@@ -14,6 +14,7 @@ import ClientsView from './components/ClientsView';
 import ProjectsView from './components/ProjectsView';
 import TasksView from './components/TasksView';
 import AdminAuthentication from './components/AdminAuthentication';
+import CustomSelect from './components/CustomSelect';
 import { getInsights } from './services/geminiService';
 
 const TrackerView: React.FC<{
@@ -31,7 +32,15 @@ const TrackerView: React.FC<{
   treatSaturdayAsHoliday: boolean;
   onMakeRecurring: (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', endDate?: string) => void;
   userRole: UserRole;
-}> = ({ entries, clients, projects, projectTasks, onAddEntry, onDeleteEntry, insights, isInsightLoading, onRefreshInsights, onUpdateEntry, startOfWeek, treatSaturdayAsHoliday, onMakeRecurring, userRole }) => {
+  viewingUserId: string;
+  onViewUserChange: (id: string) => void;
+  availableUsers: User[];
+  currentUser: User;
+}> = ({ 
+  entries, clients, projects, projectTasks, onAddEntry, onDeleteEntry, insights, isInsightLoading, 
+  onRefreshInsights, onUpdateEntry, startOfWeek, treatSaturdayAsHoliday, onMakeRecurring, userRole,
+  viewingUserId, onViewUserChange, availableUsers, currentUser
+}) => {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const filteredEntries = useMemo(() => {
@@ -43,9 +52,40 @@ const TrackerView: React.FC<{
     return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
   }, [filteredEntries]);
 
+  const viewingUser = availableUsers.find(u => u.id === viewingUserId);
+  const isViewingSelf = viewingUserId === currentUser.id;
+
+  const userOptions = useMemo(() => availableUsers.map(u => ({ id: u.id, name: u.name })), [availableUsers]);
+
   return (
     <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500">
       <div className="flex-1 space-y-6">
+        
+        {/* Manager Selection Header */}
+        {availableUsers.length > 1 && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
+                {viewingUser?.avatarInitials}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  {isViewingSelf ? 'My Timesheet' : 'Managing User'}
+                </p>
+                <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
+              </div>
+            </div>
+            <div className="w-64">
+               <CustomSelect 
+                 options={userOptions}
+                 value={viewingUserId}
+                 onChange={onViewUserChange}
+                 label="Switch User View"
+               />
+            </div>
+          </div>
+        )}
+
         <TimeEntryForm 
           clients={clients} 
           projects={projects} 
@@ -195,6 +235,24 @@ const App: React.FC = () => {
     return DEFAULT_USERS;
   });
 
+  // State to track which user's data is currently being viewed/edited
+  const [viewingUserId, setViewingUserId] = useState<string>(currentUser?.id || '');
+
+  // Update viewingUserId when currentUser changes (e.g., login/logout)
+  useEffect(() => {
+    if (currentUser) {
+      setViewingUserId(currentUser.id);
+    }
+  }, [currentUser]);
+
+  // Determine available users for the dropdown based on role
+  const availableUsers = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return users;
+    if (currentUser.role === 'manager') return users.filter(u => u.role === 'user' || u.id === currentUser.id);
+    return [currentUser];
+  }, [users, currentUser]);
+
   const [clients, setClients] = useState<Client[]>(() => {
     const saved = localStorage.getItem('tempo_clients');
     return saved ? JSON.parse(saved) : DEFAULT_CLIENTS;
@@ -334,7 +392,9 @@ const App: React.FC = () => {
 
   const handleAddEntry = (newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>) => {
     if (!currentUser) return;
-    const entry: TimeEntry = { ...newEntry, id: Math.random().toString(36).substr(2, 9), createdAt: Date.now(), userId: currentUser.id };
+    // Use viewingUserId if available (for managers/admins), otherwise default to current user
+    const targetUserId = viewingUserId || currentUser.id;
+    const entry: TimeEntry = { ...newEntry, id: Math.random().toString(36).substr(2, 9), createdAt: Date.now(), userId: targetUserId };
     setEntries([entry, ...entries]);
   };
 
@@ -390,7 +450,8 @@ const App: React.FC = () => {
   const generateInsights = async () => {
     if (entries.length < 3) return;
     setIsInsightLoading(true);
-    const userEntries = entries.filter(e => e.userId === currentUser?.id);
+    // Use viewingUserId to generate insights for the specific user being viewed
+    const userEntries = entries.filter(e => e.userId === viewingUserId);
     const result = await getInsights(userEntries.slice(0, 10));
     setInsights(result);
     setIsInsightLoading(false);
@@ -402,12 +463,16 @@ const App: React.FC = () => {
     <Layout activeView={activeView} onViewChange={setActiveView} currentUser={currentUser} onLogout={handleLogout}>
       {activeView === 'tracker' && (
         <TrackerView 
-          entries={entries.filter(e => e.userId === currentUser.id)}
+          entries={entries.filter(e => e.userId === viewingUserId)}
           clients={clients} projects={projects} projectTasks={projectTasks}
           onAddEntry={handleAddEntry} onDeleteEntry={handleDeleteEntry} onUpdateEntry={handleUpdateEntry}
           insights={insights} isInsightLoading={isInsightLoading} onRefreshInsights={generateInsights}
           startOfWeek={settings.startOfWeek} treatSaturdayAsHoliday={settings.treatSaturdayAsHoliday}
           onMakeRecurring={handleMakeRecurring} userRole={currentUser.role}
+          viewingUserId={viewingUserId}
+          onViewUserChange={setViewingUserId}
+          availableUsers={availableUsers}
+          currentUser={currentUser}
         />
       )}
       {activeView === 'reports' && <Reports entries={entries.filter(e => e.userId === currentUser.id)} projects={projects} clients={clients} />}
