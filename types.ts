@@ -6,6 +6,8 @@ export interface User {
   name: string;
   role: UserRole;
   avatarInitials: string;
+  username: string;
+  password?: string;
 }
 
 export interface Client {

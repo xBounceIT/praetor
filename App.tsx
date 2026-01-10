@@ -182,7 +182,16 @@ const App: React.FC = () => {
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('tempo_users');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migration: Ensure users have username/password if missing from old data
+      return parsed.map((u: any) => ({
+        ...u,
+        username: u.username || u.name.toLowerCase(),
+        password: u.password || 'password'
+      }));
+    }
+    return DEFAULT_USERS;
   });
 
   const [clients, setClients] = useState<Client[]>(() => {
@@ -355,9 +364,9 @@ const App: React.FC = () => {
     setProjectTasks([...projectTasks, { id: 't-' + Date.now(), name, projectId, description, ...recurringConfig, recurrenceStart: recurringConfig?.isRecurring ? new Date().toISOString().split('T')[0] : undefined }]);
   };
 
-  const addUser = (name: string, role: UserRole) => {
+  const addUser = (name: string, username: string, password: string, role: UserRole) => {
     const initials = name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
-    setUsers([...users, { id: 'u-' + Date.now(), name, role, avatarInitials: initials }]);
+    setUsers([...users, { id: 'u-' + Date.now(), name, role, avatarInitials: initials, username, password }]);
   };
   const deleteUser = (id: string) => { setUsers(users.filter(u => u.id !== id)); };
 

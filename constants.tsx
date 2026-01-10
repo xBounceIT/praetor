@@ -2,9 +2,9 @@
 import { Client, Project, ProjectTask, User } from './types';
 
 export const DEFAULT_USERS: User[] = [
-  { id: 'u1', name: 'Admin User', role: 'admin', avatarInitials: 'AD' },
-  { id: 'u2', name: 'Manager User', role: 'manager', avatarInitials: 'MG' },
-  { id: 'u3', name: 'Standard User', role: 'user', avatarInitials: 'US' },
+  { id: 'u1', name: 'Admin User', role: 'admin', avatarInitials: 'AD', username: 'admin', password: 'password' },
+  { id: 'u2', name: 'Manager User', role: 'manager', avatarInitials: 'MG', username: 'manager', password: 'password' },
+  { id: 'u3', name: 'Standard User', role: 'user', avatarInitials: 'US', username: 'user', password: 'password' },
 ];
 
 export const DEFAULT_CLIENTS: Client[] = [

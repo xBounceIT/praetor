@@ -30,7 +30,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient }) => {
             value={newClientName} 
             onChange={(e) => setNewClientName(e.target.value)}
             placeholder="Client Name..." 
-            className="flex-1 text-sm px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" 
+            className="flex-1 text-sm px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900" 
           />
           <button className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold shadow-md shadow-indigo-100 transition-all active:scale-95">
             Add Client
