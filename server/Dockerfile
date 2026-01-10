@@ -2,11 +2,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json ./
+# Use faster npm registry and skip optional dependencies
+RUN npm config set registry https://registry.npmmirror.com
 
-# Install dependencies
-RUN npm install
+# Copy package files and .npmrc
+COPY package.json .npmrc* ./
+
+# Install production dependencies only (faster)
+RUN npm install --production --prefer-offline
 
 # Copy source code
 COPY . .
