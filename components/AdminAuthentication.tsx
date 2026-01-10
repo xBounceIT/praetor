@@ -99,7 +99,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
 
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Authentication</h2>
+          <h2 className="text-2xl font-bold text-slate-800">Authentication Settings</h2>
           <p className="text-sm text-slate-500 mt-1">Configure LDAP/Active Directory integration</p>
         </div>
         {isSaved && (
