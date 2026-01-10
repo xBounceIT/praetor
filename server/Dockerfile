@@ -1,17 +1,14 @@
-# Use a specific version instead of 'lts' to avoid unexpected updates
 FROM node:lts-slim
 
 WORKDIR /app
 
-# 1. Copy both package and lock files
-COPY package.json package-lock.json* .npmrc* ./
+# Copy package files
+COPY package.json package-lock.json ./
 
-# 2. Use BuildKit cache mount to persist the npm cache between builds
-# 3. Use 'npm ci' for faster, reproducible installs
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --no-audit --progress=false
+# Simple npm install with verbose output to see what's happening
+RUN npm install --omit=dev --loglevel=verbose
 
-# 4. Copy source
+# Copy source
 COPY . .
 
 EXPOSE 3001
