@@ -1,17 +1,17 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  Legend 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from 'recharts';
 import { TimeEntry, Project, Client, User } from '../types';
 import CustomSelect, { Option } from './CustomSelect';
@@ -72,12 +72,12 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
 
   // --- Detailed Report State ---
   const [period, setPeriod] = useState('this_month');
-  
+
   // Initial date calculation for state
   const getInitialDates = () => {
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date();
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return {
       start: toLocalISOString(start),
       end: toLocalISOString(end)
@@ -87,7 +87,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
   const initialDates = getInitialDates();
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
-  
+
   const [filterUser, setFilterUser] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
   const [filterProject, setFilterProject] = useState('all');
@@ -112,7 +112,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
   const weeklyActivityData = useMemo(() => {
     const today = new Date();
     const currentDay = today.getDay(); // 0 is Sunday
-    
+
     // Calculate the start of the week
     let offset = 0;
     if (startOfWeek === 'Monday') {
@@ -130,11 +130,11 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
       const dateStr = toLocalISOString(d);
-      
+
       const dayOfWeek = d.getDay();
       const isSunday = dayOfWeek === 0;
       const isSaturday = dayOfWeek === 6;
-      
+
       // Skip Sundays and Saturdays (if treated as holiday)
       if (isSunday || (treatSaturdayAsHoliday && isSaturday)) {
         continue;
@@ -145,7 +145,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
       const hours = entries
         .filter(e => e.date === dateStr)
         .reduce((sum, e) => sum + e.duration, 0);
-      
+
       data.push({
         date: d.toLocaleDateString(undefined, { weekday: 'short' }),
         fullDate: dateStr,
@@ -193,7 +193,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
   const filteredTasks = useMemo(() => {
     let relevantEntries = entries;
     if (filterUser !== 'all') {
-         relevantEntries = relevantEntries.filter(e => e.userId === filterUser);
+      relevantEntries = relevantEntries.filter(e => e.userId === filterUser);
     }
     if (filterClient !== 'all') {
       relevantEntries = relevantEntries.filter(e => e.clientId === filterClient);
@@ -219,8 +219,8 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     setFilterProject(val);
     setFilterTask('all');
     if (val !== 'all') {
-        const proj = projects.find(p => p.id === val);
-        if (proj) setFilterClient(proj.clientId);
+      const proj = projects.find(p => p.id === val);
+      if (proj) setFilterClient(proj.clientId);
     }
   };
 
@@ -232,11 +232,11 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     let end = new Date(today);
 
     switch (val) {
-      case 'today': 
+      case 'today':
         break;
-      case 'yesterday': 
-        start.setDate(today.getDate() - 1); 
-        end.setDate(today.getDate() - 1); 
+      case 'yesterday':
+        start.setDate(today.getDate() - 1);
+        end.setDate(today.getDate() - 1);
         break;
       case 'this_week': {
         const currentDay = today.getDay();
@@ -263,18 +263,18 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
         end.setDate(start.getDate() + 6);
         break;
       }
-      case 'this_month': 
-        start = new Date(today.getFullYear(), today.getMonth(), 1); 
+      case 'this_month':
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
         end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
         break;
-      case 'last_month': 
-        start = new Date(today.getFullYear(), today.getMonth() - 1, 1); 
-        end = new Date(today.getFullYear(), today.getMonth(), 0); 
+      case 'last_month':
+        start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        end = new Date(today.getFullYear(), today.getMonth(), 0);
         break;
       default:
         return; // For 'custom' we don't auto-set
     }
-    
+
     setStartDate(toLocalISOString(start));
     setEndDate(toLocalISOString(end));
   };
@@ -289,7 +289,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
       const noteMatch = !noteSearch || (e.notes?.toLowerCase().includes(noteSearch.toLowerCase()));
       return dateMatch && userMatch && clientMatch && projectMatch && taskMatch && noteMatch;
     });
-    setGeneratedEntries(filtered.sort((a,b) => b.date.localeCompare(a.date)));
+    setGeneratedEntries(filtered.sort((a, b) => b.date.localeCompare(a.date)));
   };
 
   const getUserName = (userId: string) => {
@@ -300,18 +300,17 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Tab Switcher */}
       <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-xl w-full max-w-[340px]">
-        <div 
-          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-            activeTab === 'dashboard' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
-          }`}
+        <div
+          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'dashboard' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
+            }`}
         ></div>
-        <button 
+        <button
           onClick={() => setActiveTab('dashboard')}
           className={`relative z-10 w-full py-2 text-sm font-bold transition-colors duration-300 ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Dashboard
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('detailed')}
           className={`relative z-10 w-full py-2 text-sm font-bold transition-colors duration-300 ${activeTab === 'detailed' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
@@ -333,7 +332,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-sm font-medium text-slate-500 mb-1">Most Active Project</p>
               <p className="text-3xl font-bold text-slate-900">
-                {projectData.length > 0 ? [...projectData].sort((a,b) => b.value - a.value)[0].name : 'N/A'}
+                {projectData.length > 0 ? [...projectData].sort((a, b) => b.value - a.value)[0].name : 'N/A'}
               </p>
             </div>
           </div>
@@ -347,13 +346,13 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                     <BarChart data={weeklyActivityData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
                         domain={[0, (dataMax: number) => Math.max(dataMax, dailyGoal)]}
                       />
-                      <RechartsTooltip 
-                        cursor={{fill: '#f8fafc'}}
+                      <RechartsTooltip
+                        cursor={{ fill: '#f8fafc' }}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                         formatter={(value: any, name: string, item: any) => {
                           if (item && item.payload && item.payload.isHoliday) {
@@ -362,25 +361,25 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                           return [`${value} hrs`, 'Hours'];
                         }}
                       />
-                      <Bar 
-                        dataKey="hours" 
-                        fill="#6366f1" 
-                        radius={[4, 4, 0, 0]} 
-                        barSize={40} 
+                      <Bar
+                        dataKey="hours"
+                        fill="#6366f1"
+                        radius={[4, 4, 0, 0]}
+                        barSize={40}
                       >
-                         {weeklyActivityData.map((entry, index) => {
-                           let color = '#6366f1'; // Default Purple (Below Goal)
-                           
-                           if (entry.isHoliday && entry.hours === 0) {
-                             color = '#e2e8f0'; // Gray for empty holidays
-                           } else if (entry.hours > dailyGoal) {
-                             color = '#ef4444'; // Red (Above Goal)
-                           } else if (Math.abs(entry.hours - dailyGoal) < 0.1 && dailyGoal > 0) {
-                             color = '#22c55e'; // Green (At Goal)
-                           }
+                        {weeklyActivityData.map((entry, index) => {
+                          let color = '#6366f1'; // Default Purple (Below Goal)
 
-                           return <Cell key={`cell-${index}`} fill={color} />;
-                         })}
+                          if (entry.isHoliday && entry.hours === 0) {
+                            color = '#e2e8f0'; // Gray for empty holidays
+                          } else if (entry.hours > dailyGoal) {
+                            color = '#ef4444'; // Red (Above Goal)
+                          } else if (Math.abs(entry.hours - dailyGoal) < 0.1 && dailyGoal > 0) {
+                            color = '#22c55e'; // Green (At Goal)
+                          }
+
+                          return <Cell key={`cell-${index}`} fill={color} />;
+                        })}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -408,7 +407,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                         ))}
                       </Pie>
                       <RechartsTooltip />
-                      <Legend verticalAlign="bottom" height={36}/>
+                      <Legend verticalAlign="bottom" height={36} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -423,7 +422,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-indigo-500 mb-4">1. Time Period</h4>
                 <div className="space-y-4">
-                  <CustomSelect 
+                  <CustomSelect
                     label="Selection"
                     options={PERIOD_OPTIONS}
                     value={period}
@@ -432,9 +431,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
                     <div>
                       <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">From</label>
-                      <input 
-                        type="date" 
-                        value={startDate} 
+                      <input
+                        type="date"
+                        value={startDate}
                         onChange={e => {
                           setStartDate(e.target.value);
                           setPeriod('custom');
@@ -444,9 +443,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">To</label>
-                      <input 
-                        type="date" 
-                        value={endDate} 
+                      <input
+                        type="date"
+                        value={endDate}
                         onChange={e => {
                           setEndDate(e.target.value);
                           setPeriod('custom');
@@ -463,7 +462,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-4">
                     {canFilterUsers && (
-                      <CustomSelect 
+                      <CustomSelect
                         label="User"
                         options={userOptions}
                         value={filterUser}
@@ -471,7 +470,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                         searchable={true}
                       />
                     )}
-                    <CustomSelect 
+                    <CustomSelect
                       label="Client"
                       options={clientOptions}
                       value={filterClient}
@@ -479,15 +478,15 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                       searchable={true}
                     />
                     <CustomSelect
-                       label="Project"
-                       options={projectOptions}
-                       value={filterProject}
-                       onChange={handleProjectChange}
-                       searchable={true}
+                      label="Project"
+                      options={projectOptions}
+                      value={filterProject}
+                      onChange={handleProjectChange}
+                      searchable={true}
                     />
                   </div>
                   <div className="space-y-4">
-                    <CustomSelect 
+                    <CustomSelect
                       label="Task"
                       options={taskOptions}
                       value={filterTask}
@@ -496,9 +495,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                     />
                     <div>
                       <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Notes Containing</label>
-                      <input 
-                        type="text" 
-                        value={noteSearch} 
+                      <input
+                        type="text"
+                        value={noteSearch}
                         onChange={e => setNoteSearch(e.target.value)}
                         placeholder="Search notes..."
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm"
@@ -515,10 +514,10 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                 <div className="flex flex-wrap gap-6">
                   {Object.entries(visibleFields).map(([key, value]) => (
                     <label key={key} className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={value}
-                        onChange={e => setVisibleFields({...visibleFields, [key]: e.target.checked})}
+                        onChange={e => setVisibleFields({ ...visibleFields, [key]: e.target.checked })}
                         className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-xs font-bold text-slate-600 capitalize">{key}</span>
@@ -531,7 +530,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                 <h4 className="text-xs font-black uppercase tracking-widest text-indigo-500 mb-4">4. Grouping</h4>
                 <div className="flex gap-4">
                   {[0, 1, 2].map(i => (
-                    <CustomSelect 
+                    <CustomSelect
                       key={i}
                       options={GROUP_OPTIONS}
                       value={grouping[i]}
@@ -548,7 +547,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
             </div>
 
             <div className="pt-6 flex justify-center">
-              <button 
+              <button
                 onClick={generateReport}
                 className="bg-indigo-600 text-white px-12 py-3 rounded-xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 flex items-center gap-3"
               >
@@ -567,10 +566,10 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Grand Total</p>
-                  <p className="text-2xl font-black text-indigo-400">{generatedEntries.reduce((s,e) => s+e.duration, 0).toFixed(2)} hrs</p>
+                  <p className="text-2xl font-black text-indigo-400">{generatedEntries.reduce((s, e) => s + e.duration, 0).toFixed(2)} hrs</p>
                 </div>
               </div>
-              
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 border-b border-slate-200">
