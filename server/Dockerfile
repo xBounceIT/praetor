@@ -1,21 +1,19 @@
+# Use a specific version instead of 'lts' to avoid unexpected updates
 FROM node:lts-slim
 
 WORKDIR /app
 
-# Use faster npm registry and skip optional dependencies
-RUN npm config set registry https://registry.npmmirror.com
+# 1. Copy both package and lock files
+COPY package.json package-lock.json* .npmrc* ./
 
-# Copy package files and .npmrc
-COPY package.json .npmrc* ./
+# 2. Use BuildKit cache mount to persist the npm cache between builds
+# 3. Use 'npm ci' for faster, reproducible installs
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --no-audit --progress=false
 
-# Install production dependencies only (faster)
-RUN npm install --production --prefer-offline
-
-# Copy source code
+# 4. Copy source
 COPY . .
 
-# Expose port
 EXPOSE 3001
 
-# Start the server
 CMD ["node", "index.js"]
