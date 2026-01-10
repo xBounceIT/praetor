@@ -1,20 +1,100 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Tempo - Minimalist Time Tracking
 
-This contains everything you need to run your app locally.
+Tempo is a modern, AI-enhanced time tracking application inspired by the simplicity of tools like Anuko Time Tracker. It streamlines the process of logging work hours, categorizing tasks, and generating insightful reports using a clean, responsive interface and powerful AI capabilities.
 
-View your app in AI Studio: https://ai.studio/apps/drive/19GJJ8UliZzXZKZxrkMpU_HhjwTnG_rPv
+## Features
 
-## Run Locally
+- **Smart Time Entry**: Log time using natural language (e.g., "2 hours on Frontend for Acme") powered by Google Gemini AI.
+- **Robust Reporting**:
+  - **Dashboard**: High-level overview with bar charts for weekly activity and pie charts for project distribution.
+  - **Detailed Reports**: Filter by Date Range, Client, Project, Task, and User. 
+  - **Visualizations**: Interactive charts built with Recharts.
+- **Role-Based Access Control (RBAC)**:
+  - **Admin**: Full system access, user management, authentication settings.
+  - **Manager**: Access to all user reports and project/client management.
+  - **User**: Personal time tracking and reporting.
+- **Hierarchical Management**: Manage Clients, Projects, and Tasks with dependency filtering.
+- **Recurring Tasks**: Automate time entry placeholders for daily, weekly, or monthly tasks.
+- **AI Coach**: Receive personalized productivity insights and pattern analysis.
+- **Authentication**: Built-in credential system with a UI for configuring LDAP/Active Directory integration.
 
-**Prerequisites:**  Node.js
+## Tech Stack
 
+- **Frontend**: React 19, TypeScript
+- **Styling**: Tailwind CSS
+- **Charts**: Recharts
+- **AI Integration**: Google Gemini API (`@google/genai`)
+- **Icons**: FontAwesome
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Setup & Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/tempo.git
+   cd tempo
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Environment Configuration**
+   The application requires a Google Gemini API key to function fully (Smart Entry & AI Coach).
+   
+   Ensure the `API_KEY` environment variable is set in your environment.
+   
+   *Example `.env` (if using a build tool like Vite):*
+   ```
+   API_KEY=your_google_gemini_api_key
+   ```
+
+4. **Run Locally**
+   ```bash
+   npm run dev
+   ```
+
+## Deployment
+
+Tempo is a Single Page Application (SPA) and can be deployed to any static hosting provider.
+
+### Vercel / Netlify / Cloudflare Pages
+
+1. **Connect Repository**: Connect your GitHub/GitLab repository to your hosting provider.
+2. **Build Settings**:
+   - **Build Command**: `npm run build` (or `vite build`)
+   - **Output Directory**: `dist` (or `build`)
+3. **Environment Variables**:
+   - Add `API_KEY` in the project settings dashboard of your hosting provider. This is critical for the AI features to work.
+
+### Docker (Optional)
+
+You can containerize the application using Nginx to serve the static files:
+
+```dockerfile
+FROM node:18-alpine as build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+## Usage Guide
+
+- **Login**:
+  - Default Admin: `admin` / `password`
+  - Default Manager: `manager` / `password`
+  - Default User: `user` / `password`
+  
+- **Tracking Time**: Navigate to the "Time Tracker" view. You can manually select clients/projects or toggle "Magic Input" to type a sentence describing your work.
+
+- **Reports**: Go to the "Reports" view. Use the animated tabs to switch between the graphical Dashboard and the Detailed List view. Managers can filter by specific users.
+
+- **Settings**: Click your avatar in the top right to access user profile settings, daily goals, and UI preferences.
