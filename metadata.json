@@ -1,0 +1,7 @@
+{
+  "name": "Tempo - Minimalist Time Tracking",
+  "description": "A modern, AI-enhanced time tracking application inspired by Anuko. Effortlessly log tasks, categorize work with AI, and visualize productivity patterns with beautiful charts.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
