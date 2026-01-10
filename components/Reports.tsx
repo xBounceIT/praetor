@@ -245,16 +245,21 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, startOfWe
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Tab Switcher */}
-      <div className="flex bg-slate-200/50 p-1 rounded-xl w-fit">
+      <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-xl w-full max-w-[340px]">
+        <div 
+          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            activeTab === 'dashboard' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
+          }`}
+        ></div>
         <button 
           onClick={() => setActiveTab('dashboard')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`relative z-10 w-full py-2 text-sm font-bold transition-colors duration-300 ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Dashboard
         </button>
         <button 
           onClick={() => setActiveTab('detailed')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'detailed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`relative z-10 w-full py-2 text-sm font-bold transition-colors duration-300 ${activeTab === 'detailed' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Detailed Report
         </button>
