@@ -30,6 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const isManagement = currentUser.role === 'admin' || currentUser.role === 'manager';
+  const isAdmin = currentUser.role === 'admin';
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
@@ -71,7 +72,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
           </div>
         )}
         
-        <div className={`flex-1 px-4 space-y-2 ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}>
+        <div className={`flex-1 px-4 space-y-2 overflow-y-auto ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}>
           <NavItem 
             icon="fa-list-check" 
             label="Time Tracker" 
@@ -114,7 +115,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             onClick={() => { onViewChange('tasks'); setIsMobileMenuOpen(false); }} 
           />
 
-          {currentUser.role === 'admin' && (
+          {isAdmin && (
             <NavItem 
               icon="fa-users" 
               label="Users" 
@@ -131,6 +132,27 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             isCollapsed={isCollapsed}
             onClick={() => { onViewChange('recurring'); setIsMobileMenuOpen(false); }} 
           />
+
+          {isAdmin && (
+            <>
+              {!isCollapsed && (
+                <div className="px-2 mt-6 mb-2">
+                  <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                    Administration
+                  </div>
+                </div>
+              )}
+              {isCollapsed && <div className="h-4"></div>}
+              
+              <NavItem 
+                icon="fa-shield-halved" 
+                label="Authentication" 
+                active={activeView === 'admin-auth'} 
+                isCollapsed={isCollapsed}
+                onClick={() => { onViewChange('admin-auth'); setIsMobileMenuOpen(false); }} 
+              />
+            </>
+          )}
         </div>
 
         <div className={`p-6 border-t border-slate-800 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}>

@@ -49,4 +49,21 @@ export interface TimeEntry {
   isPlaceholder?: boolean;
 }
 
-export type View = 'tracker' | 'reports' | 'projects' | 'tasks' | 'clients' | 'settings' | 'users' | 'recurring';
+export interface LdapRoleMapping {
+  ldapGroup: string;
+  tempoRole: UserRole;
+}
+
+export interface LdapConfig {
+  enabled: boolean;
+  serverUrl: string;
+  baseDn: string;
+  bindDn: string;
+  bindPassword: string;
+  userFilter: string;
+  groupBaseDn: string;
+  groupFilter: string;
+  roleMappings: LdapRoleMapping[];
+}
+
+export type View = 'tracker' | 'reports' | 'projects' | 'tasks' | 'clients' | 'settings' | 'users' | 'recurring' | 'admin-auth';

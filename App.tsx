@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole } from './types';
+import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig } from './types';
 import { DEFAULT_CLIENTS, DEFAULT_PROJECTS, DEFAULT_TASKS, DEFAULT_USERS, COLORS } from './constants';
 import Layout from './components/Layout';
 import TimeEntryForm from './components/TimeEntryForm';
@@ -13,6 +13,7 @@ import RecurringManager from './components/RecurringManager';
 import ClientsView from './components/ClientsView';
 import ProjectsView from './components/ProjectsView';
 import TasksView from './components/TasksView';
+import AdminAuthentication from './components/AdminAuthentication';
 import { getInsights } from './services/geminiService';
 
 const TrackerView: React.FC<{
@@ -227,6 +228,21 @@ const App: React.FC = () => {
     };
   });
 
+  const [ldapConfig, setLdapConfig] = useState<LdapConfig>(() => {
+      const saved = localStorage.getItem('tempo_ldap_config');
+      return saved ? JSON.parse(saved) : {
+        enabled: false,
+        serverUrl: 'ldap://ldap.example.com:389',
+        baseDn: 'dc=example,dc=com',
+        bindDn: 'cn=read-only-admin,dc=example,dc=com',
+        bindPassword: '',
+        userFilter: '(uid={0})',
+        groupBaseDn: 'ou=groups,dc=example,dc=com',
+        groupFilter: '(member={0})',
+        roleMappings: []
+      };
+  });
+
   const [activeView, setActiveView] = useState<View>('tracker');
   const [insights, setInsights] = useState<string>('Logging some time to see patterns!');
   const [isInsightLoading, setIsInsightLoading] = useState(false);
@@ -236,6 +252,7 @@ const App: React.FC = () => {
   useEffect(() => localStorage.setItem('tempo_projects', JSON.stringify(projects)), [projects]);
   useEffect(() => localStorage.setItem('tempo_tasks', JSON.stringify(projectTasks)), [projectTasks]);
   useEffect(() => localStorage.setItem('tempo_entries', JSON.stringify(entries)), [entries]);
+  useEffect(() => localStorage.setItem('tempo_ldap_config', JSON.stringify(ldapConfig)), [ldapConfig]);
   
   useEffect(() => {
     if (currentUser) {
@@ -420,6 +437,10 @@ const App: React.FC = () => {
       
       {currentUser.role === 'admin' && activeView === 'users' && (
         <UserManagement users={users} onAddUser={addUser} onDeleteUser={deleteUser} currentUserId={currentUser.id} />
+      )}
+      
+      {currentUser.role === 'admin' && activeView === 'admin-auth' && (
+        <AdminAuthentication config={ldapConfig} onSave={setLdapConfig} />
       )}
 
       {activeView === 'recurring' && <RecurringManager tasks={projectTasks} projects={projects} clients={clients} onAction={handleRecurringAction} />}
