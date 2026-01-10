@@ -20,11 +20,17 @@ router.post('/login', async (req, res, next) => {
         );
 
         if (result.rows.length === 0) {
+            console.log(`[AUTH-DEBUG] User not found for username: ${username}`);
             return res.status(401).json({ error: 'Invalid username or password' });
         }
 
         const user = result.rows[0];
+        console.log(`[AUTH-DEBUG] User found: ${user.username}`);
+        // Log truncated hash for security, just to verify it exists
+        console.log(`[AUTH-DEBUG] Stored hash start: ${user.password_hash.substring(0, 10)}...`);
+
         const validPassword = await bcrypt.compare(password, user.password_hash);
+        console.log(`[AUTH-DEBUG] Password valid: ${validPassword}`);
 
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid username or password' });
