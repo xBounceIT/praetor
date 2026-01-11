@@ -557,8 +557,8 @@ const App: React.FC = () => {
     try {
       await api.projects.delete(id);
       setProjects(projects.filter(p => p.id !== id));
-      // Clean up related entries if needed, or backend handles it? 
-      // Backend likely doesn't cascade delete entries, but for this task we just delete the project.
+      setProjectTasks(projectTasks.filter(t => t.projectId !== id));
+      setEntries(entries.filter(e => e.projectId !== id));
     } catch (err) {
       console.error('Failed to delete project:', err);
       alert('Failed to delete project');
