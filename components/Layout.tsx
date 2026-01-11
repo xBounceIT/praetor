@@ -115,7 +115,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             onClick={() => { onViewChange('tasks'); setIsMobileMenuOpen(false); }}
           />
 
-          {isAdmin && (
+          {isManagement && (
             <NavItem
               icon="fa-users"
               label="Users"

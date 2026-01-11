@@ -669,7 +669,7 @@ const App: React.FC = () => {
         />
       )}
 
-      {currentUser.role === 'admin' && activeView === 'users' && (
+      {(currentUser.role === 'admin' || currentUser.role === 'manager') && activeView === 'users' && (
         <UserManagement
           users={users}
           clients={clients}
@@ -678,6 +678,7 @@ const App: React.FC = () => {
           onAddUser={addUser}
           onDeleteUser={deleteUser}
           currentUserId={currentUser.id}
+          currentUserRole={currentUser.role}
         />
       )}
 

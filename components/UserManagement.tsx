@@ -11,6 +11,7 @@ interface UserManagementProps {
   onAddUser: (name: string, username: string, password: string, role: UserRole) => void;
   onDeleteUser: (id: string) => void;
   currentUserId: string;
+  currentUserRole: UserRole;
 }
 
 const ROLE_OPTIONS = [
@@ -19,7 +20,7 @@ const ROLE_OPTIONS = [
   { id: 'admin', name: 'Admin' },
 ];
 
-const UserManagement: React.FC<UserManagementProps> = ({ users, clients, projects, tasks, onAddUser, onDeleteUser, currentUserId }) => {
+const UserManagement: React.FC<UserManagementProps> = ({ users, clients, projects, tasks, onAddUser, onDeleteUser, currentUserId, currentUserRole }) => {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('password');
@@ -87,63 +88,65 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <i className="fa-solid fa-user-plus text-indigo-500"></i>
-          Create New User
-        </h3>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-          <div className="lg:col-span-1">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Name</label>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => {
-                setNewName(e.target.value);
-                if (!newUsername) setNewUsername(e.target.value.toLowerCase());
-              }}
-              placeholder="e.g. Alice Smith"
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Username</label>
-            <input
-              type="text"
-              value={newUsername}
-              onChange={(e) => setNewUsername(e.target.value)}
-              placeholder="e.g. alice"
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
-            <input
-              type="text"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <CustomSelect
-              label="Role"
-              options={ROLE_OPTIONS}
-              value={newRole}
-              onChange={val => setNewRole(val as UserRole)}
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <button
-              type="submit"
-              className="w-full px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i> Add
-            </button>
-          </div>
-        </form>
-      </div>
+      {currentUserRole === 'admin' && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <i className="fa-solid fa-user-plus text-indigo-500"></i>
+            Create New User
+          </h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Name</label>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  if (!newUsername) setNewUsername(e.target.value.toLowerCase());
+                }}
+                placeholder="e.g. Alice Smith"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Username</label>
+              <input
+                type="text"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="e.g. alice"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
+              <input
+                type="text"
+                value={newPassword}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="Password"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <CustomSelect
+                label="Role"
+                options={ROLE_OPTIONS}
+                value={newRole}
+                onChange={val => setNewRole(val as UserRole)}
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <button
+                type="submit"
+                className="w-full px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-plus"></i> Add
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
@@ -192,13 +195,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
-                    <button
-                      onClick={() => onDeleteUser(user.id)}
-                      disabled={user.id === currentUserId}
-                      className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
+                    {currentUserRole === 'admin' && (
+                      <button
+                        onClick={() => onDeleteUser(user.id)}
+                        disabled={user.id === currentUserId}
+                        className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
