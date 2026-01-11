@@ -77,7 +77,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
   const projectOptions = projects.map(p => ({ id: p.id, name: p.name }));
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
 
       {/* Delete Confirmation Modal */}
       {isDeleteConfirmOpen && (
@@ -113,14 +113,14 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
         </div>
       )}
 
-      {/* Main Modal Overlay */}
-      {isModalOpen && (
+      {/* Main Modal Overlay (For Editing Only Now) */}
+      {isModalOpen && editingTask && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <i className={`fa-solid ${editingTask ? 'fa-pen-to-square text-indigo-500' : 'fa-list-check text-emerald-500'}`}></i>
-                {editingTask ? 'Edit Task' : 'New Task'}
+                <i className="fa-solid fa-pen-to-square text-indigo-500"></i>
+                Edit Task
               </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -162,15 +162,13 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
               </div>
 
               <div className="pt-4 flex items-center justify-between gap-4">
-                {editingTask && (
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-red-500 shadow-red-200 hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-red-500 shadow-red-200 hover:bg-red-600"
+                >
+                  Delete
+                </button>
 
                 <div className="flex gap-3 ml-auto">
                   <button
@@ -182,12 +180,9 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
                   </button>
                   <button
                     type="submit"
-                    className={`px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${editingTask
-                      ? 'bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700'
-                      : 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'
-                      }`}
+                    className="px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
                   >
-                    {editingTask ? 'Save Changes' : 'Create Task'}
+                    Save Changes
                   </button>
                 </div>
               </div>
@@ -196,49 +191,74 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
         </div>
       )}
 
-      {/* Header with Add Button */}
+      {/* Creation Form (Visible to management) */}
       {isManagement && (
-        <div className="flex justify-end">
-          <button
-            onClick={openCreateModal}
-            className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-100 hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i>
-            New Task
-          </button>
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <i className="fa-solid fa-list-check text-indigo-500"></i>
+            Create New Task
+          </h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div className="lg:col-span-1">
+              <CustomSelect
+                label="Project"
+                options={projectOptions}
+                value={projectId}
+                onChange={setProjectId}
+                placeholder="Select Project..."
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Task Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Frontend Implementation"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Description</label>
+              <input
+                type="text"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Task context..."
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <button
+                type="submit"
+                className="w-full px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-plus"></i> Add Task
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-        <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
-          <div>
-            <h3 className="text-xl font-black italic tracking-tighter uppercase flex items-center gap-3">
-              <i className="fa-solid fa-tasks text-indigo-400"></i>
-              Tasks Directory
-            </h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Full list of project tasks</p>
-          </div>
-          <div className="text-right">
-            <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
-              {tasks.length} Total
-            </span>
-          </div>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+          <h3 className="font-bold text-slate-800">Tasks Directory ({tasks.length})</h3>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Project</th>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Task Name</th>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</th>
-                {isManagement && <th className="px-6 py-4 w-10"></th>}
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Project</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Task Name</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={isManagement ? 4 : 3} className="px-6 py-12 text-center text-slate-400 italic">No tasks found.</td>
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No tasks found.</td>
                 </tr>
               ) : tasks.map(task => {
                 const project = projects.find(p => p.id === task.projectId);
@@ -248,7 +268,9 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project?.color || '#ccc' }}></div>
-                        <span className="text-xs font-bold text-slate-600">{project?.name || 'Unknown'}</span>
+                        <span className="text-[10px] font-black text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                          {project?.name || 'Unknown'}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -257,16 +279,17 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
                     <td className="px-6 py-4">
                       <p className="text-xs text-slate-500 max-w-md italic">{task.description || 'No description provided.'}</p>
                     </td>
-                    {isManagement && (
-                      <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right">
+                      {isManagement && (
                         <button
                           onClick={() => startEditing(task)}
-                          className="text-slate-300 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100"
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-2"
+                          title="Edit Task"
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
                         </button>
-                      </td>
-                    )}
+                      )}
+                    </td>
                   </tr>
                 );
               })}

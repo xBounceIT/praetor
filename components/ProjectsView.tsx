@@ -77,7 +77,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
   const clientOptions = clients.map(c => ({ id: c.id, name: c.name }));
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
 
       {/* Delete Confirmation Modal */}
       {isDeleteConfirmOpen && (
@@ -113,14 +113,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
         </div>
       )}
 
-      {/* Main Modal Overlay */}
-      {isModalOpen && (
+      {/* Main Modal Overlay (For Editing Only Now) */}
+      {isModalOpen && editingProject && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <i className={`fa-solid ${editingProject ? 'fa-pen-to-square text-indigo-500' : 'fa-briefcase text-emerald-500'}`}></i>
-                {editingProject ? 'Edit Project' : 'New Project'}
+                <i className="fa-solid fa-pen-to-square text-indigo-500"></i>
+                Edit Project
               </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -162,15 +162,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               </div>
 
               <div className="pt-4 flex items-center justify-between gap-4">
-                {editingProject && (
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-red-500 shadow-red-200 hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-red-500 shadow-red-200 hover:bg-red-600"
+                >
+                  Delete
+                </button>
 
                 <div className="flex gap-3 ml-auto">
                   <button
@@ -182,12 +180,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                   </button>
                   <button
                     type="submit"
-                    className={`px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${editingProject
-                        ? 'bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700'
-                        : 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'
-                      }`}
+                    className="px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
                   >
-                    {editingProject ? 'Save Changes' : 'Create Project'}
+                    Save Changes
                   </button>
                 </div>
               </div>
@@ -196,56 +191,81 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
         </div>
       )}
 
-      {/* Header with Add Button */}
+      {/* Creation Form (Visible to management) */}
       {isManagement && (
-        <div className="flex justify-end">
-          <button
-            onClick={openCreateModal}
-            className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-100 hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i>
-            New Project
-          </button>
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <i className="fa-solid fa-briefcase text-indigo-500"></i>
+            Create New Project
+          </h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div className="lg:col-span-1">
+              <CustomSelect
+                label="Client"
+                options={clientOptions}
+                value={clientId}
+                onChange={setClientId}
+                placeholder="Select Client..."
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Project Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Website Redesign"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Description</label>
+              <input
+                type="text"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Project details..."
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <button
+                type="submit"
+                className="w-full px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-plus"></i> Add Project
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-        <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
-          <div>
-            <h3 className="text-xl font-black italic tracking-tighter uppercase flex items-center gap-3">
-              <i className="fa-solid fa-briefcase text-indigo-400"></i>
-              Projects Directory
-            </h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Active and archived projects</p>
-          </div>
-          <div className="text-right">
-            <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
-              {projects.length} Total
-            </span>
-          </div>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+          <h3 className="font-bold text-slate-800">Projects Directory ({projects.length})</h3>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Client</th>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Project Name</th>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</th>
-                {isManagement && <th className="px-6 py-4 w-10"></th>}
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Client</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Project Name</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {projects.length === 0 ? (
                 <tr>
-                  <td colSpan={isManagement ? 4 : 3} className="px-6 py-12 text-center text-slate-400 italic">No projects found.</td>
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No projects found.</td>
                 </tr>
               ) : projects.map(project => {
                 const client = clients.find(c => c.id === project.clientId);
                 return (
                   <tr key={project.id} className="group hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
-                      <span className="text-[10px] font-black text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded">
+                      <span className="text-[10px] font-black text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
                         {client?.name || 'Unknown'}
                       </span>
                     </td>
@@ -258,16 +278,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                     <td className="px-6 py-4">
                       <p className="text-xs text-slate-500 max-w-md italic">{project.description || 'No description provided.'}</p>
                     </td>
-                    {isManagement && (
-                      <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right">
+                      {isManagement && (
                         <button
                           onClick={() => startEditing(project)}
-                          className="text-slate-300 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100"
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-2"
+                          title="Edit Project"
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
                         </button>
-                      </td>
-                    )}
+                      )}
+                    </td>
                   </tr>
                 );
               })}
