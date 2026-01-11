@@ -186,8 +186,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 {editingUser.id !== currentUserId && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <div>
-                      <p className="text-sm font-bold text-slate-700">Account Access</p>
-                      <p className="text-[10px] text-slate-500 font-medium">Prevent user from logging in</p>
+                      <p className="text-sm font-bold text-slate-700">Disabled</p>
                     </div>
                     <button
                       onClick={() => setEditIsDisabled(!editIsDisabled)}
