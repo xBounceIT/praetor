@@ -408,18 +408,21 @@ const App: React.FC = () => {
 
   // Filtered lists for TrackerView
   const filteredClients = useMemo(() => {
-    if (!viewingUserAssignments) return clients;
-    return clients.filter(c => viewingUserAssignments.clientIds.includes(c.id));
+    const activeClients = clients.filter(c => !c.isDisabled);
+    if (!viewingUserAssignments) return activeClients;
+    return activeClients.filter(c => viewingUserAssignments.clientIds.includes(c.id));
   }, [clients, viewingUserAssignments]);
 
   const filteredProjects = useMemo(() => {
-    if (!viewingUserAssignments) return projects;
-    return projects.filter(p => viewingUserAssignments.projectIds.includes(p.id));
+    const activeProjects = projects.filter(p => !p.isDisabled);
+    if (!viewingUserAssignments) return activeProjects;
+    return activeProjects.filter(p => viewingUserAssignments.projectIds.includes(p.id));
   }, [projects, viewingUserAssignments]);
 
   const filteredTasks = useMemo(() => {
-    if (!viewingUserAssignments) return projectTasks;
-    return projectTasks.filter(t => viewingUserAssignments.taskIds.includes(t.id));
+    const activeTasks = projectTasks.filter(t => !t.isDisabled);
+    if (!viewingUserAssignments) return activeTasks;
+    return activeTasks.filter(t => viewingUserAssignments.taskIds.includes(t.id));
   }, [projectTasks, viewingUserAssignments]);
 
 
@@ -521,6 +524,39 @@ const App: React.FC = () => {
       setClients([...clients, client]);
     } catch (err) {
       console.error('Failed to add client:', err);
+    }
+  };
+
+  const handleUpdateClient = async (id: string, updates: Partial<Client>) => {
+    try {
+      const updated = await api.clients.update(id, updates);
+      setClients(clients.map(c => c.id === id ? updated : c));
+      // If client was disabled, refresh projects and tasks as they might have been cascaded
+      if (updates.isDisabled === true) {
+        const [projectsData, tasksData] = await Promise.all([
+          api.projects.list(),
+          api.tasks.list()
+        ]);
+        setProjects(projectsData);
+        setProjectTasks(tasksData);
+      }
+    } catch (err) {
+      console.error('Failed to update client:', err);
+      alert('Failed to update client');
+    }
+  };
+
+  const handleDeleteClient = async (id: string) => {
+    try {
+      await api.clients.delete(id);
+      setClients(clients.filter(c => c.id !== id));
+      setProjects(projects.filter(p => p.clientId !== id));
+      // Tasks are also deleted by cascade in DB, so filter them too
+      const projectIdsForClient = projects.filter(p => p.clientId === id).map(p => p.id);
+      setProjectTasks(projectTasks.filter(t => !projectIdsForClient.includes(t.projectId)));
+    } catch (err) {
+      console.error('Failed to delete client:', err);
+      alert('Failed to delete client');
     }
   };
 
@@ -679,7 +715,12 @@ const App: React.FC = () => {
       )}
 
       {activeView === 'clients' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-        <ClientsView clients={clients} onAddClient={addClient} />
+        <ClientsView
+          clients={clients}
+          onAddClient={addClient}
+          onUpdateClient={handleUpdateClient}
+          onDeleteClient={handleDeleteClient}
+        />
       )}
 
       {activeView === 'projects' && (

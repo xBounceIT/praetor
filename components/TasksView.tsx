@@ -161,6 +161,22 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
                 />
               </div>
 
+              <div className="flex items-center gap-2 py-2">
+                <input
+                  type="checkbox"
+                  id="isDisabled"
+                  checked={editingTask?.isDisabled || false}
+                  onChange={(e) => {
+                    if (editingTask) {
+                      onUpdateTask(editingTask.id, { isDisabled: e.target.checked });
+                      setEditingTask({ ...editingTask, isDisabled: e.target.checked });
+                    }
+                  }}
+                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="isDisabled" className="text-sm font-bold text-slate-700">Task is Disabled</label>
+              </div>
+
               <div className="pt-4 flex items-center justify-between gap-4">
                 <button
                   type="button"
@@ -252,19 +268,20 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Project</th>
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Task Name</th>
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Status</th>
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No tasks found.</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">No tasks found.</td>
                 </tr>
               ) : tasks.map(task => {
                 const project = projects.find(p => p.id === task.projectId);
 
                 return (
-                  <tr key={task.id} className="group hover:bg-slate-50 transition-colors">
+                  <tr key={task.id} className={`group hover:bg-slate-50 transition-colors ${task.isDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project?.color || '#ccc' }}></div>
@@ -274,10 +291,17 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, role, onAddTask,
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-800">{task.name}</span>
+                      <span className={`text-sm font-bold ${task.isDisabled ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-800'}`}>{task.name}</span>
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-xs text-slate-500 max-w-md italic">{task.description || 'No description provided.'}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      {task.isDisabled ? (
+                        <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
+                      ) : (
+                        <span className="text-[10px] font-black text-emerald-500 uppercase">Active</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {isManagement && (

@@ -14,6 +14,7 @@ export interface User {
 export interface Client {
   id: string;
   name: string;
+  isDisabled?: boolean;
 }
 
 export interface Project {
@@ -22,6 +23,7 @@ export interface Project {
   clientId: string;
   color: string;
   description?: string;
+  isDisabled?: boolean;
 }
 
 export interface ProjectTask {
@@ -33,6 +35,7 @@ export interface ProjectTask {
   recurrencePattern?: 'daily' | 'weekly' | 'monthly';
   recurrenceStart?: string;
   recurrenceEnd?: string;
+  isDisabled?: boolean;
 }
 
 export interface TimeEntry {

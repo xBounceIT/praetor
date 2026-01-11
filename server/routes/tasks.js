@@ -9,7 +9,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     try {
         let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
-                   recurrence_pattern, recurrence_start, recurrence_end 
+                   recurrence_pattern, recurrence_start, recurrence_end, is_disabled 
             FROM tasks ORDER BY name
         `;
         let queryParams = [];
@@ -17,7 +17,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         if (req.user.role === 'user') {
             queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
-                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end 
+                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.is_disabled 
                 FROM tasks t
                 INNER JOIN user_tasks ut ON t.id = ut.task_id
                 WHERE ut.user_id = $1
@@ -36,7 +36,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
             isRecurring: t.is_recurring,
             recurrencePattern: t.recurrence_pattern,
             recurrenceStart: t.recurrence_start ? t.recurrence_start.toISOString().split('T')[0] : undefined,
-            recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined
+            recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
+            isDisabled: t.is_disabled
         }));
 
         res.json(tasks);
@@ -58,9 +59,9 @@ router.post('/', authenticateToken, async (req, res, next) => {
         const recurrenceStart = isRecurring ? new Date().toISOString().split('T')[0] : null;
 
         await query(
-            `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, recurrenceStart]
+            `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, is_disabled) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, recurrenceStart, false]
         );
 
         res.status(201).json({
@@ -70,7 +71,8 @@ router.post('/', authenticateToken, async (req, res, next) => {
             description,
             isRecurring: isRecurring || false,
             recurrencePattern,
-            recurrenceStart
+            recurrenceStart,
+            isDisabled: false
         });
     } catch (err) {
         if (err.code === '23503') { // Foreign key violation
@@ -84,7 +86,7 @@ router.post('/', authenticateToken, async (req, res, next) => {
 router.put('/:id', authenticateToken, async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd } = req.body;
+        const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = req.body;
 
         const result = await query(
             `UPDATE tasks 
@@ -93,10 +95,11 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
            is_recurring = COALESCE($4, is_recurring),
            recurrence_pattern = $5,
            recurrence_start = $6,
-           recurrence_end = $7
+           recurrence_end = $7,
+           is_disabled = COALESCE($8, is_disabled)
        WHERE id = $1
        RETURNING *`,
-            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null]
+            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, isDisabled]
         );
 
         if (result.rows.length === 0) {
@@ -112,7 +115,8 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
             isRecurring: t.is_recurring,
             recurrencePattern: t.recurrence_pattern,
             recurrenceStart: t.recurrence_start ? t.recurrence_start.toISOString().split('T')[0] : undefined,
-            recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined
+            recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
+            isDisabled: t.is_disabled
         });
     } catch (err) {
         next(err);

@@ -110,6 +110,15 @@ export const clientsApi = {
             method: 'POST',
             body: JSON.stringify({ name }),
         }),
+
+    update: (id: string, updates: Partial<Client>): Promise<Client> =>
+        fetchApi(`/clients/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        }),
+
+    delete: (id: string): Promise<void> =>
+        fetchApi(`/clients/${id}`, { method: 'DELETE' }),
 };
 
 // Projects API

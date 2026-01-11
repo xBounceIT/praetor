@@ -19,8 +19,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 CREATE TABLE IF NOT EXISTS clients (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure is_disabled column exists for existing installations
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
@@ -29,8 +33,12 @@ CREATE TABLE IF NOT EXISTS projects (
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     color VARCHAR(20) NOT NULL DEFAULT '#3b82f6',
     description TEXT,
+    is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure is_disabled column exists for existing installations
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
@@ -42,8 +50,12 @@ CREATE TABLE IF NOT EXISTS tasks (
     recurrence_pattern VARCHAR(20) CHECK (recurrence_pattern IN ('daily', 'weekly', 'monthly')),
     recurrence_start DATE,
     recurrence_end DATE,
+    is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure is_disabled column exists for existing installations
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 
 -- User-Client associations
 CREATE TABLE IF NOT EXISTS user_clients (
