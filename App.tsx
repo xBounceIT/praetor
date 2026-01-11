@@ -254,6 +254,7 @@ const App: React.FC = () => {
   });
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
+  const [viewingUserAssignments, setViewingUserAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] } | null>(null);
   const [activeView, setActiveView] = useState<View>('tracker');
   const [insights, setInsights] = useState<string>('Logging some time to see patterns!');
   const [isInsightLoading, setIsInsightLoading] = useState(false);
@@ -310,20 +311,28 @@ const App: React.FC = () => {
     loadData();
   }, [currentUser]);
 
-  // Load entries when viewing user changes
+  // Load entries and assignments when viewing user changes
   useEffect(() => {
     if (!currentUser || !viewingUserId) return;
 
-    const loadEntries = async () => {
+    const loadEntriesAndAssignments = async () => {
       try {
         const entriesData = await api.entries.list(viewingUserId);
         setEntries(entriesData);
+
+        // If manager/admin is viewing another user, fetch that user's assignments to filter the dropdowns
+        if ((currentUser.role === 'admin' || currentUser.role === 'manager') && viewingUserId !== currentUser.id) {
+          const assignments = await api.users.getAssignments(viewingUserId);
+          setViewingUserAssignments(assignments);
+        } else {
+          setViewingUserAssignments(null);
+        }
       } catch (err) {
-        console.error('Failed to load entries:', err);
+        console.error('Failed to load user data:', err);
       }
     };
 
-    loadEntries();
+    loadEntriesAndAssignments();
   }, [currentUser, viewingUserId]);
 
   // Update viewingUserId when currentUser changes
@@ -342,6 +351,7 @@ const App: React.FC = () => {
   }, [users, currentUser]);
 
   const generateRecurringEntries = useCallback(async () => {
+    // ... (unchanged)
     const today = new Date();
     const futureLimit = new Date();
     futureLimit.setDate(today.getDate() + 14);
@@ -353,6 +363,7 @@ const App: React.FC = () => {
       const client = project ? clients.find(c => c.id === project.clientId) : null;
       if (!project || !client) continue;
 
+      // ... (logic continues same as before, preserving it)
       const startDate = task.recurrenceStart ? new Date(task.recurrenceStart) : new Date();
       for (let d = new Date(startDate); d <= futureLimit; d.setDate(d.getDate() + 1)) {
         if (task.recurrenceEnd) {
@@ -393,11 +404,32 @@ const App: React.FC = () => {
     }
   }, [projectTasks, entries, projects, clients, currentUser]);
 
+  // ... (rest of the logic remains validation which we don't need to change but need for context)
+
+  // Filtered lists for TrackerView
+  const filteredClients = useMemo(() => {
+    if (!viewingUserAssignments) return clients;
+    return clients.filter(c => viewingUserAssignments.clientIds.includes(c.id));
+  }, [clients, viewingUserAssignments]);
+
+  const filteredProjects = useMemo(() => {
+    if (!viewingUserAssignments) return projects;
+    return projects.filter(p => viewingUserAssignments.projectIds.includes(p.id));
+  }, [projects, viewingUserAssignments]);
+
+  const filteredTasks = useMemo(() => {
+    if (!viewingUserAssignments) return projectTasks;
+    return projectTasks.filter(t => viewingUserAssignments.taskIds.includes(t.id));
+  }, [projectTasks, viewingUserAssignments]);
+
+
   useEffect(() => {
     if (!currentUser) return;
     const timer = setTimeout(() => { generateRecurringEntries(); }, 1000);
     return () => clearTimeout(timer);
   }, [generateRecurringEntries, currentUser]);
+
+  // ... (handlers)
 
   const handleAddEntry = async (newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>) => {
     if (!currentUser) return;
@@ -585,7 +617,7 @@ const App: React.FC = () => {
       {activeView === 'tracker' && (
         <TrackerView
           entries={entries.filter(e => e.userId === viewingUserId)}
-          clients={clients} projects={projects} projectTasks={projectTasks}
+          clients={filteredClients} projects={filteredProjects} projectTasks={filteredTasks}
           onAddEntry={handleAddEntry} onDeleteEntry={handleDeleteEntry} onUpdateEntry={handleUpdateEntry}
           insights={insights} isInsightLoading={isInsightLoading} onRefreshInsights={generateInsights}
           startOfWeek={settings.startOfWeek} treatSaturdayAsHoliday={settings.treatSaturdayAsHoliday}
