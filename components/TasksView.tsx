@@ -162,24 +162,47 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Task is Disabled</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (editingTask) {
-                      const newValue = !editingTask.isDisabled;
-                      onUpdateTask(editingTask.id, { isDisabled: newValue });
-                      setEditingTask({ ...editingTask, isDisabled: newValue });
-                    }
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editingTask?.isDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editingTask?.isDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
+              {(() => {
+                const project = projects.find(p => p.id === projectId);
+                const client = clients.find(c => c.id === project?.clientId);
+                const isProjectDisabled = project?.isDisabled || false;
+                const isClientDisabled = client?.isDisabled || false;
+                const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+                const isCurrentlyDisabled = editingTask?.isDisabled || isInheritedDisabled;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <div>
+                        <p className={`text-sm font-bold ${isInheritedDisabled ? 'text-slate-400' : 'text-slate-700'}`}>Task is Disabled</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isInheritedDisabled}
+                        onClick={() => {
+                          if (editingTask && !isInheritedDisabled) {
+                            const newValue = !editingTask.isDisabled;
+                            onUpdateTask(editingTask.id, { isDisabled: newValue });
+                            setEditingTask({ ...editingTask, isDisabled: newValue });
+                          }
+                        }}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'} ${isInheritedDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    {isInheritedDisabled && (
+                      <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1 px-1">
+                        <i className="fa-solid fa-circle-info"></i>
+                        {isClientDisabled
+                          ? `Inherited from disabled Client: ${client?.name}`
+                          : `Inherited from disabled Project: ${project?.name}`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
 
 
               <div className="pt-4 flex items-center justify-between gap-4">

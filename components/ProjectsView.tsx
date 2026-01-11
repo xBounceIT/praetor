@@ -161,24 +161,42 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Project is Disabled</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (editingProject) {
-                      const newValue = !editingProject.isDisabled;
-                      onUpdateProject(editingProject.id, { isDisabled: newValue });
-                      setEditingProject({ ...editingProject, isDisabled: newValue });
-                    }
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editingProject?.isDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editingProject?.isDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
+              {(() => {
+                const client = clients.find(c => c.id === clientId);
+                const isClientDisabled = client?.isDisabled || false;
+                const isCurrentlyDisabled = editingProject?.isDisabled || isClientDisabled;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <div>
+                        <p className={`text-sm font-bold ${isClientDisabled ? 'text-slate-400' : 'text-slate-700'}`}>Project is Disabled</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isClientDisabled}
+                        onClick={() => {
+                          if (editingProject && !isClientDisabled) {
+                            const newValue = !editingProject.isDisabled;
+                            onUpdateProject(editingProject.id, { isDisabled: newValue });
+                            setEditingProject({ ...editingProject, isDisabled: newValue });
+                          }
+                        }}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'} ${isClientDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    {isClientDisabled && (
+                      <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1 px-1">
+                        <i className="fa-solid fa-circle-info"></i>
+                        Inherited from disabled Client: {client?.name}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
 
 
               <div className="pt-4 flex items-center justify-between gap-4">
