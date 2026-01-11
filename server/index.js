@@ -62,7 +62,21 @@ app.listen(PORT, async () => {
       // Import query from db module dynamically to ensure it's loaded
       const { query } = await import('./db/index.js');
       await query(schemaSql);
-      console.log('Database schema verified/updated');
+
+      // Explicitly verify that the new tables exist
+      const tableCheck = await query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name IN ('user_clients', 'user_projects', 'user_tasks')
+      `);
+
+      const foundTables = tableCheck.rows.map(r => r.table_name);
+      console.log(`Database schema verified. Found tables: ${foundTables.join(', ')}`);
+
+      if (!foundTables.includes('user_clients')) {
+        console.error('CRITICAL: user_clients table was not created!');
+      }
     } else {
       console.warn('Schema file not found at:', schemaPath);
     }
