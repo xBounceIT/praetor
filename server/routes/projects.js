@@ -73,8 +73,8 @@ router.post('/', authenticateToken, requireRole('admin', 'manager'), async (req,
     }
 });
 
-// DELETE /api/projects/:id - Delete project (admin only)
-router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res, next) => {
+// DELETE /api/projects/:id - Delete project (admin/manager only)
+router.delete('/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await query('DELETE FROM projects WHERE id = $1 RETURNING id', [id]);

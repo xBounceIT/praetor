@@ -121,6 +121,9 @@ export const projectsApi = {
             method: 'PUT',
             body: JSON.stringify(updates),
         }),
+
+    delete: (id: string): Promise<void> =>
+        fetchApi(`/projects/${id}`, { method: 'DELETE' }),
 };
 
 // Tasks API

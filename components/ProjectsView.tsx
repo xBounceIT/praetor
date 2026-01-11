@@ -9,13 +9,15 @@ interface ProjectsViewProps {
   role: UserRole;
   onAddProject: (name: string, clientId: string, description?: string) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
+  onDeleteProject: (id: string) => void;
 }
 
-const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, onAddProject, onUpdateProject }) => {
+const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, onAddProject, onUpdateProject, onDeleteProject }) => {
   const [name, setName] = useState('');
   const [clientId, setClientId] = useState('');
   const [description, setDescription] = useState('');
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const isManagement = role === 'admin' || role === 'manager';
 
@@ -24,14 +26,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     if (name && clientId) {
       if (editingProject) {
         onUpdateProject(editingProject.id, { name, clientId, description });
-        setEditingProject(null);
       } else {
         onAddProject(name, clientId, description);
       }
-      setName('');
-      setClientId('');
-      setDescription('');
+      closeModal();
     }
+  };
+
+  const openCreateModal = () => {
+    setEditingProject(null);
+    setName('');
+    setClientId('');
+    setDescription('');
+    setIsModalOpen(true);
   };
 
   const startEditing = (project: Project) => {
@@ -39,67 +46,122 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     setName(project.name);
     setClientId(project.clientId);
     setDescription(project.description || '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsModalOpen(true);
   };
 
-  const cancelEditing = () => {
+  const closeModal = () => {
+    setIsModalOpen(false);
     setEditingProject(null);
     setName('');
     setClientId('');
     setDescription('');
   };
 
+  const handleDelete = () => {
+    if (editingProject) {
+      onDeleteProject(editingProject.id);
+      closeModal();
+    }
+  };
+
   const clientOptions = clients.map(c => ({ id: c.id, name: c.name }));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {isManagement && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <i className={`fa-solid ${editingProject ? 'fa-pen-to-square text-indigo-500' : 'fa-briefcase text-emerald-500'}`}></i>
-            {editingProject ? 'Edit Project' : 'Create New Project'}
-          </h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <CustomSelect
-                label="Client"
-                options={clientOptions}
-                value={clientId}
-                onChange={setClientId}
-                placeholder="Select Client..."
-              />
+
+      {/* Modal Overlay */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i className={`fa-solid ${editingProject ? 'fa-pen-to-square text-indigo-500' : 'fa-briefcase text-emerald-500'}`}></i>
+                {editingProject ? 'Edit Project' : 'New Project'}
+              </h3>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
             </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Project Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Website Redesign"
-                className="w-full text-sm px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Description</label>
-              <div className="flex gap-2">
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              <div className="space-y-2">
+                <CustomSelect
+                  label="Client"
+                  options={clientOptions}
+                  value={clientId}
+                  onChange={setClientId}
+                  placeholder="Select Client..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Project Name</label>
                 <input
                   type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Website Redesign"
+                  className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 focus:bg-white transition-all"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Description</label>
+                <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   placeholder="What is this project about?"
-                  className="flex-1 text-sm px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50"
+                  rows={3}
+                  className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 focus:bg-white transition-all resize-none"
                 />
-                <button type="submit" className={`text-white px-6 py-2 rounded-xl font-bold shadow-md transition-all active:scale-95 ${editingProject ? 'bg-indigo-600 shadow-indigo-100' : 'bg-emerald-600 shadow-emerald-100'}`}>
-                  {editingProject ? 'Update' : 'Create'}
-                </button>
+              </div>
+
+              <div className="pt-4 flex items-center justify-between gap-4">
                 {editingProject && (
-                  <button type="button" onClick={cancelEditing} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl font-bold hover:bg-slate-200 transition-colors">
-                    Cancel
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="text-red-500 text-xs font-bold uppercase tracking-wider hover:text-red-700 hover:underline transition-colors"
+                  >
+                    Delete Project
                   </button>
                 )}
+
+                <div className="flex gap-3 ml-auto">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={`px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${editingProject
+                        ? 'bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700'
+                        : 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'
+                      }`}
+                  >
+                    {editingProject ? 'Save Changes' : 'Create Project'}
+                  </button>
+                </div>
               </div>
-            </div>
-          </form>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Header with Add Button */}
+      {isManagement && (
+        <div className="flex justify-end">
+          <button
+            onClick={openCreateModal}
+            className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-100 hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i>
+            New Project
+          </button>
         </div>
       )}
 
@@ -137,7 +199,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               ) : projects.map(project => {
                 const client = clients.find(c => c.id === project.clientId);
                 return (
-                  <tr key={project.id} className={`group hover:bg-slate-50 transition-colors ${editingProject?.id === project.id ? 'bg-indigo-50/50' : ''}`}>
+                  <tr key={project.id} className="group hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
                       <span className="text-[10px] font-black text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded">
                         {client?.name || 'Unknown'}
