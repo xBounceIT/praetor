@@ -24,6 +24,11 @@ router.post('/login', async (req, res, next) => {
         }
 
         const user = result.rows[0];
+
+        if (user.is_disabled) {
+            return res.status(403).json({ error: 'Account is disabled. Please contact an administrator.' });
+        }
+
         const validPassword = await bcrypt.compare(password, user.password_hash);
 
         if (!validPassword) {

@@ -13,19 +13,19 @@ router.get('/', authenticateToken, async (req, res, next) => {
         if (req.user.role === 'admin') {
             // Admin sees all users
             result = await query(
-                'SELECT id, name, username, role, avatar_initials FROM users ORDER BY name'
+                'SELECT id, name, username, role, avatar_initials, is_disabled FROM users ORDER BY name'
             );
         } else if (req.user.role === 'manager') {
             // Manager sees regular users and themselves
             result = await query(
-                `SELECT id, name, username, role, avatar_initials FROM users 
-         WHERE role = 'user' OR id = $1 ORDER BY name`,
+                `SELECT id, name, username, role, avatar_initials, is_disabled FROM users 
+          WHERE role = 'user' OR id = $1 ORDER BY name`,
                 [req.user.id]
             );
         } else {
             // Regular users only see themselves
             result = await query(
-                'SELECT id, name, username, role, avatar_initials FROM users WHERE id = $1',
+                'SELECT id, name, username, role, avatar_initials, is_disabled FROM users WHERE id = $1',
                 [req.user.id]
             );
         }
@@ -35,7 +35,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
             name: u.name,
             username: u.username,
             role: u.role,
-            avatarInitials: u.avatar_initials
+            avatarInitials: u.avatar_initials,
+            isDisabled: !!u.is_disabled
         }));
 
         res.json(users);
@@ -62,9 +63,9 @@ router.post('/', authenticateToken, requireRole('admin'), async (req, res, next)
         const id = 'u-' + Date.now();
 
         await query(
-            `INSERT INTO users (id, name, username, password_hash, role, avatar_initials)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-            [id, name, username, passwordHash, role, avatarInitials]
+            `INSERT INTO users (id, name, username, password_hash, role, avatar_initials, is_disabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [id, name, username, passwordHash, role, avatarInitials, false]
         );
 
         res.status(201).json({
@@ -98,6 +99,58 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res, 
         }
 
         res.json({ message: 'User deleted' });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// PUT /api/users/:id - Update user (admin only)
+router.put('/:id', authenticateToken, requireRole('admin'), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, isDisabled } = req.body;
+
+        if (id === req.user.id && isDisabled === true) {
+            return res.status(400).json({ error: 'Cannot disable your own account' });
+        }
+
+        const updates = [];
+        const values = [];
+        let paramIdx = 1;
+
+        if (name !== undefined) {
+            updates.push(`name = $${paramIdx++}`);
+            values.push(name);
+        }
+
+        if (isDisabled !== undefined) {
+            updates.push(`is_disabled = $${paramIdx++}`);
+            values.push(isDisabled);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        values.push(id);
+        const result = await query(
+            `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, is_disabled`,
+            values
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const u = result.rows[0];
+        res.json({
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            role: u.role,
+            avatarInitials: u.avatar_initials,
+            isDisabled: !!u.is_disabled
+        });
     } catch (err) {
         next(err);
     }

@@ -8,6 +8,7 @@ export interface User {
   avatarInitials: string;
   username: string;
   password?: string;
+  isDisabled?: boolean;
 }
 
 export interface Client {

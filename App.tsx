@@ -584,6 +584,16 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateUser = async (id: string, updates: Partial<User>) => {
+    try {
+      const updated = await api.users.update(id, updates);
+      setUsers(users.map(u => u.id === id ? updated : u));
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      alert('Failed to update user: ' + (err as Error).message);
+    }
+  };
+
   const generateInsights = async () => {
     if (entries.length < 3) return;
     setIsInsightLoading(true);
@@ -710,6 +720,7 @@ const App: React.FC = () => {
           tasks={projectTasks}
           onAddUser={addUser}
           onDeleteUser={deleteUser}
+          onUpdateUser={handleUpdateUser}
           currentUserId={currentUser.id}
           currentUserRole={currentUser.role}
         />

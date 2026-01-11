@@ -10,6 +10,7 @@ interface UserManagementProps {
   tasks: ProjectTask[];
   onAddUser: (name: string, username: string, password: string, role: UserRole) => void;
   onDeleteUser: (id: string) => void;
+  onUpdateUser: (id: string, updates: Partial<User>) => void;
   currentUserId: string;
   currentUserRole: UserRole;
 }
@@ -20,7 +21,7 @@ const ROLE_OPTIONS = [
   { id: 'admin', name: 'Admin' },
 ];
 
-const UserManagement: React.FC<UserManagementProps> = ({ users, clients, projects, tasks, onAddUser, onDeleteUser, currentUserId, currentUserRole }) => {
+const UserManagement: React.FC<UserManagementProps> = ({ users, clients, projects, tasks, onAddUser, onDeleteUser, onUpdateUser, currentUserId, currentUserRole }) => {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('password');
@@ -33,6 +34,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editIsDisabled, setEditIsDisabled] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,6 +109,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     }
   };
 
+  const handleEdit = (user: User) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditIsDisabled(!!user.isDisabled);
+  };
+
+  const saveEdit = () => {
+    if (editingUser) {
+      onUpdateUser(editingUser.id, { name: editName, isDisabled: editIsDisabled });
+      setEditingUser(null);
+    }
+  };
+
   const managingUser = users.find(u => u.id === managingUserId);
 
   return (
@@ -135,6 +153,64 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                   className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
                 >
                   Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <i className="fa-solid fa-user-pen text-indigo-600"></i>
+                </div>
+                <h3 className="text-lg font-black text-slate-800">Edit User</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+                  />
+                </div>
+
+                {editingUser.id !== currentUserId && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">Account Access</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Prevent user from logging in</p>
+                    </div>
+                    <button
+                      onClick={() => setEditIsDisabled(!editIsDisabled)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editIsDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setEditingUser(null)}
+                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEdit}
+                  className="flex-1 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+                >
+                  Save Changes
                 </button>
               </div>
             </div>
@@ -223,6 +299,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       {user.avatarInitials}
                     </div>
                     <span className="font-bold text-slate-800">{user.name}</span>
+                    {user.isDisabled && (
+                      <span className="text-[10px] bg-red-100 px-2 py-0.5 rounded text-red-600 font-bold uppercase border border-red-200">
+                        Disabled
+                      </span>
+                    )}
                     {user.id === currentUserId && <span className="text-[10px] bg-indigo-600 px-2 py-0.5 rounded text-white font-bold uppercase">You</span>}
                   </div>
                 </td>
@@ -249,13 +330,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       <i className="fa-solid fa-link"></i>
                     </button>
                     {currentUserRole === 'admin' && (
-                      <button
-                        onClick={() => confirmDelete(user)}
-                        disabled={user.id === currentUserId}
-                        className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleEdit(user)}
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-2"
+                          title="Edit User"
+                        >
+                          <i className="fa-solid fa-user-pen"></i>
+                        </button>
+                        <button
+                          onClick={() => confirmDelete(user)}
+                          disabled={user.id === currentUserId}
+                          className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                          title="Delete User"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>

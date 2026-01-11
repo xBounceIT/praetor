@@ -93,6 +93,12 @@ export const usersApi = {
             method: 'POST',
             body: JSON.stringify({ clientIds, projectIds, taskIds }),
         }),
+
+    update: (id: string, updates: Partial<User>): Promise<User> =>
+        fetchApi(`/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        }),
 };
 
 // Clients API
