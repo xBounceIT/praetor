@@ -162,21 +162,25 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                 />
               </div>
 
-              <div className="flex items-center gap-2 py-2">
-                <input
-                  type="checkbox"
-                  id="isDisabled"
-                  checked={editingTask?.isDisabled || false}
-                  onChange={(e) => {
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Task is Disabled</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
                     if (editingTask) {
-                      onUpdateTask(editingTask.id, { isDisabled: e.target.checked });
-                      setEditingTask({ ...editingTask, isDisabled: e.target.checked });
+                      const newValue = !editingTask.isDisabled;
+                      onUpdateTask(editingTask.id, { isDisabled: newValue });
+                      setEditingTask({ ...editingTask, isDisabled: newValue });
                     }
                   }}
-                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="isDisabled" className="text-sm font-bold text-slate-700">Task is Disabled</label>
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editingTask?.isDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editingTask?.isDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
+
 
               <div className="pt-4 flex items-center justify-between gap-4">
                 <button

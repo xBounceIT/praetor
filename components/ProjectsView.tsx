@@ -161,21 +161,25 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 />
               </div>
 
-              <div className="flex items-center gap-2 py-2">
-                <input
-                  type="checkbox"
-                  id="isDisabled"
-                  checked={editingProject?.isDisabled || false}
-                  onChange={(e) => {
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Project is Disabled</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
                     if (editingProject) {
-                      onUpdateProject(editingProject.id, { isDisabled: e.target.checked });
-                      setEditingProject({ ...editingProject, isDisabled: e.target.checked });
+                      const newValue = !editingProject.isDisabled;
+                      onUpdateProject(editingProject.id, { isDisabled: newValue });
+                      setEditingProject({ ...editingProject, isDisabled: newValue });
                     }
                   }}
-                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <label htmlFor="isDisabled" className="text-sm font-bold text-slate-700">Project is Disabled</label>
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editingProject?.isDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editingProject?.isDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
+
 
               <div className="pt-4 flex items-center justify-between gap-4">
                 <button
