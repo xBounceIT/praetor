@@ -18,6 +18,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
   const [description, setDescription] = useState('');
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const isManagement = role === 'admin' || role === 'manager';
 
@@ -51,10 +52,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setIsDeleteConfirmOpen(false);
     setEditingProject(null);
     setName('');
     setClientId('');
     setDescription('');
+  };
+
+  const confirmDelete = () => {
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const cancelDelete = () => {
+    setIsDeleteConfirmOpen(false);
   };
 
   const handleDelete = () => {
@@ -69,7 +79,41 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
 
-      {/* Modal Overlay */}
+      {/* Delete Confirmation Modal */}
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800">Delete Project?</h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  Are you sure you want to delete <span className="font-bold text-slate-800">{editingProject?.name}</span>?
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={cancelDelete}
+                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+                >
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Modal Overlay */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-300">
@@ -121,10 +165,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 {editingProject && (
                   <button
                     type="button"
-                    onClick={handleDelete}
-                    className="text-red-500 text-xs font-bold uppercase tracking-wider hover:text-red-700 hover:underline transition-colors"
+                    onClick={confirmDelete}
+                    className="px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-red-500 shadow-red-200 hover:bg-red-600"
                   >
-                    Delete Project
+                    Delete
                   </button>
                 )}
 

@@ -555,7 +555,6 @@ const App: React.FC = () => {
 
   const handleDeleteProject = async (id: string) => {
     try {
-      if (!confirm('Are you sure you want to delete this project? Data will be lost.')) return;
       await api.projects.delete(id);
       setProjects(projects.filter(p => p.id !== id));
       // Clean up related entries if needed, or backend handles it? 
