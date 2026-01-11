@@ -46,7 +46,30 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  try {
+    // Run automatic migration on startup
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const schemaPath = path.join(__dirname, 'db', 'schema.sql');
+
+    if (fs.existsSync(schemaPath)) {
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      // Import query from db module dynamically to ensure it's loaded
+      const { query } = await import('./db/index.js');
+      await query(schemaSql);
+      console.log('Database schema verified/updated');
+    } else {
+      console.warn('Schema file not found at:', schemaPath);
+    }
+  } catch (err) {
+    console.error('Failed to run auto-migration:', err);
+  }
+
   console.log(`Tempo API server running on port ${PORT}`);
 });
 
