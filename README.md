@@ -61,7 +61,9 @@ Tempo is a modern, AI-enhanced time tracking application inspired by the simplic
 
 You can containerize the application using Nginx to serve the static files:
 
-```dockerfile
+```bash
+cp .env.example .env
+
 docker compose up -d --build
 ```
 
