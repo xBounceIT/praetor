@@ -173,7 +173,7 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, entries
           {/* Year Picker Overlay */}
           {isYearPickerOpen && (
             <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 shadow-xl rounded-xl p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
-              {Array.from({ length: 21 }, (_, i) => currentYear - 10 + i).map((y) => (
+              {Array.from({ length: 7 }, (_, i) => currentYear - 3 + i).map((y) => (
                 <button
                   key={y}
                   onClick={() => {
