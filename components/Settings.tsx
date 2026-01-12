@@ -6,7 +6,6 @@ import api from '../services/api';
 export interface UserSettings {
   fullName: string;
   email: string;
-  dailyGoal: number;
   startOfWeek: 'Monday' | 'Sunday';
   enableAiInsights: boolean;
   compactView: boolean;
@@ -22,7 +21,6 @@ const Settings: React.FC = () => {
   const [settings, setSettings] = useState<UserSettings>({
     fullName: '',
     email: '',
-    dailyGoal: 8,
     startOfWeek: 'Monday',
     enableAiInsights: true,
     compactView: false,
@@ -118,22 +116,6 @@ const Settings: React.FC = () => {
             <h3 className="font-bold text-slate-800">Tracking Preferences</h3>
           </div>
           <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-slate-800">Daily Hour Goal</p>
-                <p className="text-xs text-slate-500 italic">Target hours to track per day</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  step="0.5"
-                  value={settings.dailyGoal}
-                  onChange={e => setSettings({ ...settings, dailyGoal: parseFloat(e.target.value) })}
-                  className="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-center font-bold text-sm"
-                />
-                <span className="text-xs font-bold text-slate-400 uppercase">hrs</span>
-              </div>
-            </div>
 
             <div className="flex items-center justify-between">
               <div>

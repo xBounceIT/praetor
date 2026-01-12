@@ -138,8 +138,12 @@ CREATE TABLE IF NOT EXISTS ldap_config (
 CREATE TABLE IF NOT EXISTS general_settings (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     currency VARCHAR(10) DEFAULT 'USD',
+    daily_limit DECIMAL(4, 2) DEFAULT 8.00,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure daily_limit exists for existing installations
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS daily_limit DECIMAL(4, 2) DEFAULT 8.00;
 
 -- Insert default general settings room
 INSERT INTO general_settings (id, currency) VALUES (1, 'USD') ON CONFLICT (id) DO NOTHING;

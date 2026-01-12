@@ -292,7 +292,6 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState({
     fullName: 'User',
     email: '',
-    dailyGoal: 8,
     startOfWeek: 'Monday' as 'Monday' | 'Sunday',
     enableAiInsights: true,
     compactView: false,
@@ -310,7 +309,8 @@ const App: React.FC = () => {
     roleMappings: []
   });
   const [generalSettings, setGeneralSettings] = useState({
-    currency: 'USD'
+    currency: 'USD',
+    dailyLimit: 8
   });
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
@@ -749,7 +749,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateGeneralSettings = async (updates: Partial<{ currency: string }>) => {
+  const handleUpdateGeneralSettings = async (updates: Partial<{ currency: string, dailyLimit: number }>) => {
     try {
       const updated = await api.generalSettings.update(updates);
       setGeneralSettings(updated);
@@ -823,7 +823,7 @@ const App: React.FC = () => {
           onViewUserChange={setViewingUserId}
           availableUsers={availableUsers}
           currentUser={currentUser}
-          dailyGoal={settings.dailyGoal}
+          dailyGoal={generalSettings.dailyLimit}
           onAddBulkEntries={handleAddBulkEntries}
         />
       )}
@@ -840,7 +840,7 @@ const App: React.FC = () => {
           currentUser={currentUser}
           startOfWeek={settings.startOfWeek}
           treatSaturdayAsHoliday={settings.treatSaturdayAsHoliday}
-          dailyGoal={settings.dailyGoal}
+          dailyGoal={generalSettings.dailyLimit}
           currency={generalSettings.currency}
         />
       )}

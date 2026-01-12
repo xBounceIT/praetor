@@ -54,7 +54,6 @@ export interface LoginResponse {
 export interface Settings {
     fullName: string;
     email: string;
-    dailyGoal: number;
     startOfWeek: 'Monday' | 'Sunday';
     enableAiInsights: boolean;
     compactView: boolean;

@@ -14,6 +14,7 @@ export interface User {
 
 export interface GeneralSettings {
   currency: string;
+  dailyLimit: number;
 }
 
 export interface Client {
