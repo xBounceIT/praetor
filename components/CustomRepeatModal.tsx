@@ -29,9 +29,17 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
         onClose();
     };
 
+    const occurrenceOptions = [
+        { id: 'first', name: 'First' },
+        { id: 'second', name: 'Second' },
+        { id: 'third', name: 'Third' },
+        { id: 'fourth', name: 'Fourth' },
+        { id: 'last', name: 'Last' },
+    ];
+
     return (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                     <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                         <i className="fa-solid fa-calendar-days text-indigo-500"></i>
@@ -41,84 +49,16 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
                 </div>
 
                 <div className="p-6 space-y-6">
-                    <div className="space-y-3">
-                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group">
-                            <input
-                                type="radio"
-                                name="repeatType"
-                                checked={type === 'first'}
-                                onChange={() => setType('first')}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">Every</span>
+                        <div className="flex-1">
+                            <CustomSelect
+                                options={occurrenceOptions}
+                                value={type}
+                                onChange={(val) => setType(val as any)}
+                                className="w-full"
                             />
-                            <span className={`text-sm font-bold ${type === 'first' ? 'text-slate-800' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                                Every <span className="text-indigo-600">First</span>...
-                            </span>
-                        </label>
-
-                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group">
-                            <input
-                                type="radio"
-                                name="repeatType"
-                                checked={type === 'first'}
-                                onChange={() => setType('first')}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                            />
-                            <span className={`text-sm font-bold ${type === 'first' ? 'text-slate-800' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                                Every <span className="text-indigo-600">First</span>...
-                            </span>
-                        </label>
-
-                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group">
-                            <input
-                                type="radio"
-                                name="repeatType"
-                                checked={type === 'second'}
-                                onChange={() => setType('second')}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                            />
-                            <span className={`text-sm font-bold ${type === 'second' ? 'text-slate-800' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                                Every <span className="text-indigo-600">Second</span>...
-                            </span>
-                        </label>
-
-                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group">
-                            <input
-                                type="radio"
-                                name="repeatType"
-                                checked={type === 'third'}
-                                onChange={() => setType('third')}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                            />
-                            <span className={`text-sm font-bold ${type === 'third' ? 'text-slate-800' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                                Every <span className="text-indigo-600">Third</span>...
-                            </span>
-                        </label>
-
-                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group">
-                            <input
-                                type="radio"
-                                name="repeatType"
-                                checked={type === 'fourth'}
-                                onChange={() => setType('fourth')}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                            />
-                            <span className={`text-sm font-bold ${type === 'fourth' ? 'text-slate-800' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                                Every <span className="text-indigo-600">Fourth</span>...
-                            </span>
-                        </label>
-
-                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group">
-                            <input
-                                type="radio"
-                                name="repeatType"
-                                checked={type === 'last'}
-                                onChange={() => setType('last')}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                            />
-                            <span className={`text-sm font-bold ${type === 'last' ? 'text-slate-800' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                                Every <span className="text-indigo-600">Last</span>...
-                            </span>
-                        </label>
+                        </div>
                     </div>
 
                     <div className="space-y-2">
