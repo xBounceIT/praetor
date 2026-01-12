@@ -9,7 +9,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     try {
         let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
-                   recurrence_pattern, recurrence_start, recurrence_end, is_disabled 
+                   recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
             FROM tasks ORDER BY name
         `;
         let queryParams = [];
@@ -17,7 +17,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         if (req.user.role === 'user') {
             queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
-                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.is_disabled 
+                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
                 FROM tasks t
                 INNER JOIN user_tasks ut ON t.id = ut.task_id
                 WHERE ut.user_id = $1
@@ -37,6 +37,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
             recurrencePattern: t.recurrence_pattern,
             recurrenceStart: t.recurrence_start ? t.recurrence_start.toISOString().split('T')[0] : undefined,
             recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
+            recurrenceDuration: parseFloat(t.recurrence_duration || 0),
             isDisabled: t.is_disabled
         }));
 
@@ -59,9 +60,9 @@ router.post('/', authenticateToken, async (req, res, next) => {
         const start = isRecurring ? (recurrenceStart || new Date().toISOString().split('T')[0]) : null;
 
         await query(
-            `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, is_disabled) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, start, false]
+            `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, is_disabled) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, start, req.body.recurrenceDuration || 0, false]
         );
 
         res.status(201).json({
@@ -72,6 +73,7 @@ router.post('/', authenticateToken, async (req, res, next) => {
             isRecurring: isRecurring || false,
             recurrencePattern,
             recurrenceStart: start,
+            recurrenceDuration: req.body.recurrenceDuration || 0,
             isDisabled: false
         });
     } catch (err) {
@@ -96,10 +98,11 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
            recurrence_pattern = $5,
            recurrence_start = $6,
            recurrence_end = $7,
-           is_disabled = COALESCE($8, is_disabled)
+           recurrence_duration = $8,
+           is_disabled = COALESCE($9, is_disabled)
        WHERE id = $1
        RETURNING *`,
-            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, isDisabled]
+            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, req.body.recurrenceDuration || 0, isDisabled]
         );
 
         if (result.rows.length === 0) {
@@ -116,6 +119,7 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
             recurrencePattern: t.recurrence_pattern,
             recurrenceStart: t.recurrence_start ? t.recurrence_start.toISOString().split('T')[0] : undefined,
             recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
+            recurrenceDuration: parseFloat(t.recurrence_duration || 0),
             isDisabled: t.is_disabled
         });
     } catch (err) {

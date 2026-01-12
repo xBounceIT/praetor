@@ -547,7 +547,7 @@ const App: React.FC = () => {
                 projectId: task.projectId,
                 projectName: project.name,
                 task: task.name,
-                duration: 0,
+                duration: task.recurrenceDuration || 0,
                 isPlaceholder: true,
                 hourlyCost: currentUser?.costPerHour || 0
               });
@@ -599,7 +599,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    const timer = setTimeout(() => { generateRecurringEntries(); }, 1000);
+    const timer = setTimeout(() => { generateRecurringEntries(); }, 100);
     return () => clearTimeout(timer);
   }, [generateRecurringEntries, currentUser]);
 
@@ -664,17 +664,17 @@ const App: React.FC = () => {
     }
   };
 
-  const handleMakeRecurring = async (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', startDate?: string, endDate?: string) => {
+  const handleMakeRecurring = async (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', startDate?: string, endDate?: string, duration?: number) => {
     try {
       const updated = await api.tasks.update(taskId, {
         isRecurring: true,
         recurrencePattern: pattern,
         recurrenceStart: startDate || new Date().toISOString().split('T')[0],
-        recurrenceEnd: endDate
+        recurrenceEnd: endDate,
+        recurrenceDuration: duration
       });
       setProjectTasks(projectTasks.map(t => t.id === taskId ? updated : t));
       setTimeout(generateRecurringEntries, 100);
-      alert('Task set to recurring!');
     } catch (err) {
       console.error('Failed to make task recurring:', err);
     }

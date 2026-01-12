@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     recurrence_pattern VARCHAR(50),
     recurrence_start DATE,
     recurrence_end DATE,
+    recurrence_duration DECIMAL(10, 2) DEFAULT 0,
     is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -73,6 +74,9 @@ END $$;
 
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
+
+-- Ensure recurrence_duration column exists for existing installations
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_duration DECIMAL(10, 2) DEFAULT 0;
 
 -- User-Client associations
 CREATE TABLE IF NOT EXISTS user_clients (
