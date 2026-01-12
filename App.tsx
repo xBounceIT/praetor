@@ -98,6 +98,8 @@ const TrackerView: React.FC<{
             availableUsers={availableUsers}
             onViewUserChange={onViewUserChange}
             onAddBulkEntries={onAddBulkEntries}
+            startOfWeek={startOfWeek}
+            treatSaturdayAsHoliday={treatSaturdayAsHoliday}
           />
         ) : (
           <div className="flex flex-col lg:flex-row gap-8">

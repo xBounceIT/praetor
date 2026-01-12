@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Client, Project, ProjectTask, TimeEntry, UserRole, User } from '../types';
 import CustomSelect from './CustomSelect';
+import { isItalianHoliday } from '../utils/holidays';
 
 interface WeeklyViewProps {
     entries: TimeEntry[];
@@ -16,11 +17,14 @@ interface WeeklyViewProps {
     viewingUserId: string;
     availableUsers: User[];
     onViewUserChange: (id: string) => void;
+    startOfWeek: 'Monday' | 'Sunday';
+    treatSaturdayAsHoliday: boolean;
 }
 
 const WeeklyView: React.FC<WeeklyViewProps> = ({
     entries, clients, projects, projectTasks, onAddBulkEntries, onDeleteEntry, onUpdateEntry,
-    userRole, currentUser, viewingUserId, availableUsers, onViewUserChange
+    userRole, currentUser, viewingUserId, availableUsers, onViewUserChange,
+    startOfWeek, treatSaturdayAsHoliday
 }) => {
     const [currentWeekStart, setCurrentWeekStart] = useState(() => {
         const d = new Date();
@@ -319,16 +323,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                                                     step="0.1"
                                                     min="0"
                                                     placeholder="0.0"
+                                                    disabled={(day.dayName === 'Sun' || (treatSaturdayAsHoliday && day.dayName === 'Sab')) || !!isItalianHoliday(new Date(day.dateStr))}
                                                     value={row.days[day.dateStr]?.duration || ''}
                                                     onChange={(e) => handleValueChange(rowIndex, day.dateStr, 'duration', e.target.value)}
-                                                    className={`w-16 text-center text-sm font-black transition-all duration-300 ${showSuccess && (row.days[day.dateStr]?.duration > 0) ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-slate-700 bg-slate-50 border-slate-200'} border rounded-lg py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none`}
+                                                    className={`w-16 text-center text-sm font-black transition-all duration-300 ${showSuccess && (row.days[day.dateStr]?.duration > 0) ? 'text-emerald-700 border-emerald-200 bg-white scale-105 shadow-sm' : 'text-slate-700 bg-slate-50 border-slate-200'} ${(day.dayName === 'Sun' || (treatSaturdayAsHoliday && day.dayName === 'Sab')) || !!isItalianHoliday(new Date(day.dateStr)) ? 'opacity-50 cursor-not-allowed bg-red-50/50' : ''} border rounded-lg py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none`}
                                                 />
                                                 <input
                                                     type="text"
                                                     placeholder="Note..."
+                                                    disabled={(day.dayName === 'Sun' || (treatSaturdayAsHoliday && day.dayName === 'Sab')) || !!isItalianHoliday(new Date(day.dateStr))}
                                                     value={row.days[day.dateStr]?.note || ''}
                                                     onChange={(e) => handleValueChange(rowIndex, day.dateStr, 'note', e.target.value)}
-                                                    className={`w-16 text-[9px] bg-transparent border-none focus:ring-1 focus:ring-indigo-200 rounded p-1 transition-colors ${showSuccess && (row.days[day.dateStr]?.duration > 0) ? 'text-emerald-600' : 'text-slate-400 focus:text-slate-700'}`}
+                                                    className={`w-16 text-[9px] bg-transparent border-none focus:ring-1 focus:ring-indigo-200 rounded p-1 transition-colors ${showSuccess && (row.days[day.dateStr]?.duration > 0) ? 'text-emerald-600' : 'text-slate-400 focus:text-slate-700'} ${(day.dayName === 'Sun' || (treatSaturdayAsHoliday && day.dayName === 'Sab')) || !!isItalianHoliday(new Date(day.dateStr)) ? 'opacity-30 cursor-not-allowed' : ''}`}
                                                 />
                                             </div>
                                         </td>
