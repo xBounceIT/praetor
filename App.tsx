@@ -502,7 +502,6 @@ const App: React.FC = () => {
         if (task.recurrencePattern === 'daily') matches = true;
         if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay()) matches = true;
         if (task.recurrencePattern === 'monthly' && d.getDate() === startDate.getDate()) matches = true;
-        if (task.recurrencePattern === 'first_of_month' && d.getDate() === 1) matches = true;
         if (matches) {
           const exists = entries.some(e => e.date === dateStr && e.projectId === task.projectId && e.task === task.name);
           if (!exists) {
@@ -632,7 +631,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleMakeRecurring = async (taskId: string, pattern: string, endDate?: string) => {
+  const handleMakeRecurring = async (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', endDate?: string) => {
     try {
       const updated = await api.tasks.update(taskId, {
         isRecurring: true,

@@ -51,15 +51,12 @@ CREATE TABLE IF NOT EXISTS tasks (
     project_id VARCHAR(50) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     description TEXT,
     is_recurring BOOLEAN DEFAULT FALSE,
-    recurrence_pattern VARCHAR(50),
+    recurrence_pattern VARCHAR(20) CHECK (recurrence_pattern IN ('daily', 'weekly', 'monthly')),
     recurrence_start DATE,
     recurrence_end DATE,
     is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
--- Safely remove existing constraint for custom patterns
-ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_recurrence_pattern_check;
 
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;

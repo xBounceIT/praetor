@@ -75,7 +75,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-100">
                         <i className="fa-solid fa-repeat text-[10px]"></i>
-                        {task.recurrencePattern === 'first_of_month' ? 'Every 1st' : task.recurrencePattern}
+                        {task.recurrencePattern}
                       </span>
                     </td>
                     <td className="px-6 py-4">
