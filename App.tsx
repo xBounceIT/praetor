@@ -502,6 +502,30 @@ const App: React.FC = () => {
         if (task.recurrencePattern === 'daily') matches = true;
         if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay()) matches = true;
         if (task.recurrencePattern === 'monthly' && d.getDate() === startDate.getDate()) matches = true;
+
+        // Custom patterns: monthly:first:X or monthly:last:X
+        if (typeof task.recurrencePattern === 'string' && task.recurrencePattern.startsWith('monthly:')) {
+          const parts = task.recurrencePattern.split(':');
+          if (parts.length === 3) {
+            const type = parts[1]; // 'first' or 'last'
+            const targetDay = parseInt(parts[2]); // 0-6 (Sun-Sat) or 1-7 depending on UI, my modal uses 0=Sun, 1=Mon... match JS getDay()
+
+            // Adjust for UI mapping: My modal uses 0=Sun, 1=Mon...6=Sat which matches getDay() perfectly.
+            // Wait, in modal I used 0=Sunday, 1=Monday. JS getDay() returns 0=Sunday, 1=Monday. So it matches.
+
+            if (d.getDay() === targetDay) {
+              if (type === 'first') {
+                // It is the first occurrence if the date is <= 7
+                if (d.getDate() <= 7) matches = true;
+              } else if (type === 'last') {
+                // It is the last occurrence if adding 7 days puts us in next month
+                const nextWeek = new Date(d);
+                nextWeek.setDate(d.getDate() + 7);
+                if (nextWeek.getMonth() !== d.getMonth()) matches = true;
+              }
+            }
+          }
+        }
         if (matches) {
           const exists = entries.some(e => e.date === dateStr && e.projectId === task.projectId && e.task === task.name);
           if (!exists) {

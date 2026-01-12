@@ -51,12 +51,25 @@ CREATE TABLE IF NOT EXISTS tasks (
     project_id VARCHAR(50) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     description TEXT,
     is_recurring BOOLEAN DEFAULT FALSE,
-    recurrence_pattern VARCHAR(20) CHECK (recurrence_pattern IN ('daily', 'weekly', 'monthly')),
+    recurrence_pattern VARCHAR(50),
     recurrence_start DATE,
     recurrence_end DATE,
     is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Safe migration for existing installations to allow custom patterns
+DO $$
+BEGIN
+    -- Drop the check constraint if it exists (default name usually tasks_recurrence_pattern_check)
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'tasks_recurrence_pattern_check'
+    ) THEN
+        ALTER TABLE tasks DROP CONSTRAINT tasks_recurrence_pattern_check;
+    END IF;
+END $$;
 
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;

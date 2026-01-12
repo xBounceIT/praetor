@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Client, Project, ProjectTask, TimeEntry, UserRole } from '../types';
 import { parseSmartEntry } from '../services/geminiService';
 import CustomSelect from './CustomSelect';
+import CustomRepeatModal from './CustomRepeatModal';
 
 interface TimeEntryFormProps {
   clients: Client[];
@@ -43,8 +44,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
   // New user controls
   const [makeRecurring, setMakeRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [recurrencePattern, setRecurrencePattern] = useState<'daily' | 'weekly' | 'monthly' | string>('weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  const [isCustomRepeatModalOpen, setIsCustomRepeatModalOpen] = useState(false);
 
   // Sync internal date when calendar selection changes
   useEffect(() => {
@@ -114,7 +116,16 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     setNotes('');
     setMakeRecurring(false);
     setRecurrenceEndDate('');
+    setRecurrencePattern('weekly');
     setErrors({});
+  };
+
+  const handleRecurrenceChange = (val: string) => {
+    if (val === 'custom') {
+      setIsCustomRepeatModalOpen(true);
+    } else {
+      setRecurrencePattern(val as any);
+    }
   };
 
   const handleSmartSubmit = async (e: React.FormEvent) => {
@@ -321,21 +332,26 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                       {makeRecurring && (
                         <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200">
                           <div className="h-4 w-px bg-indigo-200 mx-1"></div>
-                          <select
-                            value={recurrencePattern}
-                            onChange={(e) => setRecurrencePattern(e.target.value as any)}
-                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
-                          >
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                          </select>
+                          <div className="w-32">
+                            <CustomSelect
+                              options={[
+                                { id: 'daily', name: 'Daily' },
+                                { id: 'weekly', name: 'Weekly' },
+                                { id: 'monthly', name: 'Monthly' },
+                                { id: 'custom', name: recurrencePattern.startsWith('monthly:') ? 'Custom Configured' : 'Custom...' }
+                              ]}
+                              value={recurrencePattern.startsWith('monthly:') ? 'custom' : recurrencePattern}
+                              onChange={handleRecurrenceChange}
+                              className="text-xs"
+                              placeholder="Pattern..."
+                            />
+                          </div>
                           <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Until</span>
                           <input
                             type="date"
                             value={recurrenceEndDate}
                             onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                       )}
@@ -354,6 +370,14 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
           </div>
         </div>
       )}
+      <CustomRepeatModal
+        isOpen={isCustomRepeatModalOpen}
+        onClose={() => setIsCustomRepeatModalOpen(false)}
+        onSave={(pattern) => {
+          setRecurrencePattern(pattern);
+          setIsCustomRepeatModalOpen(false);
+        }}
+      />
     </div>
   );
 };
