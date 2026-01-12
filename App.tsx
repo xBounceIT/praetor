@@ -18,6 +18,7 @@ import GeneralSettings from './components/GeneralSettings';
 import CustomSelect from './components/CustomSelect';
 import WeeklyView from './components/WeeklyView';
 import { getInsights } from './services/geminiService';
+import { isItalianHoliday } from './utils/holidays';
 import api, { setAuthToken, getAuthToken } from './services/api';
 import NotFound from './components/NotFound';
 
@@ -573,6 +574,14 @@ const App: React.FC = () => {
 
       for (let d = new Date(startDate); d <= futureLimit; d.setDate(d.getDate() + 1)) {
         if (taskEndDate && d > taskEndDate) break;
+
+        // Skip disabled days: Sundays, Saturdays (if configured), and holidays
+        const isSunday = d.getDay() === 0;
+        const isSaturday = d.getDay() === 6;
+        const holidayName = isItalianHoliday(d);
+        const isDisabledDay = isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
+        if (isDisabledDay) continue;
+
         const dateStr = d.toISOString().split('T')[0];
         let matches = false;
         if (task.recurrencePattern === 'daily') matches = true;
