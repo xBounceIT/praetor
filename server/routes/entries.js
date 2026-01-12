@@ -15,14 +15,14 @@ router.get('/', authenticateToken, async (req, res, next) => {
             if (userId) {
                 result = await query(
                     `SELECT id, user_id, date, client_id, client_name, project_id, 
-                  project_name, task, notes, duration, is_placeholder, created_at
+                  project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
            FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
                     [userId]
                 );
             } else {
                 result = await query(
                     `SELECT id, user_id, date, client_id, client_name, project_id, 
-                  project_name, task, notes, duration, is_placeholder, created_at
+                  project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
            FROM time_entries ORDER BY created_at DESC`
                 );
             }
@@ -30,7 +30,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
             // Regular users can only see their own entries
             result = await query(
                 `SELECT id, user_id, date, client_id, client_name, project_id, 
-                project_name, task, notes, duration, is_placeholder, created_at
+                project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
          FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
                 [req.user.id]
             );
@@ -47,6 +47,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
             task: e.task,
             notes: e.notes,
             duration: parseFloat(e.duration),
+            hourlyCost: parseFloat(e.hourly_cost || 0),
             isPlaceholder: e.is_placeholder,
             createdAt: new Date(e.created_at).getTime()
         }));
@@ -72,12 +73,16 @@ router.post('/', authenticateToken, async (req, res, next) => {
             targetUserId = userId;
         }
 
+        // Fetch user's current cost
+        const userResult = await query('SELECT cost_per_hour FROM users WHERE id = $1', [targetUserId]);
+        const hourlyCost = userResult.rows[0]?.cost_per_hour || 0;
+
         const id = Math.random().toString(36).substr(2, 9);
 
         await query(
-            `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, is_placeholder)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [id, targetUserId, date, clientId, clientName, projectId, projectName, task, notes || null, duration || 0, isPlaceholder || false]
+            `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [id, targetUserId, date, clientId, clientName, projectId, projectName, task, notes || null, duration || 0, hourlyCost, isPlaceholder || false]
         );
 
         res.status(201).json({
@@ -91,6 +96,7 @@ router.post('/', authenticateToken, async (req, res, next) => {
             task,
             notes,
             duration: duration || 0,
+            hourlyCost: parseFloat(hourlyCost),
             isPlaceholder: isPlaceholder || false,
             createdAt: Date.now()
         });
@@ -137,6 +143,7 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
             task: e.task,
             notes: e.notes,
             duration: parseFloat(e.duration),
+            hourlyCost: parseFloat(e.hourly_cost || 0),
             isPlaceholder: e.is_placeholder,
             createdAt: new Date(e.created_at).getTime()
         });

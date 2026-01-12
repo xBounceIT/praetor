@@ -97,9 +97,13 @@ CREATE TABLE IF NOT EXISTS time_entries (
     task VARCHAR(255) NOT NULL,
     notes TEXT,
     duration DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    hourly_cost DECIMAL(10, 2) DEFAULT 0,
     is_placeholder BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure hourly_cost column exists for existing installations
+ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS hourly_cost DECIMAL(10, 2) DEFAULT 0;
 
 -- User settings table
 CREATE TABLE IF NOT EXISTS settings (

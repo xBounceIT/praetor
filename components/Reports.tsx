@@ -568,9 +568,17 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Generated: {new Date().toLocaleString()}</p>
                 </div>
                 <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Grand Total</p>
-                    <p className="text-2xl font-black text-indigo-400">{generatedEntries.reduce((s, e) => s + e.duration, 0).toFixed(2)} hrs</p>
+                  <div className="text-right flex items-center gap-6">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Grand Total</p>
+                      <p className="text-2xl font-black text-indigo-400">{generatedEntries.reduce((s, e) => s + e.duration, 0).toFixed(2)} hrs</p>
+                    </div>
+                    {visibleFields.cost && (
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Cost</p>
+                        <p className="text-2xl font-black text-emerald-400">{currency} {generatedEntries.reduce((s, e) => s + (e.hourlyCost || 0) * e.duration, 0).toFixed(2)}</p>
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -601,8 +609,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                         }
                         if (visibleFields.duration) row.push(e.duration.toFixed(2));
                         if (visibleFields.cost) {
-                          const u = users.find(usr => usr.id === e.userId);
-                          const cost = (u?.costPerHour || 0) * e.duration;
+                          const cost = (e.hourlyCost || 0) * e.duration;
                           row.push(cost.toFixed(2));
                         }
 
@@ -658,7 +665,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                         {visibleFields.duration && <td className="px-6 py-4 text-sm font-black text-slate-900 text-right">{e.duration.toFixed(2)}</td>}
                         {visibleFields.cost && (
                           <td className="px-6 py-4 text-sm font-black text-slate-900 text-right">
-                            {currency} {((users.find(usr => usr.id === e.userId)?.costPerHour || 0) * e.duration).toFixed(2)}
+                            {currency} {((e.hourlyCost || 0) * e.duration).toFixed(2)}
                           </td>
                         )}
                       </tr>

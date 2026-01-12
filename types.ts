@@ -54,6 +54,7 @@ export interface TimeEntry {
   task: string;
   notes?: string;
   duration: number;
+  hourlyCost: number;
   createdAt: number;
   isPlaceholder?: boolean;
 }
