@@ -109,7 +109,7 @@ const Settings: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">User Settings</h2>
@@ -156,7 +156,7 @@ const Settings: React.FC = () => {
 
       <div className="space-y-8">
         {activeTab === 'profile' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-300 overflow-hidden">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
               <i className="fa-solid fa-user text-indigo-500"></i>
               <h3 className="font-bold text-slate-800">User Profile</h3>
@@ -185,7 +185,7 @@ const Settings: React.FC = () => {
         )}
 
         {activeTab === 'preferences' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-hidden">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
               <i className="fa-solid fa-clock text-indigo-500"></i>
               <h3 className="font-bold text-slate-800">Tracking Preferences</h3>
@@ -259,7 +259,7 @@ const Settings: React.FC = () => {
         )}
 
         {activeTab === 'ai' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300 overflow-hidden">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
               <i className="fa-solid fa-wand-magic-sparkles text-indigo-500"></i>
               <h3 className="font-bold text-slate-800">AI Capabilities</h3>
@@ -285,7 +285,7 @@ const Settings: React.FC = () => {
         )}
 
         {activeTab === 'security' && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300 overflow-hidden">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
               <i className="fa-solid fa-lock text-indigo-500"></i>
               <h3 className="font-bold text-slate-800">Password Settings</h3>
