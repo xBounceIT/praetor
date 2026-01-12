@@ -45,7 +45,6 @@ export interface ProjectTask {
   recurrenceStart?: string;
   recurrenceEnd?: string;
   recurrenceDuration?: number;
-  recurrenceDuration?: number;
   isDisabled?: boolean;
 }
 

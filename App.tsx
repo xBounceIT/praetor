@@ -43,11 +43,12 @@ const TrackerView: React.FC<{
   dailyGoal: number;
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   enableAiInsights: boolean;
+  onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
 }> = ({
   entries, clients, projects, projectTasks, onAddEntry, onDeleteEntry, insights, isInsightLoading,
   onRefreshInsights, onUpdateEntry, startOfWeek, treatSaturdayAsHoliday, onMakeRecurring, userRole,
   viewingUserId, onViewUserChange, availableUsers, currentUser, dailyGoal, onAddBulkEntries,
-  enableAiInsights
+  enableAiInsights, onRecurringAction
 }) => {
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
@@ -67,6 +68,27 @@ const TrackerView: React.FC<{
     const dailyTotal = useMemo(() => {
       return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
     }, [filteredEntries]);
+
+    const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
+
+    const handleDeleteClick = (entry: TimeEntry) => {
+      if (entry.isPlaceholder) {
+        // Show modal for recurring entries
+        setPendingDeleteEntry(entry);
+      } else {
+        // Direct delete for normal entries
+        onDeleteEntry(entry.id);
+      }
+    };
+
+    const handleRecurringDelete = (action: 'stop' | 'delete_future' | 'delete_all') => {
+      if (!pendingDeleteEntry) return;
+      const task = projectTasks.find(t => t.name === pendingDeleteEntry.task && t.projectId === pendingDeleteEntry.projectId);
+      if (task) {
+        onRecurringAction(task.id, action);
+      }
+      setPendingDeleteEntry(null);
+    };
 
     const viewingUser = availableUsers.find(u => u.id === viewingUserId);
     const isViewingSelf = viewingUserId === currentUser.id;
@@ -210,19 +232,6 @@ const TrackerView: React.FC<{
                               <span className="font-semibold text-slate-800">{entry.task}</span>
                               {entry.isPlaceholder && <i className="fa-solid fa-repeat text-[10px] text-indigo-400" title="Recurring task"></i>}
                             </div>
-                            {entry.isPlaceholder && (
-                              <button
-                                onClick={() => {
-                                  const hours = prompt("Enter hours for this task:", "1.0");
-                                  if (hours && !isNaN(parseFloat(hours))) {
-                                    onUpdateEntry(entry.id, { duration: parseFloat(hours), isPlaceholder: false });
-                                  }
-                                }}
-                                className="mt-2 text-[10px] font-bold text-indigo-600 uppercase hover:underline"
-                              >
-                                Complete Log
-                              </button>
-                            )}
                           </td>
                           <td className="px-6 py-4 text-sm align-top">
                             {entry.notes ? (
@@ -232,10 +241,10 @@ const TrackerView: React.FC<{
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-900 font-black text-right align-top">
-                            {entry.isPlaceholder ? '--' : entry.duration.toFixed(2)}
+                            {entry.isPlaceholder && entry.duration === 0 ? '--' : entry.duration.toFixed(2)}
                           </td>
                           <td className="px-6 py-4 align-top">
-                            <button onClick={() => onDeleteEntry(entry.id)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1">
+                            <button onClick={() => handleDeleteClick(entry)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1">
                               <i className="fa-solid fa-trash-can text-xs"></i>
                             </button>
                           </td>
@@ -279,6 +288,73 @@ const TrackerView: React.FC<{
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Recurring Delete Modal */}
+        {pendingDeleteEntry && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                  Stop Recurring Task?
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  How would you like to handle existing entries for <strong className="text-slate-800">{pendingDeleteEntry.task}</strong>?
+                </p>
+              </div>
+
+              <div className="p-4 space-y-3">
+                <button
+                  onClick={() => handleRecurringDelete('stop')}
+                  className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-800 group-hover:text-indigo-700">Only Stop Recurrence</span>
+                    <i className="fa-solid fa-pause text-slate-300 group-hover:text-indigo-500"></i>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Keeps all existing history. Just stops the task from repeating in the future.
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => handleRecurringDelete('delete_future')}
+                  className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-800 group-hover:text-red-700">Delete Today & Future</span>
+                    <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Stops recurrence and removes entries from today onwards. Past history is saved.
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => handleRecurringDelete('delete_all')}
+                  className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-red-700">Delete Everything</span>
+                    <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
+                  </div>
+                  <p className="text-xs text-red-600/70 leading-relaxed">
+                    Completely wipes the task settings and ALL associated time logs forever.
+                  </p>
+                </button>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
+                <button
+                  onClick={() => setPendingDeleteEntry(null)}
+                  className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -905,6 +981,7 @@ const App: React.FC = () => {
               dailyGoal={generalSettings.dailyLimit}
               onAddBulkEntries={handleAddBulkEntries}
               enableAiInsights={generalSettings.enableAiInsights}
+              onRecurringAction={handleRecurringAction}
             />
           )}
           {activeView === 'reports' && (
