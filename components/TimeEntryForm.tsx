@@ -371,6 +371,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                               onChange={handleRecurrenceChange}
                               className="text-xs"
                               placeholder="Pattern..."
+                              buttonClassName="bg-white border border-indigo-200 text-indigo-700 font-medium py-1.5"
                             />
                           </div>
                           <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider ml-6">Until</span>
