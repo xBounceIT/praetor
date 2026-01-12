@@ -192,14 +192,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cost per Hour</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">{currency}</span>
+                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                    <div className="pl-4 pr-2 text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30 min-w-[3rem] text-center">
+                      {currency}
+                    </div>
                     <input
                       type="number"
                       step="0.01"
                       value={editCostPerHour}
                       onChange={(e) => setEditCostPerHour(e.target.value)}
-                      className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold"
+                      className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
                       placeholder="0.00"
                     />
                   </div>
