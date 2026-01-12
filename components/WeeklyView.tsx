@@ -399,12 +399,58 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
 
             {/* Footer Actions */}
             <div className="flex justify-end gap-4 p-4">
+                <style>
+                    {`
+                    @keyframes shimmer {
+                        0% { transform: translateX(-100%) skewX(-20deg); }
+                        100% { transform: translateX(200%) skewX(-20deg); }
+                    }
+                    .animate-shimmer {
+                        position: relative;
+                        overflow: hidden;
+                    }
+                    .animate-shimmer::after {
+                        content: '';
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 50%;
+                        height: 100%;
+                        background: linear-gradient(
+                            to right,
+                            transparent,
+                            rgba(255, 255, 255, 0.2),
+                            transparent
+                        );
+                        animation: shimmer 3s infinite;
+                    }
+                    @keyframes pulse-soft {
+                        0%, 100% { transform: scale(1); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+                        50% { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgb(79 70 229 / 0.3), 0 4px 6px -4px rgb(79 70 229 / 0.3); }
+                    }
+                    .submit-button-premium {
+                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    }
+                    .submit-button-premium:not(:disabled):hover {
+                        animation: pulse-soft 2s infinite;
+                    }
+                    .submit-button-premium:active {
+                        transform: scale(0.95);
+                    }
+                    `}
+                </style>
                 <button
                     onClick={handleSubmit}
                     disabled={isLoading}
-                    className={`bg-indigo-600 text-white px-10 py-3 rounded-xl hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-500/20 font-bold text-sm flex items-center gap-3 disabled:opacity-50 ${showSuccess ? 'bg-emerald-600 hover:bg-emerald-600 shadow-emerald-500/20' : ''}`}
+                    className={`submit-button-premium animate-shimmer bg-indigo-600 text-white px-10 py-3 rounded-xl hover:bg-indigo-700 shadow-lg font-bold text-sm flex items-center gap-3 disabled:opacity-50 ${showSuccess ? 'bg-emerald-600 hover:bg-emerald-600 shadow-emerald-500/20' : ''}`}
                 >
-                    {isLoading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : (showSuccess ? <i className="fa-solid fa-check"></i> : <i className="fa-solid fa-cloud-arrow-up"></i>)}
+                    {isLoading ? (
+                        <i className="fa-solid fa-circle-notch fa-spin"></i>
+                    ) : showSuccess ? (
+                        <i className="fa-solid fa-check scale-125 transition-transform duration-500"></i>
+                    ) : (
+                        <i className="fa-solid fa-cloud-arrow-up group-hover:-translate-y-1 transition-transform"></i>
+                    )}
                     {showSuccess ? 'Success!' : 'Submit Time'}
                 </button>
             </div>
