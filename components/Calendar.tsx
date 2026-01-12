@@ -33,7 +33,9 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, entries
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
-  const today = new Date().toISOString().split('T')[0];
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const today = currentDate.toISOString().split('T')[0];
 
   // Italian Holiday Logic (Anonymous Algorithm for Easter)
   const getEaster = (y: number) => {
@@ -205,8 +207,8 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, entries
                     setIsMonthPickerOpen(false);
                   }}
                   className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${idx === month
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-600 hover:bg-slate-50'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
                   {mName.slice(0, 3)}
@@ -218,7 +220,7 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDate, onDateSelect, entries
           {/* Year Picker Overlay */}
           {isYearPickerOpen && (
             <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 shadow-xl rounded-xl p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
-              {Array.from({ length: 21 }, (_, i) => year - 10 + i).map((y) => (
+              {Array.from({ length: 21 }, (_, i) => currentYear - 10 + i).map((y) => (
                 <button
                   key={y}
                   onClick={() => {
