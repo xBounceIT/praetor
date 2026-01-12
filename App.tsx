@@ -554,10 +554,10 @@ const App: React.FC = () => {
   }, [users, currentUser]);
 
   const generateRecurringEntries = useCallback(async () => {
-    // ... (unchanged)
     const today = new Date();
-    const futureLimit = new Date();
-    futureLimit.setDate(today.getDate() + 14);
+    // Default future limit for entries without an end date
+    const defaultFutureLimit = new Date();
+    defaultFutureLimit.setDate(today.getDate() + 14);
 
     const newEntries: TimeEntry[] = [];
 
@@ -566,13 +566,13 @@ const App: React.FC = () => {
       const client = project ? clients.find(c => c.id === project.clientId) : null;
       if (!project || !client) continue;
 
-      // ... (logic continues same as before, preserving it)
       const startDate = task.recurrenceStart ? new Date(task.recurrenceStart) : new Date();
+      // Use recurrence end date if specified, otherwise use default 14-day limit
+      const taskEndDate = task.recurrenceEnd ? new Date(task.recurrenceEnd) : null;
+      const futureLimit = taskEndDate && taskEndDate > defaultFutureLimit ? taskEndDate : defaultFutureLimit;
+
       for (let d = new Date(startDate); d <= futureLimit; d.setDate(d.getDate() + 1)) {
-        if (task.recurrenceEnd) {
-          const endDate = new Date(task.recurrenceEnd);
-          if (d > endDate) break;
-        }
+        if (taskEndDate && d > taskEndDate) break;
         const dateStr = d.toISOString().split('T')[0];
         let matches = false;
         if (task.recurrencePattern === 'daily') matches = true;
