@@ -16,6 +16,7 @@ import TasksView from './components/TasksView';
 import AdminAuthentication from './components/AdminAuthentication';
 import GeneralSettings from './components/GeneralSettings';
 import CustomSelect from './components/CustomSelect';
+import WeeklyView from './components/WeeklyView';
 import { getInsights } from './services/geminiService';
 import api, { setAuthToken, getAuthToken } from './services/api';
 
@@ -39,12 +40,14 @@ const TrackerView: React.FC<{
   availableUsers: User[];
   currentUser: User;
   dailyGoal: number;
+  onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
 }> = ({
   entries, clients, projects, projectTasks, onAddEntry, onDeleteEntry, insights, isInsightLoading,
   onRefreshInsights, onUpdateEntry, startOfWeek, treatSaturdayAsHoliday, onMakeRecurring, userRole,
-  viewingUserId, onViewUserChange, availableUsers, currentUser, dailyGoal
+  viewingUserId, onViewUserChange, availableUsers, currentUser, dailyGoal, onAddBulkEntries
 }) => {
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>('daily');
 
     const filteredEntries = useMemo(() => {
       if (!selectedDate) return entries;
@@ -61,167 +64,204 @@ const TrackerView: React.FC<{
     const userOptions = useMemo(() => availableUsers.map(u => ({ id: u.id, name: u.name })), [availableUsers]);
 
     return (
-      <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500">
-        <div className="flex-1 space-y-6">
-
-          {/* Manager Selection Header */}
-          {availableUsers.length > 1 && (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
-                  {viewingUser?.avatarInitials}
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    {isViewingSelf ? 'My Timesheet' : 'Managing User'}
-                  </p>
-                  <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
-                </div>
-              </div>
-              <div className="w-64">
-                <CustomSelect
-                  options={userOptions}
-                  value={viewingUserId}
-                  onChange={onViewUserChange}
-                  label="Switch User View"
-                />
-              </div>
-            </div>
-          )}
-
-          <TimeEntryForm
-            clients={clients}
-            projects={projects}
-            projectTasks={projectTasks}
-            onAdd={onAddEntry}
-            selectedDate={selectedDate}
-            onMakeRecurring={onMakeRecurring}
-            userRole={userRole}
-            dailyGoal={dailyGoal}
-            currentDayTotal={dailyTotal}
-          />
-
-          <div className="space-y-4">
-            <div className="flex justify-between items-end px-2">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
-                  {selectedDate ? `Activity for ${new Date(selectedDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}` : 'Recent Activity'}
-                </h3>
-                {selectedDate && <p className="text-xs text-slate-400 font-medium">Logs specifically for this date</p>}
-              </div>
-              {selectedDate && (
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Day Total</p>
-                  <p className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-indigo-600'}`}>{dailyTotal.toFixed(2)} h</p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    {!selectedDate && <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Date</th>}
-                    <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Client / Project</th>
-                    <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Task</th>
-                    <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Notes</th>
-                    <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter text-right">Hours</th>
-                    <th className="px-6 py-3 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredEntries.length === 0 ? (
-                    <tr>
-                      <td colSpan={selectedDate ? 5 : 6} className="px-6 py-20 text-center">
-                        <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
-                        <p className="text-slate-400 font-medium text-sm">No time entries for this selection</p>
-                      </td>
-                    </tr>
-                  ) : filteredEntries.map(entry => (
-                    <tr key={entry.id} className={`group hover:bg-slate-50/50 transition-colors ${entry.isPlaceholder ? 'bg-indigo-50/30 italic' : ''}`}>
-                      {!selectedDate && <td className="px-6 py-4 text-xs font-bold text-slate-500 align-top">{entry.date}</td>}
-                      <td className="px-6 py-4 align-top">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black text-indigo-500 uppercase leading-none mb-1 tracking-wider">{entry.clientName}</span>
-                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: projects.find(p => p.id === entry.projectId)?.color }}></span>
-                            {entry.projectName}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm align-top">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-800">{entry.task}</span>
-                          {entry.isPlaceholder && <i className="fa-solid fa-repeat text-[10px] text-indigo-400" title="Recurring task"></i>}
-                        </div>
-                        {entry.isPlaceholder && (
-                          <button
-                            onClick={() => {
-                              const hours = prompt("Enter hours for this task:", "1.0");
-                              if (hours && !isNaN(parseFloat(hours))) {
-                                onUpdateEntry(entry.id, { duration: parseFloat(hours), isPlaceholder: false });
-                              }
-                            }}
-                            className="mt-2 text-[10px] font-bold text-indigo-600 uppercase hover:underline"
-                          >
-                            Complete Log
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm align-top">
-                        {entry.notes ? (
-                          <div className="text-slate-500 text-xs italic leading-relaxed">{entry.notes}</div>
-                        ) : (
-                          <span className="text-slate-300 text-xs">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-900 font-black text-right align-top">
-                        {entry.isPlaceholder ? '--' : entry.duration.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 align-top">
-                        <button onClick={() => onDeleteEntry(entry.id)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1">
-                          <i className="fa-solid fa-trash-can text-xs"></i>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:w-80 shrink-0 space-y-6">
-          <Calendar
-            selectedDate={selectedDate}
-            onDateSelect={setSelectedDate}
-            entries={entries}
-            startOfWeek={startOfWeek}
-            treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-            dailyGoal={dailyGoal}
-          />
-
-          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 hidden lg:block">
-            <h3 className="text-indigo-900 font-bold mb-3 flex items-center gap-2 text-sm">
-              <i className="fa-solid fa-lightbulb text-indigo-500"></i>
-              AI Coach
-            </h3>
-            <div className="text-indigo-700 text-xs leading-relaxed whitespace-pre-line mb-4">
-              {isInsightLoading ? (
-                <div className="flex items-center gap-2">
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  Analyzing patterns...
-                </div>
-              ) : insights}
-            </div>
+      <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+        {/* Top Middle Toggle */}
+        <div className="flex justify-center">
+          <div className="bg-white rounded-full shadow-sm border border-slate-200 p-1 flex gap-1">
             <button
-              onClick={onRefreshInsights}
-              className="w-full bg-white text-indigo-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+              onClick={() => setTrackerMode('daily')}
+              className={`px-6 py-1.5 rounded-full text-xs font-bold transition-all ${trackerMode === 'daily' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-              Refresh Insights
+              Daily
+            </button>
+            <button
+              onClick={() => setTrackerMode('weekly')}
+              className={`px-6 py-1.5 rounded-full text-xs font-bold transition-all ${trackerMode === 'weekly' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              Weekly
             </button>
           </div>
         </div>
+
+        {trackerMode === 'weekly' ? (
+          <WeeklyView
+            entries={entries}
+            clients={clients}
+            projects={projects}
+            projectTasks={projectTasks}
+            onAddEntry={onAddEntry}
+            onDeleteEntry={onDeleteEntry}
+            onUpdateEntry={onUpdateEntry}
+            userRole={userRole}
+            currentUser={currentUser}
+            viewingUserId={viewingUserId}
+            availableUsers={availableUsers}
+            onViewUserChange={onViewUserChange}
+          />
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-8">
+            <div className="flex-1 space-y-6">
+
+              {/* Manager Selection Header */}
+              {availableUsers.length > 1 && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
+                      {viewingUser?.avatarInitials}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {isViewingSelf ? 'My Timesheet' : 'Managing User'}
+                      </p>
+                      <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
+                    </div>
+                  </div>
+                  <div className="w-64">
+                    <CustomSelect
+                      options={userOptions}
+                      value={viewingUserId}
+                      onChange={onViewUserChange}
+                      label="Switch User View"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <TimeEntryForm
+                clients={clients}
+                projects={projects}
+                projectTasks={projectTasks}
+                onAdd={onAddEntry}
+                selectedDate={selectedDate}
+                onMakeRecurring={onMakeRecurring}
+                userRole={userRole}
+                dailyGoal={dailyGoal}
+                currentDayTotal={dailyTotal}
+              />
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-end px-2">
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                      {selectedDate ? `Activity for ${new Date(selectedDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}` : 'Recent Activity'}
+                    </h3>
+                    {selectedDate && <p className="text-xs text-slate-400 font-medium">Logs specifically for this date</p>}
+                  </div>
+                  {selectedDate && (
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Day Total</p>
+                      <p className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-indigo-600'}`}>{dailyTotal.toFixed(2)} h</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        {!selectedDate && <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Date</th>}
+                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Client / Project</th>
+                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Task</th>
+                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">Notes</th>
+                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter text-right">Hours</th>
+                        <th className="px-6 py-3 w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={selectedDate ? 5 : 6} className="px-6 py-20 text-center">
+                            <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
+                            <p className="text-slate-400 font-medium text-sm">No time entries for this selection</p>
+                          </td>
+                        </tr>
+                      ) : filteredEntries.map(entry => (
+                        <tr key={entry.id} className={`group hover:bg-slate-50/50 transition-colors ${entry.isPlaceholder ? 'bg-indigo-50/30 italic' : ''}`}>
+                          {!selectedDate && <td className="px-6 py-4 text-xs font-bold text-slate-500 align-top">{entry.date}</td>}
+                          <td className="px-6 py-4 align-top">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-indigo-500 uppercase leading-none mb-1 tracking-wider">{entry.clientName}</span>
+                              <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: projects.find(p => p.id === entry.projectId)?.color }}></span>
+                                {entry.projectName}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm align-top">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800">{entry.task}</span>
+                              {entry.isPlaceholder && <i className="fa-solid fa-repeat text-[10px] text-indigo-400" title="Recurring task"></i>}
+                            </div>
+                            {entry.isPlaceholder && (
+                              <button
+                                onClick={() => {
+                                  const hours = prompt("Enter hours for this task:", "1.0");
+                                  if (hours && !isNaN(parseFloat(hours))) {
+                                    onUpdateEntry(entry.id, { duration: parseFloat(hours), isPlaceholder: false });
+                                  }
+                                }}
+                                className="mt-2 text-[10px] font-bold text-indigo-600 uppercase hover:underline"
+                              >
+                                Complete Log
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm align-top">
+                            {entry.notes ? (
+                              <div className="text-slate-500 text-xs italic leading-relaxed">{entry.notes}</div>
+                            ) : (
+                              <span className="text-slate-300 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-900 font-black text-right align-top">
+                            {entry.isPlaceholder ? '--' : entry.duration.toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <button onClick={() => onDeleteEntry(entry.id)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1">
+                              <i className="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:w-80 shrink-0 space-y-6">
+              <Calendar
+                selectedDate={selectedDate}
+                onDateSelect={setSelectedDate}
+                entries={entries}
+                startOfWeek={startOfWeek}
+                treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+                dailyGoal={dailyGoal}
+              />
+
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 hidden lg:block">
+                <h3 className="text-indigo-900 font-bold mb-3 flex items-center gap-2 text-sm">
+                  <i className="fa-solid fa-lightbulb text-indigo-500"></i>
+                  AI Coach
+                </h3>
+                <div className="text-indigo-700 text-xs leading-relaxed whitespace-pre-line mb-4">
+                  {isInsightLoading ? (
+                    <div className="flex items-center gap-2">
+                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                      Analyzing patterns...
+                    </div>
+                  ) : insights}
+                </div>
+                <button
+                  onClick={onRefreshInsights}
+                  className="w-full bg-white text-indigo-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                >
+                  Refresh Insights
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -425,7 +465,8 @@ const App: React.FC = () => {
                 projectName: project.name,
                 task: task.name,
                 duration: 0,
-                isPlaceholder: true
+                isPlaceholder: true,
+                hourlyCost: currentUser?.costPerHour || 0
               });
               newEntries.push(entry);
             } catch (err) {
@@ -485,11 +526,31 @@ const App: React.FC = () => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
-      const entry = await api.entries.create({ ...newEntry, userId: targetUserId });
+      const entry = await api.entries.create({
+        ...newEntry,
+        userId: targetUserId,
+        hourlyCost: currentUser?.costPerHour || 0
+      } as any);
       setEntries([entry, ...entries]);
     } catch (err) {
       console.error('Failed to add entry:', err);
       alert('Failed to add time entry');
+    }
+  };
+
+  const handleAddBulkEntries = async (newEntries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => {
+    if (!currentUser) return;
+    try {
+      const targetUserId = viewingUserId || currentUser.id;
+      const createdEntries = await Promise.all(newEntries.map(entry => api.entries.create({
+        ...entry,
+        userId: targetUserId,
+        hourlyCost: currentUser?.costPerHour || 0
+      } as any)));
+      setEntries(prev => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+    } catch (err) {
+      console.error('Failed to add bulk entries:', err);
+      alert('Failed to add some time entries');
     }
   };
 
@@ -748,6 +809,7 @@ const App: React.FC = () => {
           availableUsers={availableUsers}
           currentUser={currentUser}
           dailyGoal={settings.dailyGoal}
+          onAddBulkEntries={handleAddBulkEntries}
         />
       )}
       {activeView === 'reports' && (

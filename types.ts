@@ -76,4 +76,6 @@ export interface LdapConfig {
   roleMappings: LdapRoleMapping[];
 }
 
+export type TrackerViewMode = 'daily' | 'weekly';
+
 export type View = 'tracker' | 'reports' | 'projects' | 'tasks' | 'clients' | 'settings' | 'users' | 'recurring' | 'admin-auth' | 'administration-general';
