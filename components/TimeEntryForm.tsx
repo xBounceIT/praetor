@@ -55,6 +55,13 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     }
   }, [selectedDate]);
 
+  // Init client selection when clients load
+  useEffect(() => {
+    if (!selectedClientId && clients.length > 0) {
+      setSelectedClientId(clients[0].id);
+    }
+  }, [clients, selectedClientId]);
+
   // Filter projects when client changes
   const filteredProjects = projects.filter(p => p.clientId === selectedClientId);
 
@@ -318,7 +325,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                   </div>
                 )}
                 {selectedTaskId && (
-                  <div className={`transition-all duration-300 border rounded-xl overflow-hidden ${makeRecurring ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}>
+                  <div className={`transition-all duration-300 border rounded-xl ${makeRecurring ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}>
                     <div className="flex items-center">
                       <button
                         type="button"
