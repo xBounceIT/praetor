@@ -267,21 +267,15 @@ const Settings: React.FC = () => {
               <i className="fa-solid fa-lock text-indigo-500"></i>
               <h3 className="font-bold text-slate-800">Password Settings</h3>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-6">
               {passwordError && (
-                <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                   <i className="fa-solid fa-circle-exclamation"></i>
                   {passwordError}
                 </div>
               )}
-              {passwordSuccess && (
-                <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                  <i className="fa-solid fa-circle-check"></i>
-                  Password updated successfully!
-                </div>
-              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Current Password</label>
                   <input
@@ -293,6 +287,7 @@ const Settings: React.FC = () => {
                     required
                   />
                 </div>
+                <div className="hidden md:block"></div>
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">New Password</label>
                   <input
@@ -317,29 +312,32 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-              <button
-                onClick={handlePasswordUpdate}
-                disabled={isSavingPassword}
-                className="px-6 py-2 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900 transition-all shadow-md shadow-slate-100 flex items-center gap-2 disabled:opacity-50 text-sm"
-              >
-                {isSavingPassword ? (
-                  <>
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-key"></i> Update Password
-                  </>
-                )}
-              </button>
-            </div>
           </section>
         )}
 
-        {activeTab !== 'security' && (
-          <div className="flex justify-end gap-4 pt-4">
+        <div className="flex justify-end gap-4 pt-4">
+          {activeTab === 'security' ? (
+            <button
+              onClick={handlePasswordUpdate}
+              disabled={isSavingPassword}
+              className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${passwordSuccess ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700'}`}
+            >
+              {isSavingPassword ? (
+                <>
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  Updating...
+                </>
+              ) : passwordSuccess ? (
+                <>
+                  <i className="fa-solid fa-check"></i> Password Updated
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-key"></i> Update Password
+                </>
+              )}
+            </button>
+          ) : (
             <button
               onClick={handleSave}
               disabled={isSaving}
@@ -360,8 +358,8 @@ const Settings: React.FC = () => {
                 </>
               )}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
