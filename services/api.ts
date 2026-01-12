@@ -3,7 +3,7 @@
  * Replaces localStorage with REST API calls to the backend server
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Token management
 let authToken: string | null = localStorage.getItem('tempo_auth_token');
