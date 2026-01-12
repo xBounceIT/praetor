@@ -68,14 +68,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
             </div>
 
             <form onSubmit={handleSave} className="space-y-8">
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
                         <i className="fa-solid fa-globe text-indigo-500"></i>
                         <h3 className="font-bold text-slate-800">Localization & Display</h3>
                     </div>
 
                     <div className="p-6 space-y-6">
-                        <div className="max-w-md">
+                        <div className="max-w-xs">
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Application Currency</label>
                             <CustomSelect
                                 options={CURRENCY_OPTIONS}
@@ -94,8 +94,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         type="submit"
                         disabled={isSaving || currency === settings.currency}
                         className={`px-8 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center gap-2 ${isSaving || currency === settings.currency
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                                : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700'
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                            : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700'
                             }`}
                     >
                         {isSaving ? (
