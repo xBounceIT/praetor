@@ -194,6 +194,12 @@ export const settingsApi = {
             method: 'PUT',
             body: JSON.stringify(settings),
         }),
+
+    updatePassword: (currentPassword: string, newPassword: string): Promise<{ message: string }> =>
+        fetchApi('/settings/password', {
+            method: 'PUT',
+            body: JSON.stringify({ currentPassword, newPassword }),
+        }),
 };
 
 // LDAP API
