@@ -17,6 +17,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
   const [clientId, setClientId] = useState('');
   const [description, setDescription] = useState('');
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
@@ -26,7 +27,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     e.preventDefault();
     if (name && clientId) {
       if (editingProject) {
-        onUpdateProject(editingProject.id, { name, clientId, description });
+        onUpdateProject(editingProject.id, { name, clientId, description, isDisabled: tempIsDisabled });
       } else {
         onAddProject(name, clientId, description);
       }
@@ -47,6 +48,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     setName(project.name);
     setClientId(project.clientId);
     setDescription(project.description || '');
+    setTempIsDisabled(project.isDisabled || false);
     setIsModalOpen(true);
   };
 
@@ -164,7 +166,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               {(() => {
                 const client = clients.find(c => c.id === clientId);
                 const isClientDisabled = client?.isDisabled || false;
-                const isCurrentlyDisabled = editingProject?.isDisabled || isClientDisabled;
+                const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
 
                 return (
                   <div className="space-y-2">
@@ -176,10 +178,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                         type="button"
                         disabled={isClientDisabled}
                         onClick={() => {
-                          if (editingProject && !isClientDisabled) {
-                            const newValue = !editingProject.isDisabled;
-                            onUpdateProject(editingProject.id, { isDisabled: newValue });
-                            setEditingProject({ ...editingProject, isDisabled: newValue });
+                          if (!isClientDisabled) {
+                            setTempIsDisabled(!tempIsDisabled);
                           }
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'} ${isClientDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}

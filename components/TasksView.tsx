@@ -18,6 +18,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+  const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
@@ -27,7 +28,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
     e.preventDefault();
     if (name && projectId) {
       if (editingTask) {
-        onUpdateTask(editingTask.id, { name, projectId, description });
+        onUpdateTask(editingTask.id, { name, projectId, description, isDisabled: tempIsDisabled });
       } else {
         onAddTask(name, projectId, undefined, description);
       }
@@ -48,6 +49,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
     setName(task.name);
     setProjectId(task.projectId);
     setDescription(task.description || '');
+    setTempIsDisabled(task.isDisabled || false);
     setIsModalOpen(true);
   };
 
@@ -168,7 +170,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                 const isProjectDisabled = project?.isDisabled || false;
                 const isClientDisabled = client?.isDisabled || false;
                 const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-                const isCurrentlyDisabled = editingTask?.isDisabled || isInheritedDisabled;
+                const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
 
                 return (
                   <div className="space-y-2">
@@ -180,10 +182,8 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                         type="button"
                         disabled={isInheritedDisabled}
                         onClick={() => {
-                          if (editingTask && !isInheritedDisabled) {
-                            const newValue = !editingTask.isDisabled;
-                            onUpdateTask(editingTask.id, { isDisabled: newValue });
-                            setEditingTask({ ...editingTask, isDisabled: newValue });
+                          if (!isInheritedDisabled) {
+                            setTempIsDisabled(!tempIsDisabled);
                           }
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'} ${isInheritedDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
