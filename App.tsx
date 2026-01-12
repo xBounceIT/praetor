@@ -349,6 +349,13 @@ const App: React.FC = () => {
   const [insights, setInsights] = useState<string>('Logging some time to see patterns!');
   const [isInsightLoading, setIsInsightLoading] = useState(false);
 
+  // Redirect to 404 if route is not accessible
+  useEffect(() => {
+    if (currentUser && !isRouteAccessible && activeView !== '404') {
+      setActiveView('404');
+    }
+  }, [currentUser, isRouteAccessible, activeView]);
+
   // Sync hash with activeView
   useEffect(() => {
     window.location.hash = activeView;
