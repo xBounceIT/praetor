@@ -97,18 +97,16 @@ router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (re
         const { id } = req.params;
         const { name, clientId, description, color, isDisabled } = req.body;
 
-        if (!name || !clientId) {
-            return res.status(400).json({ error: 'Project name and client ID are required' });
-        }
-
-        const projectColor = color || '#3b82f6';
-
         const result = await query(
             `UPDATE projects 
-             SET name = $1, client_id = $2, color = $3, description = $4, is_disabled = $5
+             SET name = COALESCE($1, name), 
+                 client_id = COALESCE($2, client_id), 
+                 color = COALESCE($3, color), 
+                 description = COALESCE($4, description), 
+                 is_disabled = COALESCE($5, is_disabled)
              WHERE id = $6
              RETURNING id, name, client_id, color, description, is_disabled`,
-            [name, clientId, projectColor, description || null, isDisabled || false, id]
+            [name || null, clientId || null, color || null, description || null, isDisabled, id]
         );
 
         if (result.rows.length === 0) {

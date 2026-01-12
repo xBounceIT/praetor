@@ -57,13 +57,9 @@ router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (re
         const { id } = req.params;
         const { name, isDisabled } = req.body;
 
-        if (!name) {
-            return res.status(400).json({ error: 'Client name is required' });
-        }
-
         const result = await query(
-            'UPDATE clients SET name = $1, is_disabled = $2 WHERE id = $3 RETURNING id, name, is_disabled',
-            [name, isDisabled || false, id]
+            'UPDATE clients SET name = COALESCE($1, name), is_disabled = COALESCE($2, is_disabled) WHERE id = $3 RETURNING id, name, is_disabled',
+            [name || null, isDisabled, id]
         );
 
         if (result.rows.length === 0) {
