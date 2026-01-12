@@ -123,6 +123,7 @@ const TrackerView: React.FC<{
                       value={viewingUserId}
                       onChange={onViewUserChange}
                       label="Switch User View"
+                      searchable={true}
                     />
                   </div>
                 </div>

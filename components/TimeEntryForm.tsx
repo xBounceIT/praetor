@@ -16,13 +16,13 @@ interface TimeEntryFormProps {
   currentDayTotal: number;
 }
 
-const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ 
-  clients, 
-  projects, 
-  projectTasks, 
-  onAdd, 
-  selectedDate, 
-  onMakeRecurring, 
+const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
+  clients,
+  projects,
+  projectTasks,
+  onAdd,
+  selectedDate,
+  onMakeRecurring,
   userRole,
   dailyGoal,
   currentDayTotal
@@ -40,10 +40,10 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
   const [errors, setErrors] = useState<{ hours?: string }>({});
-  
+
   // New user controls
   const [makeRecurring, setMakeRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<'daily'|'weekly'|'monthly'>('weekly');
+  const [recurrencePattern, setRecurrencePattern] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
 
   // Sync internal date when calendar selection changes
@@ -55,7 +55,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
   // Filter projects when client changes
   const filteredProjects = projects.filter(p => p.clientId === selectedClientId);
-  
+
   // Filter tasks when project changes
   const filteredTasks = projectTasks.filter(t => t.projectId === selectedProjectId);
 
@@ -128,7 +128,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     if (parsed) {
       const projectMatch = projects.find(p => p.name.toLowerCase().includes(parsed.project.toLowerCase()));
       const clientMatch = projectMatch ? clients.find(c => c.id === projectMatch.clientId) : clients[0];
-      
+
       onAdd({
         date: date,
         clientId: clientMatch?.id || 'c1',
@@ -189,7 +189,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
             For {new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
-        <button 
+        <button
           onClick={() => setIsSmartMode(!isSmartMode)}
           className="text-xs font-medium text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
         >
@@ -228,29 +228,32 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         <div className="space-y-4">
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-1">
-              <CustomSelect 
+              <CustomSelect
                 label="Client"
                 options={clientOptions}
                 value={selectedClientId}
                 onChange={setSelectedClientId}
+                searchable={true}
               />
             </div>
             <div className="md:col-span-1">
-              <CustomSelect 
+              <CustomSelect
                 label="Project"
                 options={projectOptions}
                 value={selectedProjectId}
                 onChange={setSelectedProjectId}
                 placeholder={filteredProjects.length === 0 ? "No projects" : "Select project..."}
+                searchable={true}
               />
             </div>
             <div className="md:col-span-2">
-              <CustomSelect 
+              <CustomSelect
                 label="Task"
                 options={taskOptions}
                 value={selectedTaskId || (selectedTaskName === 'custom' ? 'custom' : '')}
                 onChange={handleTaskChange}
                 placeholder={filteredTasks.length === 0 && !canCreateCustomTask ? "No tasks" : "Select task..."}
+                searchable={true}
               />
               {selectedTaskName === 'custom' && canCreateCustomTask && (
                 <input
@@ -280,7 +283,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
               {errors.hours && <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">{errors.hours}</p>}
             </div>
           </form>
-          
+
           <div className="flex flex-col gap-4">
             <div className="w-full">
               <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Notes / Description</label>
@@ -292,61 +295,61 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
               />
             </div>
-            
-            <div className="flex items-end justify-between gap-4">
-                <div className="flex-1">
-                  {isExceedingGoal && (
-                    <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
-                      <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                      <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
-                        Warning: This entry will exceed your daily goal of {dailyGoal} hours.
-                      </p>
-                    </div>
-                  )}
-                  {selectedTaskId && (
-                    <div className={`transition-all duration-300 border rounded-xl overflow-hidden ${makeRecurring ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}>
-                       <div className="flex items-center">
-                          <button 
-                            type="button"
-                            onClick={() => setMakeRecurring(!makeRecurring)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                          >
-                             <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
-                             Repeat Task?
-                          </button>
-                          
-                          {makeRecurring && (
-                            <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                               <div className="h-4 w-px bg-indigo-200 mx-1"></div>
-                               <select 
-                                  value={recurrencePattern}
-                                  onChange={(e) => setRecurrencePattern(e.target.value as any)}
-                                  className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                  <option value="daily">Daily</option>
-                                  <option value="weekly">Weekly</option>
-                                  <option value="monthly">Monthly</option>
-                                </select>
-                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Until</span>
-                                <input 
-                                  type="date"
-                                  value={recurrenceEndDate}
-                                  onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                                  className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
-                                />
-                            </div>
-                          )}
-                       </div>
-                    </div>
-                  )}
-                </div>
 
-                <button
-                  onClick={handleSubmit}
-                  className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap"
-                >
-                  <i className="fa-solid fa-check"></i> Log Time
-                </button>
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex-1">
+                {isExceedingGoal && (
+                  <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                    <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
+                      Warning: This entry will exceed your daily goal of {dailyGoal} hours.
+                    </p>
+                  </div>
+                )}
+                {selectedTaskId && (
+                  <div className={`transition-all duration-300 border rounded-xl overflow-hidden ${makeRecurring ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setMakeRecurring(!makeRecurring)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
+                        Repeat Task?
+                      </button>
+
+                      {makeRecurring && (
+                        <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200">
+                          <div className="h-4 w-px bg-indigo-200 mx-1"></div>
+                          <select
+                            value={recurrencePattern}
+                            onChange={(e) => setRecurrencePattern(e.target.value as any)}
+                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Until</span>
+                          <input
+                            type="date"
+                            value={recurrenceEndDate}
+                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap"
+              >
+                <i className="fa-solid fa-check"></i> Log Time
+              </button>
             </div>
           </div>
         </div>

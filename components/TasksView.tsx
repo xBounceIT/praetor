@@ -138,6 +138,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                   value={projectId}
                   onChange={setProjectId}
                   placeholder="Select Project..."
+                  searchable={true}
                 />
               </div>
 
@@ -250,6 +251,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                 value={projectId}
                 onChange={setProjectId}
                 placeholder="Select Project..."
+                searchable={true}
               />
             </div>
             <div className="lg:col-span-1">

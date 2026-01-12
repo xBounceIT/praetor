@@ -430,6 +430,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                     options={PERIOD_OPTIONS}
                     value={period}
                     onChange={handlePeriodChange}
+                    searchable={true}
                   />
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
                     <div>
@@ -543,6 +544,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                         setGrouping(newG as GroupingType[]);
                       }}
                       className="flex-1"
+                      searchable={true}
                     />
                   ))}
                 </div>

@@ -235,6 +235,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                             value={viewingUserId}
                             onChange={onViewUserChange}
                             label="Viewing User"
+                            searchable={true}
                         />
                     </div>
                 )}
@@ -246,7 +247,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     <table className="w-full text-left border-collapse min-w-[800px] isolate">
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
-                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-48">Client / Project</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">Client</th>
+                                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">Project</th>
                                 <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-40">Task</th>
                                 {weekDays.map(day => (
                                     <th key={day.dateStr} className={`px-2 py-3 text-center w-24 ${day.isToday ? 'bg-indigo-50/50' : ''}`}>
@@ -265,25 +267,27 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                                     style={{ zIndex: activeDropdownRow === rowIndex ? 50 : 0, position: 'relative' }}
                                 >
                                     <td className="px-4 py-3">
-                                        <div className="space-y-2">
-                                            <CustomSelect
-                                                options={clients.map(c => ({ id: c.id, name: c.name }))}
-                                                value={row.clientId}
-                                                onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val)}
-                                                className="!bg-transparent"
-                                                onOpen={() => setActiveDropdownRow(rowIndex)}
-                                                onClose={() => setActiveDropdownRow(null)}
-                                            />
-                                            <CustomSelect
-                                                options={projects.filter(p => p.clientId === row.clientId).map(p => ({ id: p.id, name: p.name }))}
-                                                value={row.projectId}
-                                                onChange={(val) => handleRowInfoChange(rowIndex, 'projectId', val)}
-                                                className="!bg-transparent"
-                                                placeholder="Select project..."
-                                                onOpen={() => setActiveDropdownRow(rowIndex)}
-                                                onClose={() => setActiveDropdownRow(null)}
-                                            />
-                                        </div>
+                                        <CustomSelect
+                                            options={clients.map(c => ({ id: c.id, name: c.name }))}
+                                            value={row.clientId}
+                                            onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val)}
+                                            className="!bg-transparent"
+                                            onOpen={() => setActiveDropdownRow(rowIndex)}
+                                            onClose={() => setActiveDropdownRow(null)}
+                                            searchable={true}
+                                        />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <CustomSelect
+                                            options={projects.filter(p => p.clientId === row.clientId).map(p => ({ id: p.id, name: p.name }))}
+                                            value={row.projectId}
+                                            onChange={(val) => handleRowInfoChange(rowIndex, 'projectId', val)}
+                                            className="!bg-transparent"
+                                            placeholder="Select project..."
+                                            onOpen={() => setActiveDropdownRow(rowIndex)}
+                                            onClose={() => setActiveDropdownRow(null)}
+                                            searchable={true}
+                                        />
                                     </td>
                                     <td className="px-4 py-3">
                                         <CustomSelect
@@ -294,6 +298,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                                             placeholder="Select task..."
                                             onOpen={() => setActiveDropdownRow(rowIndex)}
                                             onClose={() => setActiveDropdownRow(null)}
+                                            searchable={true}
                                         />
                                         <input
                                             type="text"
@@ -338,7 +343,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         </tbody>
                         <tfoot className="bg-slate-50/50 border-t border-slate-200">
                             <tr>
-                                <td colSpan={2} className="px-4 py-3">
+                                <td colSpan={3} className="px-4 py-3">
                                     <button
                                         onClick={addRow}
                                         className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-2 uppercase tracking-widest"

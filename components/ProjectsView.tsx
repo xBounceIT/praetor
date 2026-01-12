@@ -141,6 +141,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                   value={clientId}
                   onChange={setClientId}
                   placeholder="Select Client..."
+                  searchable={true}
                 />
               </div>
 
@@ -264,6 +265,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 value={clientId}
                 onChange={setClientId}
                 placeholder="Select Client..."
+                searchable={true}
               />
             </div>
             <div className="lg:col-span-1">
