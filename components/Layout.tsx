@@ -45,8 +45,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
               <i className="fa-solid fa-clock text-white text-lg"></i>
             </div>
             {!isCollapsed && (
-              <h1 className="text-2xl font-bold text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
-                Tempo
+              <h1 className="text-2xl font-black italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
+                TEMPO
               </h1>
             )}
           </div>
