@@ -57,33 +57,12 @@ Tempo is a modern, AI-enhanced time tracking application inspired by the simplic
 
 ## Deployment
 
-Tempo is a Single Page Application (SPA) and can be deployed to any static hosting provider.
-
-### Vercel / Netlify / Cloudflare Pages
-
-1. **Connect Repository**: Connect your GitHub/GitLab repository to your hosting provider.
-2. **Build Settings**:
-   - **Build Command**: `npm run build` (or `vite build`)
-   - **Output Directory**: `dist` (or `build`)
-3. **Environment Variables**:
-   - Add `API_KEY` in the project settings dashboard of your hosting provider. This is critical for the AI features to work.
-
-### Docker (Optional)
+### Docker
 
 You can containerize the application using Nginx to serve the static files:
 
 ```dockerfile
-FROM node:18-alpine as build
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+docker compose up -d --build
 ```
 
 ## Usage Guide
