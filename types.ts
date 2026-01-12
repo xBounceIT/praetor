@@ -41,7 +41,7 @@ export interface ProjectTask {
   projectId: string;
   description?: string;
   isRecurring?: boolean;
-  recurrencePattern?: 'daily' | 'weekly' | 'monthly';
+  recurrencePattern?: 'daily' | 'weekly' | 'monthly' | 'first_of_month' | string;
   recurrenceStart?: string;
   recurrenceEnd?: string;
   isDisabled?: boolean;

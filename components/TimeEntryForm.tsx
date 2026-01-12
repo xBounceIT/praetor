@@ -10,7 +10,7 @@ interface TimeEntryFormProps {
   projectTasks: ProjectTask[];
   onAdd: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>) => void;
   selectedDate: string;
-  onMakeRecurring?: (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', endDate?: string) => void;
+  onMakeRecurring?: (taskId: string, pattern: string, endDate?: string) => void;
   userRole: UserRole;
   dailyGoal: number;
   currentDayTotal: number;
@@ -43,8 +43,11 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
   // New user controls
   const [makeRecurring, setMakeRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [recurrencePattern, setRecurrencePattern] = useState<string>('weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [tempPattern, setTempPattern] = useState<string>('first_of_month');
+  const [tempEndDate, setTempEndDate] = useState('');
 
   // Sync internal date when calendar selection changes
   useEffect(() => {
@@ -178,6 +181,35 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     return opts;
   }, [filteredTasks, canCreateCustomTask]);
 
+  const recurrenceOptions = [
+    { id: 'none', name: 'None (One-time)' },
+    { id: 'daily', name: 'Daily' },
+    { id: 'weekly', name: 'Weekly' },
+    { id: 'monthly', name: 'Monthly' },
+    { id: 'first_of_month', name: 'Every 1st of month' },
+    { id: 'custom', name: 'Custom...' }
+  ];
+
+  const handleRecurrenceChange = (val: string) => {
+    if (val === 'none') {
+      setMakeRecurring(false);
+    } else if (val === 'custom') {
+      setTempPattern(recurrencePattern === 'custom' ? 'first_of_month' : (recurrencePattern || 'first_of_month'));
+      setTempEndDate(recurrenceEndDate);
+      setIsCustomModalOpen(true);
+    } else {
+      setMakeRecurring(true);
+      setRecurrencePattern(val);
+    }
+  };
+
+  const saveCustomRecurrence = () => {
+    setMakeRecurring(true);
+    setRecurrencePattern(tempPattern);
+    setRecurrenceEndDate(tempEndDate);
+    setIsCustomModalOpen(false);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
       <div className="flex justify-between items-center mb-6">
@@ -307,39 +339,50 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                   </div>
                 )}
                 {selectedTaskId && (
-                  <div className={`transition-all duration-300 border rounded-xl overflow-hidden ${makeRecurring ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}>
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => setMakeRecurring(!makeRecurring)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
-                        Repeat Task?
-                      </button>
-
-                      {makeRecurring && (
-                        <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                          <div className="h-4 w-px bg-indigo-200 mx-1"></div>
-                          <select
-                            value={recurrencePattern}
-                            onChange={(e) => setRecurrencePattern(e.target.value as any)}
-                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
-                          >
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                          </select>
-                          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Until</span>
-                          <input
-                            type="date"
-                            value={recurrenceEndDate}
-                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                            className="text-xs bg-white border border-indigo-200 text-indigo-700 font-medium rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        </div>
-                      )}
+                  <div className="flex items-center gap-4">
+                    <div className="w-48">
+                      <CustomSelect
+                        label="Repeat"
+                        options={recurrenceOptions}
+                        value={!makeRecurring ? 'none' : (['daily', 'weekly', 'monthly', 'first_of_month'].includes(recurrencePattern) ? recurrencePattern : 'custom')}
+                        onChange={handleRecurrenceChange}
+                      />
                     </div>
+                    {makeRecurring && !['custom', 'first_of_month'].includes(recurrencePattern) && (
+                      <div className="animate-in fade-in slide-in-from-left-2 duration-200">
+                        <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Until</label>
+                        <input
+                          type="date"
+                          value={recurrenceEndDate}
+                          onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                          className="text-xs bg-slate-50 border border-slate-200 text-slate-700 font-medium rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    )}
+                    {makeRecurring && (recurrencePattern === 'first_of_month' || !['daily', 'weekly', 'monthly'].includes(recurrencePattern)) && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mb-1">Pattern</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-700 bg-indigo-50 px-2 py-1 rounded">
+                            {recurrencePattern === 'first_of_month' ? 'Every 1st of month' : recurrencePattern}
+                          </span>
+                          {recurrenceEndDate && (
+                            <span className="text-[10px] font-bold text-slate-400">UNTIL {recurrenceEndDate}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempPattern(recurrencePattern);
+                              setTempEndDate(recurrenceEndDate);
+                              setIsCustomModalOpen(true);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-700 text-[10px] font-bold underline"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -350,6 +393,66 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
               >
                 <i className="fa-solid fa-check"></i> Log Time
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Recurrence Modal */}
+      {isCustomModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 space-y-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <i className="fa-solid fa-calendar-plus text-indigo-600 text-xl"></i>
+                </div>
+                <h3 className="text-lg font-black text-slate-800">Custom Recurrence</h3>
+                <p className="text-sm text-slate-500 mt-1">Set advanced repeating options</p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Pattern</label>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setTempPattern('first_of_month')}
+                      className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${tempPattern === 'first_of_month' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm">Every first of month</span>
+                        {tempPattern === 'first_of_month' && <i className="fa-solid fa-check"></i>}
+                      </div>
+                    </button>
+                    {/* Add more custom patterns here if needed */}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Repeat Until (Optional)</label>
+                  <input
+                    type="date"
+                    value={tempEndDate}
+                    onChange={(e) => setTempEndDate(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setIsCustomModalOpen(false)}
+                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveCustomRecurrence}
+                  className="flex-1 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+                >
+                  Save Pattern
+                </button>
+              </div>
             </div>
           </div>
         </div>

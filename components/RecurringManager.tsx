@@ -66,7 +66,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                           <span className="text-[10px] font-black uppercase text-indigo-500 tracking-wide">{client?.name || 'Unknown'}</span>
                           <span className="text-slate-300">•</span>
                           <span className="text-xs text-slate-500 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full" style={{backgroundColor: project?.color || '#ccc'}}></span>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: project?.color || '#ccc' }}></span>
                             {project?.name || 'Unknown'}
                           </span>
                         </div>
@@ -75,7 +75,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-100">
                         <i className="fa-solid fa-repeat text-[10px]"></i>
-                        {task.recurrencePattern}
+                        {task.recurrencePattern === 'first_of_month' ? 'Every 1st' : task.recurrencePattern}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -88,7 +88,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button 
+                      <button
                         onClick={() => setSelectedTask(task)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                         title="Remove Recurrence"
@@ -117,9 +117,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                 How would you like to handle existing entries for <strong className="text-slate-800">{selectedTask.name}</strong>?
               </p>
             </div>
-            
+
             <div className="p-4 space-y-3">
-              <button 
+              <button
                 onClick={() => { onAction(selectedTask.id, 'stop'); closeModal(); }}
                 className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
               >
@@ -132,7 +132,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                 </p>
               </button>
 
-              <button 
+              <button
                 onClick={() => { onAction(selectedTask.id, 'delete_future'); closeModal(); }}
                 className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
               >
@@ -145,7 +145,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                 </p>
               </button>
 
-              <button 
+              <button
                 onClick={() => { onAction(selectedTask.id, 'delete_all'); closeModal(); }}
                 className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
               >
@@ -160,7 +160,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
-              <button 
+              <button
                 onClick={closeModal}
                 className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
               >
