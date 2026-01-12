@@ -256,9 +256,31 @@ const App: React.FC = () => {
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
   const [viewingUserAssignments, setViewingUserAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] } | null>(null);
-  const [activeView, setActiveView] = useState<View>('tracker');
+  const [activeView, setActiveView] = useState<View>(() => {
+    const hash = window.location.hash.replace('#', '') as View;
+    const validViews: View[] = ['tracker', 'reports', 'projects', 'tasks', 'clients', 'settings', 'users', 'recurring', 'admin-auth'];
+    return validViews.includes(hash) ? hash : 'tracker';
+  });
   const [insights, setInsights] = useState<string>('Logging some time to see patterns!');
   const [isInsightLoading, setIsInsightLoading] = useState(false);
+
+  // Sync hash with activeView
+  useEffect(() => {
+    window.location.hash = activeView;
+  }, [activeView]);
+
+  // Sync state with hash (for back/forward buttons)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '') as View;
+      const validViews: View[] = ['tracker', 'reports', 'projects', 'tasks', 'clients', 'settings', 'users', 'recurring', 'admin-auth'];
+      if (validViews.includes(hash) && hash !== activeView) {
+        setActiveView(hash);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeView]);
 
   // Check for existing token on mount
   useEffect(() => {
