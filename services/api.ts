@@ -35,6 +35,12 @@ const fetchApi = async <T>(
         headers,
     });
 
+    // Check for new token in header (sliding window auth)
+    const newToken = response.headers.get('x-auth-token');
+    if (newToken) {
+        setAuthToken(newToken);
+    }
+
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
         throw new Error(error.error || `HTTP ${response.status}`);
