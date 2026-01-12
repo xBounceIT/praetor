@@ -312,14 +312,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                                                 onClose={() => setActiveDropdownRow(null)}
                                                 searchable={true}
                                             />
-                                            <button
-                                                onClick={() => deleteRow(rowIndex)}
-                                                className="h-7 text-xs font-bold text-red-400 hover:text-white hover:bg-red-500 border border-red-300 hover:border-red-500 rounded px-2 py-1 transition-all duration-300 flex items-center gap-1.5 w-fit"
-                                                title="Delete row"
-                                            >
-                                                <i className="fa-solid fa-trash-can text-[10px]"></i>
-                                                <span>Delete Row</span>
-                                            </button>
+                                            <div className="h-7 invisible">Spacer</div>
                                         </div>
                                     </td>
                                     <td className="px-4 py-4">
@@ -386,9 +379,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                                         </td>
                                     ))}
                                     <td className="px-4 py-3 text-right">
-                                        <span className="text-sm font-black text-slate-800">
-                                            {(Object.values(row.days).reduce((sum: number, d: any) => sum + (d.duration || 0), 0) as number).toFixed(1)}
-                                        </span>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <span className="text-sm font-black text-slate-800">
+                                                {(Object.values(row.days).reduce((sum: number, d: any) => sum + (d.duration || 0), 0) as number).toFixed(1)}
+                                            </span>
+                                            <button
+                                                onClick={() => deleteRow(rowIndex)}
+                                                className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
+                                                title="Delete row"
+                                            >
+                                                <i className="fa-solid fa-trash-can text-sm"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
