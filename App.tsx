@@ -286,6 +286,13 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [activeView]);
 
+  // Reset viewingUserId when navigating away from tracker
+  useEffect(() => {
+    if (activeView !== 'tracker' && currentUser && viewingUserId !== currentUser.id) {
+      setViewingUserId(currentUser.id);
+    }
+  }, [activeView, currentUser, viewingUserId]);
+
   // Check for existing token on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -311,12 +318,13 @@ const App: React.FC = () => {
 
     const loadData = async () => {
       try {
-        const [usersData, clientsData, projectsData, tasksData, settingsData] = await Promise.all([
+        const [usersData, clientsData, projectsData, tasksData, settingsData, entriesData] = await Promise.all([
           api.users.list(),
           api.clients.list(),
           api.projects.list(),
           api.tasks.list(),
-          api.settings.get()
+          api.settings.get(),
+          api.entries.list()
         ]);
 
         setUsers(usersData);
@@ -324,6 +332,7 @@ const App: React.FC = () => {
         setProjects(projectsData);
         setProjectTasks(tasksData);
         setSettings(settingsData);
+        setEntries(entriesData);
 
         // Load global settings for all users
         const genSettings = await api.generalSettings.get();
@@ -346,11 +355,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser || !viewingUserId) return;
 
-    const loadEntriesAndAssignments = async () => {
+    const loadAssignments = async () => {
       try {
-        const entriesData = await api.entries.list(viewingUserId);
-        setEntries(entriesData);
-
         // If manager/admin is viewing another user, fetch that user's assignments to filter the dropdowns
         if ((currentUser.role === 'admin' || currentUser.role === 'manager') && viewingUserId !== currentUser.id) {
           const assignments = await api.users.getAssignments(viewingUserId);
@@ -359,11 +365,11 @@ const App: React.FC = () => {
           setViewingUserAssignments(null);
         }
       } catch (err) {
-        console.error('Failed to load user data:', err);
+        console.error('Failed to load user assignments:', err);
       }
     };
 
-    loadEntriesAndAssignments();
+    loadAssignments();
   }, [currentUser, viewingUserId]);
 
   // Update viewingUserId when currentUser changes
