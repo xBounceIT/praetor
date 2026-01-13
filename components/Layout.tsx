@@ -14,6 +14,7 @@ const modules: Module[] = [
   { id: 'crm', name: 'CRM', icon: 'fa-handshake', active: false },
   { id: 'dipendenti', name: 'Dipendenti', icon: 'fa-user-tie', active: false },
   { id: 'fornitori', name: 'Fornitori', icon: 'fa-truck', active: false },
+  { id: 'configurazione', name: 'Configurazione', icon: 'fa-gears', active: false },
 ];
 
 interface LayoutProps {
