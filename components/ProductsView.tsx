@@ -29,6 +29,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
         costUnit: 'unit',
         category: '',
         taxRate: 0,
+        type: 'item'
     });
 
     const openAddModal = () => {
@@ -41,6 +42,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
             costUnit: 'unit',
             category: '',
             taxRate: 0,
+            type: 'item'
         });
         setIsModalOpen(true);
     };
@@ -55,6 +57,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
             costUnit: product.costUnit || 'unit',
             category: product.category || '',
             taxRate: product.taxRate || 0,
+            type: product.type || 'item'
         });
         setIsModalOpen(true);
     };
@@ -109,6 +112,22 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
         { id: 'unit', name: 'Unit' },
         { id: 'hours', name: 'Hours' }
     ];
+
+    const typeOptions: Option[] = [
+        { id: 'item', name: 'Item' },
+        { id: 'service', name: 'Service' }
+    ];
+
+    const handleTypeChange = (val: string) => {
+        const type = val as 'item' | 'service';
+        const unit = type === 'item' ? 'unit' : 'hours';
+        setFormData({
+            ...formData,
+            type,
+            saleUnit: unit,
+            costUnit: unit
+        });
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -232,15 +251,32 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                             className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                                         />
                                     </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                            <label className="text-xs font-bold text-slate-500">Type</label>
+                                        </div>
+                                        <CustomSelect
+                                            options={typeOptions}
+                                            value={formData.type || 'item'}
+                                            onChange={handleTypeChange}
+                                            searchable={false}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                            <label className="text-xs font-bold text-slate-500 font-black">Unit of Measure</label>
+                                        </div>
+                                        <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-bold flex items-center gap-2">
+                                            <i className={`fa-solid ${formData.type === 'service' ? 'fa-clock' : 'fa-box-open'}`}></i>
+                                            {formData.type === 'service' ? 'Hours' : 'Unit'}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 ml-1">Automatically set based on Type</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                    Pricing and Unit
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-500 ml-1">Sale Price</label>
                                         <div className="flex gap-2">
@@ -251,14 +287,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                                 onChange={(e) => setFormData({ ...formData, salePrice: parseFloat(e.target.value) })}
                                                 className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all min-w-0"
                                             />
-                                            <div className="w-32 flex-shrink-0">
-                                                <CustomSelect
-                                                    options={unitOptions}
-                                                    value={formData.saleUnit || 'unit'}
-                                                    onChange={(val) => setFormData({ ...formData, saleUnit: val as 'unit' | 'hours' })}
-                                                    searchable={false}
-                                                />
-                                            </div>
                                         </div>
                                     </div>
 
@@ -272,14 +300,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                                 onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
                                                 className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all min-w-0"
                                             />
-                                            <div className="w-32 flex-shrink-0">
-                                                <CustomSelect
-                                                    options={unitOptions}
-                                                    value={formData.costUnit || 'unit'}
-                                                    onChange={(val) => setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })}
-                                                    searchable={false}
-                                                />
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -301,43 +321,45 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                    </div >
+                </div >
             )}
 
-            {/* Delete Confirmation Modal */}
-            {isDeleteConfirmOpen && (
-                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-                        <div className="p-6 text-center space-y-4">
-                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-black text-slate-800">Delete Product?</h3>
-                                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                                    Are you sure you want to delete <span className="font-bold text-slate-800">{productToDelete?.name}</span>?
-                                    This action cannot be undone.
-                                </p>
-                            </div>
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    onClick={() => setIsDeleteConfirmOpen(false)}
-                                    className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleDelete}
-                                    className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                                >
-                                    Yes, Delete
-                                </button>
-                            </div>
-                        </div>
+{/* Delete Confirmation Modal */ }
+{
+    isDeleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+                <div className="p-6 text-center space-y-4">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+                        <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-slate-800">Delete Product?</h3>
+                        <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                            Are you sure you want to delete <span className="font-bold text-slate-800">{productToDelete?.name}</span>?
+                            This action cannot be undone.
+                        </p>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            onClick={() => setIsDeleteConfirmOpen(false)}
+                            className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleDelete}
+                            className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+                        >
+                            Yes, Delete
+                        </button>
                     </div>
                 </div>
-            )}
+            </div>
+        </div>
+    )
+}
 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -362,6 +384,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                         <thead className="bg-slate-50 border-b border-slate-100">
                             <tr>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name / Category</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Type</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sale Price</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cost</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tax Rate</th>
@@ -381,6 +404,11 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                                 <div className="text-[10px] font-black text-slate-400 uppercase">{p.category || 'No Category'}</div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td className="px-8 py-5">
+                                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${p.type === 'service' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                            {p.type || 'item'}
+                                        </span>
                                     </td>
                                     <td className="px-8 py-5 text-sm font-semibold text-slate-700">
                                         {p.salePrice.toFixed(2)} / {p.saleUnit}
@@ -434,44 +462,46 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                 </div>
             </div>
 
-            {disabledProducts.length > 0 && (
-                <div className="bg-slate-50 rounded-3xl border border-slate-200 shadow-sm overflow-hidden border-dashed">
-                    <div className="px-8 py-4 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center">
-                        <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Disabled Products</h4>
-                        <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black">{disabledProducts.length} DISABLED</span>
-                    </div>
-                    <div className="divide-y divide-slate-100">
-                        {disabledProducts.map(p => (
-                            <div key={p.id} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4">
-                                <div className="flex gap-4 items-center">
-                                    <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
-                                        <i className="fa-solid fa-box"></i>
-                                    </div>
-                                    <div>
-                                        <h5 className="font-bold text-slate-500 line-through">{p.name}</h5>
-                                        <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => onUpdateProduct(p.id, { isDisabled: false })}
-                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                    >
-                                        <i className="fa-solid fa-rotate-left"></i>
-                                    </button>
-                                    <button
-                                        onClick={() => confirmDelete(p)}
-                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    >
-                                        <i className="fa-solid fa-trash-can"></i>
-                                    </button>
-                                </div>
+{
+    disabledProducts.length > 0 && (
+        <div className="bg-slate-50 rounded-3xl border border-slate-200 shadow-sm overflow-hidden border-dashed">
+            <div className="px-8 py-4 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center">
+                <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Disabled Products</h4>
+                <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black">{disabledProducts.length} DISABLED</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+                {disabledProducts.map(p => (
+                    <div key={p.id} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4">
+                        <div className="flex gap-4 items-center">
+                            <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
+                                <i className="fa-solid fa-box"></i>
                             </div>
-                        ))}
+                            <div>
+                                <h5 className="font-bold text-slate-500 line-through">{p.name}</h5>
+                                <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => onUpdateProduct(p.id, { isDisabled: false })}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            >
+                                <i className="fa-solid fa-rotate-left"></i>
+                            </button>
+                            <button
+                                onClick={() => confirmDelete(p)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                                <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                ))}
+            </div>
         </div>
+    )
+}
+        </div >
     );
 };
 

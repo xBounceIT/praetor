@@ -206,9 +206,13 @@ CREATE TABLE IF NOT EXISTS products (
     cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit',
     category VARCHAR(100),
     tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    type VARCHAR(20) NOT NULL DEFAULT 'item',
     is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure type column exists for existing installations
+ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'item';
 
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 

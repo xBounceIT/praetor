@@ -12,7 +12,7 @@ router.use(requireRole('admin', 'manager'));
 router.get('/', async (req, res, next) => {
     try {
         const result = await query(
-            'SELECT id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", is_disabled as "isDisabled" FROM products ORDER BY name ASC'
+            'SELECT id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled" FROM products ORDER BY name ASC'
         );
         res.json(result.rows);
     } catch (err) {
@@ -22,7 +22,7 @@ router.get('/', async (req, res, next) => {
 
 // Create product
 router.post('/', async (req, res, next) => {
-    const { name, salePrice, saleUnit, cost, costUnit, category, taxRate } = req.body;
+    const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type } = req.body;
 
     if (!name) {
         return res.status(400).json({ error: 'Product name is required' });
@@ -31,8 +31,8 @@ router.post('/', async (req, res, next) => {
     try {
         const id = 'p-' + Date.now();
         const result = await query(
-            'INSERT INTO products (id, name, sale_price, sale_unit, cost, cost_unit, category, tax_rate) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate"',
-            [id, name, salePrice || 0, saleUnit || 'unit', cost || 0, costUnit || 'unit', category, taxRate || 0]
+            'INSERT INTO products (id, name, sale_price, sale_unit, cost, cost_unit, category, tax_rate, type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", type',
+            [id, name, salePrice || 0, saleUnit || 'unit', cost || 0, costUnit || 'unit', category, taxRate || 0, type || 'item']
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -43,7 +43,7 @@ router.post('/', async (req, res, next) => {
 // Update product
 router.put('/:id', async (req, res, next) => {
     const { id } = req.params;
-    const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, isDisabled } = req.body;
+    const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type, isDisabled } = req.body;
 
     try {
         const result = await query(

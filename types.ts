@@ -102,6 +102,7 @@ export interface Product {
   costUnit: 'unit' | 'hours';
   category?: string;
   taxRate: number;
+  type: 'item' | 'service';
   isDisabled?: boolean;
 }
 
