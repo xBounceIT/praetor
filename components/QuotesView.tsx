@@ -60,6 +60,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
     const openEditModal = (quote: Quote) => {
         setEditingQuote(quote);
+        // Ensure expirationDate is in YYYY-MM-DD format for the date input
+        const formattedDate = quote.expirationDate ? new Date(quote.expirationDate).toISOString().split('T')[0] : '';
         setFormData({
             clientId: quote.clientId,
             clientName: quote.clientName,
@@ -67,7 +69,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
             paymentTerms: quote.paymentTerms,
             discount: quote.discount,
             status: quote.status,
-            expirationDate: quote.expirationDate,
+            expirationDate: formattedDate,
             notes: quote.notes || '',
         });
         setIsModalOpen(true);
@@ -548,7 +550,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                 const { total } = calculateTotals(quote.items, quote.discount);
                                 const expired = isExpired(quote.expirationDate);
                                 return (
-                                    <tr key={quote.id} className={`hover:bg-slate-50/50 transition-colors group ${expired ? 'bg-red-50/30' : ''}`}>
+                                    <tr
+                                        key={quote.id}
+                                        onClick={() => openEditModal(quote)}
+                                        className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : ''}`}
+                                    >
                                         <td className="px-8 py-5">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center text-sm">
@@ -583,21 +589,30 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                         <td className="px-8 py-5">
                                             <div className="flex justify-end gap-2">
                                                 <button
-                                                    onClick={() => openEditModal(quote)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEditModal(quote);
+                                                    }}
                                                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                                                     title="Edit Quote"
                                                 >
                                                     <i className="fa-solid fa-pen-to-square"></i>
                                                 </button>
                                                 <button
-                                                    onClick={() => onUpdateQuote(quote.id, { status: quote.status === 'quoted' ? 'confirmed' : 'quoted' })}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onUpdateQuote(quote.id, { status: quote.status === 'quoted' ? 'confirmed' : 'quoted' });
+                                                    }}
                                                     className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                                                     title={quote.status === 'quoted' ? 'Mark as Confirmed' : 'Mark as Quoted'}
                                                 >
                                                     <i className={`fa-solid ${quote.status === 'quoted' ? 'fa-check' : 'fa-rotate-left'}`}></i>
                                                 </button>
                                                 <button
-                                                    onClick={() => confirmDelete(quote)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        confirmDelete(quote);
+                                                    }}
                                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                     title="Delete Quote"
                                                 >
