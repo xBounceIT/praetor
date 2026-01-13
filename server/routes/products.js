@@ -1,6 +1,5 @@
 import express from 'express';
 import { query } from '../db/index.js';
-import { v4 as uuidv4 } from 'uuid';
 import { authenticateToken, authorizeRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -30,7 +29,7 @@ router.post('/', async (req, res, next) => {
     }
 
     try {
-        const id = uuidv4();
+        const id = 'p-' + Date.now();
         const result = await query(
             'INSERT INTO products (id, name, sale_price, sale_unit, cost, cost_unit, category, tax_rate) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate"',
             [id, name, salePrice || 0, saleUnit || 'unit', cost || 0, costUnit || 'unit', category, taxRate || 0]
