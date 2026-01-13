@@ -815,9 +815,9 @@ const App: React.FC = () => {
     }
   };
 
-  const addClient = async (name: string) => {
+  const addClient = async (clientData: Partial<Client>) => {
     try {
-      const client = await api.clients.create(name);
+      const client = await api.clients.create(clientData);
       setClients([...clients, client]);
     } catch (err) {
       console.error('Failed to add client:', err);

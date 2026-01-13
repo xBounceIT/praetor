@@ -24,6 +24,16 @@ export interface Client {
   id: string;
   name: string;
   isDisabled?: boolean;
+  type?: 'individual' | 'company';
+  contactName?: string;
+  clientCode?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  billingCode?: string;
+  paymentTerms?: string;
 }
 
 export interface Project {

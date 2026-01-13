@@ -7,12 +7,12 @@ const router = express.Router();
 // GET /api/clients - List all clients
 router.get('/', authenticateToken, async (req, res, next) => {
     try {
-        let queryText = 'SELECT id, name, is_disabled FROM clients ORDER BY name';
+        let queryText = 'SELECT * FROM clients ORDER BY name';
         let queryParams = [];
 
         if (req.user.role === 'user') {
             queryText = `
-                SELECT c.id, c.name, c.is_disabled
+                SELECT c.*
                 FROM clients c
                 INNER JOIN user_clients uc ON c.id = uc.client_id
                 WHERE uc.user_id = $1
@@ -25,7 +25,17 @@ router.get('/', authenticateToken, async (req, res, next) => {
         const clients = result.rows.map(c => ({
             id: c.id,
             name: c.name,
-            isDisabled: c.is_disabled
+            isDisabled: c.is_disabled,
+            type: c.type,
+            contactName: c.contact_name,
+            clientCode: c.client_code,
+            email: c.email,
+            phone: c.phone,
+            address: c.address,
+            vatNumber: c.vat_number,
+            taxCode: c.tax_code,
+            billingCode: c.billing_code,
+            paymentTerms: c.payment_terms
         }));
         res.json(clients);
     } catch (err) {
@@ -36,16 +46,30 @@ router.get('/', authenticateToken, async (req, res, next) => {
 // POST /api/clients - Create client (admin/manager only)
 router.post('/', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
     try {
-        const { name } = req.body;
+        const {
+            name, type, contactName, clientCode, email, phone,
+            address, vatNumber, taxCode, billingCode, paymentTerms
+        } = req.body;
 
         if (!name) {
             return res.status(400).json({ error: 'Client name is required' });
         }
 
         const id = 'c-' + Date.now();
-        await query('INSERT INTO clients (id, name, is_disabled) VALUES ($1, $2, $3)', [id, name, false]);
+        await query(`
+            INSERT INTO clients (
+                id, name, is_disabled, type, contact_name, client_code, 
+                email, phone, address, vat_number, tax_code, billing_code, payment_terms
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `, [
+            id, name, false, type || 'company', contactName, clientCode,
+            email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
+        ]);
 
-        res.status(201).json({ id, name, isDisabled: false });
+        res.status(201).json({
+            id, name, isDisabled: false, type, contactName, clientCode,
+            email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
+        });
     } catch (err) {
         next(err);
     }
@@ -55,23 +79,52 @@ router.post('/', authenticateToken, requireRole('admin', 'manager'), async (req,
 router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { name, isDisabled } = req.body;
+        const {
+            name, isDisabled, type, contactName, clientCode, email, phone,
+            address, vatNumber, taxCode, billingCode, paymentTerms
+        } = req.body;
 
-        const result = await query(
-            'UPDATE clients SET name = COALESCE($1, name), is_disabled = COALESCE($2, is_disabled) WHERE id = $3 RETURNING id, name, is_disabled',
-            [name || null, isDisabled, id]
-        );
+        const result = await query(`
+            UPDATE clients SET 
+                name = COALESCE($1, name), 
+                is_disabled = COALESCE($2, is_disabled),
+                type = COALESCE($3, type),
+                contact_name = COALESCE($4, contact_name),
+                client_code = COALESCE($5, client_code),
+                email = COALESCE($6, email),
+                phone = COALESCE($7, phone),
+                address = COALESCE($8, address),
+                vat_number = COALESCE($9, vat_number),
+                tax_code = COALESCE($10, tax_code),
+                billing_code = COALESCE($11, billing_code),
+                payment_terms = COALESCE($12, payment_terms)
+            WHERE id = $13 
+            RETURNING *
+        `, [
+            name || null, isDisabled, type, contactName, clientCode, email, phone,
+            address, vatNumber, taxCode, billingCode, paymentTerms, id
+        ]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Client not found' });
         }
 
-        const updatedClient = result.rows[0];
+        const c = result.rows[0];
 
         res.json({
-            id: updatedClient.id,
-            name: updatedClient.name,
-            isDisabled: updatedClient.is_disabled
+            id: c.id,
+            name: c.name,
+            isDisabled: c.is_disabled,
+            type: c.type,
+            contactName: c.contact_name,
+            clientCode: c.client_code,
+            email: c.email,
+            phone: c.phone,
+            address: c.address,
+            vatNumber: c.vat_number,
+            taxCode: c.tax_code,
+            billingCode: c.billing_code,
+            paymentTerms: c.payment_terms
         });
     } catch (err) {
         next(err);

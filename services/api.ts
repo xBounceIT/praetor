@@ -106,10 +106,10 @@ export const usersApi = {
 export const clientsApi = {
     list: (): Promise<Client[]> => fetchApi('/clients'),
 
-    create: (name: string): Promise<Client> =>
+    create: (clientData: Partial<Client>): Promise<Client> =>
         fetchApi('/clients', {
             method: 'POST',
-            body: JSON.stringify({ name }),
+            body: JSON.stringify(clientData),
         }),
 
     update: (id: string, updates: Partial<Client>): Promise<Client> =>
