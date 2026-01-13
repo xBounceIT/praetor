@@ -46,6 +46,10 @@ const fetchApi = async <T>(
         throw new Error(error.error || `HTTP ${response.status}`);
     }
 
+    if (response.status === 204) {
+        return {} as T;
+    }
+
     return response.json();
 };
 
