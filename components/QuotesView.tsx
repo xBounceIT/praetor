@@ -1,5 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { Quote, QuoteItem, Client, Product } from '../types';
+import CustomSelect from './CustomSelect';
+
+const PAYMENT_TERMS_OPTIONS = [
+    { id: 'immediate', name: 'Immediate' },
+    { id: '15gg', name: '15 days' },
+    { id: '21gg', name: '21 days' },
+    { id: '30gg', name: '30 days' },
+    { id: '45gg', name: '45 days' },
+];
+
+const STATUS_OPTIONS = [
+    { id: 'quoted', name: 'Quoted' },
+    { id: 'confirmed', name: 'Confirmed' },
+];
 
 interface QuotesViewProps {
     quotes: Quote[];
@@ -202,17 +216,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                 </h4>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 ml-1">Client</label>
-                                    <select
-                                        required
-                                        value={formData.clientId}
-                                        onChange={(e) => handleClientChange(e.target.value)}
-                                        className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                    >
-                                        <option value="">Select a client...</option>
-                                        {activeClients.map(client => (
-                                            <option key={client.id} value={client.id}>{client.name}</option>
-                                        ))}
-                                    </select>
+                                    <CustomSelect
+                                        options={activeClients.map(c => ({ id: c.id, name: c.name }))}
+                                        value={formData.clientId || ''}
+                                        onChange={handleClientChange}
+                                        placeholder="Select a client..."
+                                        searchable={true}
+                                    />
                                 </div>
                             </div>
 
@@ -248,17 +258,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                             <div key={item.id} className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl">
                                                 <div className="flex-1 grid grid-cols-12 gap-2">
                                                     <div className="col-span-5">
-                                                        <select
-                                                            required
+                                                        <CustomSelect
+                                                            options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
                                                             value={item.productId}
-                                                            onChange={(e) => updateProductRow(index, 'productId', e.target.value)}
-                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                        >
-                                                            <option value="">Select product...</option>
-                                                            {activeProducts.map(product => (
-                                                                <option key={product.id} value={product.id}>{product.name}</option>
-                                                            ))}
-                                                        </select>
+                                                            onChange={(val) => updateProductRow(index, 'productId', val)}
+                                                            placeholder="Select product..."
+                                                            searchable={true}
+                                                            buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                                        />
                                                     </div>
                                                     <div className="col-span-2">
                                                         <input
@@ -340,17 +347,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-500 ml-1">Payment Terms</label>
-                                        <select
-                                            value={formData.paymentTerms}
-                                            onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value as any })}
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                        >
-                                            <option value="immediate">Immediate</option>
-                                            <option value="15gg">15 days</option>
-                                            <option value="21gg">21 days</option>
-                                            <option value="30gg">30 days</option>
-                                            <option value="45gg">45 days</option>
-                                        </select>
+                                        <CustomSelect
+                                            options={PAYMENT_TERMS_OPTIONS}
+                                            value={formData.paymentTerms || 'immediate'}
+                                            onChange={(val) => setFormData({ ...formData, paymentTerms: val as any })}
+                                            searchable={false}
+                                        />
                                     </div>
 
                                     <div className="space-y-1.5">
@@ -373,14 +375,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-500 ml-1">Status</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                        >
-                                            <option value="quoted">Quoted</option>
-                                            <option value="confirmed">Confirmed</option>
-                                        </select>
+                                        <CustomSelect
+                                            options={STATUS_OPTIONS}
+                                            value={formData.status || 'quoted'}
+                                            onChange={(val) => setFormData({ ...formData, status: val as any })}
+                                            searchable={false}
+                                        />
                                     </div>
 
                                     <div className="space-y-1.5">

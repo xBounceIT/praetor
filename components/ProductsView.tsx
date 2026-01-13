@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
+import CustomSelect, { Option } from './CustomSelect';
 
 interface ProductsViewProps {
     products: Product[];
@@ -13,6 +14,11 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
+    // Category Management State
+    const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [customCategories, setCustomCategories] = useState<string[]>([]);
 
     // Form State
     const [formData, setFormData] = useState<Partial<Product>>({
@@ -65,6 +71,18 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
         }
     };
 
+    const handleAddCategory = () => {
+        if (newCategoryName.trim()) {
+            const name = newCategoryName.trim();
+            if (!customCategories.includes(name)) {
+                setCustomCategories([...customCategories, name]);
+            }
+            setFormData({ ...formData, category: name });
+            setNewCategoryName('');
+            setIsAddCategoryModalOpen(false);
+        }
+    };
+
     const confirmDelete = (product: Product) => {
         setProductToDelete(product);
         setIsDeleteConfirmOpen(true);
@@ -81,8 +99,69 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
     const activeProducts = products.filter(p => !p.isDisabled);
     const disabledProducts = products.filter(p => p.isDisabled);
 
+    // Get unique categories from existing products + custom ones
+    const existingCategories = Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)));
+    const allCategories = Array.from(new Set([...existingCategories, ...customCategories])).sort();
+
+    const categoryOptions: Option[] = allCategories.map(c => ({ id: c, name: c }));
+
+    const unitOptions: Option[] = [
+        { id: 'unit', name: 'Unit' },
+        { id: 'hours', name: 'Hours' }
+    ];
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Add Category Modal */}
+            {isAddCategoryModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
+                                    <i className="fa-solid fa-plus"></i>
+                                </div>
+                                Add Category
+                            </h3>
+                            <button
+                                onClick={() => setIsAddCategoryModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 ml-1">Category Name</label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                    placeholder="e.g. Software Licenses"
+                                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsAddCategoryModalOpen(false)}
+                                    className="flex-1 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddCategory}
+                                    className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+                                >
+                                    Add Category
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Add/Edit Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -122,13 +201,22 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 ml-1">Category</label>
-                                        <input
-                                            type="text"
-                                            value={formData.category}
-                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                            placeholder="e.g. Services"
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        <div className="flex justify-between items-center ml-1">
+                                            <label className="text-xs font-bold text-slate-500">Category</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsAddCategoryModalOpen(true)}
+                                                className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-tighter flex items-center gap-1"
+                                            >
+                                                <i className="fa-solid fa-plus"></i> Add Category
+                                            </button>
+                                        </div>
+                                        <CustomSelect
+                                            options={categoryOptions}
+                                            value={formData.category || ''}
+                                            onChange={(val) => setFormData({ ...formData, category: val })}
+                                            placeholder="Select category"
+                                            searchable={true}
                                         />
                                     </div>
 
@@ -159,16 +247,16 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                                 step="0.01"
                                                 value={formData.salePrice}
                                                 onChange={(e) => setFormData({ ...formData, salePrice: parseFloat(e.target.value) })}
-                                                className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                                className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all min-w-0"
                                             />
-                                            <select
-                                                value={formData.saleUnit}
-                                                onChange={(e) => setFormData({ ...formData, saleUnit: e.target.value as 'unit' | 'hours' })}
-                                                className="w-32 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                            >
-                                                <option value="unit">Unit</option>
-                                                <option value="hours">Hours</option>
-                                            </select>
+                                            <div className="w-32 flex-shrink-0">
+                                                <CustomSelect
+                                                    options={unitOptions}
+                                                    value={formData.saleUnit || 'unit'}
+                                                    onChange={(val) => setFormData({ ...formData, saleUnit: val as 'unit' | 'hours' })}
+                                                    searchable={false}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
@@ -180,16 +268,16 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                                 step="0.01"
                                                 value={formData.cost}
                                                 onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
-                                                className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                                className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all min-w-0"
                                             />
-                                            <select
-                                                value={formData.costUnit}
-                                                onChange={(e) => setFormData({ ...formData, costUnit: e.target.value as 'unit' | 'hours' })}
-                                                className="w-32 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                            >
-                                                <option value="unit">Unit</option>
-                                                <option value="hours">Hours</option>
-                                            </select>
+                                            <div className="w-32 flex-shrink-0">
+                                                <CustomSelect
+                                                    options={unitOptions}
+                                                    value={formData.costUnit || 'unit'}
+                                                    onChange={(val) => setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })}
+                                                    searchable={false}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
