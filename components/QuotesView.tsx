@@ -131,14 +131,33 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
     // Calculate totals
     const calculateTotals = (items: QuoteItem[], globalDiscount: number) => {
-        const subtotal = items.reduce((sum, item) => {
-            const itemTotal = item.quantity * item.unitPrice;
-            const itemDiscount = item.discount ? (itemTotal * item.discount / 100) : 0;
-            return sum + (itemTotal - itemDiscount);
-        }, 0);
+        let subtotal = 0;
+        let totalTax = 0;
+        let totalCost = 0;
+
+        items.forEach(item => {
+            const product = products.find(p => p.id === item.productId);
+            const lineSubtotal = item.quantity * item.unitPrice;
+            const lineDiscount = item.discount ? (lineSubtotal * item.discount / 100) : 0;
+            const lineNet = lineSubtotal - lineDiscount;
+
+            subtotal += lineNet;
+
+            if (product) {
+                totalTax += lineNet * (product.taxRate / 100);
+                totalCost += item.quantity * product.cost;
+            }
+        });
+
         const discountAmount = subtotal * (globalDiscount / 100);
-        const total = subtotal - discountAmount;
-        return { subtotal, discountAmount, total };
+        const taxableAmount = subtotal - discountAmount;
+        // Adjust tax proportional to global discount
+        const finalTax = totalTax * (1 - globalDiscount / 100);
+        const total = taxableAmount + finalTax;
+        const margin = taxableAmount - totalCost;
+        const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+
+        return { subtotal, taxableAmount, discountAmount, totalTax: finalTax, total, margin, marginPercentage };
     };
 
     const activeClients = clients.filter(c => !c.isDisabled);
@@ -208,6 +227,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                         <i className="fa-solid fa-plus"></i> Add Product
                                     </button>
                                 </div>
+
+                                {formData.items && formData.items.length > 0 && (
+                                    <div className="grid grid-cols-12 gap-2 px-3 mb-1">
+                                        <div className="col-span-12 md:col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Unit Price</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Disc %</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">Subtotal</div>
+                                    </div>
+                                )}
 
                                 {formData.items && formData.items.length > 0 ? (
                                     <div className="space-y-3">
@@ -287,26 +316,43 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
                                 {/* Totals */}
                                 {formData.items && formData.items.length > 0 && (
-                                    <div className="bg-indigo-50 rounded-xl p-4 space-y-2">
+                                    <div className="flex flex-col items-end pt-4 space-y-3">
                                         {(() => {
-                                            const { subtotal, discountAmount, total } = calculateTotals(formData.items, formData.discount || 0);
+                                            const { subtotal, taxableAmount, discountAmount, totalTax, total, margin, marginPercentage } = calculateTotals(formData.items, formData.discount || 0);
                                             return (
-                                                <>
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-slate-600">Subtotal:</span>
-                                                        <span className="font-bold text-slate-800">{subtotal.toFixed(2)}</span>
+                                                <div className="w-full max-w-md space-y-2">
+                                                    <div className="flex justify-between items-center py-1">
+                                                        <span className="text-sm font-bold text-slate-500">Imponibile:</span>
+                                                        <span className="text-sm font-black text-slate-800">{subtotal.toFixed(2)} €</span>
                                                     </div>
+
                                                     {formData.discount! > 0 && (
-                                                        <div className="flex justify-between text-sm">
-                                                            <span className="text-slate-600">Discount ({formData.discount}%):</span>
-                                                            <span className="font-bold text-amber-600">-{discountAmount.toFixed(2)}</span>
+                                                        <div className="flex justify-between items-center py-1">
+                                                            <span className="text-sm font-bold text-slate-500">Sconto ({formData.discount}%):</span>
+                                                            <span className="text-sm font-black text-amber-600">-{discountAmount.toFixed(2)} €</span>
                                                         </div>
                                                     )}
-                                                    <div className="flex justify-between text-lg pt-2 border-t border-indigo-200">
-                                                        <span className="font-black text-indigo-900">Total:</span>
-                                                        <span className="font-black text-indigo-600">{total.toFixed(2)}</span>
+
+                                                    <div className="flex justify-between items-center py-1">
+                                                        <span className="text-sm font-bold text-slate-500">IVA:</span>
+                                                        <span className="text-sm font-black text-slate-800">{totalTax.toFixed(2)} €</span>
                                                     </div>
-                                                </>
+
+                                                    <div className="h-px bg-slate-200 my-2"></div>
+
+                                                    <div className="flex justify-between items-center pb-4">
+                                                        <span className="text-lg font-black text-slate-800">Totale:</span>
+                                                        <span className="text-2xl font-black text-indigo-600">{total.toFixed(2)} €</span>
+                                                    </div>
+
+                                                    <div className="bg-emerald-50/50 rounded-xl p-4 flex justify-between items-center border border-emerald-100/50">
+                                                        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Margine:</span>
+                                                        <div className="text-right">
+                                                            <div className="text-sm font-black text-emerald-700">{margin.toFixed(2)} €</div>
+                                                            <div className="text-[10px] font-bold text-emerald-600 opacity-80">({marginPercentage.toFixed(1)}%)</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             );
                                         })()}
                                     </div>
@@ -487,8 +533,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                         </td>
                                         <td className="px-8 py-5">
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black ${quote.status === 'confirmed'
-                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                    : 'bg-amber-100 text-amber-700'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-amber-100 text-amber-700'
                                                 }`}>
                                                 {quote.status.toUpperCase()}
                                             </span>
