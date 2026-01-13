@@ -30,6 +30,18 @@ CREATE TABLE IF NOT EXISTS clients (
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 
+-- Ensure new client details columns exist (Migration for Clients Improvements)
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'company';
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_code VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_terms TEXT;
+
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(50) PRIMARY KEY,
