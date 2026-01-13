@@ -1,12 +1,12 @@
 import express from 'express';
 import { query } from '../db/index.js';
-import { authenticateToken, authorizeRole } from '../middleware/auth.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // All product routes require at least manager role
 router.use(authenticateToken);
-router.use(authorizeRole(['admin', 'manager']));
+router.use(requireRole('admin', 'manager'));
 
 // List all products
 router.get('/', async (req, res, next) => {
