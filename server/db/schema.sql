@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS ldap_config (
 -- General settings table (single row)
 CREATE TABLE IF NOT EXISTS general_settings (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    currency VARCHAR(10) DEFAULT 'USD',
+    currency VARCHAR(10) DEFAULT '$',
     daily_limit DECIMAL(4, 2) DEFAULT 8.00,
     start_of_week VARCHAR(10) DEFAULT 'Monday' CHECK (start_of_week IN ('Monday', 'Sunday')),
     treat_saturday_as_holiday BOOLEAN DEFAULT TRUE,
@@ -181,7 +181,10 @@ ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS treat_saturday_as_holiday 
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS enable_ai_insights BOOLEAN DEFAULT TRUE;
 
 -- Insert default general settings room
-INSERT INTO general_settings (id, currency) VALUES (1, 'USD') ON CONFLICT (id) DO NOTHING;
+INSERT INTO general_settings (id, currency) VALUES (1, '$') ON CONFLICT (id) DO NOTHING;
+
+-- Migration: Update existing 'USD' currency to '$'
+UPDATE general_settings SET currency = '$' WHERE currency = 'USD';
 
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_time_entries_user_id ON time_entries(user_id);

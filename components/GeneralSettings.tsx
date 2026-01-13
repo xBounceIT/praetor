@@ -8,7 +8,7 @@ interface GeneralSettingsProps {
 }
 
 const CURRENCY_OPTIONS: Option[] = [
-    { id: 'USD', name: 'US Dollar ($)' },
+    { id: '$', name: 'US Dollar ($)' },
     { id: '€', name: 'Euro (€)' },
     { id: '£', name: 'British Pound (£)' },
     { id: '¥', name: 'Japanese Yen (¥)' },

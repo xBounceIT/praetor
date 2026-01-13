@@ -393,7 +393,7 @@ const App: React.FC = () => {
     roleMappings: []
   });
   const [generalSettings, setGeneralSettings] = useState({
-    currency: 'USD',
+    currency: '$',
     dailyLimit: 8,
     startOfWeek: 'Monday' as 'Monday' | 'Sunday',
     treatSaturdayAsHoliday: true,
@@ -534,6 +534,9 @@ const App: React.FC = () => {
 
         // Load global settings for all users
         const genSettings = await api.generalSettings.get();
+        if (genSettings.currency === 'USD') {
+          genSettings.currency = '$';
+        }
         setGeneralSettings(genSettings);
 
         // Load LDAP config for admins
