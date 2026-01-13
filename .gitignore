@@ -30,4 +30,4 @@ server/.env
 # Todo file
 todo.md
 
-env.md
+.agent/*/*
