@@ -274,6 +274,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                                     </div>
                                                     <div className="col-span-2">
                                                         <div className="flex items-center bg-white border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                                                            <div className="w-10 flex items-center justify-center text-slate-400 text-[10px] font-black border-r border-slate-100 py-2 bg-slate-50/50">
+                                                                {currency}
+                                                            </div>
                                                             <input
                                                                 type="number"
                                                                 step="0.01"
@@ -282,13 +285,15 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                                                 placeholder="Price"
                                                                 value={item.unitPrice}
                                                                 onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                className="w-full text-sm px-3 py-2 bg-transparent outline-none min-w-0"
+                                                                className="flex-1 px-3 py-2 bg-transparent outline-none text-sm font-semibold min-w-0"
                                                             />
-                                                            <div className="px-2 text-[10px] font-black text-slate-400 border-l border-slate-100 bg-slate-50/50">{currency}</div>
                                                         </div>
                                                     </div>
                                                     <div className="col-span-2">
                                                         <div className="flex items-center bg-white border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                                                            <div className="w-8 flex items-center justify-center text-slate-400 text-[10px] font-black border-r border-slate-100 py-2 bg-slate-50/50">
+                                                                %
+                                                            </div>
                                                             <input
                                                                 type="number"
                                                                 step="0.01"
@@ -297,9 +302,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                                                 placeholder="Disc"
                                                                 value={item.discount || 0}
                                                                 onChange={(e) => updateProductRow(index, 'discount', parseFloat(e.target.value) || 0)}
-                                                                className="w-full text-sm px-3 py-2 bg-transparent outline-none min-w-0"
+                                                                className="flex-1 px-3 py-2 bg-transparent outline-none text-sm font-semibold min-w-0"
                                                             />
-                                                            <div className="px-2 text-[10px] font-black text-slate-400 border-l border-slate-100 bg-slate-50/50">%</div>
                                                         </div>
                                                     </div>
                                                     <div className="col-span-1 flex items-center justify-center">
@@ -350,16 +354,21 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 ml-1">Global Discount (%)</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            max="100"
-                                            value={formData.discount}
-                                            onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                        />
+                                        <label className="text-xs font-bold text-slate-500 ml-1">Global Discount</label>
+                                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                                            <div className="w-12 flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 py-2.5 bg-slate-100/30">
+                                                %
+                                            </div>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                value={formData.discount}
+                                                onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
+                                                className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold"
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="space-y-1.5">
