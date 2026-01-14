@@ -1,16 +1,13 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
-const router = express.Router();
+export default async function (fastify, opts) {
+    // All quote routes require at least manager role
+    fastify.addHook('onRequest', authenticateToken);
+    fastify.addHook('onRequest', requireRole('admin', 'manager'));
 
-// All quote routes require at least manager role
-router.use(authenticateToken);
-router.use(requireRole('admin', 'manager'));
-
-// List all quotes with their items
-router.get('/', async (req, res, next) => {
-    try {
+    // GET / - List all quotes with their items
+    fastify.get('/', async (request, reply) => {
         // Get all quotes
         const quotesResult = await query(
             `SELECT 
@@ -57,21 +54,17 @@ router.get('/', async (req, res, next) => {
             items: itemsByQuote[quote.id] || []
         }));
 
-        res.json(quotes);
-    } catch (err) {
-        next(err);
-    }
-});
+        return quotes;
+    });
 
-// Create quote with items
-router.post('/', async (req, res, next) => {
-    const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } = req.body;
+    // POST / - Create quote with items
+    fastify.post('/', async (request, reply) => {
+        const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } = request.body;
 
-    if (!clientId || !clientName || !items || items.length === 0 || !expirationDate) {
-        return res.status(400).json({ error: 'Client, items, and expiration date are required' });
-    }
+        if (!clientId || !clientName || !items || items.length === 0 || !expirationDate) {
+            return reply.code(400).send({ error: 'Client, items, and expiration date are required' });
+        }
 
-    try {
         const quoteId = 'q-' + Date.now();
 
         // Insert quote
@@ -112,23 +105,17 @@ router.post('/', async (req, res, next) => {
             createdItems.push(itemResult.rows[0]);
         }
 
-        const quote = {
+        return reply.code(201).send({
             ...quoteResult.rows[0],
             items: createdItems
-        };
+        });
+    });
 
-        res.status(201).json(quote);
-    } catch (err) {
-        next(err);
-    }
-});
+    // PUT /:id - Update quote
+    fastify.put('/:id', async (request, reply) => {
+        const { id } = request.params;
+        const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } = request.body;
 
-// Update quote
-router.put('/:id', async (req, res, next) => {
-    const { id } = req.params;
-    const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } = req.body;
-
-    try {
         // Update quote
         const quoteResult = await query(
             `UPDATE quotes 
@@ -156,7 +143,7 @@ router.put('/:id', async (req, res, next) => {
         );
 
         if (quoteResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Quote not found' });
+            return reply.code(404).send({ error: 'Quote not found' });
         }
 
         // If items are provided, update them
@@ -201,33 +188,23 @@ router.put('/:id', async (req, res, next) => {
             updatedItems = itemsResult.rows;
         }
 
-        const quote = {
+        return {
             ...quoteResult.rows[0],
             items: updatedItems
         };
+    });
 
-        res.json(quote);
-    } catch (err) {
-        next(err);
-    }
-});
+    // DELETE /:id - Delete quote
+    fastify.delete('/:id', async (request, reply) => {
+        const { id } = request.params;
 
-// Delete quote
-router.delete('/:id', async (req, res, next) => {
-    const { id } = req.params;
-
-    try {
         // Items will be deleted automatically via CASCADE
         const result = await query('DELETE FROM quotes WHERE id = $1 RETURNING id', [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Quote not found' });
+            return reply.code(404).send({ error: 'Quote not found' });
         }
 
-        res.status(204).send();
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+        return reply.code(204).send();
+    });
+}

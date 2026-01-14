@@ -1,16 +1,15 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
-const router = express.Router();
-
-// GET /api/clients - List all clients
-router.get('/', authenticateToken, async (req, res, next) => {
-    try {
+export default async function (fastify, opts) {
+    // GET / - List all clients
+    fastify.get('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
         let queryText = 'SELECT * FROM clients ORDER BY name';
         let queryParams = [];
 
-        if (req.user.role === 'user') {
+        if (request.user.role === 'user') {
             queryText = `
                 SELECT c.*
                 FROM clients c
@@ -18,7 +17,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
                 WHERE uc.user_id = $1
                 ORDER BY c.name
             `;
-            queryParams = [req.user.id];
+            queryParams = [request.user.id];
         }
 
         const result = await query(queryText, queryParams);
@@ -37,22 +36,20 @@ router.get('/', authenticateToken, async (req, res, next) => {
             billingCode: c.billing_code,
             paymentTerms: c.payment_terms
         }));
-        res.json(clients);
-    } catch (err) {
-        next(err);
-    }
-});
+        return clients;
+    });
 
-// POST /api/clients - Create client (admin/manager only)
-router.post('/', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
-    try {
+    // POST / - Create client (admin/manager only)
+    fastify.post('/', {
+        onRequest: [authenticateToken, requireRole('admin', 'manager')]
+    }, async (request, reply) => {
         const {
             name, type, contactName, clientCode, email, phone,
             address, vatNumber, taxCode, billingCode, paymentTerms
-        } = req.body;
+        } = request.body;
 
         if (!name) {
-            return res.status(400).json({ error: 'Client name is required' });
+            return reply.code(400).send({ error: 'Client name is required' });
         }
 
         const id = 'c-' + Date.now();
@@ -66,23 +63,21 @@ router.post('/', authenticateToken, requireRole('admin', 'manager'), async (req,
             email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
         ]);
 
-        res.status(201).json({
+        return reply.code(201).send({
             id, name, isDisabled: false, type, contactName, clientCode,
             email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
         });
-    } catch (err) {
-        next(err);
-    }
-});
+    });
 
-// PUT /api/clients/:id - Update client (admin/manager only)
-router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
-    try {
-        const { id } = req.params;
+    // PUT /:id - Update client (admin/manager only)
+    fastify.put('/:id', {
+        onRequest: [authenticateToken, requireRole('admin', 'manager')]
+    }, async (request, reply) => {
+        const { id } = request.params;
         const {
             name, isDisabled, type, contactName, clientCode, email, phone,
             address, vatNumber, taxCode, billingCode, paymentTerms
-        } = req.body;
+        } = request.body;
 
         const result = await query(`
             UPDATE clients SET 
@@ -106,12 +101,12 @@ router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (re
         ]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Client not found' });
+            return reply.code(404).send({ error: 'Client not found' });
         }
 
         const c = result.rows[0];
 
-        res.json({
+        return {
             id: c.id,
             name: c.name,
             isDisabled: c.is_disabled,
@@ -125,26 +120,20 @@ router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (re
             taxCode: c.tax_code,
             billingCode: c.billing_code,
             paymentTerms: c.payment_terms
-        });
-    } catch (err) {
-        next(err);
-    }
-});
+        };
+    });
 
-// DELETE /api/clients/:id - Delete client (admin only)
-router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res, next) => {
-    try {
-        const { id } = req.params;
+    // DELETE /:id - Delete client (admin only)
+    fastify.delete('/:id', {
+        onRequest: [authenticateToken, requireRole('admin')]
+    }, async (request, reply) => {
+        const { id } = request.params;
         const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Client not found' });
+            return reply.code(404).send({ error: 'Client not found' });
         }
 
-        res.json({ message: 'Client deleted' });
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+        return { message: 'Client deleted' };
+    });
+}

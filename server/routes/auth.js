@@ -1,45 +1,38 @@
-import express from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../db/index.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
 
-const router = express.Router();
-
-// POST /api/auth/login
-router.post('/login', async (req, res, next) => {
-    try {
-        const { username, password } = req.body;
+export default async function (fastify, opts) {
+    // POST /login
+    fastify.post('/login', async (request, reply) => {
+        const { username, password } = request.body;
 
         if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password are required' });
+            return reply.code(400).send({ error: 'Username and password are required' });
         }
 
         const result = await query(
-            'SELECT id, name, username, password_hash, role, avatar_initials FROM users WHERE username = $1',
+            'SELECT id, name, username, password_hash, role, avatar_initials, is_disabled FROM users WHERE username = $1',
             [username]
         );
 
         if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid username or password' });
+            return reply.code(401).send({ error: 'Invalid username or password' });
         }
 
         const user = result.rows[0];
 
         if (user.is_disabled) {
-            return res.status(403).json({ error: 'Account is disabled. Please contact an administrator.' });
+            return reply.code(403).send({ error: 'Account is disabled. Please contact an administrator.' });
         }
 
         // LDAP Authentication
         let ldapAuthSuccess = false;
         try {
-            // We need to dynamic import or ensure service is ready. 
-            // Since we use ES modules, top level import is fine.
-            // But we need to handle if LDAP is disabled in config.
-            // The service handles check internally.
             const ldapService = (await import('../services/ldap.js')).default;
             ldapAuthSuccess = await ldapService.authenticate(username, password);
         } catch (err) {
-            console.error('LDAP Auth Attempt Failed:', err.message); // Log but continue to local
+            console.error('LDAP Auth Attempt Failed:', err.message);
         }
 
         let validPassword = false;
@@ -50,12 +43,12 @@ router.post('/login', async (req, res, next) => {
         }
 
         if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid username or password' });
+            return reply.code(401).send({ error: 'Invalid username or password' });
         }
 
         const token = generateToken(user.id);
 
-        res.json({
+        return {
             token,
             user: {
                 id: user.id,
@@ -64,21 +57,19 @@ router.post('/login', async (req, res, next) => {
                 role: user.role,
                 avatarInitials: user.avatar_initials
             }
-        });
-    } catch (err) {
-        next(err);
-    }
-});
-
-// GET /api/auth/me - Get current user
-router.get('/me', authenticateToken, async (req, res) => {
-    res.json({
-        id: req.user.id,
-        name: req.user.name,
-        username: req.user.username,
-        role: req.user.role,
-        avatarInitials: req.user.avatar_initials
+        };
     });
-});
 
-export default router;
+    // GET /me - Get current user
+    fastify.get('/me', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        return {
+            id: request.user.id,
+            name: request.user.name,
+            username: request.user.username,
+            role: request.user.role,
+            avatarInitials: request.user.avatar_initials
+        };
+    });
+}

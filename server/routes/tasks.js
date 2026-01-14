@@ -1,12 +1,11 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
 
-const router = express.Router();
-
-// GET /api/tasks - List all tasks
-router.get('/', authenticateToken, async (req, res, next) => {
-    try {
+export default async function (fastify, opts) {
+    // GET / - List all tasks
+    fastify.get('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
         let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
@@ -14,7 +13,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         `;
         let queryParams = [];
 
-        if (req.user.role === 'user') {
+        if (request.user.role === 'user') {
             queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
@@ -23,7 +22,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
                 WHERE ut.user_id = $1
                 ORDER BY t.name
             `;
-            queryParams = [req.user.id];
+            queryParams = [request.user.id];
         }
 
         const result = await query(queryText, queryParams);
@@ -41,54 +40,54 @@ router.get('/', authenticateToken, async (req, res, next) => {
             isDisabled: t.is_disabled
         }));
 
-        res.json(tasks);
-    } catch (err) {
-        next(err);
-    }
-});
+        return tasks;
+    });
 
-// POST /api/tasks - Create task
-router.post('/', authenticateToken, async (req, res, next) => {
-    try {
-        const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } = req.body;
+    // POST / - Create task
+    fastify.post('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } = request.body;
 
         if (!name || !projectId) {
-            return res.status(400).json({ error: 'Task name and project ID are required' });
+            return reply.code(400).send({ error: 'Task name and project ID are required' });
         }
 
         const id = 't-' + Date.now();
         const start = isRecurring ? (recurrenceStart || new Date().toISOString().split('T')[0]) : null;
 
-        await query(
-            `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, is_disabled) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, start, req.body.recurrenceDuration || 0, false]
-        );
+        try {
+            await query(
+                `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, is_disabled) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, start, request.body.recurrenceDuration || 0, false]
+            );
 
-        res.status(201).json({
-            id,
-            name,
-            projectId,
-            description,
-            isRecurring: isRecurring || false,
-            recurrencePattern,
-            recurrenceStart: start,
-            recurrenceDuration: req.body.recurrenceDuration || 0,
-            isDisabled: false
-        });
-    } catch (err) {
-        if (err.code === '23503') { // Foreign key violation
-            return res.status(400).json({ error: 'Project not found' });
+            return reply.code(201).send({
+                id,
+                name,
+                projectId,
+                description,
+                isRecurring: isRecurring || false,
+                recurrencePattern,
+                recurrenceStart: start,
+                recurrenceDuration: request.body.recurrenceDuration || 0,
+                isDisabled: false
+            });
+        } catch (err) {
+            if (err.code === '23503') { // Foreign key violation
+                return reply.code(400).send({ error: 'Project not found' });
+            }
+            throw err;
         }
-        next(err);
-    }
-});
+    });
 
-// PUT /api/tasks/:id - Update task
-router.put('/:id', authenticateToken, async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = req.body;
+    // PUT /:id - Update task
+    fastify.put('/:id', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { id } = request.params;
+        const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = request.body;
 
         const result = await query(
             `UPDATE tasks 
@@ -102,15 +101,15 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
            is_disabled = COALESCE($9, is_disabled)
        WHERE id = $1
        RETURNING *`,
-            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, req.body.recurrenceDuration || 0, isDisabled]
+            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, request.body.recurrenceDuration || 0, isDisabled]
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
+            return reply.code(404).send({ error: 'Task not found' });
         }
 
         const t = result.rows[0];
-        res.json({
+        return {
             id: t.id,
             name: t.name,
             projectId: t.project_id,
@@ -121,26 +120,20 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
             recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
             recurrenceDuration: parseFloat(t.recurrence_duration || 0),
             isDisabled: t.is_disabled
-        });
-    } catch (err) {
-        next(err);
-    }
-});
+        };
+    });
 
-// DELETE /api/tasks/:id - Delete task
-router.delete('/:id', authenticateToken, async (req, res, next) => {
-    try {
-        const { id } = req.params;
+    // DELETE /:id - Delete task
+    fastify.delete('/:id', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { id } = request.params;
         const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Task not found' });
+            return reply.code(404).send({ error: 'Task not found' });
         }
 
-        res.json({ message: 'Task deleted' });
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+        return { message: 'Task deleted' };
+    });
+}

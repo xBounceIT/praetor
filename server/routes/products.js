@@ -1,51 +1,40 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
-const router = express.Router();
+export default async function (fastify, opts) {
+    // All product routes require at least manager role
+    fastify.addHook('onRequest', authenticateToken);
+    fastify.addHook('onRequest', requireRole('admin', 'manager'));
 
-// All product routes require at least manager role
-router.use(authenticateToken);
-router.use(requireRole('admin', 'manager'));
-
-// List all products
-router.get('/', async (req, res, next) => {
-    try {
+    // GET / - List all products
+    fastify.get('/', async (request, reply) => {
         const result = await query(
             'SELECT id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled" FROM products ORDER BY name ASC'
         );
-        res.json(result.rows);
-    } catch (err) {
-        next(err);
-    }
-});
+        return result.rows;
+    });
 
-// Create product
-router.post('/', async (req, res, next) => {
-    const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type } = req.body;
+    // POST / - Create product
+    fastify.post('/', async (request, reply) => {
+        const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type } = request.body;
 
-    if (!name) {
-        return res.status(400).json({ error: 'Product name is required' });
-    }
+        if (!name) {
+            return reply.code(400).send({ error: 'Product name is required' });
+        }
 
-    try {
         const id = 'p-' + Date.now();
         const result = await query(
             'INSERT INTO products (id, name, sale_price, sale_unit, cost, cost_unit, category, tax_rate, type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", type',
             [id, name, salePrice || 0, saleUnit || 'unit', cost || 0, costUnit || 'unit', category, taxRate || 0, type || 'item']
         );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        next(err);
-    }
-});
+        return reply.code(201).send(result.rows[0]);
+    });
 
-// Update product
-router.put('/:id', async (req, res, next) => {
-    const { id } = req.params;
-    const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type, isDisabled } = req.body;
+    // PUT /:id - Update product
+    fastify.put('/:id', async (request, reply) => {
+        const { id } = request.params;
+        const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type, isDisabled } = request.body;
 
-    try {
         const result = await query(
             `UPDATE products 
              SET name = COALESCE($1, name), 
@@ -62,30 +51,22 @@ router.put('/:id', async (req, res, next) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Product not found' });
+            return reply.code(404).send({ error: 'Product not found' });
         }
 
-        res.json(result.rows[0]);
-    } catch (err) {
-        next(err);
-    }
-});
+        return result.rows[0];
+    });
 
-// Delete product
-router.delete('/:id', async (req, res, next) => {
-    const { id } = req.params;
+    // DELETE /:id - Delete product
+    fastify.delete('/:id', async (request, reply) => {
+        const { id } = request.params;
 
-    try {
         const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Product not found' });
+            return reply.code(404).send({ error: 'Product not found' });
         }
 
-        res.status(204).send();
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+        return reply.code(204).send();
+    });
+}

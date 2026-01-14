@@ -1,19 +1,18 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
-const router = express.Router();
-
-// GET /api/projects - List all projects
-router.get('/', authenticateToken, async (req, res, next) => {
-    try {
+export default async function (fastify, opts) {
+    // GET / - List all projects
+    fastify.get('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
         let queryText = `
             SELECT id, name, client_id, color, description, is_disabled 
             FROM projects ORDER BY name
         `;
         let queryParams = [];
 
-        if (req.user.role === 'user') {
+        if (request.user.role === 'user') {
             queryText = `
                 SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled 
                 FROM projects p
@@ -21,7 +20,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
                 WHERE up.user_id = $1
                 ORDER BY p.name
             `;
-            queryParams = [req.user.id];
+            queryParams = [request.user.id];
         }
 
         const result = await query(queryText, queryParams);
@@ -35,100 +34,98 @@ router.get('/', authenticateToken, async (req, res, next) => {
             isDisabled: p.is_disabled
         }));
 
-        res.json(projects);
-    } catch (err) {
-        next(err);
-    }
-});
+        return projects;
+    });
 
-// POST /api/projects - Create project (admin/manager only)
-router.post('/', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
-    try {
-        const { name, clientId, description, color } = req.body;
+    // POST / - Create project (admin/manager only)
+    fastify.post('/', {
+        onRequest: [authenticateToken, requireRole('admin', 'manager')]
+    }, async (request, reply) => {
+        const { name, clientId, description, color } = request.body;
 
         if (!name || !clientId) {
-            return res.status(400).json({ error: 'Project name and client ID are required' });
+            return reply.code(400).send({ error: 'Project name and client ID are required' });
         }
 
         const id = 'p-' + Date.now();
         const projectColor = color || '#3b82f6';
 
-        await query(
-            `INSERT INTO projects (id, name, client_id, color, description, is_disabled) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-            [id, name, clientId, projectColor, description || null, false]
-        );
+        try {
+            await query(
+                `INSERT INTO projects (id, name, client_id, color, description, is_disabled) 
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+                [id, name, clientId, projectColor, description || null, false]
+            );
 
-        res.status(201).json({
-            id,
-            name,
-            clientId,
-            color: projectColor,
-            description,
-            isDisabled: false
-        });
-    } catch (err) {
-        if (err.code === '23503') { // Foreign key violation
-            return res.status(400).json({ error: 'Client not found' });
+            return reply.code(201).send({
+                id,
+                name,
+                clientId,
+                color: projectColor,
+                description,
+                isDisabled: false
+            });
+        } catch (err) {
+            if (err.code === '23503') { // Foreign key violation
+                return reply.code(400).send({ error: 'Client not found' });
+            }
+            throw err;
         }
-        next(err);
-    }
-});
+    });
 
-// DELETE /api/projects/:id - Delete project (admin/manager only)
-router.delete('/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
-    try {
-        const { id } = req.params;
+    // DELETE /:id - Delete project (admin/manager only)
+    fastify.delete('/:id', {
+        onRequest: [authenticateToken, requireRole('admin', 'manager')]
+    }, async (request, reply) => {
+        const { id } = request.params;
         const result = await query('DELETE FROM projects WHERE id = $1 RETURNING id', [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Project not found' });
+            return reply.code(404).send({ error: 'Project not found' });
         }
 
-        res.json({ message: 'Project deleted' });
-    } catch (err) {
-        next(err);
-    }
-});
+        return { message: 'Project deleted' };
+    });
 
-// PUT /api/projects/:id - Update project (admin/manager only)
-router.put('/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const { name, clientId, description, color, isDisabled } = req.body;
+    // PUT /:id - Update project (admin/manager only)
+    fastify.put('/:id', {
+        onRequest: [authenticateToken, requireRole('admin', 'manager')]
+    }, async (request, reply) => {
+        const { id } = request.params;
+        const { name, clientId, description, color, isDisabled } = request.body;
 
-        const result = await query(
-            `UPDATE projects 
-             SET name = COALESCE($1, name), 
-                 client_id = COALESCE($2, client_id), 
-                 color = COALESCE($3, color), 
-                 description = COALESCE($4, description), 
-                 is_disabled = COALESCE($5, is_disabled)
-             WHERE id = $6
-             RETURNING id, name, client_id, color, description, is_disabled`,
-            [name || null, clientId || null, color || null, description || null, isDisabled, id]
-        );
+        try {
+            const result = await query(
+                `UPDATE projects 
+                 SET name = COALESCE($1, name), 
+                     client_id = COALESCE($2, client_id), 
+                     color = COALESCE($3, color), 
+                     description = COALESCE($4, description), 
+                     is_disabled = COALESCE($5, is_disabled)
+                 WHERE id = $6
+                 RETURNING id, name, client_id, color, description, is_disabled`,
+                [name || null, clientId || null, color || null, description || null, isDisabled, id]
+            );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Project not found' });
+            if (result.rows.length === 0) {
+                return reply.code(404).send({ error: 'Project not found' });
+            }
+
+            const updated = result.rows[0];
+
+            return {
+                id: updated.id,
+                name: updated.name,
+                clientId: updated.client_id,
+                color: updated.color,
+                description: updated.description,
+                isDisabled: updated.is_disabled
+            };
+        } catch (err) {
+            if (err.code === '23503') { // Foreign key violation
+                return reply.code(400).send({ error: 'Client not found' });
+            }
+            throw err;
         }
-
-        const updated = result.rows[0];
-
-        res.json({
-            id: updated.id,
-            name: updated.name,
-            clientId: updated.client_id,
-            color: updated.color,
-            description: updated.description,
-            isDisabled: updated.is_disabled
-        });
-    } catch (err) {
-        if (err.code === '23503') { // Foreign key violation
-            return res.status(400).json({ error: 'Client not found' });
-        }
-        next(err);
-    }
-});
-
-export default router;
+    });
+}

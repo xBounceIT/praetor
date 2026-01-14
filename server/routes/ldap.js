@@ -1,12 +1,11 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
-const router = express.Router();
-
-// GET /api/ldap/config - Get LDAP configuration (admin only)
-router.get('/config', authenticateToken, requireRole('admin'), async (req, res, next) => {
-    try {
+export default async function (fastify, opts) {
+    // GET /config - Get LDAP configuration (admin only)
+    fastify.get('/config', {
+        onRequest: [authenticateToken, requireRole('admin')]
+    }, async (request, reply) => {
         const result = await query(
             `SELECT enabled, server_url, base_dn, bind_dn, bind_password, 
               user_filter, group_base_dn, group_filter, role_mappings
@@ -14,7 +13,7 @@ router.get('/config', authenticateToken, requireRole('admin'), async (req, res, 
         );
 
         if (result.rows.length === 0) {
-            return res.json({
+            return {
                 enabled: false,
                 serverUrl: 'ldap://ldap.example.com:389',
                 baseDn: 'dc=example,dc=com',
@@ -24,11 +23,11 @@ router.get('/config', authenticateToken, requireRole('admin'), async (req, res, 
                 groupBaseDn: 'ou=groups,dc=example,dc=com',
                 groupFilter: '(member={0})',
                 roleMappings: []
-            });
+            };
         }
 
         const c = result.rows[0];
-        res.json({
+        return {
             enabled: c.enabled,
             serverUrl: c.server_url,
             baseDn: c.base_dn,
@@ -38,16 +37,14 @@ router.get('/config', authenticateToken, requireRole('admin'), async (req, res, 
             groupBaseDn: c.group_base_dn,
             groupFilter: c.group_filter,
             roleMappings: c.role_mappings || []
-        });
-    } catch (err) {
-        next(err);
-    }
-});
+        };
+    });
 
-// PUT /api/ldap/config - Update LDAP configuration (admin only)
-router.put('/config', authenticateToken, requireRole('admin'), async (req, res, next) => {
-    try {
-        const { enabled, serverUrl, baseDn, bindDn, bindPassword, userFilter, groupBaseDn, groupFilter, roleMappings } = req.body;
+    // PUT /config - Update LDAP configuration (admin only)
+    fastify.put('/config', {
+        onRequest: [authenticateToken, requireRole('admin')]
+    }, async (request, reply) => {
+        const { enabled, serverUrl, baseDn, bindDn, bindPassword, userFilter, groupBaseDn, groupFilter, roleMappings } = request.body;
 
         const result = await query(
             `UPDATE ldap_config SET
@@ -67,7 +64,7 @@ router.put('/config', authenticateToken, requireRole('admin'), async (req, res, 
         );
 
         const c = result.rows[0];
-        res.json({
+        return {
             enabled: c.enabled,
             serverUrl: c.server_url,
             baseDn: c.base_dn,
@@ -77,21 +74,15 @@ router.put('/config', authenticateToken, requireRole('admin'), async (req, res, 
             groupBaseDn: c.group_base_dn,
             groupFilter: c.group_filter,
             roleMappings: c.role_mappings || []
-        });
-    } catch (err) {
-        next(err);
-    }
-});
+        };
+    });
 
-// POST /api/ldap/sync - Trigger LDAP user sync (admin only)
-router.post('/sync', authenticateToken, requireRole('admin'), async (req, res, next) => {
-    try {
+    // POST /sync - Trigger LDAP user sync (admin only)
+    fastify.post('/sync', {
+        onRequest: [authenticateToken, requireRole('admin')]
+    }, async (request, reply) => {
         const ldapService = (await import('../services/ldap.js')).default;
         const stats = await ldapService.syncUsers();
-        res.json({ success: true, ...stats });
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+        return { success: true, ...stats };
+    });
+}

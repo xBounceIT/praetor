@@ -1,8 +1,6 @@
-import express from 'express';
-import cors from 'cors';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import dotenv from 'dotenv';
-import http2 from 'node:http2';
-import http2Express from 'http2-express-bridge';
 
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
@@ -20,99 +18,93 @@ import salesRoutes from './routes/sales.js';
 
 dotenv.config();
 
-const app = http2Express(express);
 const PORT = process.env.PORT || 3001;
 
-const server = http2.createServer(app);
-
-// Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
-app.use(express.json());
-
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/clients', clientsRoutes);
-app.use('/api/projects', projectsRoutes);
-app.use('/api/tasks', tasksRoutes);
-app.use('/api/entries', entriesRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/ldap', ldapRoutes);
-app.use('/api/general-settings', generalSettingsRoutes);
-app.use('/api/products', productsRoutes);
-app.use('/api/quotes', quotesRoutes);
-app.use('/api/work-units', workUnitsRoutes);
-app.use('/api/sales', salesRoutes);
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Create Fastify instance with HTTP/2 support
+const fastify = Fastify({
+  logger: false,
+  http2: true
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
+// Register CORS
+await fastify.register(cors, {
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+});
+
+// Register routes
+await fastify.register(authRoutes, { prefix: '/api/auth' });
+await fastify.register(usersRoutes, { prefix: '/api/users' });
+await fastify.register(clientsRoutes, { prefix: '/api/clients' });
+await fastify.register(projectsRoutes, { prefix: '/api/projects' });
+await fastify.register(tasksRoutes, { prefix: '/api/tasks' });
+await fastify.register(entriesRoutes, { prefix: '/api/entries' });
+await fastify.register(settingsRoutes, { prefix: '/api/settings' });
+await fastify.register(ldapRoutes, { prefix: '/api/ldap' });
+await fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
+await fastify.register(productsRoutes, { prefix: '/api/products' });
+await fastify.register(quotesRoutes, { prefix: '/api/quotes' });
+await fastify.register(workUnitsRoutes, { prefix: '/api/work-units' });
+await fastify.register(salesRoutes, { prefix: '/api/sales' });
+
+// Health check
+fastify.get('/api/health', async (request, reply) => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Error handling
+fastify.setErrorHandler((error, request, reply) => {
+  console.error('Error:', error);
+  reply.code(error.statusCode || 500).send({
+    error: error.message || 'Internal server error'
   });
 });
 
-server.listen(PORT, async () => {
-  try {
-    // Run automatic migration on startup
-    const fs = await import('fs');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
+// Start server
+try {
+  await fastify.listen({ port: PORT, host: '0.0.0.0' });
 
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const schemaPath = path.join(__dirname, 'db', 'schema.sql');
+  // Run automatic migration on startup
+  const fs = await import('fs');
+  const path = await import('path');
+  const { fileURLToPath } = await import('url');
 
-    if (fs.existsSync(schemaPath)) {
-      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-      // Import query from db module dynamically to ensure it's loaded
-      const { query } = await import('./db/index.js');
-      // Split by semicolon and run each to be safer and see progress, 
-      // but simple query(schemaSql) also works for multiple statements in pg.
-      await query(schemaSql);
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const schemaPath = path.join(__dirname, 'db', 'schema.sql');
 
-      // Explicitly verify that the new tables exist
-      const tableCheck = await query(`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name IN ('user_clients', 'user_projects', 'user_tasks')
-      `);
+  if (fs.existsSync(schemaPath)) {
+    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+    const { query } = await import('./db/index.js');
+    await query(schemaSql);
 
-      const foundTables = tableCheck.rows.map(r => r.table_name);
-      console.log(`Database schema verified. Found tables: ${foundTables.join(', ')}`);
+    // Explicitly verify that the new tables exist
+    const tableCheck = await query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN ('user_clients', 'user_projects', 'user_tasks')
+    `);
 
-      if (!foundTables.includes('user_clients')) {
-        console.error('CRITICAL: user_clients table was not created!');
-      }
-    } else {
-      console.warn('Schema file not found at:', schemaPath);
+    const foundTables = tableCheck.rows.map(r => r.table_name);
+    console.log(`Database schema verified. Found tables: ${foundTables.join(', ')}`);
+
+    if (!foundTables.includes('user_clients')) {
+      console.error('CRITICAL: user_clients table was not created!');
     }
-  } catch (err) {
-    console.error('Failed to run auto-migration:', err);
+  } else {
+    console.warn('Schema file not found at:', schemaPath);
   }
 
-  console.log(`Praetor API server running on port ${PORT}`);
+  console.log(`Praetor API server running on port ${PORT} with HTTP/2`);
 
   // Periodic LDAP Sync Task (every hour)
   try {
     const ldapService = (await import('./services/ldap.js')).default;
 
-    // Run once on startup if enabled (wait a bit for DB to settle if needed, but here is fine after migration)
-    // Actually, let's just schedule it.
-
     const SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
     setInterval(async () => {
       try {
-        // Reload config to check if enabled
         await ldapService.loadConfig();
         if (ldapService.config && ldapService.config.enabled) {
           console.log('Running periodic LDAP sync...');
@@ -125,6 +117,9 @@ server.listen(PORT, async () => {
   } catch (err) {
     console.error('Failed to initialize LDAP sync task:', err);
   }
-});
+} catch (err) {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+}
 
-export default app;
+export default fastify;

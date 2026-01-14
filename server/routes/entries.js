@@ -1,17 +1,16 @@
-import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
 
-const router = express.Router();
-
-// GET /api/entries - List time entries
-router.get('/', authenticateToken, async (req, res, next) => {
-    try {
+export default async function (fastify, opts) {
+    // GET / - List time entries
+    fastify.get('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
         let result;
 
-        if (req.user.role === 'admin' || req.user.role === 'manager') {
+        if (request.user.role === 'admin' || request.user.role === 'manager') {
             // Admins and managers can see all entries, optionally filtered by user
-            const { userId } = req.query;
+            const { userId } = request.query;
             if (userId) {
                 result = await query(
                     `SELECT id, user_id, date, client_id, client_name, project_id, 
@@ -32,7 +31,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
                 `SELECT id, user_id, date, client_id, client_name, project_id, 
                 project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
          FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-                [req.user.id]
+                [request.user.id]
             );
         }
 
@@ -52,24 +51,22 @@ router.get('/', authenticateToken, async (req, res, next) => {
             createdAt: new Date(e.created_at).getTime()
         }));
 
-        res.json(entries);
-    } catch (err) {
-        next(err);
-    }
-});
+        return entries;
+    });
 
-// POST /api/entries - Create time entry
-router.post('/', authenticateToken, async (req, res, next) => {
-    try {
-        const { date, clientId, clientName, projectId, projectName, task, notes, duration, isPlaceholder, userId } = req.body;
+    // POST / - Create time entry
+    fastify.post('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { date, clientId, clientName, projectId, projectName, task, notes, duration, isPlaceholder, userId } = request.body;
 
         if (!date || !clientId || !clientName || !projectId || !projectName || !task) {
-            return res.status(400).json({ error: 'Missing required fields' });
+            return reply.code(400).send({ error: 'Missing required fields' });
         }
 
         // Allow admins/managers to create entries for other users
-        let targetUserId = req.user.id;
-        if (userId && (req.user.role === 'admin' || req.user.role === 'manager')) {
+        let targetUserId = request.user.id;
+        if (userId && (request.user.role === 'admin' || request.user.role === 'manager')) {
             targetUserId = userId;
         }
 
@@ -85,7 +82,7 @@ router.post('/', authenticateToken, async (req, res, next) => {
             [id, targetUserId, date, clientId, clientName, projectId, projectName, task, notes || null, duration || 0, hourlyCost, isPlaceholder || false]
         );
 
-        res.status(201).json({
+        return reply.code(201).send({
             id,
             userId: targetUserId,
             date,
@@ -100,25 +97,23 @@ router.post('/', authenticateToken, async (req, res, next) => {
             isPlaceholder: isPlaceholder || false,
             createdAt: Date.now()
         });
-    } catch (err) {
-        next(err);
-    }
-});
+    });
 
-// PUT /api/entries/:id - Update time entry
-router.put('/:id', authenticateToken, async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const { duration, notes, isPlaceholder } = req.body;
+    // PUT /:id - Update time entry
+    fastify.put('/:id', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { id } = request.params;
+        const { duration, notes, isPlaceholder } = request.body;
 
         // Check ownership or admin/manager role
         const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [id]);
         if (existing.rows.length === 0) {
-            return res.status(404).json({ error: 'Entry not found' });
+            return reply.code(404).send({ error: 'Entry not found' });
         }
 
-        if (existing.rows[0].user_id !== req.user.id && req.user.role === 'user') {
-            return res.status(403).json({ error: 'Not authorized to update this entry' });
+        if (existing.rows[0].user_id !== request.user.id && request.user.role === 'user') {
+            return reply.code(403).send({ error: 'Not authorized to update this entry' });
         }
 
         const result = await query(
@@ -132,7 +127,7 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
         );
 
         const e = result.rows[0];
-        res.json({
+        return {
             id: e.id,
             userId: e.user_id,
             date: e.date.toISOString().split('T')[0],
@@ -146,41 +141,37 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
             hourlyCost: parseFloat(e.hourly_cost || 0),
             isPlaceholder: e.is_placeholder,
             createdAt: new Date(e.created_at).getTime()
-        });
-    } catch (err) {
-        next(err);
-    }
-});
+        };
+    });
 
-// DELETE /api/entries/:id - Delete time entry
-router.delete('/:id', authenticateToken, async (req, res, next) => {
-    try {
-        const { id } = req.params;
+    // DELETE /:id - Delete time entry
+    fastify.delete('/:id', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { id } = request.params;
 
         // Check ownership or admin/manager role
         const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [id]);
         if (existing.rows.length === 0) {
-            return res.status(404).json({ error: 'Entry not found' });
+            return reply.code(404).send({ error: 'Entry not found' });
         }
 
-        if (existing.rows[0].user_id !== req.user.id && req.user.role === 'user') {
-            return res.status(403).json({ error: 'Not authorized to delete this entry' });
+        if (existing.rows[0].user_id !== request.user.id && request.user.role === 'user') {
+            return reply.code(403).send({ error: 'Not authorized to delete this entry' });
         }
 
         await query('DELETE FROM time_entries WHERE id = $1', [id]);
-        res.json({ message: 'Entry deleted' });
-    } catch (err) {
-        next(err);
-    }
-});
+        return { message: 'Entry deleted' };
+    });
 
-// DELETE /api/entries - Bulk delete entries (for recurring cleanup)
-router.delete('/', authenticateToken, async (req, res, next) => {
-    try {
-        const { projectId, task, futureOnly, placeholderOnly } = req.query;
+    // DELETE / - Bulk delete entries (for recurring cleanup)
+    fastify.delete('/', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { projectId, task, futureOnly, placeholderOnly } = request.query;
 
         if (!projectId || !task) {
-            return res.status(400).json({ error: 'projectId and task are required' });
+            return reply.code(400).send({ error: 'projectId and task are required' });
         }
 
         let sql = 'DELETE FROM time_entries WHERE project_id = $1 AND task = $2';
@@ -188,9 +179,9 @@ router.delete('/', authenticateToken, async (req, res, next) => {
         let paramIndex = 3;
 
         // Only delete user's own entries unless admin/manager
-        if (req.user.role === 'user') {
+        if (request.user.role === 'user') {
             sql += ` AND user_id = $${paramIndex++}`;
-            params.push(req.user.id);
+            params.push(request.user.id);
         }
 
         if (futureOnly === 'true') {
@@ -203,10 +194,6 @@ router.delete('/', authenticateToken, async (req, res, next) => {
         }
 
         const result = await query(sql + ' RETURNING id', params);
-        res.json({ message: `Deleted ${result.rows.length} entries` });
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+        return { message: `Deleted ${result.rows.length} entries` };
+    });
+}
