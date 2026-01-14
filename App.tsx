@@ -405,12 +405,22 @@ const App: React.FC = () => {
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
   const [viewingUserAssignments, setViewingUserAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] } | null>(null);
+  const VALID_VIEWS: View[] = useMemo(() => [
+    'tempo/tracker', 'tempo/reports', 'tempo/recurring', 'tempo/tasks', 'tempo/projects',
+    'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
+    'crm/clients', 'crm/products', 'crm/quotes',
+    'projects/manage', 'projects/tasks',
+    'settings'
+  ], []);
+
   const [activeView, setActiveView] = useState<View | '404'>(() => {
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
     const hash = rawHash as View;
+    // We can't use the memoized VALID_VIEWS here because this runs before the initial render
+    // So we define the list once for initialization
     const validViews: View[] = [
       'tempo/tracker', 'tempo/reports', 'tempo/recurring', 'tempo/tasks', 'tempo/projects',
-      'hr/workforce', 'configuration/authentication', 'configuration/general',
+      'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
       'crm/clients', 'crm/products', 'crm/quotes',
       'projects/manage', 'projects/tasks',
       'settings'
@@ -468,21 +478,14 @@ const App: React.FC = () => {
     const handleHashChange = () => {
       const rawHash = window.location.hash.replace('#/', '').replace('#', '');
       const hash = rawHash as View;
-      const validViews: View[] = [
-        'tempo/tracker', 'tempo/reports', 'tempo/recurring', 'tempo/tasks', 'tempo/projects',
-        'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-        'crm/clients', 'crm/products', 'crm/quotes',
-        'projects/manage', 'projects/tasks',
-        'settings'
-      ];
-      const nextView = validViews.includes(hash) ? hash : (rawHash === '' ? 'tempo/tracker' : '404');
+      const nextView = VALID_VIEWS.includes(hash) ? hash : (rawHash === '' ? 'tempo/tracker' : '404');
       if (nextView !== activeView) {
         setActiveView(nextView);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView]);
+  }, [activeView, VALID_VIEWS]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {

@@ -108,10 +108,33 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
           ${isOpen ? 'ring-2 ring-indigo-500 border-indigo-500' : ''}
           ${buttonClassName ? buttonClassName : 'px-3 py-2.5 bg-slate-50 border border-slate-200 text-sm'}`}
       >
-        <span className={`truncate ${((isMulti && (value as string[]).length > 0) || (!isMulti && value)) ? "text-slate-800 font-semibold" : "text-slate-400"}`}>
-          {getButtonLabel()}
-        </span>
-        <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          {isMulti && (value as string[]).length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {(selectedOptions as Option[]).map(option => (
+                <span
+                  key={option.id}
+                  className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-indigo-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {option.name}
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggle(option.id, e)}
+                    className="hover:text-indigo-900 text-indigo-400 transition-colors w-3 h-3 flex items-center justify-center rounded-full hover:bg-indigo-200"
+                  >
+                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className={`truncate block ${((!isMulti && value)) ? "text-slate-800 font-semibold" : "text-slate-400"}`}>
+              {getButtonLabel()}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-2 shrink-0">
           {isMulti && (value as string[]).length > 0 && (
             <button
               type="button"
