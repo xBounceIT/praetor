@@ -59,7 +59,7 @@ Praetor is a modern, AI-enhanced time tracking application inspired by the simpl
 
 ### Docker
 
-You can containerize the application using Nginx to serve the static files:
+You can containerize the application using Caddy to serve the static files:
 
 ```bash
 cp .env.example .env
