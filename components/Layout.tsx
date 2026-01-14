@@ -145,7 +145,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 ${isCollapsed ? 'justify-center' : ''}`}
             >
               <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20">
-                <i className="fa-solid fa-grid-2 text-white text-sm"></i>
+                <i className={`fa-solid ${activeModule.icon} text-white text-sm`}></i>
               </div>
               {!isCollapsed && (
                 <>
