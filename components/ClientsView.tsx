@@ -14,6 +14,21 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    const saved = localStorage.getItem('tempo_clients_rowsPerPage');
+    return saved ? parseInt(saved, 10) : 5;
+  });
+
+  const handleRowsPerPageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = parseInt(e.target.value, 10);
+    setRowsPerPage(value);
+    localStorage.setItem('tempo_clients_rowsPerPage', value.toString());
+    setCurrentPage(1); // Reset to first page
+  };
+
+
   // Form State
   const [formData, setFormData] = useState<Partial<Client>>({
     name: '',
@@ -91,8 +106,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     }
   };
 
-  const activeClients = clients.filter(c => !c.isDisabled);
+  const activeClientsTotal = clients.filter(c => !c.isDisabled);
   const disabledClients = clients.filter(c => c.isDisabled);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(activeClientsTotal.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const activeClients = activeClientsTotal.slice(startIndex, startIndex + rowsPerPage);
+
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -337,7 +358,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
           <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Active Clients</h4>
-          <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">{activeClients.length} TOTAL</span>
+          <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">{activeClientsTotal.length} TOTAL</span>
         </div>
         <div className="divide-y divide-slate-100">
           {activeClients.map(c => (
@@ -407,7 +428,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
               </div>
             </div>
           ))}
-          {activeClients.length === 0 && (
+          {activeClientsTotal.length === 0 && (
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                 <i className="fa-solid fa-users text-2xl"></i>
@@ -416,6 +437,57 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
               <button onClick={openAddModal} className="mt-4 text-indigo-600 text-sm font-black hover:underline">Add your first client</button>
             </div>
           )}
+        </div>
+
+        {/* Pagination UI */}
+        <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+            <select
+              value={rowsPerPage}
+              onChange={handleRowsPerPageChange}
+              className="bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span className="text-xs font-bold text-slate-400 ml-2">
+              Showing {activeClients.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeClientsTotal.length)} of {activeClientsTotal.length}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+            >
+              <i className="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                      : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+            >
+              <i className="fa-solid fa-chevron-right text-xs"></i>
+            </button>
+          </div>
         </div>
       </div>
 
