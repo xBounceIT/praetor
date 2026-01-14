@@ -399,7 +399,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {activeProducts.map(p => (
-                                <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+                                <tr key={p.id} onClick={() => openEditModal(p)} className="hover:bg-slate-50/50 transition-colors group cursor-pointer">
                                     <td className="px-8 py-5">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center text-sm">
@@ -428,21 +428,30 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                     <td className="px-8 py-5">
                                         <div className="flex justify-end gap-2">
                                             <button
-                                                onClick={() => openEditModal(p)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openEditModal(p);
+                                                }}
                                                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                                                 title="Edit Product"
                                             >
                                                 <i className="fa-solid fa-pen-to-square"></i>
                                             </button>
                                             <button
-                                                onClick={() => onUpdateProduct(p.id, { isDisabled: true })}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onUpdateProduct(p.id, { isDisabled: true });
+                                                }}
                                                 className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                                 title="Disable Product"
                                             >
                                                 <i className="fa-solid fa-ban"></i>
                                             </button>
                                             <button
-                                                onClick={() => confirmDelete(p)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    confirmDelete(p);
+                                                }}
                                                 className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                 title="Delete Product"
                                             >
@@ -477,7 +486,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                         </div>
                         <div className="divide-y divide-slate-100">
                             {disabledProducts.map(p => (
-                                <div key={p.id} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4">
+                                <div key={p.id} onClick={() => openEditModal(p)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4 cursor-pointer">
                                     <div className="flex gap-4 items-center">
                                         <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
                                             <i className="fa-solid fa-box"></i>
@@ -489,13 +498,19 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                     </div>
                                     <div className="flex gap-2">
                                         <button
-                                            onClick={() => onUpdateProduct(p.id, { isDisabled: false })}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onUpdateProduct(p.id, { isDisabled: false });
+                                            }}
                                             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                         >
                                             <i className="fa-solid fa-rotate-left"></i>
                                         </button>
                                         <button
-                                            onClick={() => confirmDelete(p)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                confirmDelete(p);
+                                            }}
                                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         >
                                             <i className="fa-solid fa-trash-can"></i>

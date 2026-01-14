@@ -341,7 +341,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
         </div>
         <div className="divide-y divide-slate-100">
           {activeClients.map(c => (
-            <div key={c.id} className="p-6 hover:bg-slate-50/50 transition-colors group">
+            <div key={c.id} onClick={() => openEditModal(c)} className="p-6 hover:bg-slate-50/50 transition-colors group cursor-pointer">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex gap-4 items-start">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg shadow-sm ${c.type === 'individual' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
@@ -374,21 +374,30 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => openEditModal(c)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditModal(c);
+                    }}
                     className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
                     title="Edit Client"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
                   <button
-                    onClick={() => onUpdateClient(c.id, { isDisabled: true })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateClient(c.id, { isDisabled: true });
+                    }}
                     className="p-2.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
                     title="Disable Client"
                   >
                     <i className="fa-solid fa-ban"></i>
                   </button>
                   <button
-                    onClick={() => confirmDelete(c)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      confirmDelete(c);
+                    }}
                     className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                     title="Delete Client"
                   >
@@ -418,7 +427,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
           </div>
           <div className="divide-y divide-slate-100">
             {disabledClients.map(c => (
-              <div key={c.id} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4">
+              <div key={c.id} onClick={() => openEditModal(c)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4 cursor-pointer">
                 <div className="flex gap-4 items-center">
                   <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
                     <i className={`fa-solid ${c.type === 'individual' ? 'fa-user' : 'fa-building'}`}></i>
@@ -430,13 +439,19 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => onUpdateClient(c.id, { isDisabled: false })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateClient(c.id, { isDisabled: false });
+                    }}
                     className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-rotate-left"></i>
                   </button>
                   <button
-                    onClick={() => confirmDelete(c)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      confirmDelete(c);
+                    }}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-trash-can"></i>
