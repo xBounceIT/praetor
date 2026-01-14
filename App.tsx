@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote } from './types';
+import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote, WorkUnit } from './types';
 import { COLORS } from './constants';
 import Layout from './components/Layout';
 import TimeEntryForm from './components/TimeEntryForm';
@@ -25,6 +25,7 @@ import api, { setAuthToken, getAuthToken } from './services/api';
 import NotFound from './components/NotFound';
 import ProductsView from './components/ProductsView';
 import QuotesView from './components/QuotesView';
+import WorkUnitsView from './components/WorkUnitsView';
 
 const TrackerView: React.FC<{
   entries: TimeEntry[];
@@ -400,6 +401,8 @@ const App: React.FC = () => {
     enableAiInsights: false
   });
 
+  const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
+
   const [viewingUserId, setViewingUserId] = useState<string>('');
   const [viewingUserAssignments, setViewingUserAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] } | null>(null);
   const [activeView, setActiveView] = useState<View | '404'>(() => {
@@ -428,6 +431,7 @@ const App: React.FC = () => {
       'tempo/projects': ['admin', 'manager', 'user'],
       // Configuration module - admin only (users is admin/manager)
       'hr/workforce': ['admin', 'manager'],
+      'hr/work-units': ['admin'],
       'configuration/authentication': ['admin'],
       'configuration/general': ['admin'],
       // CRM module - admin/manager
@@ -466,7 +470,7 @@ const App: React.FC = () => {
       const hash = rawHash as View;
       const validViews: View[] = [
         'tempo/tracker', 'tempo/reports', 'tempo/recurring', 'tempo/tasks', 'tempo/projects',
-        'hr/workforce', 'configuration/authentication', 'configuration/general',
+        'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
         'crm/clients', 'crm/products', 'crm/quotes',
         'projects/manage', 'projects/tasks',
         'settings'
@@ -543,6 +547,16 @@ const App: React.FC = () => {
         if (currentUser.role === 'admin') {
           const ldap = await api.ldap.getConfig();
           setLdapConfig(ldap);
+        }
+
+        // Load Work Units for admin/manager
+        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+          try {
+            const wu = await api.workUnits.list();
+            setWorkUnits(wu);
+          } catch (err) {
+            console.error('Failed to load work units', err);
+          }
         }
       } catch (err) {
         console.error('Failed to load data:', err);
@@ -1039,6 +1053,45 @@ const App: React.FC = () => {
     }
   };
 
+  const addWorkUnit = async (data: Partial<WorkUnit>) => {
+    try {
+      const unit = await api.workUnits.create(data);
+      setWorkUnits([...workUnits, unit]);
+    } catch (err) {
+      console.error('Failed to add work unit:', err);
+      throw err;
+    }
+  };
+
+  const updateWorkUnit = async (id: string, updates: Partial<WorkUnit>) => {
+    try {
+      const updated = await api.workUnits.update(id, updates);
+      setWorkUnits(workUnits.map(w => w.id === id ? updated : w));
+    } catch (err) {
+      console.error('Failed to update work unit:', err);
+      throw err;
+    }
+  };
+
+  const deleteWorkUnit = async (id: string) => {
+    try {
+      await api.workUnits.delete(id);
+      setWorkUnits(workUnits.filter(w => w.id !== id));
+    } catch (err) {
+      console.error('Failed to delete work unit:', err);
+      throw err;
+    }
+  };
+
+  const refreshWorkUnits = async () => {
+    try {
+      const wu = await api.workUnits.list();
+      setWorkUnits(wu);
+    } catch (err) {
+      console.error('Failed to refresh work units', err);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -1189,6 +1242,17 @@ const App: React.FC = () => {
               currentUserId={currentUser.id}
               currentUserRole={currentUser.role}
               currency={generalSettings.currency}
+            />
+          )}
+
+          {currentUser.role === 'admin' && activeView === 'hr/work-units' && (
+            <WorkUnitsView
+              workUnits={workUnits}
+              users={users}
+              onAddWorkUnit={addWorkUnit}
+              onUpdateWorkUnit={updateWorkUnit}
+              onDeleteWorkUnit={deleteWorkUnit}
+              refreshWorkUnits={refreshWorkUnits}
             />
           )}
 

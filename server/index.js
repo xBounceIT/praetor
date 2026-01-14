@@ -13,6 +13,7 @@ import ldapRoutes from './routes/ldap.js';
 import generalSettingsRoutes from './routes/general-settings.js';
 import productsRoutes from './routes/products.js';
 import quotesRoutes from './routes/quotes.js';
+import workUnitsRoutes from './routes/work-units.js';
 
 dotenv.config();
 
@@ -38,6 +39,7 @@ app.use('/api/ldap', ldapRoutes);
 app.use('/api/general-settings', generalSettingsRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/quotes', quotesRoutes);
+app.use('/api/work-units', workUnitsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

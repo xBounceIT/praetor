@@ -19,6 +19,27 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS cost_per_hour DECIMAL(10, 2) DEFAULT 
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 
+-- Work Units table
+CREATE TABLE IF NOT EXISTS work_units (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    manager_id VARCHAR(50) NOT NULL REFERENCES users(id),
+    description TEXT,
+    is_disabled BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Ensure is_disabled column exists for existing installations
+ALTER TABLE work_units ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
+
+-- User-Work Unit associations
+CREATE TABLE IF NOT EXISTS user_work_units (
+    user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
+    work_unit_id VARCHAR(50) REFERENCES work_units(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, work_unit_id)
+);
+
 -- Clients table
 CREATE TABLE IF NOT EXISTS clients (
     id VARCHAR(50) PRIMARY KEY,
@@ -253,4 +274,3 @@ ALTER TABLE settings ALTER COLUMN enable_ai_insights SET DEFAULT FALSE;
 
 -- Migration: Add gemini_api_key to general_settings
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemini_api_key VARCHAR(255);
-

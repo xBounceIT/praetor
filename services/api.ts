@@ -54,7 +54,7 @@ const fetchApi = async <T>(
 };
 
 // Types for API responses
-import type { User, Client, Project, ProjectTask, TimeEntry, LdapConfig, GeneralSettings, Product, Quote, QuoteItem } from '../types';
+import type { User, Client, Project, ProjectTask, TimeEntry, LdapConfig, GeneralSettings, Product, Quote, QuoteItem, WorkUnit } from '../types';
 
 // Normalization Helpers
 const normalizeUser = (u: User): User => ({
@@ -284,6 +284,35 @@ export const productsApi = {
         fetchApi(`/products/${id}`, { method: 'DELETE' }),
 };
 
+// Work Units API
+export const workUnitsApi = {
+    list: (): Promise<WorkUnit[]> => fetchApi('/work-units'),
+
+    create: (data: Partial<WorkUnit>): Promise<WorkUnit> =>
+        fetchApi('/work-units', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    update: (id: string, updates: Partial<WorkUnit>): Promise<WorkUnit> =>
+        fetchApi(`/work-units/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        }),
+
+    delete: (id: string): Promise<void> =>
+        fetchApi(`/work-units/${id}`, { method: 'DELETE' }),
+
+    getUsers: (id: string): Promise<string[]> =>
+        fetchApi(`/work-units/${id}/users`),
+
+    updateUsers: (id: string, userIds: string[]): Promise<void> =>
+        fetchApi(`/work-units/${id}/users`, {
+            method: 'POST',
+            body: JSON.stringify({ userIds }),
+        }),
+};
+
 // General Settings API
 export const generalSettingsApi = {
     get: (): Promise<GeneralSettings> => fetchApi<GeneralSettings>('/general-settings').then(normalizeGeneralSettings),
@@ -324,6 +353,7 @@ export default {
     entries: entriesApi,
     products: productsApi,
     quotes: quotesApi,
+    workUnits: workUnitsApi,
     settings: settingsApi,
     ldap: ldapApi,
     generalSettings: generalSettingsApi,

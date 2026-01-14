@@ -279,6 +279,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('hr/workforce'); setIsMobileMenuOpen(false); }}
               />
+              {isAdmin && (
+                <NavItem
+                  icon="fa-sitemap"
+                  label="Work Units"
+                  active={activeView === 'hr/work-units'}
+                  isCollapsed={isCollapsed}
+                  onClick={() => { onViewChange('hr/work-units'); setIsMobileMenuOpen(false); }}
+                />
+              )}
             </>
           )}
 

@@ -147,9 +147,19 @@ export type View =
   | 'crm/quotes'
   // HR module
   | 'hr/workforce'
+  | 'hr/work-units'
   // Projects module
   | 'projects/manage'
   | 'projects/tasks'
   // Standalone
   | 'settings';
 
+export interface WorkUnit {
+  id: string;
+  name: string;
+  managerId: string;
+  managerName?: string;
+  description?: string;
+  isDisabled?: boolean;
+  userCount?: number;
+}

@@ -16,10 +16,15 @@ router.get('/', authenticateToken, async (req, res, next) => {
                 'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled FROM users ORDER BY name'
             );
         } else if (req.user.role === 'manager') {
-            // Manager sees regular users and themselves
+            // Manager sees themselves AND users in work units they manage
             result = await query(
-                `SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled FROM users 
-          WHERE role = 'user' OR id = $1 ORDER BY name`,
+                `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled
+                 FROM users u
+                 LEFT JOIN user_work_units uw ON u.id = uw.user_id
+                 LEFT JOIN work_units w ON uw.work_unit_id = w.id
+                 WHERE u.id = $1  -- The manager themselves
+                    OR w.manager_id = $1 -- Users in work units managed by this user
+                 ORDER BY u.name`,
                 [req.user.id]
             );
         } else {
