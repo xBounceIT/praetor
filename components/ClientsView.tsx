@@ -168,18 +168,22 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 ml-1">Tipologia Soggetto</label>
-                    <div className="flex p-1 bg-slate-100 rounded-xl">
+                    <div className="relative flex p-1 bg-slate-100 rounded-xl">
+                      <div
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${formData.type === 'company' ? 'translate-x-0' : 'translate-x-full'
+                          }`}
+                      ></div>
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, type: 'company' })}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${formData.type === 'company' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${formData.type === 'company' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         Azienda
                       </button>
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, type: 'individual' })}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${formData.type === 'individual' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${formData.type === 'individual' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         Persona Fisica
                       </button>
@@ -337,17 +341,17 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4 border-t border-slate-100">
+              <div className="flex justify-between items-center pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                  className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-[2] py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+                  className="px-10 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
                 >
                   {editingClient ? 'Update Client' : 'Save Client'}
                 </button>
