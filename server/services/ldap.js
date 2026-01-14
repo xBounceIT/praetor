@@ -20,8 +20,8 @@ class LDAPService {
             await this.loadConfig();
         }
 
-        if (!this.config.enabled) {
-            throw new Error('LDAP is disabled');
+        if (!this.config || !this.config.enabled) {
+            return null;
         }
 
         const tlsOptions = {
@@ -50,6 +50,9 @@ class LDAPService {
         let client;
         try {
             client = await this.getClient();
+            if (!client) {
+                return false;
+            }
 
             // Bind with service account first to find the user's DN
             await new Promise((resolve, reject) => {
@@ -127,6 +130,10 @@ class LDAPService {
         try {
             console.log('Starting LDAP Sync...');
             client = await this.getClient();
+            if (!client) {
+                console.log('LDAP Sync skipped: LDAP is disabled.');
+                return { skipped: true, reason: 'LDAP is disabled' };
+            }
 
             await new Promise((resolve, reject) => {
                 client.bind(this.config.bind_dn, this.config.bind_password, (err) => {
