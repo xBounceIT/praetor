@@ -32,6 +32,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const [assignments, setAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] }>({
     clientIds: [], projectIds: [], taskIds: []
   });
+  const [clientSearch, setClientSearch] = useState('');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
+
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -68,6 +72,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const closeAssignments = () => {
     setManagingUserId(null);
     setAssignments({ clientIds: [], projectIds: [], taskIds: [] });
+    setClientSearch('');
+    setProjectSearch('');
+    setTaskSearch('');
   };
 
   const saveAssignments = async () => {
@@ -429,12 +436,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Clients Column */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between sticky top-0 bg-white z-10 py-2 border-b border-slate-100">
-                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Clients</h4>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.clientIds.length}</span>
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="flex items-center justify-between py-2">
+                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Clients</h4>
+                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.clientIds.length}</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search clients..."
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
                     </div>
                     <div className="space-y-2">
-                      {clients.map(client => (
+                      {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).map(client => (
                         <label key={client.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.clientIds.includes(client.id)
                           ? 'bg-indigo-50 border-indigo-200 shadow-sm'
                           : 'bg-white border-slate-200 hover:border-indigo-200'
@@ -456,12 +472,25 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
                   {/* Projects Column */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between sticky top-0 bg-white z-10 py-2 border-b border-slate-100">
-                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Projects</h4>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.projectIds.length}</span>
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="flex items-center justify-between py-2">
+                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Projects</h4>
+                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.projectIds.length}</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search projects..."
+                        value={projectSearch}
+                        onChange={(e) => setProjectSearch(e.target.value)}
+                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
                     </div>
                     <div className="space-y-2">
-                      {projects.map(project => (
+                      {projects.filter(p => {
+                        const search = projectSearch.toLowerCase();
+                        const clientName = clients.find(c => c.id === p.clientId)?.name.toLowerCase() || '';
+                        return p.name.toLowerCase().includes(search) || clientName.includes(search);
+                      }).map(project => (
                         <label key={project.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.projectIds.includes(project.id)
                           ? 'bg-indigo-50 border-indigo-200 shadow-sm'
                           : 'bg-white border-slate-200 hover:border-indigo-200'
@@ -488,12 +517,25 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
                   {/* Tasks Column */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between sticky top-0 bg-white z-10 py-2 border-b border-slate-100">
-                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="flex items-center justify-between py-2">
+                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
+                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search tasks..."
+                        value={taskSearch}
+                        onChange={(e) => setTaskSearch(e.target.value)}
+                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
                     </div>
                     <div className="space-y-2">
-                      {tasks.map(task => {
+                      {tasks.filter(t => {
+                        const search = taskSearch.toLowerCase();
+                        const projectName = projects.find(p => p.id === t.projectId)?.name.toLowerCase() || '';
+                        return t.name.toLowerCase().includes(search) || projectName.includes(search);
+                      }).map(task => {
                         const project = projects.find(p => p.id === task.projectId);
                         return (
                           <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)

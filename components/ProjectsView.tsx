@@ -327,7 +327,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 const isEffectivelyDisabled = project.isDisabled || isClientDisabled;
 
                 return (
-                  <tr key={project.id} className={`group hover:bg-slate-50 transition-colors ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}>
+                  <tr
+                    key={project.id}
+                    onClick={() => startEditing(project)}
+                    className={`group hover:bg-slate-50 transition-colors cursor-pointer ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
+                  >
                     <td className="px-6 py-4">
                       <span className={`text-[10px] font-black uppercase bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 ${isClientDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-indigo-600'}`}>
                         {client?.name || 'Unknown'}
@@ -355,7 +359,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                     <td className="px-6 py-4 text-right">
                       {isManagement && (
                         <button
-                          onClick={() => startEditing(project)}
+                          onClick={(e) => { e.stopPropagation(); startEditing(project); }}
                           className="text-slate-400 hover:text-indigo-600 transition-colors p-2"
                           title="Edit Project"
                         >

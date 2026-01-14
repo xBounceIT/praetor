@@ -317,7 +317,11 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                 const isEffectivelyDisabled = task.isDisabled || isInheritedDisabled;
 
                 return (
-                  <tr key={task.id} className={`group hover:bg-slate-50 transition-colors ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}>
+                  <tr
+                    key={task.id}
+                    onClick={() => startEditing(task)}
+                    className={`group hover:bg-slate-50 transition-colors cursor-pointer ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -352,7 +356,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                     <td className="px-6 py-4 text-right">
                       {isManagement && (
                         <button
-                          onClick={() => startEditing(task)}
+                          onClick={(e) => { e.stopPropagation(); startEditing(task); }}
                           className="text-slate-400 hover:text-indigo-600 transition-colors p-2"
                           title="Edit Task"
                         >

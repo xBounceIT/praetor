@@ -287,7 +287,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             <>
               <NavItem
                 icon="fa-folder-tree"
-                label="Manage Projects"
+                label="Projects"
                 active={activeView === 'projects/manage'}
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('projects/manage'); setIsMobileMenuOpen(false); }}
@@ -295,7 +295,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
 
               <NavItem
                 icon="fa-tasks"
-                label="Manage Tasks"
+                label="Tasks"
                 active={activeView === 'projects/tasks'}
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('projects/tasks'); setIsMobileMenuOpen(false); }}
@@ -339,8 +339,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             {isNotFound ? 'Page Not Found' :
               activeView === 'configuration/authentication' ? 'Authentication Settings' :
                 activeView === 'configuration/general' ? 'General Administration' :
-                  activeView === 'projects/manage' ? 'Project Management' :
-                    activeView === 'projects/tasks' ? 'Task Management' :
+                  activeView === 'projects/manage' ? 'Projects' :
+                    activeView === 'projects/tasks' ? 'Tasks' :
                       activeView.split('/').pop()?.replace('-', ' ') || activeView}
           </h2>
           <div className="flex items-center gap-6">
