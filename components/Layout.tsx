@@ -98,14 +98,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
   return (
     <div className="h-screen flex flex-col md:flex-row bg-slate-50 overflow-hidden">
       <nav
-        className={`bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 transition-all duration-300 ease-in-out relative z-30
+        className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-30
           ${isCollapsed ? 'md:w-20' : 'md:w-64'} 
           w-full`}
       >
         <div className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}>
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-8 h-8 bg-praetor rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
-              <i className="fa-solid fa-clock text-white text-lg"></i>
+            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
+              <i className="fa-solid fa-clock text-praetor text-lg"></i>
             </div>
             {!isCollapsed && (
               <h1 className="text-2xl font-black italic tracking-tighter text-white whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
@@ -114,13 +114,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             )}
           </div>
 
-          <button onClick={toggleMobileMenu} className="md:hidden p-2 text-slate-400 hover:text-white">
+          <button onClick={toggleMobileMenu} className="md:hidden p-2 text-white/70 hover:text-white">
             <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-xl`}></i>
           </button>
 
           <button
             onClick={toggleSidebar}
-            className={`hidden md:flex absolute -right-3 top-12 w-6 h-6 bg-slate-800 border border-slate-700 rounded-full items-center justify-center text-slate-400 hover:text-white hover:bg-praetor transition-all z-40
+            className={`hidden md:flex absolute -right-3 top-12 w-6 h-6 bg-praetor border border-white/20 rounded-full items-center justify-center text-white/70 hover:text-white hover:bg-praetor transition-all z-40
               ${isCollapsed ? 'rotate-180' : ''}`}
           >
             <i className="fa-solid fa-chevron-left text-[10px]"></i>
@@ -129,7 +129,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
 
         {!isCollapsed && (
           <div className="px-6 mb-4 animate-in fade-in duration-300 hidden md:block">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
+            <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">
               {currentUser.role} Workspace
             </div>
           </div>
@@ -141,19 +141,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             <button
               onClick={() => setIsModuleSwitcherOpen(!isModuleSwitcherOpen)}
               className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 
-                bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800 hover:border-slate-500/50
+                bg-black/20 border border-white/10 hover:bg-black/30 hover:border-white/20
                 ${isCollapsed ? 'justify-center' : ''}`}
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-praetor to-slate-800 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
+              <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-black/10">
                 <i className={`fa-solid ${activeModule.icon} text-white text-sm`}></i>
               </div>
               {!isCollapsed && (
                 <>
                   <div className="flex-1 text-left">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Modulo</div>
+                    <div className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Modulo</div>
                     <div className="text-sm font-semibold text-white">{activeModule.name}</div>
                   </div>
-                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${isModuleSwitcherOpen ? 'rotate-180' : ''}`}></i>
+                  <i className={`fa-solid fa-chevron-down text-[10px] text-white/50 transition-transform duration-200 ${isModuleSwitcherOpen ? 'rotate-180' : ''}`}></i>
                 </>
               )}
             </button>
@@ -341,8 +341,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
           )}
         </div>
 
-        <div className={`p-6 border-t border-slate-800 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}>
-          <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+        <div className={`p-6 border-t border-white/10 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}>
+          <div className="text-[10px] text-white/40 font-medium whitespace-nowrap">
             Praetor v{import.meta.env.VITE_APP_VERSION}
           </div>
         </div>
@@ -428,11 +428,11 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onC
   <button
     onClick={onClick}
     className={`group relative w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${active
-      ? 'bg-praetor text-white shadow-lg shadow-slate-900/40'
-      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+      ? 'bg-white/20 text-white shadow-lg shadow-black/10'
+      : 'text-white/60 hover:bg-white/10 hover:text-white'
       } ${isCollapsed ? 'justify-center' : ''}`}
   >
-    <i className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-slate-500 group-hover:text-white'}`}></i>
+    <i className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}></i>
     {!isCollapsed && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>}
 
     {isCollapsed && (
