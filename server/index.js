@@ -60,70 +60,28 @@ app.use((err, req, res, next) => {
 
 // Helper function to convert HTTP/2 request to Express-compatible format
 function convertH2Request(h2Req, h2Res) {
-  // Use a Proxy to wrap the HTTP/2 request while preserving stream internals
-  // This allows us to override read-only properties while keeping stream functionality
+  // Use the HTTP/2 request directly without modification
+  // This preserves all stream internals that Express body parser needs
+  const req = h2Req;
+  
+  // Store writable url separately for Express middleware
   let writableUrl = h2Req.path || h2Req.url || '/';
   
-  // Normalize headers to lowercase (HTTP/2 headers are already lowercase, but ensure compatibility)
-  const normalizedHeaders = {};
-  for (const [key, value] of Object.entries(h2Req.headers)) {
-    normalizedHeaders[key.toLowerCase()] = value;
+  // Try to make url writable, but don't break if it fails
+  try {
+    Object.defineProperty(req, 'url', {
+      get: () => writableUrl,
+      set: (val) => { writableUrl = val; },
+      enumerable: true,
+      configurable: true
+    });
+  } catch (e) {
+    // If url is read-only, store it separately and let Express access it via path
+    req._originalUrl = writableUrl;
   }
   
-  const req = new Proxy(h2Req, {
-    get(target, prop) {
-      // Override specific properties
-      if (prop === 'url') {
-        return writableUrl;
-      }
-      if (prop === 'headers') {
-        return normalizedHeaders;
-      }
-      if (prop === 'httpVersion') {
-        return '2.0';
-      }
-      if (prop === 'httpVersionMajor') {
-        return 2;
-      }
-      if (prop === 'httpVersionMinor') {
-        return 0;
-      }
-      // Default: return property from original request
-      return target[prop];
-    },
-    set(target, prop, value) {
-      // Allow setting url
-      if (prop === 'url') {
-        writableUrl = value;
-        return true;
-      }
-      // Try to set on target, but don't fail if it's read-only
-      try {
-        target[prop] = value;
-        return true;
-      } catch (e) {
-        // Property is read-only, that's okay
-        return true;
-      }
-    },
-    has(target, prop) {
-      return prop in target || prop === 'url' || prop === 'headers';
-    },
-    ownKeys(target) {
-      return Reflect.ownKeys(target);
-    },
-    getOwnPropertyDescriptor(target, prop) {
-      if (prop === 'url') {
-        return {
-          enumerable: true,
-          configurable: true,
-          writable: true,
-          value: writableUrl
-        };
-      }
-      return Reflect.getOwnPropertyDescriptor(target, prop);
-    }
-  });
+  // Headers are already lowercase in HTTP/2, so no modification needed
+  // httpVersion properties should already exist on HTTP/2 requests
   
   // Create a response object that mimics http.ServerResponse
   // Use a plain object wrapper to avoid read-only property issues
