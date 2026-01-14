@@ -29,7 +29,14 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
+
+// Add logging for request body parsing
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log('[Express] Request:', req.method, req.url);
+  console.log('[Express] Body parsed:', Object.keys(req.body || {}));
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -61,14 +68,13 @@ app.use((err, req, res, next) => {
 
 // Helper function to convert HTTP/2 request to Express-compatible format
 function convertH2Request(h2Req, h2Res) {
+  console.log('[HTTP/2] Converting request:', h2Req.method, h2Req.path || h2Req.url);
+  
   // Copy HTTP/2 request headers
   const headers = {};
   for (const [key, value] of Object.entries(h2Req.headers)) {
     headers[key.toLowerCase()] = value;
   }
-  
-  // Create PassThrough stream to handle the body
-  const passThrough = new PassThrough();
   
   // Create a minimal mock socket
   const mockSocket = {
@@ -98,29 +104,22 @@ function convertH2Request(h2Req, h2Res) {
   req.socket = mockSocket;
   req.connection = mockSocket;
   
-  // Pipe HTTP/2 stream to PassThrough
-  h2Req.pipe(passThrough);
+  // Pipe HTTP/2 stream directly to req
+  // This is simpler and more reliable than using PassThrough
+  h2Req.on('data', (chunk) => {
+    console.log('[HTTP/2] Received chunk:', chunk.length, 'bytes');
+    req.push(chunk);
+  });
   
-  // Replace req's internal readable stream with passThrough
-  // This ensures that when Express reads from req, it reads from passThrough
-  const originalRead = req._read;
-  req._read = function(size) {
-    const chunk = passThrough.read(size);
-    if (chunk !== null) {
-      req.push(chunk);
-    } else {
-      passThrough.once('readable', () => {
-        const chunk = passThrough.read(size);
-        if (chunk !== null) {
-          req.push(chunk);
-        }
-      });
-    }
-  };
+  h2Req.on('end', () => {
+    console.log('[HTTP/2] Request body ended');
+    req.push(null);
+  });
   
-  // Forward passThrough events to req
-  passThrough.on('end', () => req.push(null));
-  passThrough.on('error', (err) => req.emit('error', err));
+  h2Req.on('error', (err) => {
+    console.error('[HTTP/2] Request error:', err);
+    req.emit('error', err);
+  });
   
   // Create a response object that mimics http.ServerResponse
   const res = {};
@@ -246,16 +245,20 @@ const server = http2.createServer({
 }, async (req, res) => {
   // Check if this is an HTTP/2 request
   if (req instanceof http2.Http2ServerRequest) {
+    console.log('[HTTP/2] Server received request');
     try {
-      const { req: expressReq, res: expressRes } = await convertH2Request(req, res);
+      const { req: expressReq, res: expressRes } = convertH2Request(req, res);
+      console.log('[HTTP/2] Passing to Express');
       app(expressReq, expressRes);
+      console.log('[HTTP/2] Express handler called');
     } catch (err) {
-      console.error('Error converting HTTP/2 request:', err);
+      console.error('[HTTP/2] Error converting HTTP/2 request:', err);
       res.writeHead(500);
       res.end('Internal Server Error');
     }
   } else {
     // HTTP/1.1 request - use Express directly
+    console.log('[HTTP/1.1] Server received request');
     app(req, res);
   }
 });

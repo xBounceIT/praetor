@@ -7,6 +7,9 @@ const router = express.Router();
 
 // POST /api/auth/login
 router.post('/login', async (req, res, next) => {
+    console.log('[Auth] Login request received');
+    console.log('[Auth] Request body:', req.body);
+    
     try {
         const { username, password } = req.body;
 
