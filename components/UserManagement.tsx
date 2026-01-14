@@ -138,6 +138,84 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
   const managingUser = users.find(u => u.id === managingUserId);
 
+  // Synchronized Filtering Logic
+  const getFilteredData = () => {
+    const searchClient = clientSearch.toLowerCase();
+    const searchProject = projectSearch.toLowerCase();
+    const searchTask = taskSearch.toLowerCase();
+
+    // 1. Visible Tasks
+    const visibleTasks = tasks.filter(t => {
+      // Must match task search
+      if (searchTask && !t.name.toLowerCase().includes(searchTask)) return false;
+
+      const project = projects.find(p => p.id === t.projectId);
+      if (!project) return false;
+
+      // Must match project search (via parent project)
+      if (searchProject && !project.name.toLowerCase().includes(searchProject)) return false;
+
+      const client = clients.find(c => c.id === project.clientId);
+      if (!client) return false;
+
+      // Must match client search (via grandparent client)
+      if (searchClient && !client.name.toLowerCase().includes(searchClient)) return false;
+
+      return true;
+    });
+
+    // 2. Visible Projects
+    const visibleProjects = projects.filter(p => {
+      // Must match project search
+      if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
+
+      const client = clients.find(c => c.id === p.clientId);
+      if (!client) return false;
+
+      // Must match client search (via parent client)
+      if (searchClient && !client.name.toLowerCase().includes(searchClient)) return false;
+
+      // If task search is active, project must contain at least one matching task
+      if (searchTask) {
+        const hasMatchingTask = tasks.some(t =>
+          t.projectId === p.id && t.name.toLowerCase().includes(searchTask)
+        );
+        if (!hasMatchingTask) return false;
+      }
+
+      return true;
+    });
+
+    // 3. Visible Clients
+    const visibleClients = clients.filter(c => {
+      // Must match client search
+      if (searchClient && !c.name.toLowerCase().includes(searchClient)) return false;
+
+      // If project or task search is active, client must have at least one valid descendant path
+      if (searchProject || searchTask) {
+        const hasMatchingPath = projects.some(p => {
+          if (p.clientId !== c.id) return false;
+
+          if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
+
+          if (searchTask) {
+            return tasks.some(t => t.projectId === p.id && t.name.toLowerCase().includes(searchTask));
+          }
+
+          return true;
+        });
+
+        if (!hasMatchingPath) return false;
+      }
+
+      return true;
+    });
+
+    return { visibleClients, visibleProjects, visibleTasks };
+  };
+
+  const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       {/* Delete Confirmation Modal */}
@@ -450,7 +528,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       />
                     </div>
                     <div className="space-y-2">
-                      {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).map(client => (
+                    <div className="space-y-2">
+                      {visibleClients.map(client => (
                         <label key={client.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.clientIds.includes(client.id)
                           ? 'bg-indigo-50 border-indigo-200 shadow-sm'
                           : 'bg-white border-slate-200 hover:border-indigo-200'
@@ -486,11 +565,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       />
                     </div>
                     <div className="space-y-2">
-                      {projects.filter(p => {
-                        const search = projectSearch.toLowerCase();
-                        const clientName = clients.find(c => c.id === p.clientId)?.name.toLowerCase() || '';
-                        return p.name.toLowerCase().includes(search) || clientName.includes(search);
-                      }).map(project => (
+                      {visibleProjects.map(project => (
                         <label key={project.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.projectIds.includes(project.id)
                           ? 'bg-indigo-50 border-indigo-200 shadow-sm'
                           : 'bg-white border-slate-200 hover:border-indigo-200'
@@ -531,11 +606,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       />
                     </div>
                     <div className="space-y-2">
-                      {tasks.filter(t => {
-                        const search = taskSearch.toLowerCase();
-                        const projectName = projects.find(p => p.id === t.projectId)?.name.toLowerCase() || '';
-                        return t.name.toLowerCase().includes(search) || projectName.includes(search);
-                      }).map(task => {
+                      {visibleTasks.map(task => {
                         const project = projects.find(p => p.id === task.projectId);
                         return (
                           <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)
@@ -581,10 +652,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
               </button>
             </div>
           </div>
-        </div>
+          </div>
       )}
-    </div>
-  );
+        </div>
+      );
 };
 
-export default UserManagement;
+      export default UserManagement;
