@@ -31,8 +31,8 @@ Praetor is a modern, AI-enhanced time tracking application inspired by the simpl
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/tempo.git
-   cd tempo
+   git clone https://github.com/xBounceIT/praetor
+   cd praetor
    ```
 
 2. **Install dependencies**
