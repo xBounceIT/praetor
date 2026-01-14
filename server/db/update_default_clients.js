@@ -1,6 +1,6 @@
 import { query } from './index.js';
 
-async function migrate() {
+export async function migrate() {
     console.log('Starting migration: Update default clients with fake info...');
     try {
         await query(`
@@ -37,5 +37,3 @@ async function migrate() {
         console.error('Migration failed:', err);
     }
 }
-
-migrate();

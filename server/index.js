@@ -92,6 +92,14 @@ try {
     if (!foundTables.includes('user_clients')) {
       console.error('CRITICAL: user_clients table was not created!');
     }
+
+    // Run data migration for default clients
+    try {
+      const { migrate: updateClients } = await import('./db/update_default_clients.js');
+      await updateClients();
+    } catch (err) {
+      console.error('Failed to run default clients data update:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

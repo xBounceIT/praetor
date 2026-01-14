@@ -8,22 +8,11 @@ INSERT INTO users (id, name, username, password_hash, role, avatar_initials) VAL
     ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US')
 ON CONFLICT (id) DO NOTHING;
 
--- Default clients with fake info
-INSERT INTO clients (id, name, type, contact_name, client_code, email, phone, address, vat_number, tax_code, billing_code, payment_terms) VALUES
-    ('c1', 'Acme Corp S.r.l.', 'company', 'Marco Bianchi (Ufficio Acquisti)', 'CL-001', 'info@acmecorp.example.com', '+39 012 345 6789', 'Via delle Industrie 42, 00100 Roma (RM)', 'IT01234567890', '01234567890', 'KRRH6B9', '30 gg D.F.F.M.'),
-    ('c2', 'Mario Rossi', 'individual', 'Mario Rossi', 'CL-002', 'mario.rossi@example.it', '+39 333 123 4567', 'Via Roma 123, 20100 Milano (MI)', NULL, 'RSSMRA80A01H501U', '0000000', 'Rimessa Diretta')
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    type = EXCLUDED.type,
-    contact_name = EXCLUDED.contact_name,
-    client_code = EXCLUDED.client_code,
-    email = EXCLUDED.email,
-    phone = EXCLUDED.phone,
-    address = EXCLUDED.address,
-    vat_number = EXCLUDED.vat_number,
-    tax_code = EXCLUDED.tax_code,
-    billing_code = EXCLUDED.billing_code,
-    payment_terms = EXCLUDED.payment_terms;
+-- Default clients
+INSERT INTO clients (id, name) VALUES
+    ('c1', 'Acme Corp'),
+    ('c2', 'Global Tech')
+ON CONFLICT (id) DO NOTHING;
 
 -- Default projects
 INSERT INTO projects (id, name, client_id, color, description) VALUES
