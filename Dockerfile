@@ -29,6 +29,8 @@ FROM caddy:alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /app/dist /srv
 COPY docker-entrypoint.sh /docker-entrypoint.sh
+# Fix Windows line endings (CRLF) just in case
+RUN sed -i 's/\r$//' /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 80
