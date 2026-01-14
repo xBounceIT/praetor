@@ -644,8 +644,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                 </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm">
+                <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
                     <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">All Quotes</h4>
                     <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">{filteredQuotes.length} TOTAL</span>
                 </div>
