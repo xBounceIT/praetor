@@ -12,11 +12,10 @@
 	}
 	header @static Cache-Control "public, max-age=31536000, immutable"
 
-	# API Proxy with HTTP/2 to backend
-	# Caddy will automatically use HTTP/2 if backend supports it
-	# This prevents HTTP desync attacks by using HTTP/2's binary protocol
+	# API Proxy with HTTP/2 cleartext (h2c) to backend
+	# Using h2c prevents HTTP desync attacks by using HTTP/2's binary protocol
 	handle /api/* {
-		reverse_proxy http://backend:3001 {
+		reverse_proxy h2c://backend:3001 {
 			header_up Host {host}
 			header_up X-Real-IP {remote_host}
 		}
