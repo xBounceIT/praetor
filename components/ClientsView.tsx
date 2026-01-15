@@ -415,7 +415,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
         </div>
         <div className="divide-y divide-slate-100">
           {activeClients.map(c => (
-            <div key={c.id} onClick={() => openEditModal(c)} className="p-6 hover:bg-slate-50/50 transition-colors group cursor-pointer">
+            <div key={c.id} onClick={() => openEditModal(c)} className="p-6 hover:bg-slate-50/50 active:bg-slate-100 active:scale-[0.98] transition-all group cursor-pointer select-none">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex gap-4 items-start">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg shadow-sm ${c.type === 'individual' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-praetor'}`}>
@@ -555,7 +555,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
           </div>
           <div className="divide-y divide-slate-100">
             {disabledClients.map(c => (
-              <div key={c.id} onClick={() => openEditModal(c)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4 cursor-pointer">
+              <div key={c.id} onClick={() => openEditModal(c)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 active:bg-slate-100 active:scale-[0.98] transition-all flex items-center justify-between gap-4 cursor-pointer select-none">
                 <div className="flex gap-4 items-center">
                   <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
                     <i className={`fa-solid ${c.type === 'individual' ? 'fa-user' : 'fa-building'}`}></i>
