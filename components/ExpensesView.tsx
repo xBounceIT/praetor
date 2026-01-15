@@ -157,20 +157,15 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Amount</label>
-                                    <div className="flex items-center bg-white border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                                        <div className="w-10 self-stretch flex items-center justify-center text-slate-400 text-xs font-black border-r border-slate-100 bg-slate-50/50">
-                                            {currency}
-                                        </div>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            required
-                                            value={formData.amount}
-                                            onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                                            className="flex-1 px-3 py-2.5 bg-transparent outline-none text-sm font-semibold"
-                                        />
-                                    </div>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">Amount ({currency})</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        required
+                                        value={formData.amount}
+                                        onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                                        className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
+                                    />
                                     {errors.amount && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.amount}</p>}
                                 </div>
                             </div>

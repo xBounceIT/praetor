@@ -284,12 +284,21 @@ export default async function (fastify, opts) {
         const { id } = request.params;
 
         // Items and payments will be deleted automatically via CASCADE
-        const result = await query('DELETE FROM invoices WHERE id = $1 RETURNING id', [id]);
+        try {
+            const result = await query('DELETE FROM invoices WHERE id = $1 RETURNING id', [id]);
 
-        if (result.rows.length === 0) {
-            return reply.code(404).send({ error: 'Invoice not found' });
+            if (result.rows.length === 0) {
+                return reply.code(404).send({ error: 'Invoice not found' });
+            }
+
+            return reply.code(204).send();
+        } catch (err) {
+            console.error('DELETE INVOICE ERROR:', err);
+            // Check for specific DB errors
+            if (err.code === '23503') { // Foreign key violation
+                return reply.code(409).send({ error: 'Cannot delete invoice because it is referenced by other records (e.g. payments)' });
+            }
+            throw err;
         }
-
-        return reply.code(204).send();
     });
 }

@@ -32,6 +32,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const [assignments, setAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] }>({
     clientIds: [], projectIds: [], taskIds: []
   });
+  const [initialAssignments, setInitialAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] }>({
+    clientIds: [], projectIds: [], taskIds: []
+  });
   const [clientSearch, setClientSearch] = useState('');
   const [projectSearch, setProjectSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
@@ -62,6 +65,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     try {
       const data = await usersApi.getAssignments(userId);
       setAssignments(data);
+      setInitialAssignments(JSON.parse(JSON.stringify(data))); // Deep clone for comparison
     } catch (err) {
       console.error("Failed to load assignments", err);
     } finally {
@@ -316,7 +320,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 </button>
                 <button
                   onClick={saveEdit}
-                  className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95"
+                  disabled={!editName || (
+                    editName === editingUser.name &&
+                    parseFloat(editCostPerHour) === (editingUser.costPerHour || 0) &&
+                    editIsDisabled === !!editingUser.isDisabled
+                  )}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${(!editName || (
+                    editName === editingUser.name &&
+                    parseFloat(editCostPerHour) === (editingUser.costPerHour || 0) &&
+                    editIsDisabled === !!editingUser.isDisabled
+                  )) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
                 >
                   Save Changes
                 </button>
@@ -645,7 +658,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
               </button>
               <button
                 onClick={saveAssignments}
-                className="px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-800 transition-all shadow-sm active:scale-95 text-sm"
+                disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
+                className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
               >
                 Save Assignments
               </button>

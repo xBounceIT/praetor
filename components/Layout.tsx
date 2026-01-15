@@ -328,7 +328,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
               <NavItem icon="fa-file-invoice-dollar" label="Invoices" active={activeView === 'finances/invoices'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/invoices'); setIsMobileMenuOpen(false); }} />
               <NavItem icon="fa-money-bill-wave" label="Payments" active={activeView === 'finances/payments'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/payments'); setIsMobileMenuOpen(false); }} />
               <NavItem icon="fa-receipt" label="Expenses" active={activeView === 'finances/expenses'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/expenses'); setIsMobileMenuOpen(false); }} />
-              <NavItem icon="fa-chart-line text-amber-500" label="Reports" active={activeView === 'finances/reports'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/reports'); setIsMobileMenuOpen(false); }} />
+              <NavItem icon="fa-chart-line" label="Reports" active={activeView === 'finances/reports'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/reports'); setIsMobileMenuOpen(false); }} />
             </>
           )}
 

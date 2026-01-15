@@ -14,6 +14,7 @@ const Settings: React.FC = () => {
     fullName: '',
     email: '',
   });
+  const [initialSettings, setInitialSettings] = useState<UserSettings | null>(null);
 
   const [isSaved, setIsSaved] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +41,7 @@ const Settings: React.FC = () => {
       try {
         const data = await api.settings.get();
         setSettings(data);
+        setInitialSettings(data);
       } catch (err) {
         console.error('Failed to load settings:', err);
       } finally {
@@ -54,6 +56,7 @@ const Settings: React.FC = () => {
     setIsSaving(true);
     try {
       await api.settings.update(settings);
+      setInitialSettings(settings);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (err) {
@@ -146,8 +149,8 @@ const Settings: React.FC = () => {
             <div className="flex justify-end pt-4">
               <button
                 onClick={handleSave}
-                disabled={isSaving}
-                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${isSaved ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                disabled={isSaving || (JSON.stringify(settings) === JSON.stringify(initialSettings))}
+                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${isSaved ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : (JSON.stringify(settings) === JSON.stringify(initialSettings)) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
               >
                 {isSaving ? (
                   <>
@@ -261,8 +264,8 @@ const Settings: React.FC = () => {
             <div className="flex justify-end pt-8">
               <button
                 onClick={handlePasswordUpdate}
-                disabled={isSavingPassword}
-                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${passwordSuccess ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
+                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${passwordSuccess ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : (!currentPassword || !newPassword || !confirmPassword) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
               >
                 {isSavingPassword ? (
                   <>

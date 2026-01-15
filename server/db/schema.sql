@@ -421,3 +421,24 @@ CREATE TABLE IF NOT EXISTS expenses (
 
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+
+-- Migration: Ensure payments foreign key has ON DELETE CASCADE
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+        WHERE tc.table_name = 'payments' 
+        AND tc.constraint_type = 'FOREIGN KEY'
+        AND kcu.column_name = 'invoice_id'
+        AND ccu.table_name = 'invoices'
+    )
+    LOOP
+        EXECUTE 'ALTER TABLE payments DROP CONSTRAINT ' || quote_ident(r.constraint_name);
+        EXECUTE 'ALTER TABLE payments ADD CONSTRAINT ' || quote_ident(r.constraint_name) || ' FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE';
+    END LOOP;
+END $$;

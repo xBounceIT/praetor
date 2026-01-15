@@ -331,8 +331,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                     <div className="grid grid-cols-12 gap-2 px-3 mb-1">
                                         <div className="col-span-12 md:col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Unit Price</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Discount</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Unit Price ({currency})</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Discount (%)</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">Subtotal</div>
                                     </div>
                                 )}
@@ -365,38 +365,28 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                                         />
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <div className="flex items-center bg-white border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                                                            <div className="w-10 self-stretch flex items-center justify-center text-slate-400 text-xs font-black border-r border-slate-100 bg-slate-50/50">
-                                                                {currency}
-                                                            </div>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                required
-                                                                placeholder="Price"
-                                                                value={item.unitPrice}
-                                                                onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                className="flex-1 px-3 py-2 bg-transparent outline-none text-sm font-semibold min-w-0"
-                                                            />
-                                                        </div>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            required
+                                                            placeholder="Price"
+                                                            value={item.unitPrice}
+                                                            onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0"
+                                                        />
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <div className="flex items-center bg-white border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                                                            <div className="w-10 self-stretch flex items-center justify-center text-slate-400 text-xs font-black border-r border-slate-100 bg-slate-50/50">
-                                                                %
-                                                            </div>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                max="100"
-                                                                placeholder="Disc"
-                                                                value={item.discount || 0}
-                                                                onChange={(e) => updateProductRow(index, 'discount', parseFloat(e.target.value) || 0)}
-                                                                className="flex-1 px-3 py-2 bg-transparent outline-none text-sm font-semibold min-w-0"
-                                                            />
-                                                        </div>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            max="100"
+                                                            placeholder="Disc"
+                                                            value={item.discount || 0}
+                                                            onChange={(e) => updateProductRow(index, 'discount', parseFloat(e.target.value) || 0)}
+                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0"
+                                                        />
                                                     </div>
                                                     <div className="col-span-1 flex items-center justify-center">
                                                         <span className="text-xs font-bold text-slate-600">
@@ -441,21 +431,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 ml-1">Global Discount</label>
-                                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                                            <div className="w-12 self-stretch flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 bg-slate-100/30">
-                                                %
-                                            </div>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max="100"
-                                                value={formData.discount}
-                                                onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
-                                                className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold"
-                                            />
-                                        </div>
+                                        <label className="text-xs font-bold text-slate-500 ml-1">Global Discount (%)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            max="100"
+                                            value={formData.discount}
+                                            onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
+                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
+                                        />
                                     </div>
 
                                     <div className="space-y-1.5">
