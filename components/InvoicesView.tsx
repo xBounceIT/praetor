@@ -582,16 +582,16 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                         <td className="px-6 py-4 font-bold text-slate-800">{invoice.clientName}</td>
                                         <td className="px-6 py-4 text-sm text-slate-600">{new Date(invoice.issueDate).toLocaleDateString()}</td>
                                         <td className="px-6 py-4 text-sm text-slate-600">{new Date(invoice.dueDate).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 font-bold text-slate-700">{invoice.total.toFixed(2)} {currency}</td>
+                                        <td className="px-6 py-4 font-bold text-slate-700">{(invoice.total ?? 0).toFixed(2)} {currency}</td>
                                         <td className={`px-6 py-4 font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
                                             {balance.toFixed(2)} {currency}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${invoice.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
-                                                    invoice.status === 'overdue' ? 'bg-red-100 text-red-700' :
-                                                        invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' :
-                                                            invoice.status === 'cancelled' ? 'bg-slate-100 text-slate-500' :
-                                                                'bg-amber-100 text-amber-700'
+                                                invoice.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                                                    invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                                                        invoice.status === 'cancelled' ? 'bg-slate-100 text-slate-500' :
+                                                            'bg-amber-100 text-amber-700'
                                                 }`}>
                                                 {invoice.status}
                                             </span>

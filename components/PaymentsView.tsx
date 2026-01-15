@@ -183,7 +183,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 ml-1">Invoice (Optional)</label>
                                     <CustomSelect
-                                        options={[{ id: '', name: 'No Invoice' }, ...clientInvoices.map(i => ({ id: i.id, name: `#${i.invoiceNumber} - ${i.total.toFixed(2)} ${currency}` }))]}
+                                        options={[{ id: '', name: 'No Invoice' }, ...clientInvoices.map(i => ({ id: i.id, name: `#${i.invoiceNumber} - ${(i.total ?? 0).toFixed(2)} ${currency}` }))]}
                                         value={formData.invoiceId || ''}
                                         onChange={handleInvoiceChange}
                                         placeholder="Link to Invoice"

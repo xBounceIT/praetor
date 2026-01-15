@@ -122,10 +122,10 @@ const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
 
 const normalizeInvoice = (i: Invoice): Invoice => ({
     ...i,
-    subtotal: Number(i.subtotal || 0),
-    taxAmount: Number(i.taxAmount || 0),
-    total: Number(i.total || 0),
-    amountPaid: Number(i.amountPaid || 0),
+    subtotal: Number(i.subtotal ?? 0),
+    taxAmount: Number(i.taxAmount ?? 0),
+    total: Number(i.total ?? 0),
+    amountPaid: Number(i.amountPaid ?? 0),
     items: (i.items || []).map(normalizeInvoiceItem)
 });
 

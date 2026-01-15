@@ -24,7 +24,7 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
         // Accounts Receivable (Unpaid Invoices)
         const accountsReceivable = invoices
             .filter(i => i.status !== 'cancelled' && i.status !== 'draft')
-            .reduce((sum, i) => sum + (i.total - i.amountPaid), 0);
+            .reduce((sum, i) => sum + ((i.total ?? 0) - (i.amountPaid ?? 0)), 0);
 
         // Expense Categories
         const expenseCategories = expenses.reduce((acc, e) => {
