@@ -137,7 +137,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               ))}
             </div>
           ) : (
-            <span className={`truncate block ${((!isMulti && value)) ? "text-slate-800 font-semibold" : "text-slate-400"}`}>
+            <span
+              className={`truncate block ${((!isMulti && value)) ? "text-slate-800 font-semibold" : "text-slate-400"}`}
+              title={typeof getButtonLabel() === 'string' ? getButtonLabel() as string : undefined}
+            >
               {getButtonLabel()}
             </span>
           )}

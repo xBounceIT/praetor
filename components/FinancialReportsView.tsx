@@ -149,7 +149,7 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                     <h2 className="text-2xl font-black text-slate-800">Financial Reports</h2>
                     <p className="text-slate-500 text-sm">Overview of your business performance</p>
                 </div>
-                <div className="w-48">
+                <div className="w-72">
                     <CustomSelect
                         options={timeFrameOptions}
                         value={timePeriod}
