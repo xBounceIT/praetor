@@ -1,19 +1,21 @@
 
 import React, { useState } from 'react';
-import { ProjectTask, Project, Client, UserRole } from '../types';
+import { ProjectTask, Project, Client, UserRole, User } from '../types';
 import CustomSelect from './CustomSelect';
+import { tasksApi } from '../services/api';
 
 interface TasksViewProps {
   tasks: ProjectTask[];
   projects: Project[];
   clients: Client[];
   role: UserRole;
+  users: User[];
   onAddTask: (name: string, projectId: string, recurringConfig?: any, description?: string) => void;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
   onDeleteTask: (id: string) => void;
 }
 
-const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, onAddTask, onUpdateTask, onDeleteTask }) => {
+const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, users, onAddTask, onUpdateTask, onDeleteTask }) => {
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
@@ -21,6 +23,12 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // Assignment State
+  const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
 
   const isManagement = role === 'admin' || role === 'manager';
 
@@ -77,7 +85,57 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
     }
   };
 
+  // Assignment Handlers
+  const openAssignments = async (taskId: string) => {
+    setManagingTaskId(taskId);
+    setIsLoadingAssignments(true);
+    setAssignedUserIds([]);
+    try {
+      const userIds = await tasksApi.getUsers(taskId);
+      setAssignedUserIds(userIds);
+    } catch (err) {
+      console.error("Failed to load task users", err);
+      // Optional: show error notification
+    } finally {
+      setIsLoadingAssignments(false);
+    }
+  };
+
+  const closeAssignments = () => {
+    setManagingTaskId(null);
+    setAssignedUserIds([]);
+    setUserSearch('');
+  };
+
+  const toggleUserAssignment = (userId: string) => {
+    setAssignedUserIds(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const saveAssignments = async () => {
+    if (!managingTaskId) return;
+    try {
+      await tasksApi.updateUsers(managingTaskId, assignedUserIds);
+      closeAssignments();
+      // Optional: show success notification
+    } catch (err) {
+      console.error("Failed to save task users", err);
+      alert("Failed to save assignments");
+    }
+  };
+
   const projectOptions = projects.map(p => ({ id: p.id, name: p.name }));
+
+  const managingTask = tasks.find(t => t.id === managingTaskId);
+
+  // Filter users for assignment modal
+  const filteredUsers = users.filter(u =>
+    u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.username.toLowerCase().includes(userSearch.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -111,6 +169,99 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                   Yes, Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Assignment Modal */}
+      {managingTaskId && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[60] backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <h3 className="font-bold text-lg text-slate-800 flex flex-col">
+                <span>Assign Users</span>
+                <span className="text-xs font-normal text-slate-500 mt-0.5">Task: <span className="font-bold text-praetor">{managingTask?.name}</span></span>
+              </h3>
+              <button onClick={closeAssignments} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-slate-100 bg-white">
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-medium"
+                autoFocus
+              />
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
+              {isLoadingAssignments ? (
+                <div className="flex items-center justify-center py-12">
+                  <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredUsers.map(user => (
+                    <label
+                      key={user.id}
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${assignedUserIds.includes(user.id)
+                          ? 'bg-white border-praetor shadow-sm ring-1 ring-praetor/10'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${assignedUserIds.includes(user.id) ? 'bg-praetor text-white' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                          {user.avatarInitials || user.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-bold ${assignedUserIds.includes(user.id) ? 'text-slate-800' : 'text-slate-600'}`}>
+                            {user.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {user.role}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${assignedUserIds.includes(user.id) ? 'bg-praetor border-praetor' : 'bg-white border-slate-300'
+                        }`}>
+                        {assignedUserIds.includes(user.id) && <i className="fa-solid fa-check text-white text-[10px]"></i>}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={assignedUserIds.includes(user.id)}
+                        onChange={() => toggleUserAssignment(user.id)}
+                      />
+                    </label>
+                  ))}
+                  {filteredUsers.length === 0 && (
+                    <div className="text-center py-8 text-slate-400 italic text-sm">
+                      No users found.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-3">
+              <button
+                onClick={closeAssignments}
+                className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveAssignments}
+                className="px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-800 transition-all shadow-sm active:scale-95 text-sm"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>
@@ -355,13 +506,25 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, o
                     </td>
                     <td className="px-6 py-4 text-right">
                       {isManagement && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startEditing(task); }}
-                          className="text-slate-400 hover:text-praetor transition-colors p-2"
-                          title="Edit Task"
-                        >
-                          <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAssignments(task.id);
+                            }}
+                            className="text-slate-400 hover:text-praetor transition-colors p-2"
+                            title="Manage Assigned Users"
+                          >
+                            <i className="fa-solid fa-users"></i>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); startEditing(task); }}
+                            className="text-slate-400 hover:text-praetor transition-colors p-2"
+                            title="Edit Task"
+                          >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

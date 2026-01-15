@@ -136,4 +136,47 @@ export default async function (fastify, opts) {
 
         return { message: 'Task deleted' };
     });
+
+    // GET /:id/users - Get assigned users
+    fastify.get('/:id/users', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { id } = request.params;
+        const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [id]);
+        return result.rows.map(r => r.user_id);
+    });
+
+    // POST /:id/users - Update assigned users
+    fastify.post('/:id/users', {
+        onRequest: [authenticateToken]
+    }, async (request, reply) => {
+        const { id } = request.params;
+        const { userIds } = request.body;
+
+        // Only admin/manager can assign users
+        if (request.user.role !== 'admin' && request.user.role !== 'manager') {
+            return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
+
+        try {
+            await query('BEGIN');
+
+            // Delete existing assignments
+            await query('DELETE FROM user_tasks WHERE task_id = $1', [id]);
+
+            // Insert new ones
+            for (const userId of userIds) {
+                await query(
+                    'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    [userId, id]
+                );
+            }
+
+            await query('COMMIT');
+            return { message: 'Task assignments updated' };
+        } catch (err) {
+            await query('ROLLBACK');
+            throw err;
+        }
+    });
 }

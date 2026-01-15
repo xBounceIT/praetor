@@ -1466,6 +1466,7 @@ const App: React.FC = () => {
               projects={projects}
               clients={clients}
               role={currentUser.role}
+              users={availableUsers}
               onAddTask={addProjectTask}
               onUpdateTask={handleUpdateTask}
               onDeleteTask={async (id) => {
