@@ -22,6 +22,14 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
         { id: 'custom', name: 'Custom Range' },
     ];
 
+    // Compute the display value for the selected time period
+    const displayValue = useMemo(() => {
+        if (timePeriod === 'custom' && customRange.start && customRange.end) {
+            return `${customRange.start} - ${customRange.end}`;
+        }
+        return timeFrameOptions.find(opt => opt.id === timePeriod)?.name || 'Last 6 Months';
+    }, [timePeriod, customRange]);
+
     const resolveDateRange = useMemo(() => {
         if (timePeriod === 'custom' && customRange.start && customRange.end) {
             return {
@@ -147,6 +155,7 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                         value={timePeriod}
                         onChange={handlePeriodChange}
                         dropdownPosition="bottom"
+                        displayValue={displayValue}
                     />
                 </div>
             </div>

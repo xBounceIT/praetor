@@ -20,6 +20,7 @@ interface CustomSelectProps {
   onClose?: () => void;
   buttonClassName?: string;
   dropdownPosition?: 'top' | 'bottom';
+  displayValue?: string; // Custom display value to override the default label
 }
 
 const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -35,7 +36,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   onOpen,
   onClose,
   buttonClassName,
-  dropdownPosition = 'bottom'
+  dropdownPosition = 'bottom',
+  displayValue
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,6 +80,9 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   };
 
   const getButtonLabel = () => {
+    // Use custom display value if provided
+    if (displayValue) return displayValue;
+
     if (isMulti) {
       const selected = selectedOptions as Option[];
       if (selected.length === 0) return placeholder || 'Select...';
