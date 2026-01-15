@@ -106,7 +106,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         className={`w-full flex items-center justify-between rounded-lg focus:ring-2 focus:ring-praetor outline-none text-left transition-all
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-300'}
           ${isOpen ? 'ring-2 ring-praetor border-praetor' : ''}
-          ${buttonClassName ? buttonClassName : 'px-3 py-2.5 bg-slate-50 border border-slate-200 text-sm'}`}
+          bg-slate-50 border border-slate-200 px-3
+          ${buttonClassName ? buttonClassName : 'py-2.5 text-sm'}`}
       >
         <div className="flex-1 min-w-0">
           {isMulti && (value as string[]).length > 0 ? (
