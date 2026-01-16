@@ -31,3 +31,5 @@ server/.env
 todo.md
 
 .agent/*/*
+opencode.json
+.gitignore
