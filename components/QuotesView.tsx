@@ -214,7 +214,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
             const product = products.find(p => p.id === value);
             if (product) {
                 newItems[index].productName = product.name;
-                newItems[index].unitPrice = calcProductSalePrice(product.costo, product.molPercentage);
+                newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), Number(product.molPercentage));
             }
         }
 
@@ -334,80 +334,80 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
                                 {formData.items && formData.items.length > 0 && (
                                     <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                                        <div className="col-span-12 md:col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Unit Price ({currency})</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Discount (%)</div>
-                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">Subtotal</div>
+                                        <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Cost ({currency})</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Mol %</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Sale Price ({currency})</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Margin ({currency})</div>
                                     </div>
                                 )}
 
                                 {formData.items && formData.items.length > 0 ? (
                                     <div className="space-y-3">
-                                        {formData.items.map((item, index) => (
-                                            <div key={item.id} className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl">
-                                                <div className="flex-1 grid grid-cols-12 gap-2">
-                                                    <div className="col-span-5">
-                                                        <CustomSelect
-                                                            options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
-                                                            value={item.productId}
-                                                            onChange={(val) => updateProductRow(index, 'productId', val)}
-                                                            placeholder="Select product..."
-                                                            searchable={true}
-                                                            buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            required
-                                                            placeholder="Qty"
-                                                            value={item.quantity}
-                                                            onChange={(e) => updateProductRow(index, 'quantity', parseFloat(e.target.value) || 0)}
-                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            required
-                                                            placeholder="Price"
-                                                            value={item.unitPrice}
-                                                            onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0"
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            max="100"
-                                                            placeholder="Disc"
-                                                            value={item.discount || 0}
-                                                            onChange={(e) => updateProductRow(index, 'discount', parseFloat(e.target.value) || 0)}
-                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0"
-                                                        />
-                                                    </div>
-                                                    <div className="col-span-1 flex items-center justify-center">
-                                                        <span className="text-xs font-bold text-slate-600">
-                                                            {((item.quantity * item.unitPrice) * (1 - (item.discount || 0) / 100)).toFixed(2)}
-                                                        </span>
-                                                    </div>
+                                {formData.items.map((item, index) => {
+                                    const selectedProduct = activeProducts.find(p => p.id === item.productId);
+                                    const cost = selectedProduct ? Number(selectedProduct.costo) : 0;
+                                    const molPercentage = selectedProduct ? Number(selectedProduct.molPercentage) : 0;
+                                    const margin = Number(item.unitPrice || 0) - cost;
+
+                                    return (
+                                        <div key={item.id} className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl">
+                                            <div className="flex-1 grid grid-cols-12 gap-2">
+                                                <div className="col-span-4">
+                                                    <CustomSelect
+                                                        options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
+                                                        value={item.productId}
+                                                        onChange={(val) => updateProductRow(index, 'productId', val)}
+                                                        placeholder="Select product..."
+                                                        searchable={true}
+                                                        buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                                    />
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeProductRow(index)}
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i>
-                                                </button>
+                                                <div className="col-span-1">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        required
+                                                        placeholder="Qty"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateProductRow(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                                                    />
+                                                </div>
+                                                <div className="col-span-2 flex items-center">
+                                                    <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)}</span>
+                                                </div>
+                                                <div className="col-span-1 flex items-center">
+                                                    <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(2)}%</span>
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        required
+                                                        placeholder="Sale"
+                                                        value={item.unitPrice}
+                                                        onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0"
+                                                    />
+                                                </div>
+                                                <div className="col-span-2 flex items-center">
+                                                    <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
+                                                </div>
                                             </div>
-                                        ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeProductRow(index)}
+                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                            >
+                                                <i className="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
                                     </div>
                                 ) : (
                                     <div className="text-center py-8 text-slate-400 text-sm">
