@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Expense } from '../types';
 import CustomSelect from './CustomSelect';
+import StandardTable from './StandardTable';
 
 const EXPENSE_CATEGORY_OPTIONS = [
     { id: 'office_supplies', name: 'Office Supplies' },
@@ -280,92 +281,89 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-visible">
-                <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
-                    <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">All Expenses</h4>
-                    <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{filteredExpenses.length} TOTAL</span>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                            <tr>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Description</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendor</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {paginatedExpenses.map(expense => (
-                                <tr key={expense.id} onClick={() => openEditModal(expense)} className="hover:bg-slate-50/50 cursor-pointer transition-colors">
-                                    <td className="px-6 py-4 text-sm text-slate-600">{new Date(expense.expenseDate).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 font-bold text-slate-800">{expense.description}</td>
-                                    <td className="px-6 py-4">
-                                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold capitalize">
-                                            {expense.category.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-slate-600">{expense.vendor || '-'}</td>
-                                    <td className="px-6 py-4 font-bold text-red-500">-{expense.amount.toFixed(2)} {currency}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); openEditModal(expense); }}
-                                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                        >
-                                            <i className="fa-solid fa-pen-to-square"></i>
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setExpenseToDelete(expense); setIsDeleteConfirmOpen(true); }}
-                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                        >
-                                            <i className="fa-solid fa-trash-can"></i>
-                                        </button>
-                                    </td>
-                                </tr>
+            <StandardTable
+                title="All Expenses"
+                totalCount={filteredExpenses.length}
+                containerClassName="overflow-visible"
+                footer={
+                    <>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-500">Rows:</span>
+                            <CustomSelect
+                                options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
+                                value={rowsPerPage.toString()}
+                                onChange={(val) => { setRowsPerPage(parseInt(val)); setCurrentPage(1); }}
+                                className="w-20"
+                                searchable={false}
+                                buttonClassName="text-xs py-1"
+                            />
+                            <span className="text-xs font-bold text-slate-400 ml-2">
+                                {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredExpenses.length)} / {filteredExpenses.length}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                <button
+                                    key={page}
+                                    onClick={() => setCurrentPage(page)}
+                                    className={`w-8 h-8 rounded-lg text-xs font-bold ${currentPage === page ? 'bg-praetor text-white' : 'hover:bg-slate-100 text-slate-500'}`}
+                                >
+                                    {page}
+                                </button>
                             ))}
-                            {paginatedExpenses.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="p-12 text-center text-slate-400 text-sm font-bold">
-                                        No expenses found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-3xl">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-500">Rows:</span>
-                        <CustomSelect
-                            options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
-                            value={rowsPerPage.toString()}
-                            onChange={(val) => { setRowsPerPage(parseInt(val)); setCurrentPage(1); }}
-                            className="w-20"
-                            searchable={false}
-                            buttonClassName="text-xs py-1"
-
-                        />
-                        <span className="text-xs font-bold text-slate-400 ml-2">
-                            {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredExpenses.length)} / {filteredExpenses.length}
-                        </span>
-                    </div>
-                    <div className="flex gap-2">
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                            <button
-                                key={page}
-                                onClick={() => setCurrentPage(page)}
-                                className={`w-8 h-8 rounded-lg text-xs font-bold ${currentPage === page ? 'bg-praetor text-white' : 'hover:bg-slate-100 text-slate-500'}`}
-                            >
-                                {page}
-                            </button>
+                        </div>
+                    </>
+                }
+            >
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Description</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendor</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {paginatedExpenses.map(expense => (
+                            <tr key={expense.id} onClick={() => openEditModal(expense)} className="hover:bg-slate-50/50 cursor-pointer transition-colors">
+                                <td className="px-6 py-4 text-sm text-slate-600">{new Date(expense.expenseDate).toLocaleDateString()}</td>
+                                <td className="px-6 py-4 font-bold text-slate-800">{expense.description}</td>
+                                <td className="px-6 py-4">
+                                    <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold capitalize">
+                                        {expense.category.replace('_', ' ')}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-slate-600">{expense.vendor || '-'}</td>
+                                <td className="px-6 py-4 font-bold text-red-500">-{expense.amount.toFixed(2)} {currency}</td>
+                                <td className="px-6 py-4 text-right">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); openEditModal(expense); }}
+                                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                                    >
+                                        <i className="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setExpenseToDelete(expense); setIsDeleteConfirmOpen(true); }}
+                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    >
+                                        <i className="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </td>
+                            </tr>
                         ))}
-                    </div>
-                </div>
-            </div>
+                        {paginatedExpenses.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center text-slate-400 text-sm font-bold">
+                                    No expenses found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </StandardTable>
         </div>
     );
 };

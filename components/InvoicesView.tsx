@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Invoice, InvoiceItem, Client, Product, Sale } from '../types';
 import CustomSelect from './CustomSelect';
+import StandardTable from './StandardTable';
 
 const INVOICE_STATUS_OPTIONS = [
     { id: 'draft', name: 'Draft' },
@@ -559,106 +560,103 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-visible">
-                <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
-                    <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">All Invoices</h4>
-                    <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{filteredInvoices.length} TOTAL</span>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                            <tr>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Number</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Due Date</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Balance</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {paginatedInvoices.map(invoice => {
-                                const balance = invoice.total - invoice.amountPaid;
-                                return (
-                                    <tr key={invoice.id} onClick={() => openEditModal(invoice)} className="hover:bg-slate-50/50 cursor-pointer transition-colors">
-                                        <td className="px-6 py-4 font-bold text-slate-700">{invoice.invoiceNumber}</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800">{invoice.clientName}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-600">{new Date(invoice.issueDate).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-600">{new Date(invoice.dueDate).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 font-bold text-slate-700">{(invoice.total ?? 0).toFixed(2)} {currency}</td>
-                                        <td className={`px-6 py-4 font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                                            {balance.toFixed(2)} {currency}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${invoice.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
-                                                invoice.status === 'overdue' ? 'bg-red-100 text-red-700' :
-                                                    invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' :
-                                                        invoice.status === 'cancelled' ? 'bg-slate-100 text-slate-500' :
-                                                            'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                {invoice.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); openEditModal(invoice); }}
-                                                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                            >
-                                                <i className="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); confirmDelete(invoice); }}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                            >
-                                                <i className="fa-solid fa-trash-can"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {paginatedInvoices.length === 0 && (
-                                <tr>
-                                    <td colSpan={8} className="p-12 text-center text-slate-400 text-sm font-bold">
-                                        No invoices found.
+            <StandardTable
+                title="All Invoices"
+                totalCount={filteredInvoices.length}
+                containerClassName="overflow-visible"
+                footer={
+                    <>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-500">Rows:</span>
+                            <CustomSelect
+                                options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
+                                value={rowsPerPage.toString()}
+                                onChange={handleRowsPerPageChange}
+                                className="w-20"
+                                searchable={false}
+                                buttonClassName="text-xs py-1"
+                            />
+                            <span className="text-xs font-bold text-slate-400 ml-2">
+                                {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredInvoices.length)} / {filteredInvoices.length}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                <button
+                                    key={page}
+                                    onClick={() => setCurrentPage(page)}
+                                    className={`w-8 h-8 rounded-lg text-xs font-bold ${currentPage === page ? 'bg-praetor text-white' : 'hover:bg-slate-100 text-slate-500'}`}
+                                >
+                                    {page}
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                }
+            >
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Number</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Due Date</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Balance</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {paginatedInvoices.map(invoice => {
+                            const balance = invoice.total - invoice.amountPaid;
+                            return (
+                                <tr key={invoice.id} onClick={() => openEditModal(invoice)} className="hover:bg-slate-50/50 cursor-pointer transition-colors">
+                                    <td className="px-6 py-4 font-bold text-slate-700">{invoice.invoiceNumber}</td>
+                                    <td className="px-6 py-4 font-bold text-slate-800">{invoice.clientName}</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600">{new Date(invoice.issueDate).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600">{new Date(invoice.dueDate).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 font-bold text-slate-700">{(invoice.total ?? 0).toFixed(2)} {currency}</td>
+                                    <td className={`px-6 py-4 font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                        {balance.toFixed(2)} {currency}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${invoice.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
+                                            invoice.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                                                invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                                                    invoice.status === 'cancelled' ? 'bg-slate-100 text-slate-500' :
+                                                        'bg-amber-100 text-amber-700'
+                                            }`}>
+                                            {invoice.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); openEditModal(invoice); }}
+                                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                                        >
+                                            <i className="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); confirmDelete(invoice); }}
+                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                        >
+                                            <i className="fa-solid fa-trash-can"></i>
+                                        </button>
                                     </td>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-3xl">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-500">Rows:</span>
-                        <CustomSelect
-                            options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
-                            value={rowsPerPage.toString()}
-                            onChange={handleRowsPerPageChange}
-                            className="w-20"
-                            searchable={false}
-                            buttonClassName="text-xs py-1"
-
-                        />
-                        <span className="text-xs font-bold text-slate-400 ml-2">
-                            {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredInvoices.length)} / {filteredInvoices.length}
-                        </span>
-                    </div>
-                    <div className="flex gap-2">
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                            <button
-                                key={page}
-                                onClick={() => setCurrentPage(page)}
-                                className={`w-8 h-8 rounded-lg text-xs font-bold ${currentPage === page ? 'bg-praetor text-white' : 'hover:bg-slate-100 text-slate-500'}`}
-                            >
-                                {page}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
+                            );
+                        })}
+                        {paginatedInvoices.length === 0 && (
+                            <tr>
+                                <td colSpan={8} className="p-12 text-center text-slate-400 text-sm font-bold">
+                                    No invoices found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </StandardTable>
         </div>
     );
 };

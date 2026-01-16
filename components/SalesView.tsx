@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Sale, SaleItem, Client, Product } from '../types';
 import CustomSelect from './CustomSelect';
+import StandardTable from './StandardTable';
 
 const PAYMENT_TERMS_OPTIONS = [
     { id: 'immediate', name: 'Immediate' },
@@ -652,157 +653,155 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, onAddSa
                 </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-visible">
-                <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
-                    <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">All Sales</h4>
-                    <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{filteredSales.length} TOTAL</span>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                            <tr>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Payment Terms</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Quote Ref</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {paginatedSales.map(sale => {
-                                const { total } = calculateTotals(sale.items, sale.discount);
-                                return (
-                                    <tr
-                                        key={sale.id}
-                                        onClick={() => openEditModal(sale)}
-                                        className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
+            <StandardTable
+                title="All Sales"
+                totalCount={filteredSales.length}
+                containerClassName="overflow-visible"
+                footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
+                footer={
+                    <>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+                            <CustomSelect
+                                options={[
+                                    { id: '5', name: '5' },
+                                    { id: '10', name: '10' },
+                                    { id: '20', name: '20' },
+                                    { id: '50', name: '50' }
+                                ]}
+                                value={rowsPerPage.toString()}
+                                onChange={(val) => handleRowsPerPageChange(val)}
+                                className="w-20"
+                                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+                                searchable={false}
+                            />
+                            <span className="text-xs font-bold text-slate-400 ml-2">
+                                Showing {paginatedSales.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredSales.length)} of {filteredSales.length}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                <i className="fa-solid fa-chevron-left text-xs"></i>
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                    <button
+                                        key={page}
+                                        onClick={() => setCurrentPage(page)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
+                                            ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                                            : 'text-slate-500 hover:bg-slate-100'
+                                            }`}
                                     >
-                                        <td className="px-8 py-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-                                                    <i className="fa-solid fa-cart-shopping"></i>
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold text-slate-800">{sale.clientName}</div>
-                                                    <div className="text-[10px] font-black text-slate-400 uppercase">{sale.items.length} item{sale.items.length !== 1 ? 's' : ''}</div>
-                                                </div>
+                                        {page}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                }
+            >
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Payment Terms</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Quote Ref</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {paginatedSales.map(sale => {
+                            const { total } = calculateTotals(sale.items, sale.discount);
+                            return (
+                                <tr
+                                    key={sale.id}
+                                    onClick={() => openEditModal(sale)}
+                                    className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                                >
+                                    <td className="px-8 py-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
+                                                <i className="fa-solid fa-cart-shopping"></i>
                                             </div>
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${sale.status === 'completed'
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : sale.status === 'cancelled'
-                                                    ? 'bg-red-100 text-red-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                {sale.status.toUpperCase()}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-5 text-sm font-bold text-slate-700">
-                                            {total.toFixed(2)} {currency}
-                                        </td>
-                                        <td className="px-8 py-5 text-sm font-semibold text-slate-600">
-                                            {sale.paymentTerms === 'immediate' ? 'Immediate' : sale.paymentTerms}
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            {sale.linkedQuoteId && (
-                                                <div className="text-xs font-bold text-praetor bg-slate-100 px-2 py-1 rounded-lg inline-flex items-center gap-1">
-                                                    <i className="fa-solid fa-link text-[10px]"></i>
-                                                    Quote
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        openEditModal(sale);
-                                                    }}
-                                                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                                    title="Edit Sale"
-                                                >
-                                                    <i className="fa-solid fa-pen-to-square"></i>
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        confirmDelete(sale);
-                                                    }}
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                    title="Delete Sale"
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i>
-                                                </button>
+                                            <div>
+                                                <div className="font-bold text-slate-800">{sale.clientName}</div>
+                                                <div className="text-[10px] font-black text-slate-400 uppercase">{sale.items.length} item{sale.items.length !== 1 ? 's' : ''}</div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {filteredSales.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="p-12 text-center">
-                                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
-                                            <i className="fa-solid fa-cart-shopping text-2xl"></i>
                                         </div>
-                                        <p className="text-slate-400 text-sm font-bold">No sales found.</p>
-                                        <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">Create your first sale</button>
+                                    </td>
+                                    <td className="px-8 py-5">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black ${sale.status === 'completed'
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : sale.status === 'cancelled'
+                                                ? 'bg-red-100 text-red-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                            }`}>
+                                            {sale.status.toUpperCase()}
+                                        </span>
+                                    </td>
+                                    <td className="px-8 py-5 text-sm font-bold text-slate-700">
+                                        {total.toFixed(2)} {currency}
+                                    </td>
+                                    <td className="px-8 py-5 text-sm font-semibold text-slate-600">
+                                        {sale.paymentTerms === 'immediate' ? 'Immediate' : sale.paymentTerms}
+                                    </td>
+                                    <td className="px-8 py-5">
+                                        {sale.linkedQuoteId && (
+                                            <div className="text-xs font-bold text-praetor bg-slate-100 px-2 py-1 rounded-lg inline-flex items-center gap-1">
+                                                <i className="fa-solid fa-link text-[10px]"></i>
+                                                Quote
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-8 py-5">
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openEditModal(sale);
+                                                }}
+                                                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                                                title="Edit Sale"
+                                            >
+                                                <i className="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    confirmDelete(sale);
+                                                }}
+                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                title="Delete Sale"
+                                            >
+                                                <i className="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination UI */}
-                <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-3xl">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-500">Rows per page:</span>
-                        <CustomSelect
-                            options={[
-                                { id: '5', name: '5' },
-                                { id: '10', name: '10' },
-                                { id: '20', name: '20' },
-                                { id: '50', name: '50' }
-                            ]}
-                            value={rowsPerPage.toString()}
-                            onChange={(val) => handleRowsPerPageChange(val)}
-                            className="w-20"
-                            buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                            searchable={false}
-
-                        />
-                        <span className="text-xs font-bold text-slate-400 ml-2">
-                            Showing {paginatedSales.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredSales.length)} of {filteredSales.length}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                        >
-                            <i className="fa-solid fa-chevron-left text-xs"></i>
-                        </button>
-                        <div className="flex items-center gap-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
-                                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                                        : 'text-slate-500 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    {page}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
+                            );
+                        })}
+                        {filteredSales.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
+                                        <i className="fa-solid fa-cart-shopping text-2xl"></i>
+                                    </div>
+                                    <p className="text-slate-400 text-sm font-bold">No sales found.</p>
+                                    <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">Create your first sale</button>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </StandardTable>
         </div>
     );
 };

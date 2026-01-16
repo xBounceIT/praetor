@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Product, Supplier } from '../types';
 import CustomSelect, { Option } from './CustomSelect';
+import StandardTable from './StandardTable';
 
 interface ProductsViewProps {
     products: Product[];
@@ -444,168 +445,166 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                 </button>
             </div>
 
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm">
-                <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
-                    <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Active Products</h4>
-                    <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{activeProducts.length} TOTAL</span>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                            <tr>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name / Category</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Type</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Supplier</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Costo</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">MOL %</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sale Price</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Margine</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tax Rate</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {activeProducts.map(p => (
-                                <tr key={p.id} onClick={() => openEditModal(p)} className="hover:bg-slate-50/50 transition-colors group cursor-pointer">
-                                    <td className="px-8 py-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-                                                <i className="fa-solid fa-box"></i>
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-slate-800">{p.name}</div>
-                                                <div className="text-[10px] font-black text-slate-400 uppercase">{p.category || 'No Category'}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${p.type === 'service' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                            {p.type || 'item'}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-slate-500">
-                                        {p.supplierName || '-'}
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-slate-500">
-                                        {Number(p.costo).toFixed(2)} / {p.costUnit}
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-slate-500">
-                                        {Number(p.molPercentage).toFixed(2)}%
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-slate-700">
-                                        {calcSalePrice(Number(p.costo), Number(p.molPercentage)).toFixed(2)} / {p.costUnit}
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-emerald-600">
-                                        {calcMargine(Number(p.costo), Number(p.molPercentage)).toFixed(2)}
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-bold text-praetor">
-                                        {p.taxRate}%
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <div className="flex justify-end gap-2">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openEditModal(p);
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                                title="Edit Product"
-                                            >
-                                                <i className="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onUpdateProduct(p.id, { isDisabled: true });
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                                                title="Disable Product"
-                                            >
-                                                <i className="fa-solid fa-ban"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    confirmDelete(p);
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                title="Delete Product"
-                                            >
-                                                <i className="fa-solid fa-trash-can"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {activeProducts.length === 0 && (
-                                <tr>
-                                    <td colSpan={9} className="p-12 text-center">
-                                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
-                                            <i className="fa-solid fa-boxes-stacked text-2xl"></i>
-                                        </div>
-                                        <p className="text-slate-400 text-sm font-bold">No active products found.</p>
-                                        <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">Add your first product</button>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination UI */}
-                <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-3xl">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-500">Rows per page:</span>
-                        <CustomSelect
-                            options={[
-                                { id: '5', name: '5' },
-                                { id: '10', name: '10' },
-                                { id: '20', name: '20' },
-                                { id: '50', name: '50' }
-                            ]}
-                            value={rowsPerPage.toString()}
-                            onChange={(val) => handleRowsPerPageChange(val)}
-                            className="w-20"
-                            buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                            searchable={false}
-                        />
-                        <span className="text-xs font-bold text-slate-400 ml-2">
-                            Showing {activeProducts.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeProductsTotal.length)} of {activeProductsTotal.length}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                        >
-                            <i className="fa-solid fa-chevron-left text-xs"></i>
-                        </button>
-                        <div className="flex items-center gap-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
-                                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                                        : 'text-slate-500 hover:bg-slate-100'
-                                        }`}
-                                >
-                                    {page}
-                                </button>
-                            ))}
+            <StandardTable
+                title="Active Products"
+                totalCount={activeProducts.length}
+                footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
+                footer={
+                    <>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+                            <CustomSelect
+                                options={[
+                                    { id: '5', name: '5' },
+                                    { id: '10', name: '10' },
+                                    { id: '20', name: '20' },
+                                    { id: '50', name: '50' }
+                                ]}
+                                value={rowsPerPage.toString()}
+                                onChange={(val) => handleRowsPerPageChange(val)}
+                                className="w-20"
+                                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+                                searchable={false}
+                            />
+                            <span className="text-xs font-bold text-slate-400 ml-2">
+                                Showing {activeProducts.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeProductsTotal.length)} of {activeProductsTotal.length}
+                            </span>
                         </div>
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages || totalPages === 0}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                        >
-                            <i className="fa-solid fa-chevron-right text-xs"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                <i className="fa-solid fa-chevron-left text-xs"></i>
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                    <button
+                                        key={page}
+                                        onClick={() => setCurrentPage(page)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
+                                            ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                                            : 'text-slate-500 hover:bg-slate-100'
+                                            }`}
+                                    >
+                                        {page}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                <i className="fa-solid fa-chevron-right text-xs"></i>
+                            </button>
+                        </div>
+                    </>
+                }
+            >
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name / Category</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Supplier</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Costo</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">MOL %</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sale Price</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Margine</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tax Rate</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {activeProducts.map(p => (
+                            <tr key={p.id} onClick={() => openEditModal(p)} className="hover:bg-slate-50/50 transition-colors group cursor-pointer">
+                                <td className="px-8 py-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
+                                            <i className="fa-solid fa-box"></i>
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-slate-800">{p.name}</div>
+                                            <div className="text-[10px] font-black text-slate-400 uppercase">{p.category || 'No Category'}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-8 py-5">
+                                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${p.type === 'service' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                        {p.type || 'item'}
+                                    </span>
+                                </td>
+                                <td className="px-8 py-5 text-sm font-semibold text-slate-500">
+                                    {p.supplierName || '-'}
+                                </td>
+                                <td className="px-8 py-5 text-sm font-semibold text-slate-500">
+                                    {Number(p.costo).toFixed(2)} / {p.costUnit}
+                                </td>
+                                <td className="px-8 py-5 text-sm font-semibold text-slate-500">
+                                    {Number(p.molPercentage).toFixed(2)}%
+                                </td>
+                                <td className="px-8 py-5 text-sm font-semibold text-slate-700">
+                                    {calcSalePrice(Number(p.costo), Number(p.molPercentage)).toFixed(2)} / {p.costUnit}
+                                </td>
+                                <td className="px-8 py-5 text-sm font-semibold text-emerald-600">
+                                    {calcMargine(Number(p.costo), Number(p.molPercentage)).toFixed(2)}
+                                </td>
+                                <td className="px-8 py-5 text-sm font-bold text-praetor">
+                                    {p.taxRate}%
+                                </td>
+                                <td className="px-8 py-5">
+                                    <div className="flex justify-end gap-2">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openEditModal(p);
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                                            title="Edit Product"
+                                        >
+                                            <i className="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onUpdateProduct(p.id, { isDisabled: true });
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                            title="Disable Product"
+                                        >
+                                            <i className="fa-solid fa-ban"></i>
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                confirmDelete(p);
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                            title="Delete Product"
+                                        >
+                                            <i className="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {activeProducts.length === 0 && (
+                            <tr>
+                                <td colSpan={9} className="p-12 text-center">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
+                                        <i className="fa-solid fa-boxes-stacked text-2xl"></i>
+                                    </div>
+                                    <p className="text-slate-400 text-sm font-bold">No active products found.</p>
+                                    <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">Add your first product</button>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </StandardTable>
 
             {
                 disabledProducts.length > 0 && (
