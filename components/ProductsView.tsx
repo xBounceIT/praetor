@@ -460,16 +460,16 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                         </span>
                                     </td>
                                     <td className="px-8 py-5 text-sm font-semibold text-slate-500">
-                                        {p.costo.toFixed(2)} / {p.costUnit}
+                                        {Number(p.costo).toFixed(2)} / {p.costUnit}
                                     </td>
                                     <td className="px-8 py-5 text-sm font-semibold text-slate-500">
-                                        {p.molPercentage.toFixed(2)}%
+                                        {Number(p.molPercentage).toFixed(2)}%
                                     </td>
                                     <td className="px-8 py-5 text-sm font-semibold text-slate-700">
-                                        {calcSalePrice(p.costo, p.molPercentage).toFixed(2)} / {p.costUnit}
+                                        {calcSalePrice(Number(p.costo), Number(p.molPercentage)).toFixed(2)} / {p.costUnit}
                                     </td>
                                     <td className="px-8 py-5 text-sm font-semibold text-emerald-600">
-                                        {calcMargine(p.costo, p.molPercentage).toFixed(2)}
+                                        {calcMargine(Number(p.costo), Number(p.molPercentage)).toFixed(2)}
                                     </td>
                                     <td className="px-8 py-5 text-sm font-bold text-praetor">
                                         {p.taxRate}%
