@@ -37,22 +37,29 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
     // Form State
     const [formData, setFormData] = useState<Partial<Product>>({
         name: '',
-        salePrice: 0,
-        saleUnit: 'unit',
-        cost: 0,
+        costo: 0,
+        molPercentage: 0,
         costUnit: 'unit',
         category: '',
         taxRate: 0,
         type: 'item'
     });
 
+    // Calculated values
+    const calcSalePrice = (costo: number, molPercentage: number) => {
+        if (molPercentage >= 100) return costo;
+        return costo / (1 - molPercentage / 100);
+    };
+    const calcMargine = (costo: number, molPercentage: number) => {
+        return calcSalePrice(costo, molPercentage) - costo;
+    };
+
     const openAddModal = () => {
         setEditingProduct(null);
         setFormData({
             name: '',
-            salePrice: 0,
-            saleUnit: 'unit',
-            cost: 0,
+            costo: 0,
+            molPercentage: 0,
             costUnit: 'unit',
             category: '',
             taxRate: 0,
@@ -65,9 +72,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
         setEditingProduct(product);
         setFormData({
             name: product.name || '',
-            salePrice: product.salePrice || 0,
-            saleUnit: product.saleUnit || 'unit',
-            cost: product.cost || 0,
+            costo: product.costo || 0,
+            molPercentage: product.molPercentage || 0,
             costUnit: product.costUnit || 'unit',
             category: product.category || '',
             taxRate: product.taxRate || 0,
@@ -143,7 +149,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
         setFormData({
             ...formData,
             type,
-            saleUnit: unit,
             costUnit: unit
         });
     };
@@ -303,28 +308,44 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 ml-1">Sale Price</label>
+                                        <label className="text-xs font-bold text-slate-500 ml-1">Costo</label>
                                         <div className="flex gap-2">
                                             <input
                                                 type="number"
                                                 step="0.01"
-                                                value={formData.salePrice}
-                                                onChange={(e) => setFormData({ ...formData, salePrice: parseFloat(e.target.value) })}
+                                                value={formData.costo}
+                                                onChange={(e) => setFormData({ ...formData, costo: parseFloat(e.target.value) || 0 })}
                                                 className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all min-w-0"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 ml-1">Cost</label>
+                                        <label className="text-xs font-bold text-slate-500 ml-1">MOL %</label>
                                         <div className="flex gap-2">
                                             <input
                                                 type="number"
                                                 step="0.01"
-                                                value={formData.cost}
-                                                onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
+                                                min="0"
+                                                max="99.99"
+                                                value={formData.molPercentage}
+                                                onChange={(e) => setFormData({ ...formData, molPercentage: parseFloat(e.target.value) || 0 })}
                                                 className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all min-w-0"
                                             />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-slate-500 ml-1">Sale Price (calculated)</label>
+                                        <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                                            {calcSalePrice(formData.costo || 0, formData.molPercentage || 0).toFixed(2)}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-slate-500 ml-1">Margine (calculated)</label>
+                                        <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
+                                            {calcMargine(formData.costo || 0, formData.molPercentage || 0).toFixed(2)}
                                         </div>
                                     </div>
                                 </div>
@@ -410,8 +431,10 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                             <tr>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name / Category</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Costo</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">MOL %</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sale Price</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cost</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Margine</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tax Rate</th>
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
@@ -435,11 +458,17 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                             {p.type || 'item'}
                                         </span>
                                     </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-slate-700">
-                                        {p.salePrice.toFixed(2)} / {p.saleUnit}
+                                    <td className="px-8 py-5 text-sm font-semibold text-slate-500">
+                                        {p.costo.toFixed(2)} / {p.costUnit}
                                     </td>
                                     <td className="px-8 py-5 text-sm font-semibold text-slate-500">
-                                        {p.cost.toFixed(2)} / {p.costUnit}
+                                        {p.molPercentage.toFixed(2)}%
+                                    </td>
+                                    <td className="px-8 py-5 text-sm font-semibold text-slate-700">
+                                        {calcSalePrice(p.costo, p.molPercentage).toFixed(2)} / {p.costUnit}
+                                    </td>
+                                    <td className="px-8 py-5 text-sm font-semibold text-emerald-600">
+                                        {calcMargine(p.costo, p.molPercentage).toFixed(2)}
                                     </td>
                                     <td className="px-8 py-5 text-sm font-bold text-praetor">
                                         {p.taxRate}%
@@ -482,7 +511,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                             ))}
                             {activeProducts.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-12 text-center">
+                                    <td colSpan={8} className="p-12 text-center">
                                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                                             <i className="fa-solid fa-boxes-stacked text-2xl"></i>
                                         </div>

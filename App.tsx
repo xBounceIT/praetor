@@ -383,6 +383,7 @@ const App: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [logoutReason, setLogoutReason] = useState<'inactivity' | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -1223,7 +1224,7 @@ const App: React.FC = () => {
     setViewingUserId(user.id);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (reason?: 'inactivity') => {
     setAuthToken(null);
     setCurrentUser(null);
     setViewingUserId('');
@@ -1234,6 +1235,7 @@ const App: React.FC = () => {
     setProducts([]);
     setQuotes([]);
     setEntries([]);
+    setLogoutReason(reason || null);
   };
 
   const handleSaveLdapConfig = async (config: LdapConfig) => {
@@ -1295,11 +1297,11 @@ const App: React.FC = () => {
     );
   }
 
-  if (!currentUser) return <Login users={users} onLogin={handleLogin} />;
+  if (!currentUser) return <Login users={users} onLogin={handleLogin} logoutReason={logoutReason} onClearLogoutReason={() => setLogoutReason(null)} />;
 
   return (
     <>
-      <SessionTimeoutHandler onLogout={handleLogout} />
+      <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />
       <Layout
         activeView={!isRouteAccessible ? 'tracker' : (activeView as View)}
         onViewChange={setActiveView}

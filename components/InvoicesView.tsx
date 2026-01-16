@@ -21,6 +21,11 @@ interface InvoicesViewProps {
     currency: string;
 }
 
+const calcProductSalePrice = (costo: number, molPercentage: number) => {
+    if (molPercentage >= 100) return costo;
+    return costo / (1 - molPercentage / 100);
+};
+
 const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products, sales, onAddInvoice, onUpdateInvoice, onDeleteInvoice, currency }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -217,7 +222,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
             const product = products.find(p => p.id === value);
             if (product) {
                 newItems[index].description = product.name;
-                newItems[index].unitPrice = product.salePrice;
+                newItems[index].unitPrice = calcProductSalePrice(product.costo, product.molPercentage);
                 newItems[index].taxRate = product.taxRate;
             }
         }

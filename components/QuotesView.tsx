@@ -26,6 +26,11 @@ interface QuotesViewProps {
     currency: string;
 }
 
+const calcProductSalePrice = (costo: number, molPercentage: number) => {
+    if (molPercentage >= 100) return costo;
+    return costo / (1 - molPercentage / 100);
+};
+
 const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAddQuote, onUpdateQuote, onDeleteQuote, onCreateSale, currency }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
@@ -209,7 +214,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
             const product = products.find(p => p.id === value);
             if (product) {
                 newItems[index].productName = product.name;
-                newItems[index].unitPrice = product.salePrice;
+                newItems[index].unitPrice = calcProductSalePrice(product.costo, product.molPercentage);
             }
         }
 
@@ -236,7 +241,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                 const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
                 const taxAmount = lineNetAfterGlobal * (taxRate / 100);
                 taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-                totalCost += item.quantity * product.cost;
+                totalCost += item.quantity * product.costo;
             }
         });
 

@@ -244,9 +244,8 @@ INSERT INTO ldap_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    sale_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    sale_unit VARCHAR(20) NOT NULL DEFAULT 'unit',
-    cost DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    costo DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    mol_percentage DECIMAL(5, 2) NOT NULL DEFAULT 0,
     cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit',
     category VARCHAR(100),
     tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
@@ -257,6 +256,43 @@ CREATE TABLE IF NOT EXISTS products (
 
 -- Ensure type column exists for existing installations
 ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'item';
+
+-- Migration: Add mol_percentage column and migrate from sale_price/cost
+ALTER TABLE products ADD COLUMN IF NOT EXISTS mol_percentage DECIMAL(5, 2) DEFAULT 0;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS costo DECIMAL(10, 2) DEFAULT 0;
+
+-- Migrate existing data: copy cost to costo, calculate mol_percentage from sale_price
+DO $$
+BEGIN
+    -- Copy cost to costo if cost column exists
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='cost') THEN
+        UPDATE products SET costo = cost WHERE costo = 0 OR costo IS NULL;
+    END IF;
+    
+    -- Calculate mol_percentage from sale_price if it exists
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sale_price') THEN
+        UPDATE products 
+        SET mol_percentage = CASE 
+            WHEN sale_price > 0 THEN ROUND((1 - (costo / sale_price)) * 100, 2)
+            ELSE 0 
+        END
+        WHERE mol_percentage = 0 OR mol_percentage IS NULL;
+    END IF;
+END $$;
+
+-- Drop old columns after migration
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sale_price') THEN
+        ALTER TABLE products DROP COLUMN sale_price;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sale_unit') THEN
+        ALTER TABLE products DROP COLUMN sale_unit;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='cost') THEN
+        ALTER TABLE products DROP COLUMN cost;
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 

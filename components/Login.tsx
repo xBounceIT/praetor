@@ -6,9 +6,11 @@ import api from '../services/api';
 interface LoginProps {
   users: User[];
   onLogin: (user: User, token?: string) => void;
+  logoutReason?: 'inactivity' | null;
+  onClearLogoutReason?: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReason }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,6 +39,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <img src="/praetor-logo.png" alt="Praetor Logo" className="h-56 mx-auto object-contain" />
           <p className="text-slate-500 text-sm">Sign in to your workspace</p>
         </div>
+
+        {logoutReason === 'inactivity' && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <i className="fa-solid fa-clock text-amber-500 mt-0.5"></i>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-800">Session Expired</p>
+              <p className="text-xs text-amber-600">You were logged out due to inactivity. Please sign in again.</p>
+            </div>
+            {onClearLogoutReason && (
+              <button type="button" onClick={onClearLogoutReason} className="text-amber-400 hover:text-amber-600 transition-colors">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

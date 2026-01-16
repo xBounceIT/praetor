@@ -9,14 +9,14 @@ export default async function (fastify, opts) {
     // GET / - List all products
     fastify.get('/', async (request, reply) => {
         const result = await query(
-            'SELECT id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled" FROM products ORDER BY name ASC'
+            'SELECT id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled" FROM products ORDER BY name ASC'
         );
         return result.rows;
     });
 
     // POST / - Create product
     fastify.post('/', async (request, reply) => {
-        const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type } = request.body;
+        const { name, costo, molPercentage, costUnit, category, taxRate, type } = request.body;
 
         if (!name) {
             return reply.code(400).send({ error: 'Product name is required' });
@@ -24,8 +24,8 @@ export default async function (fastify, opts) {
 
         const id = 'p-' + Date.now();
         const result = await query(
-            'INSERT INTO products (id, name, sale_price, sale_unit, cost, cost_unit, category, tax_rate, type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", type',
-            [id, name, salePrice || 0, saleUnit || 'unit', cost || 0, costUnit || 'unit', category, taxRate || 0, type || 'item']
+            'INSERT INTO products (id, name, costo, mol_percentage, cost_unit, category, tax_rate, type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type',
+            [id, name, costo || 0, molPercentage || 0, costUnit || 'unit', category, taxRate || 0, type || 'item']
         );
         return reply.code(201).send(result.rows[0]);
     });
@@ -33,21 +33,20 @@ export default async function (fastify, opts) {
     // PUT /:id - Update product
     fastify.put('/:id', async (request, reply) => {
         const { id } = request.params;
-        const { name, salePrice, saleUnit, cost, costUnit, category, taxRate, type, isDisabled } = request.body;
+        const { name, costo, molPercentage, costUnit, category, taxRate, type, isDisabled } = request.body;
 
         const result = await query(
             `UPDATE products 
              SET name = COALESCE($1, name), 
-                 sale_price = COALESCE($2, sale_price), 
-                 sale_unit = COALESCE($3, sale_unit), 
-                 cost = COALESCE($4, cost), 
-                 cost_unit = COALESCE($5, cost_unit), 
-                 category = COALESCE($6, category), 
-                 tax_rate = COALESCE($7, tax_rate),
-                 is_disabled = COALESCE($8, is_disabled)
-             WHERE id = $9 
-             RETURNING id, name, sale_price as "salePrice", sale_unit as "saleUnit", cost, cost_unit as "costUnit", category, tax_rate as "taxRate", is_disabled as "isDisabled"`,
-            [name, salePrice, saleUnit, cost, costUnit, category, taxRate, isDisabled, id]
+                 costo = COALESCE($2, costo), 
+                 mol_percentage = COALESCE($3, mol_percentage), 
+                 cost_unit = COALESCE($4, cost_unit), 
+                 category = COALESCE($5, category), 
+                 tax_rate = COALESCE($6, tax_rate),
+                 is_disabled = COALESCE($7, is_disabled)
+             WHERE id = $8 
+             RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", is_disabled as "isDisabled"`,
+            [name, costo, molPercentage, costUnit, category, taxRate, isDisabled, id]
         );
 
         if (result.rows.length === 0) {
