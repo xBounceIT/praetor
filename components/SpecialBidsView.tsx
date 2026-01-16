@@ -291,7 +291,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                     setFormData({
                       ...formData,
                       startDate: start,
-                      endDate: end || start
+                      endDate: end ?? ''
                     });
                     if (errors.dates) {
                       setErrors(prev => {
