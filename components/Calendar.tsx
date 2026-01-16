@@ -142,6 +142,7 @@ const Calendar: React.FC<CalendarProps> = ({
     days.push(
       <button
         key={d}
+        type="button"
         disabled={isForbidden}
         title={holidayName || (isSunday ? "Domenica" : (isSaturday && treatSaturdayAsHoliday ? "Sabato" : ""))}
         onClick={() => {
@@ -162,8 +163,8 @@ const Calendar: React.FC<CalendarProps> = ({
           }`}
       >
         <span className={`text-sm font-bold ${isSelected || isInRange ? '' :
-            isForbidden ? 'text-red-600' :
-              (dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0) ? 'text-emerald-700' : ''
+          isForbidden ? 'text-red-600' :
+            (dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0) ? 'text-emerald-700' : ''
           }`}>{d}</span>
 
         {hasActivity && selectionMode === 'single' && (
@@ -190,6 +191,7 @@ const Calendar: React.FC<CalendarProps> = ({
       <div className="flex items-center justify-between mb-4">
         <div className="relative flex items-center gap-1">
           <button
+            type="button"
             onClick={() => {
               setIsMonthPickerOpen(!isMonthPickerOpen);
               setIsYearPickerOpen(false);
@@ -201,6 +203,7 @@ const Calendar: React.FC<CalendarProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => {
               setIsYearPickerOpen(!isYearPickerOpen);
               setIsMonthPickerOpen(false);
@@ -217,6 +220,7 @@ const Calendar: React.FC<CalendarProps> = ({
               {monthNames.map((mName, idx) => (
                 <button
                   key={mName}
+                  type="button"
                   onClick={() => {
                     setViewDate(new Date(year, idx, 1));
                     setIsMonthPickerOpen(false);
@@ -240,6 +244,7 @@ const Calendar: React.FC<CalendarProps> = ({
               {Array.from({ length: 9 }, (_, i) => currentYear - 4 + i).map((y) => (
                 <button
                   key={y}
+                  type="button"
                   onClick={() => {
                     setViewDate(new Date(y, month, 1));
                     setIsYearPickerOpen(false);
@@ -258,13 +263,13 @@ const Calendar: React.FC<CalendarProps> = ({
           )}
         </div>
         <div className="flex gap-1">
-          <button onClick={prevMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+          <button type="button" onClick={prevMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
             <i className="fa-solid fa-chevron-left text-xs"></i>
           </button>
-          <button onClick={handleTodayClick} className="px-2 text-[10px] font-bold uppercase tracking-wider text-praetor hover:bg-slate-100 rounded-lg transition-colors">
+          <button type="button" onClick={handleTodayClick} className="px-2 text-[10px] font-bold uppercase tracking-wider text-praetor hover:bg-slate-100 rounded-lg transition-colors">
             Oggi
           </button>
-          <button onClick={nextMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+          <button type="button" onClick={nextMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
             <i className="fa-solid fa-chevron-right text-xs"></i>
           </button>
         </div>
