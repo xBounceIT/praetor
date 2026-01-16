@@ -328,6 +328,7 @@ CREATE TABLE IF NOT EXISTS quote_items (
 );
 
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS note TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
 
@@ -339,10 +340,22 @@ CREATE TABLE IF NOT EXISTS special_bids (
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    expiration_date DATE NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migration: Rename expiration_date to end_date and add start_date for existing installations
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='special_bids' AND column_name='expiration_date') THEN
+        ALTER TABLE special_bids RENAME COLUMN expiration_date TO end_date;
+    END IF;
+END $$;
+ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS start_date DATE;
+UPDATE special_bids SET start_date = CURRENT_DATE WHERE start_date IS NULL;
+ALTER TABLE special_bids ALTER COLUMN start_date SET NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_special_bids_unique ON special_bids(client_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_client_id ON special_bids(client_id);

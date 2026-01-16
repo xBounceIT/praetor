@@ -14,7 +14,8 @@ export default async function (fastify, opts) {
                 product_id as "productId",
                 product_name as "productName",
                 unit_price as "unitPrice",
-                expiration_date as "expirationDate",
+                start_date as "startDate",
+                end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
             FROM special_bids
@@ -24,10 +25,10 @@ export default async function (fastify, opts) {
     });
 
     fastify.post('/', async (request, reply) => {
-        const { clientId, clientName, productId, productName, unitPrice, expirationDate } = request.body;
+        const { clientId, clientName, productId, productName, unitPrice, startDate, endDate } = request.body;
 
-        if (!clientId || !clientName || !productId || !productName || !expirationDate) {
-            return reply.code(400).send({ error: 'Client, product, and expiration date are required' });
+        if (!clientId || !clientName || !productId || !productName || !startDate || !endDate) {
+            return reply.code(400).send({ error: 'Client, product, start date, and end date are required' });
         }
 
         const existing = await query(
@@ -40,8 +41,8 @@ export default async function (fastify, opts) {
 
         const id = 'sb-' + Date.now();
         const result = await query(
-            `INSERT INTO special_bids (id, client_id, client_name, product_id, product_name, unit_price, expiration_date)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO special_bids (id, client_id, client_name, product_id, product_name, unit_price, start_date, end_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING 
                 id,
                 client_id as "clientId",
@@ -49,10 +50,11 @@ export default async function (fastify, opts) {
                 product_id as "productId",
                 product_name as "productName",
                 unit_price as "unitPrice",
-                expiration_date as "expirationDate",
+                start_date as "startDate",
+                end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-            [id, clientId, clientName, productId, productName, unitPrice || 0, expirationDate]
+            [id, clientId, clientName, productId, productName, unitPrice || 0, startDate, endDate]
         );
 
         return reply.code(201).send(result.rows[0]);
@@ -60,7 +62,7 @@ export default async function (fastify, opts) {
 
     fastify.put('/:id', async (request, reply) => {
         const { id } = request.params;
-        const { clientId, clientName, productId, productName, unitPrice, expirationDate } = request.body;
+        const { clientId, clientName, productId, productName, unitPrice, startDate, endDate } = request.body;
 
         if (clientId && productId) {
             const existing = await query(
@@ -79,9 +81,10 @@ export default async function (fastify, opts) {
                  product_id = COALESCE($3, product_id),
                  product_name = COALESCE($4, product_name),
                  unit_price = COALESCE($5, unit_price),
-                 expiration_date = COALESCE($6, expiration_date),
+                 start_date = COALESCE($6, start_date),
+                 end_date = COALESCE($7, end_date),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7
+             WHERE id = $8
              RETURNING 
                 id,
                 client_id as "clientId",
@@ -89,10 +92,11 @@ export default async function (fastify, opts) {
                 product_id as "productId",
                 product_name as "productName",
                 unit_price as "unitPrice",
-                expiration_date as "expirationDate",
+                start_date as "startDate",
+                end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-            [clientId, clientName, productId, productName, unitPrice, expirationDate, id]
+            [clientId, clientName, productId, productName, unitPrice, startDate, endDate, id]
         );
 
         if (result.rows.length === 0) {

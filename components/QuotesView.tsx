@@ -274,8 +274,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
     const activeClients = clients.filter(c => !c.isDisabled);
     const activeProducts = products.filter(p => !p.isDisabled);
     const activeSpecialBids = specialBids.filter(b => {
-        if (!b.expirationDate) return true;
-        return new Date(b.expirationDate) >= new Date();
+        const now = new Date();
+        const startDate = b.startDate ? new Date(b.startDate) : null;
+        const endDate = b.endDate ? new Date(b.endDate) : null;
+        if (!startDate || !endDate) return true;
+        return now >= startDate && now <= endDate;
     });
 
     const getBidDisplayValue = (bidId?: string) => {
@@ -359,15 +362,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 )}
 
                                 {formData.items && formData.items.length > 0 && (
-                                    <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                                        <div className="col-span-12 md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Special Bid</div>
-                                        <div className="col-span-12 md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Product / Service</div>
+                                    <div className="grid grid-cols-11 gap-2 px-3 mb-1">
+                                        <div className="col-span-11 md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Special Bid</div>
+                                        <div className="col-span-11 md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Product / Service</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Cost ({currency})</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Mol %</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Sale Price ({currency})</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Margin ({currency})</div>
-                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Note</div>
                                     </div>
                                 )}
 
@@ -380,85 +382,87 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     const molPercentage = selectedProduct ? Number(selectedProduct.molPercentage) : 0;
                                     const margin = Number(item.unitPrice || 0) - cost;
                                     return (
-                                        <div key={item.id} className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl">
-                                            <div className="flex-1 grid grid-cols-12 gap-2">
-                                                <div className="col-span-2">
-                                                    <CustomSelect
-                                                        options={[
-                                                            { id: 'none', name: 'No Special Bid' },
-                                                            ...activeSpecialBids.map(b => ({ id: b.id, name: `${b.clientName} · ${b.productName}` }))
-                                                        ]}
-                                                        value={item.specialBidId || 'none'}
-                                                        onChange={(val) => updateProductRow(index, 'specialBidId', val === 'none' ? '' : val)}
-                                                        placeholder="Select bid..."
-                                                        displayValue={getBidDisplayValue(item.specialBidId)}
-                                                        searchable={true}
-                                                        buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                                    />
+                                        <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
+                                            <div className="flex gap-2 items-start">
+                                                <div className="flex-1 grid grid-cols-11 gap-2">
+                                                    <div className="col-span-2">
+                                                        <CustomSelect
+                                                            options={[
+                                                                { id: 'none', name: 'No Special Bid' },
+                                                                ...activeSpecialBids.map(b => ({ id: b.id, name: `${b.clientName} · ${b.productName}` }))
+                                                            ]}
+                                                            value={item.specialBidId || 'none'}
+                                                            onChange={(val) => updateProductRow(index, 'specialBidId', val === 'none' ? '' : val)}
+                                                            placeholder="Select bid..."
+                                                            displayValue={getBidDisplayValue(item.specialBidId)}
+                                                            searchable={true}
+                                                            buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <CustomSelect
+                                                            options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
+                                                            value={item.productId}
+                                                            onChange={(val) => updateProductRow(index, 'productId', val)}
+                                                            placeholder="Select product..."
+                                                            searchable={true}
+                                                            buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-1">
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            required
+                                                            placeholder="Qty"
+                                                            value={item.quantity}
+                                                            onChange={(e) => updateProductRow(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-2 flex items-center">
+                                                        <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="col-span-1 flex items-center">
+                                                        <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(2)}%</span>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            required
+                                                            placeholder="Sale"
+                                                            value={item.unitPrice}
+                                                            onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                                            className={`w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0 ${selectedBid ? 'text-praetor' : ''}`}
+                                                        />
+                                                        {selectedBid && (
+                                                            <div className="mt-1 text-[9px] font-black text-praetor uppercase tracking-wider">Special Bid</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-1 flex items-center">
+                                                        <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="col-span-2">
-                                                    <CustomSelect
-                                                        options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
-                                                        value={item.productId}
-                                                        onChange={(val) => updateProductRow(index, 'productId', val)}
-                                                        placeholder="Select product..."
-                                                        searchable={true}
-                                                        buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                                    />
-                                                </div>
-                                                <div className="col-span-1">
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        required
-                                                        placeholder="Qty"
-                                                        value={item.quantity}
-                                                        onChange={(e) => updateProductRow(index, 'quantity', parseFloat(e.target.value) || 0)}
-                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                                                    />
-                                                </div>
-                                                <div className="col-span-2 flex items-center">
-                                                    <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)}</span>
-                                                </div>
-                                                <div className="col-span-1 flex items-center">
-                                                    <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(2)}%</span>
-                                                </div>
-                                                <div className="col-span-2">
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        required
-                                                        placeholder="Sale"
-                                                        value={item.unitPrice}
-                                                        onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                        className={`w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0 ${selectedBid ? 'text-praetor' : ''}`}
-                                                    />
-                                                    {selectedBid && (
-                                                        <div className="mt-1 text-[9px] font-black text-praetor uppercase tracking-wider">Special Bid</div>
-                                                    )}
-                                                </div>
-                                                <div className="col-span-1 flex items-center">
-                                                    <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
-                                                </div>
-                                                <div className="col-span-1">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Note"
-                                                        value={item.note || ''}
-                                                        onChange={(e) => updateProductRow(index, 'note', e.target.value)}
-                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none min-w-0"
-                                                    />
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeProductRow(index)}
+                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => removeProductRow(index)}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                            >
-                                                <i className="fa-solid fa-trash-can"></i>
-                                            </button>
+                                            <div className="pl-1">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Note for this item..."
+                                                    value={item.note || ''}
+                                                    onChange={(e) => updateProductRow(index, 'note', e.target.value)}
+                                                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                                                />
+                                            </div>
                                         </div>
                                     );
                                 })}

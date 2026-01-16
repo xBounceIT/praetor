@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
+import Calendar from './Calendar';
 
 interface SpecialBidsViewProps {
   bids: SpecialBid[];
@@ -65,7 +66,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     productId: '',
     productName: '',
     unitPrice: 0,
-    expirationDate: new Date().toISOString().split('T')[0]
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
   });
 
   const openAddModal = () => {
@@ -76,7 +78,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       productId: '',
       productName: '',
       unitPrice: 0,
-      expirationDate: new Date().toISOString().split('T')[0]
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0]
     });
     setErrors({});
     setIsModalOpen(true);
@@ -84,14 +87,16 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
 
   const openEditModal = (bid: SpecialBid) => {
     setEditingBid(bid);
-    const formattedDate = bid.expirationDate ? new Date(bid.expirationDate).toISOString().split('T')[0] : '';
+    const formattedStartDate = bid.startDate ? new Date(bid.startDate).toISOString().split('T')[0] : '';
+    const formattedEndDate = bid.endDate ? new Date(bid.endDate).toISOString().split('T')[0] : '';
     setFormData({
       clientId: bid.clientId,
       clientName: bid.clientName,
       productId: bid.productId,
       productName: bid.productName,
       unitPrice: bid.unitPrice,
-      expirationDate: formattedDate
+      startDate: formattedStartDate,
+      endDate: formattedEndDate
     });
     setErrors({});
     setIsModalOpen(true);
@@ -107,8 +112,14 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     if (!formData.productId) {
       newErrors.productId = 'Product is required';
     }
-    if (!formData.expirationDate) {
-      newErrors.expirationDate = 'Expiration date is required';
+    if (!formData.startDate) {
+      newErrors.dates = 'Start date is required';
+    }
+    if (!formData.endDate) {
+      newErrors.dates = 'End date is required';
+    }
+    if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
+      newErrors.dates = 'Start date must be before end date';
     }
 
     if (formData.clientId && formData.productId) {
@@ -184,7 +195,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedBids = filteredBids.slice(startIndex, startIndex + rowsPerPage);
 
-  const isExpired = (expirationDate: string) => new Date(expirationDate) < new Date();
+  const isExpired = (endDate: string) => new Date(endDate) < new Date();
+  const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -253,20 +265,45 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                       className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Expiration Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.expirationDate}
-                      onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.expirationDate ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
-                    />
-                    {errors.expirationDate && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.expirationDate}</p>
-                    )}
-                  </div>
                 </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                  Validity Period
+                </h4>
+                <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
+                  <span className="font-bold">
+                    {formData.startDate ? new Date(formData.startDate).toLocaleDateString() : 'Select start'}
+                  </span>
+                  <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                  <span className="font-bold">
+                    {formData.endDate ? new Date(formData.endDate).toLocaleDateString() : 'Select end'}
+                  </span>
+                </div>
+                <Calendar
+                  selectionMode="range"
+                  startDate={formData.startDate}
+                  endDate={formData.endDate || undefined}
+                  onRangeSelect={(start, end) => {
+                    setFormData({
+                      ...formData,
+                      startDate: start,
+                      endDate: end || start
+                    });
+                    if (errors.dates) {
+                      setErrors(prev => {
+                        const next = { ...prev };
+                        delete next.dates;
+                        return next;
+                      });
+                    }
+                  }}
+                />
+                {errors.dates && (
+                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.dates}</p>
+                )}
               </div>
 
               <div className="flex justify-between items-center pt-6 border-t border-slate-100">
@@ -369,18 +406,19 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product</th>
                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Price</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Expiration</th>
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Validity Period</th>
                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedBids.map(bid => {
-                const expired = isExpired(bid.expirationDate);
+                const expired = isExpired(bid.endDate);
+                const notStarted = isNotStarted(bid.startDate);
                 return (
                   <tr
                     key={bid.id}
                     onClick={() => openEditModal(bid)}
-                    className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : ''}`}
+                    className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : notStarted ? 'bg-amber-50/30' : ''}`}
                   >
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-3">
@@ -396,9 +434,10 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                     <td className="px-8 py-5 text-sm font-bold text-slate-700">{bid.productName}</td>
                     <td className="px-8 py-5 text-sm font-bold text-slate-700">{Number(bid.unitPrice).toFixed(2)} {currency}</td>
                     <td className="px-8 py-5">
-                      <div className={`text-sm ${expired ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
-                        {new Date(bid.expirationDate).toLocaleDateString()}
+                      <div className={`text-sm ${expired ? 'text-red-600 font-bold' : notStarted ? 'text-amber-600 font-bold' : 'text-slate-600'}`}>
+                        {new Date(bid.startDate).toLocaleDateString()} - {new Date(bid.endDate).toLocaleDateString()}
                         {expired && <span className="ml-2 text-[10px] font-black">(EXPIRED)</span>}
+                        {notStarted && !expired && <span className="ml-2 text-[10px] font-black">(NOT STARTED)</span>}
                       </div>
                     </td>
                     <td className="px-8 py-5">

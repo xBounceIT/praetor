@@ -113,7 +113,8 @@ export interface SpecialBid {
   productId: string;
   productName: string;
   unitPrice: number;
-  expirationDate: string;
+  startDate: string;
+  endDate: string;
   createdAt: number;
   updatedAt: number;
 }
