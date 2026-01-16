@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
 import { getTheme, applyTheme } from './utils/theme';
-import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote, Sale, WorkUnit, Invoice, Payment, Expense, Supplier, SupplierQuote } from './types';
+import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote, Sale, WorkUnit, Invoice, Payment, Expense, Supplier, SupplierQuote, SpecialBid } from './types';
 import { COLORS } from './constants';
 import Layout from './components/Layout';
 import TimeEntryForm from './components/TimeEntryForm';
@@ -35,6 +35,7 @@ import FinancialReportsView from './components/FinancialReportsView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
+import SpecialBidsView from './components/SpecialBidsView';
 
 const TrackerView: React.FC<{
   entries: TimeEntry[];
@@ -391,6 +392,7 @@ const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [specialBids, setSpecialBids] = useState<SpecialBid[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -429,7 +431,7 @@ const App: React.FC = () => {
   const VALID_VIEWS: View[] = useMemo(() => [
     'timesheets/tracker', 'timesheets/reports', 'timesheets/recurring', 'timesheets/tasks', 'timesheets/projects',
     'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-    'crm/clients', 'crm/products', 'crm/quotes', 'crm/sales',
+    'crm/clients', 'crm/products', 'crm/special-bids', 'crm/quotes', 'crm/sales',
     'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
     'projects/manage', 'projects/tasks',
     'suppliers/manage', 'suppliers/quotes',
@@ -444,7 +446,7 @@ const App: React.FC = () => {
     const validViews: View[] = [
       'timesheets/tracker', 'timesheets/reports', 'timesheets/recurring', 'timesheets/tasks', 'timesheets/projects',
       'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-      'crm/clients', 'crm/products', 'crm/quotes', 'crm/sales',
+      'crm/clients', 'crm/products', 'crm/special-bids', 'crm/quotes', 'crm/sales',
       'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
       'projects/manage', 'projects/tasks',
       'suppliers/manage', 'suppliers/quotes',
@@ -473,6 +475,7 @@ const App: React.FC = () => {
       // CRM module - manager
       'crm/clients': ['manager'],
       'crm/products': ['manager'],
+      'crm/special-bids': ['manager'],
       'crm/quotes': ['manager'],
       'crm/sales': ['manager'],
       // Finances module - manager
@@ -554,7 +557,7 @@ const App: React.FC = () => {
 
     const loadData = async () => {
       try {
-        const [usersData, clientsData, projectsData, tasksData, settingsData, entriesData, productsData, quotesData, salesData, invoicesData, paymentsData, expensesData, suppliersData, supplierQuotesData] = await Promise.all([
+        const [usersData, clientsData, projectsData, tasksData, settingsData, entriesData, productsData, specialBidsData, quotesData, salesData, invoicesData, paymentsData, expensesData, suppliersData, supplierQuotesData] = await Promise.all([
           api.users.list(),
           api.clients.list(),
           api.projects.list(),
@@ -562,6 +565,7 @@ const App: React.FC = () => {
           api.settings.get(),
           api.entries.list(),
           api.products.list(),
+          api.specialBids.list(),
           api.quotes.list(),
           api.sales.list(),
           api.invoices.list(),
@@ -578,6 +582,7 @@ const App: React.FC = () => {
         setSettings(settingsData);
         setEntries(entriesData);
         setProducts(productsData);
+        setSpecialBids(specialBidsData);
         setQuotes(quotesData);
         setSales(salesData);
         setInvoices(invoicesData);
@@ -931,6 +936,36 @@ const App: React.FC = () => {
       setProducts([...products, product]);
     } catch (err) {
       console.error('Failed to add product:', err);
+    }
+  };
+
+  const addSpecialBid = async (bidData: Partial<SpecialBid>) => {
+    try {
+      const bid = await api.specialBids.create(bidData);
+      setSpecialBids([...specialBids, bid]);
+    } catch (err) {
+      console.error('Failed to add special bid:', err);
+      alert((err as Error).message || 'Failed to add special bid');
+    }
+  };
+
+  const handleUpdateSpecialBid = async (id: string, updates: Partial<SpecialBid>) => {
+    try {
+      const updated = await api.specialBids.update(id, updates);
+      setSpecialBids(specialBids.map(b => b.id === id ? updated : b));
+    } catch (err) {
+      console.error('Failed to update special bid:', err);
+      alert((err as Error).message || 'Failed to update special bid');
+    }
+  };
+
+  const handleDeleteSpecialBid = async (id: string) => {
+    try {
+      await api.specialBids.delete(id);
+      setSpecialBids(specialBids.filter(b => b.id !== id));
+    } catch (err) {
+      console.error('Failed to delete special bid:', err);
+      alert((err as Error).message || 'Failed to delete special bid');
     }
   };
 
@@ -1299,6 +1334,7 @@ const App: React.FC = () => {
     setProjects([]);
     setProjectTasks([]);
     setProducts([]);
+    setSpecialBids([]);
     setQuotes([]);
     setSuppliers([]);
     setSupplierQuotes([]);
@@ -1436,11 +1472,24 @@ const App: React.FC = () => {
               />
             )}
 
+            {activeView === 'crm/special-bids' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <SpecialBidsView
+                bids={specialBids}
+                clients={clients}
+                products={products}
+                onAddBid={addSpecialBid}
+                onUpdateBid={handleUpdateSpecialBid}
+                onDeleteBid={handleDeleteSpecialBid}
+                currency={generalSettings.currency}
+              />
+            )}
+
             {activeView === 'crm/quotes' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
               <QuotesView
                 quotes={quotes}
                 clients={clients}
                 products={products}
+                specialBids={specialBids}
                 onAddQuote={addQuote}
                 onUpdateQuote={handleUpdateQuote}
                 onDeleteQuote={handleDeleteQuote}

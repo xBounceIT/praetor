@@ -275,6 +275,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 onClick={() => { onViewChange('crm/products'); setIsMobileMenuOpen(false); }}
               />
               <NavItem
+                icon="fa-tags"
+                label="Special Bids"
+                active={activeView === 'crm/special-bids'}
+                isCollapsed={isCollapsed}
+                onClick={() => { onViewChange('crm/special-bids'); setIsMobileMenuOpen(false); }}
+              />
+              <NavItem
                 icon="fa-file-invoice"
                 label="Quotes"
                 active={activeView === 'crm/quotes'}
@@ -402,6 +409,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 activeView === 'configuration/general' ? 'General Administration' :
                   activeView === 'projects/manage' ? 'Projects' :
                     activeView === 'projects/tasks' ? 'Tasks' :
+                      activeView === 'crm/special-bids' ? 'Special Bids' :
                       activeView === 'suppliers/manage' ? 'Suppliers' :
                         activeView === 'suppliers/quotes' ? 'Supplier Quotes' :
                       activeView.split('/').pop()?.replace('-', ' ') || activeView}

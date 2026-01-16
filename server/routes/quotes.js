@@ -32,9 +32,11 @@ export default async function (fastify, opts) {
                 quote_id as "quoteId",
                 product_id as "productId",
                 product_name as "productName",
+                special_bid_id as "specialBidId",
                 quantity,
                 unit_price as "unitPrice",
-                discount
+                discount,
+                note
             FROM quote_items
             ORDER BY created_at ASC`
         );
@@ -90,18 +92,19 @@ export default async function (fastify, opts) {
         for (const item of items) {
             const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
             const itemResult = await query(
-                `INSERT INTO quote_items (id, quote_id, product_id, product_name, quantity, unit_price, discount, note) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
                  RETURNING 
                     id,
                     quote_id as "quoteId",
                     product_id as "productId",
                     product_name as "productName",
+                    special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
                     discount,
                     note`,
-                [itemId, quoteId, item.productId, item.productName, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
+                [itemId, quoteId, item.productId, item.productName, item.specialBidId || null, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
             );
             createdItems.push(itemResult.rows[0]);
         }
@@ -157,18 +160,19 @@ export default async function (fastify, opts) {
             for (const item of items) {
                 const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
                 const itemResult = await query(
-                    `INSERT INTO quote_items (id, quote_id, product_id, product_name, quantity, unit_price, discount, note) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                    `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
                      RETURNING 
                         id,
                         quote_id as "quoteId",
                         product_id as "productId",
                         product_name as "productName",
+                        special_bid_id as "specialBidId",
                         quantity,
                         unit_price as "unitPrice",
                         discount,
                         note`,
-                    [itemId, id, item.productId, item.productName, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
+                    [itemId, id, item.productId, item.productName, item.specialBidId || null, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
                 );
                 updatedItems.push(itemResult.rows[0]);
             }
@@ -180,6 +184,7 @@ export default async function (fastify, opts) {
                     quote_id as "quoteId",
                     product_id as "productId",
                     product_name as "productName",
+                    special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
                     discount,

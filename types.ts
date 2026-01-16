@@ -106,11 +106,24 @@ export interface Product {
   isDisabled?: boolean;
 }
 
+export interface SpecialBid {
+  id: string;
+  clientId: string;
+  clientName: string;
+  productId: string;
+  productName: string;
+  unitPrice: number;
+  expirationDate: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface QuoteItem {
   id: string;
   quoteId: string;
   productId: string;
   productName: string;
+  specialBidId?: string;
   quantity: number;
   unitPrice: number;
   discount?: number; // item-level discount percentage
@@ -168,6 +181,7 @@ export type View =
   // CRM module
   | 'crm/clients'
   | 'crm/products'
+  | 'crm/special-bids'
   | 'crm/quotes'
   | 'crm/sales'
   // Finances module

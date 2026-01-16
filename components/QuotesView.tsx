@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Quote, QuoteItem, Client, Product } from '../types';
+import { Quote, QuoteItem, Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
 
 const PAYMENT_TERMS_OPTIONS = [
@@ -19,6 +19,7 @@ interface QuotesViewProps {
     quotes: Quote[];
     clients: Client[];
     products: Product[];
+    specialBids: SpecialBid[];
     onAddQuote: (quoteData: Partial<Quote>) => void;
     onUpdateQuote: (id: string, updates: Partial<Quote>) => void;
     onDeleteQuote: (id: string) => void;
@@ -31,7 +32,7 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
     return costo / (1 - molPercentage / 100);
 };
 
-const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAddQuote, onUpdateQuote, onDeleteQuote, onCreateSale, currency }) => {
+const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, specialBids, onAddQuote, onUpdateQuote, onDeleteQuote, onCreateSale, currency }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -210,12 +211,26 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
         const newItems = [...(formData.items || [])];
         newItems[index] = { ...newItems[index], [field]: value };
 
-        // Auto-fill price when product is selected
         if (field === 'productId') {
             const product = products.find(p => p.id === value);
             if (product) {
                 newItems[index].productName = product.name;
                 newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), Number(product.molPercentage));
+                newItems[index].specialBidId = '';
+            }
+        }
+
+        if (field === 'specialBidId') {
+            if (!value) {
+                newItems[index].specialBidId = '';
+                setFormData({ ...formData, items: newItems });
+                return;
+            }
+            const bid = specialBids.find(b => b.id === value);
+            if (bid) {
+                newItems[index].productId = bid.productId;
+                newItems[index].productName = bid.productName;
+                newItems[index].unitPrice = Number(bid.unitPrice);
             }
         }
 
@@ -258,6 +273,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
     const activeClients = clients.filter(c => !c.isDisabled);
     const activeProducts = products.filter(p => !p.isDisabled);
+    const activeSpecialBids = specialBids.filter(b => {
+        if (!b.expirationDate) return true;
+        return new Date(b.expirationDate) >= new Date();
+    });
+
+    const getBidDisplayValue = (bidId?: string) => {
+        if (!bidId) return 'No Special Bid';
+        const bid = activeSpecialBids.find(b => b.id === bidId) || specialBids.find(b => b.id === bidId);
+        return bid ? `${bid.clientName} · ${bid.productName}` : 'No Special Bid';
+    };
 
     // Pagination Logic
     // Pagination Logic
@@ -335,12 +360,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
                                 {formData.items && formData.items.length > 0 && (
                                     <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                                        <div className="col-span-12 md:col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
+                                        <div className="col-span-12 md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Special Bid</div>
+                                        <div className="col-span-12 md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Product / Service</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Cost ({currency})</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Mol %</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Sale Price ({currency})</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Margin ({currency})</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Margin ({currency})</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Note</div>
                                     </div>
                                 )}
@@ -349,14 +375,28 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                     <div className="space-y-3">
                                 {formData.items.map((item, index) => {
                                     const selectedProduct = activeProducts.find(p => p.id === item.productId);
+                                    const selectedBid = item.specialBidId ? specialBids.find(b => b.id === item.specialBidId) : undefined;
                                     const cost = selectedProduct ? Number(selectedProduct.costo) : 0;
                                     const molPercentage = selectedProduct ? Number(selectedProduct.molPercentage) : 0;
                                     const margin = Number(item.unitPrice || 0) - cost;
-
                                     return (
                                         <div key={item.id} className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl">
                                             <div className="flex-1 grid grid-cols-12 gap-2">
-                                                <div className="col-span-3">
+                                                <div className="col-span-2">
+                                                    <CustomSelect
+                                                        options={[
+                                                            { id: 'none', name: 'No Special Bid' },
+                                                            ...activeSpecialBids.map(b => ({ id: b.id, name: `${b.clientName} · ${b.productName}` }))
+                                                        ]}
+                                                        value={item.specialBidId || 'none'}
+                                                        onChange={(val) => updateProductRow(index, 'specialBidId', val === 'none' ? '' : val)}
+                                                        placeholder="Select bid..."
+                                                        displayValue={getBidDisplayValue(item.specialBidId)}
+                                                        searchable={true}
+                                                        buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                </div>
+                                                <div className="col-span-2">
                                                     <CustomSelect
                                                         options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
                                                         value={item.productId}
@@ -393,10 +433,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                                         placeholder="Sale"
                                                         value={item.unitPrice}
                                                         onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0"
+                                                        className={`w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold min-w-0 ${selectedBid ? 'text-praetor' : ''}`}
                                                     />
+                                                    {selectedBid && (
+                                                        <div className="mt-1 text-[9px] font-black text-praetor uppercase tracking-wider">Special Bid</div>
+                                                    )}
                                                 </div>
-                                                <div className="col-span-2 flex items-center">
+                                                <div className="col-span-1 flex items-center">
                                                     <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
                                                 </div>
                                                 <div className="col-span-1">

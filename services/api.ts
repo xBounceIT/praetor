@@ -54,7 +54,7 @@ const fetchApi = async <T>(
 };
 
 // Types for API responses
-import type { User, Client, Project, ProjectTask, TimeEntry, LdapConfig, GeneralSettings, Product, Quote, QuoteItem, WorkUnit, Sale, SaleItem, Invoice, InvoiceItem, Payment, Expense, Supplier, SupplierQuote, SupplierQuoteItem } from '../types';
+import type { User, Client, Project, ProjectTask, TimeEntry, LdapConfig, GeneralSettings, Product, Quote, QuoteItem, WorkUnit, Sale, SaleItem, Invoice, InvoiceItem, Payment, Expense, Supplier, SupplierQuote, SupplierQuoteItem, SpecialBid } from '../types';
 
 // Normalization Helpers
 const normalizeUser = (u: User): User => ({
@@ -152,6 +152,11 @@ const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
     ...q,
     discount: Number(q.discount || 0),
     items: (q.items || []).map(normalizeSupplierQuoteItem)
+});
+
+const normalizeSpecialBid = (b: SpecialBid): SpecialBid => ({
+    ...b,
+    unitPrice: Number(b.unitPrice || 0)
 });
 
 export interface LoginResponse {
@@ -529,6 +534,26 @@ export const supplierQuotesApi = {
         fetchApi(`/supplier-quotes/${id}`, { method: 'DELETE' }),
 };
 
+// Special Bids API
+export const specialBidsApi = {
+    list: (): Promise<SpecialBid[]> => fetchApi<SpecialBid[]>('/special-bids').then(bids => bids.map(normalizeSpecialBid)),
+
+    create: (bidData: Partial<SpecialBid>): Promise<SpecialBid> =>
+        fetchApi<SpecialBid>('/special-bids', {
+            method: 'POST',
+            body: JSON.stringify(bidData),
+        }).then(normalizeSpecialBid),
+
+    update: (id: string, updates: Partial<SpecialBid>): Promise<SpecialBid> =>
+        fetchApi<SpecialBid>(`/special-bids/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        }).then(normalizeSpecialBid),
+
+    delete: (id: string): Promise<void> =>
+        fetchApi(`/special-bids/${id}`, { method: 'DELETE' }),
+};
+
 export default {
     auth: authApi,
     users: usersApi,
@@ -544,6 +569,7 @@ export default {
     expenses: expensesApi,
     suppliers: suppliersApi,
     supplierQuotes: supplierQuotesApi,
+    specialBids: specialBidsApi,
     workUnits: workUnitsApi,
     settings: settingsApi,
     ldap: ldapApi,

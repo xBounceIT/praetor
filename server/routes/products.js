@@ -45,7 +45,7 @@ export default async function (fastify, opts) {
                  tax_rate = COALESCE($6, tax_rate),
                  is_disabled = COALESCE($7, is_disabled)
              WHERE id = $8 
-             RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", is_disabled as "isDisabled"`,
+             RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled"`,
             [name, costo, molPercentage, costUnit, category, taxRate, isDisabled, id]
         );
 

@@ -319,6 +319,7 @@ CREATE TABLE IF NOT EXISTS quote_items (
     quote_id VARCHAR(50) NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
+    special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
@@ -326,7 +327,26 @@ CREATE TABLE IF NOT EXISTS quote_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
+
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
+
+-- Special bids table
+CREATE TABLE IF NOT EXISTS special_bids (
+    id VARCHAR(50) PRIMARY KEY,
+    client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    client_name VARCHAR(255) NOT NULL,
+    product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    product_name VARCHAR(255) NOT NULL,
+    unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    expiration_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_special_bids_unique ON special_bids(client_id, product_id);
+CREATE INDEX IF NOT EXISTS idx_special_bids_client_id ON special_bids(client_id);
+CREATE INDEX IF NOT EXISTS idx_special_bids_product_id ON special_bids(product_id);
 
 -- Migration: Ensure AI capabilities are off by default for existing installations that relied on default
 ALTER TABLE general_settings ALTER COLUMN enable_ai_insights SET DEFAULT FALSE;
