@@ -6,13 +6,14 @@ import { workUnitsApi } from '../services/api';
 interface WorkUnitsViewProps {
     workUnits: WorkUnit[];
     users: User[];
+    userRole: string; // Added userRole
     onAddWorkUnit: (data: any) => Promise<void>;
     onUpdateWorkUnit: (id: string, updates: any) => Promise<void>;
     onDeleteWorkUnit: (id: string) => Promise<void>;
     refreshWorkUnits: () => Promise<void>;
 }
 
-const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({ workUnits, users, onAddWorkUnit, onUpdateWorkUnit, onDeleteWorkUnit, refreshWorkUnits }) => {
+const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({ workUnits, users, userRole, onAddWorkUnit, onUpdateWorkUnit, onDeleteWorkUnit, refreshWorkUnits }) => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
@@ -134,12 +135,14 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({ workUnits, users, onAddWo
                     <h2 className="text-2xl font-black text-slate-800 tracking-tight">Work Units</h2>
                     <p className="text-slate-500 font-medium">Manage implementation teams and their managers</p>
                 </div>
-                <button
-                    onClick={openCreateModal}
-                    className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                    <i className="fa-solid fa-plus"></i> New Work Unit
-                </button>
+                {userRole === 'admin' && (
+                    <button
+                        onClick={openCreateModal}
+                        className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                        <i className="fa-solid fa-plus"></i> New Work Unit
+                    </button>
+                )}
             </div>
 
             {/* Grid */}
@@ -150,22 +153,24 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({ workUnits, users, onAddWo
                             <div className="w-12 h-12 rounded-xl bg-slate-100 text-praetor flex items-center justify-center text-xl">
                                 <i className="fa-solid fa-sitemap"></i>
                             </div>
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={() => openEditModal(unit)}
-                                    className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
-                                    title="Edit"
-                                >
-                                    <i className="fa-solid fa-pen"></i>
-                                </button>
-                                <button
-                                    onClick={() => confirmDelete(unit)}
-                                    className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                                    title="Delete"
-                                >
-                                    <i className="fa-solid fa-trash-can"></i>
-                                </button>
-                            </div>
+                            {userRole === 'admin' && (
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => openEditModal(unit)}
+                                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
+                                        title="Edit"
+                                    >
+                                        <i className="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button
+                                        onClick={() => confirmDelete(unit)}
+                                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                                        title="Delete"
+                                    >
+                                        <i className="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <h3 className="text-lg font-bold text-slate-800 mb-1">{unit.name}</h3>
@@ -202,16 +207,37 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({ workUnits, users, onAddWo
                                         <p className="text-sm font-bold text-slate-700">{unit.userCount || 0} users</p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => openAssignments(unit)}
-                                    className="text-xs font-bold text-praetor hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
-                                >
-                                    Manage Members
-                                </button>
+                                {userRole === 'admin' && (
+                                    <button
+                                        onClick={() => openAssignments(unit)}
+                                        className="text-xs font-bold text-praetor hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                        Manage Members
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
                 ))}
+
+                {workUnits.length === 0 && (
+                    <div className="col-span-full py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center px-6">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 text-2xl mb-4">
+                            <i className="fa-solid fa-sitemap"></i>
+                        </div>
+                        {userRole === 'admin' ? (
+                            <>
+                                <h3 className="text-lg font-bold text-slate-800">No work units created yet</h3>
+                                <p className="text-slate-500 max-w-sm mt-1">Use the "New Work Unit" button above to start organizing your teams.</p>
+                            </>
+                        ) : (
+                            <>
+                                <h3 className="text-lg font-bold text-slate-800">No work units assigned</h3>
+                                <p className="text-slate-500 max-w-md mt-1">You are not assigned to any work units. Please contact an administrator for assistance.</p>
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Create Modal */}

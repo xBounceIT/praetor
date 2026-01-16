@@ -10,8 +10,8 @@ interface SessionTimeoutHandlerProps {
 
 const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     onLogout,
-    warnAfterMs = 20 * 60 * 1000,
-    logoutAfterMs = 30 * 60 * 1000
+    warnAfterMs = 10 * 1000, // 10 seconds for testing
+    logoutAfterMs = 20 * 1000 // 20 seconds for testing
 }) => {
     const [showWarning, setShowWarning] = useState(false);
     const [lastActivity, setLastActivity] = useState(Date.now());

@@ -1500,10 +1500,11 @@ const App: React.FC = () => {
               />
             )}
 
-            {currentUser.role === 'admin' && activeView === 'hr/work-units' && (
+            {(currentUser.role === 'admin' || currentUser.role === 'manager') && activeView === 'hr/work-units' && (
               <WorkUnitsView
                 workUnits={workUnits}
                 users={users}
+                userRole={currentUser.role}
                 onAddWorkUnit={addWorkUnit}
                 onUpdateWorkUnit={updateWorkUnit}
                 onDeleteWorkUnit={deleteWorkUnit}
