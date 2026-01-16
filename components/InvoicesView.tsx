@@ -577,7 +577,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                 buttonClassName="text-xs py-1"
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredInvoices.length)} / {filteredInvoices.length}
+                                Showing {paginatedInvoices.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredInvoices.length)} of {filteredInvoices.length}
                             </span>
                         </div>
                         <div className="flex gap-2">

@@ -332,7 +332,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                 buttonClassName="text-xs py-1"
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredPayments.length)} / {filteredPayments.length}
+                                Showing {paginatedPayments.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredPayments.length)} of {filteredPayments.length}
                             </span>
                         </div>
                         <div className="flex gap-2">
