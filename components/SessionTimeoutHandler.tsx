@@ -49,7 +49,10 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
             window.addEventListener(event, handleActivity);
         });
 
-        resetTimers();
+        // Only reset timers on initial mount
+        if (!showWarning) {
+            resetTimers();
+        }
 
         return () => {
             events.forEach(event => {
