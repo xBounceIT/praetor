@@ -458,27 +458,20 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                                 />
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
-                                                                <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)}</span>
+                                                                <div className="relative">
+                                                                    <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)}</span>
+                                                                    {selectedBid && (
+                                                                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-praetor uppercase tracking-wider bg-slate-50/50 px-1 whitespace-nowrap">Bid</div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
                                                                 <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(1)}%</span>
                                                             </div>
-                                                            <div className="col-span-2">
-                                                                <div className="relative">
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        required
-                                                                        placeholder="Sale"
-                                                                        value={item.unitPrice}
-                                                                        onChange={(e) => updateProductRow(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                                        className={`w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold text-center ${selectedBid ? 'text-praetor border-praetor/30' : ''}`}
-                                                                    />
-                                                                    {selectedBid && (
-                                                                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-black text-praetor uppercase tracking-wider bg-slate-50 px-1">Bid</div>
-                                                                    )}
-                                                                </div>
+                                                            <div className="col-span-2 flex items-center justify-center">
+                                                                <span className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}>
+                                                                    {Number(item.unitPrice).toFixed(2)}
+                                                                </span>
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
                                                                 <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
