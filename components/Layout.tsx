@@ -27,6 +27,7 @@ const moduleDefaultRoutes: Record<string, View> = {
   'hr': 'hr/workforce',
   'projects': 'projects/manage',
   'finances': 'finances/invoices',
+  'suppliers': 'suppliers/manage',
   'configuration': 'configuration/authentication',
 };
 
@@ -37,6 +38,7 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('hr/')) return 'hr';
   if (route.startsWith('projects/')) return 'projects';
   if (route.startsWith('finances/')) return 'finances';
+  if (route.startsWith('suppliers/')) return 'suppliers';
   if (route.startsWith('configuration/')) return 'configuration';
   return 'timesheets'; // default
 };
@@ -70,12 +72,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
     if (m.id === 'hr') return currentUser.role === 'admin' || currentUser.role === 'manager';
 
     // Manager only access (Admin excluded as requested)
-    if (m.id === 'crm' || m.id === 'projects' || m.id === 'finances' || m.id === 'timesheets') {
+    if (m.id === 'crm' || m.id === 'projects' || m.id === 'finances' || m.id === 'timesheets' || m.id === 'suppliers') {
       return currentUser.role === 'manager' || currentUser.role === 'user';
     }
 
     // employees and suppliers are placeholders for future
-    if (m.id === 'employees' || m.id === 'suppliers') return false;
+    if (m.id === 'employees') return false;
 
     return true;
   });
@@ -342,6 +344,26 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             </>
           )}
 
+          {/* Suppliers Module */}
+          {activeModule.id === 'suppliers' && (
+            <>
+              <NavItem
+                icon="fa-industry"
+                label="Suppliers"
+                active={activeView === 'suppliers/manage'}
+                isCollapsed={isCollapsed}
+                onClick={() => { onViewChange('suppliers/manage'); setIsMobileMenuOpen(false); }}
+              />
+              <NavItem
+                icon="fa-file-invoice"
+                label="Quotes"
+                active={activeView === 'suppliers/quotes'}
+                isCollapsed={isCollapsed}
+                onClick={() => { onViewChange('suppliers/quotes'); setIsMobileMenuOpen(false); }}
+              />
+            </>
+          )}
+
           {/* Configuration Module Nav Items */}
           {activeModule.id === 'configuration' && (
             <>
@@ -380,6 +402,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 activeView === 'configuration/general' ? 'General Administration' :
                   activeView === 'projects/manage' ? 'Projects' :
                     activeView === 'projects/tasks' ? 'Tasks' :
+                      activeView === 'suppliers/manage' ? 'Suppliers' :
+                        activeView === 'suppliers/quotes' ? 'Supplier Quotes' :
                       activeView.split('/').pop()?.replace('-', ' ') || activeView}
           </h2>
           <div className="flex items-center gap-6">

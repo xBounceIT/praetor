@@ -367,6 +367,70 @@ CREATE TABLE IF NOT EXISTS sale_items (
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 
+-- Suppliers table
+CREATE TABLE IF NOT EXISTS suppliers (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    is_disabled BOOLEAN DEFAULT FALSE,
+    supplier_code VARCHAR(50),
+    contact_name VARCHAR(255),
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    address TEXT,
+    vat_number VARCHAR(50),
+    tax_code VARCHAR(50),
+    payment_terms TEXT,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS supplier_code VARCHAR(50);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS payment_terms TEXT;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS notes TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);
+
+-- Supplier Quotes table
+CREATE TABLE IF NOT EXISTS supplier_quotes (
+    id VARCHAR(50) PRIMARY KEY,
+    supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+    supplier_name VARCHAR(255) NOT NULL,
+    purchase_order_number VARCHAR(100) NOT NULL,
+    payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
+    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'approved', 'rejected')),
+    expiration_date DATE NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_supplier_id ON supplier_quotes(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_status ON supplier_quotes(status);
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_po ON supplier_quotes(purchase_order_number);
+
+-- Supplier Quote Items table
+CREATE TABLE IF NOT EXISTS supplier_quote_items (
+    id VARCHAR(50) PRIMARY KEY,
+    quote_id VARCHAR(50) NOT NULL REFERENCES supplier_quotes(id) ON DELETE CASCADE,
+    product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    product_name VARCHAR(255) NOT NULL,
+    quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
+    unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    discount DECIMAL(5, 2) DEFAULT 0,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_quote_items_quote_id ON supplier_quote_items(quote_id);
+
 -- Migration: Rename 'tempoRole' to 'praetorRole' in existing LDAP role mappings
 DO $$
 BEGIN

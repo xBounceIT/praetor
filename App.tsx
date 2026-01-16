@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
 import { getTheme, applyTheme } from './utils/theme';
-import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote, Sale, WorkUnit, Invoice, Payment, Expense } from './types';
+import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote, Sale, WorkUnit, Invoice, Payment, Expense, Supplier, SupplierQuote } from './types';
 import { COLORS } from './constants';
 import Layout from './components/Layout';
 import TimeEntryForm from './components/TimeEntryForm';
@@ -33,6 +33,8 @@ import PaymentsView from './components/PaymentsView';
 import ExpensesView from './components/ExpensesView';
 import FinancialReportsView from './components/FinancialReportsView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
+import SuppliersView from './components/SuppliersView';
+import SupplierQuotesView from './components/SupplierQuotesView';
 
 const TrackerView: React.FC<{
   entries: TimeEntry[];
@@ -394,6 +396,8 @@ const App: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuote[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [settings, setSettings] = useState({
     fullName: 'User',
@@ -428,6 +432,7 @@ const App: React.FC = () => {
     'crm/clients', 'crm/products', 'crm/quotes', 'crm/sales',
     'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
     'projects/manage', 'projects/tasks',
+    'suppliers/manage', 'suppliers/quotes',
     'settings'
   ], []);
 
@@ -442,6 +447,7 @@ const App: React.FC = () => {
       'crm/clients', 'crm/products', 'crm/quotes', 'crm/sales',
       'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
       'projects/manage', 'projects/tasks',
+      'suppliers/manage', 'suppliers/quotes',
       'settings'
     ];
     return validViews.includes(hash) ? hash : (rawHash === '' ? 'timesheets/tracker' : '404');
@@ -477,6 +483,9 @@ const App: React.FC = () => {
       // Projects module - manager
       'projects/manage': ['manager'],
       'projects/tasks': ['manager'],
+      // Suppliers module - manager
+      'suppliers/manage': ['manager'],
+      'suppliers/quotes': ['manager'],
       // Standalone
       'settings': ['admin', 'manager', 'user']
     };
@@ -545,7 +554,7 @@ const App: React.FC = () => {
 
     const loadData = async () => {
       try {
-        const [usersData, clientsData, projectsData, tasksData, settingsData, entriesData, productsData, quotesData, salesData, invoicesData, paymentsData, expensesData] = await Promise.all([
+        const [usersData, clientsData, projectsData, tasksData, settingsData, entriesData, productsData, quotesData, salesData, invoicesData, paymentsData, expensesData, suppliersData, supplierQuotesData] = await Promise.all([
           api.users.list(),
           api.clients.list(),
           api.projects.list(),
@@ -554,11 +563,12 @@ const App: React.FC = () => {
           api.entries.list(),
           api.products.list(),
           api.quotes.list(),
-          api.quotes.list(),
           api.sales.list(),
           api.invoices.list(),
           api.payments.list(),
-          api.expenses.list()
+          api.expenses.list(),
+          api.suppliers.list(),
+          api.supplierQuotes.list()
         ]);
 
         setUsers(usersData);
@@ -573,6 +583,8 @@ const App: React.FC = () => {
         setInvoices(invoicesData);
         setPayments(paymentsData);
         setExpenses(expensesData);
+        setSuppliers(suppliersData);
+        setSupplierQuotes(supplierQuotesData);
 
         // Load global settings for all users
         const genSettings = await api.generalSettings.get();
@@ -1122,6 +1134,60 @@ const App: React.FC = () => {
     }
   };
 
+  const addSupplier = async (supplierData: Partial<Supplier>) => {
+    try {
+      const supplier = await api.suppliers.create(supplierData);
+      setSuppliers([...suppliers, supplier]);
+    } catch (err) {
+      console.error('Failed to add supplier:', err);
+    }
+  };
+
+  const handleUpdateSupplier = async (id: string, updates: Partial<Supplier>) => {
+    try {
+      const updated = await api.suppliers.update(id, updates);
+      setSuppliers(suppliers.map(s => s.id === id ? updated : s));
+    } catch (err) {
+      console.error('Failed to update supplier:', err);
+    }
+  };
+
+  const handleDeleteSupplier = async (id: string) => {
+    try {
+      await api.suppliers.delete(id);
+      setSuppliers(suppliers.filter(s => s.id !== id));
+    } catch (err) {
+      console.error('Failed to delete supplier:', err);
+    }
+  };
+
+  const addSupplierQuote = async (quoteData: Partial<SupplierQuote>) => {
+    try {
+      const quote = await api.supplierQuotes.create(quoteData);
+      setSupplierQuotes([...supplierQuotes, quote]);
+    } catch (err) {
+      console.error('Failed to add supplier quote:', err);
+    }
+  };
+
+  const handleUpdateSupplierQuote = async (id: string, updates: Partial<SupplierQuote>) => {
+    try {
+      const updated = await api.supplierQuotes.update(id, updates);
+      setSupplierQuotes(supplierQuotes.map(q => q.id === id ? updated : q));
+    } catch (err) {
+      console.error('Failed to update supplier quote:', err);
+    }
+  };
+
+  const handleDeleteSupplierQuote = async (id: string) => {
+    try {
+      await api.supplierQuotes.delete(id);
+      setSupplierQuotes(supplierQuotes.filter(q => q.id !== id));
+    } catch (err) {
+      console.error('Failed to delete supplier quote:', err);
+    }
+  };
+
   const addProject = async (name: string, clientId: string, description?: string) => {
     try {
       const usedColors = projects.map(p => p.color);
@@ -1234,6 +1300,8 @@ const App: React.FC = () => {
     setProjectTasks([]);
     setProducts([]);
     setQuotes([]);
+    setSuppliers([]);
+    setSupplierQuotes([]);
     setEntries([]);
     setLogoutReason(reason || null);
   };
@@ -1436,6 +1504,27 @@ const App: React.FC = () => {
                 invoices={invoices}
                 expenses={expenses}
                 payments={payments}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {activeView === 'suppliers/manage' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <SuppliersView
+                suppliers={suppliers}
+                onAddSupplier={addSupplier}
+                onUpdateSupplier={handleUpdateSupplier}
+                onDeleteSupplier={handleDeleteSupplier}
+              />
+            )}
+
+            {activeView === 'suppliers/quotes' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <SupplierQuotesView
+                quotes={supplierQuotes}
+                suppliers={suppliers}
+                products={products}
+                onAddQuote={addSupplierQuote}
+                onUpdateQuote={handleUpdateSupplierQuote}
+                onDeleteQuote={handleDeleteSupplierQuote}
                 currency={generalSettings.currency}
               />
             )}

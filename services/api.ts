@@ -54,7 +54,7 @@ const fetchApi = async <T>(
 };
 
 // Types for API responses
-import type { User, Client, Project, ProjectTask, TimeEntry, LdapConfig, GeneralSettings, Product, Quote, QuoteItem, WorkUnit, Sale, SaleItem, Invoice, InvoiceItem, Payment, Expense } from '../types';
+import type { User, Client, Project, ProjectTask, TimeEntry, LdapConfig, GeneralSettings, Product, Quote, QuoteItem, WorkUnit, Sale, SaleItem, Invoice, InvoiceItem, Payment, Expense, Supplier, SupplierQuote, SupplierQuoteItem } from '../types';
 
 // Normalization Helpers
 const normalizeUser = (u: User): User => ({
@@ -138,6 +138,20 @@ const normalizePayment = (p: Payment): Payment => ({
 const normalizeExpense = (e: Expense): Expense => ({
     ...e,
     amount: Number(e.amount || 0)
+});
+
+const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuoteItem => ({
+    ...item,
+    quantity: Number(item.quantity || 0),
+    unitPrice: Number(item.unitPrice || 0),
+    discount: Number(item.discount || 0),
+    note: item.note || ''
+});
+
+const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
+    ...q,
+    discount: Number(q.discount || 0),
+    items: (q.items || []).map(normalizeSupplierQuoteItem)
 });
 
 export interface LoginResponse {
@@ -475,6 +489,46 @@ export const expensesApi = {
         fetchApi(`/expenses/${id}`, { method: 'DELETE' }),
 };
 
+// Suppliers API
+export const suppliersApi = {
+    list: (): Promise<Supplier[]> => fetchApi('/suppliers'),
+
+    create: (supplierData: Partial<Supplier>): Promise<Supplier> =>
+        fetchApi('/suppliers', {
+            method: 'POST',
+            body: JSON.stringify(supplierData),
+        }),
+
+    update: (id: string, updates: Partial<Supplier>): Promise<Supplier> =>
+        fetchApi(`/suppliers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        }),
+
+    delete: (id: string): Promise<void> =>
+        fetchApi(`/suppliers/${id}`, { method: 'DELETE' }),
+};
+
+// Supplier Quotes API
+export const supplierQuotesApi = {
+    list: (): Promise<SupplierQuote[]> => fetchApi<SupplierQuote[]>('/supplier-quotes').then(quotes => quotes.map(normalizeSupplierQuote)),
+
+    create: (quoteData: Partial<SupplierQuote>): Promise<SupplierQuote> =>
+        fetchApi<SupplierQuote>('/supplier-quotes', {
+            method: 'POST',
+            body: JSON.stringify(quoteData),
+        }).then(normalizeSupplierQuote),
+
+    update: (id: string, updates: Partial<SupplierQuote>): Promise<SupplierQuote> =>
+        fetchApi<SupplierQuote>(`/supplier-quotes/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        }).then(normalizeSupplierQuote),
+
+    delete: (id: string): Promise<void> =>
+        fetchApi(`/supplier-quotes/${id}`, { method: 'DELETE' }),
+};
+
 export default {
     auth: authApi,
     users: usersApi,
@@ -488,6 +542,8 @@ export default {
     invoices: invoicesApi,
     payments: paymentsApi,
     expenses: expensesApi,
+    suppliers: suppliersApi,
+    supplierQuotes: supplierQuotesApi,
     workUnits: workUnitsApi,
     settings: settingsApi,
     ldap: ldapApi,

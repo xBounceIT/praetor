@@ -181,6 +181,9 @@ export type View =
   // Projects module
   | 'projects/manage'
   | 'projects/tasks'
+  // Suppliers module
+  | 'suppliers/manage'
+  | 'suppliers/quotes'
   // Standalone
   | 'settings';
 
@@ -246,4 +249,45 @@ export interface Expense {
   receiptReference?: string;
   notes?: string;
   createdAt: number;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  isDisabled?: boolean;
+  supplierCode?: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  paymentTerms?: string;
+  notes?: string;
+}
+
+export interface SupplierQuoteItem {
+  id: string;
+  quoteId: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  note?: string;
+}
+
+export interface SupplierQuote {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  purchaseOrderNumber: string;
+  items: SupplierQuoteItem[];
+  paymentTerms: 'immediate' | '15gg' | '21gg' | '30gg' | '45gg';
+  discount: number;
+  status: 'received' | 'approved' | 'rejected';
+  expirationDate: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
 }
