@@ -90,8 +90,8 @@ export default async function (fastify, opts) {
         for (const item of items) {
             const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
             const itemResult = await query(
-                `INSERT INTO quote_items (id, quote_id, product_id, product_name, quantity, unit_price, discount) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) 
+                `INSERT INTO quote_items (id, quote_id, product_id, product_name, quantity, unit_price, discount, note) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                  RETURNING 
                     id,
                     quote_id as "quoteId",
@@ -99,8 +99,9 @@ export default async function (fastify, opts) {
                     product_name as "productName",
                     quantity,
                     unit_price as "unitPrice",
-                    discount`,
-                [itemId, quoteId, item.productId, item.productName, item.quantity, item.unitPrice, item.discount || 0]
+                    discount,
+                    note`,
+                [itemId, quoteId, item.productId, item.productName, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
             );
             createdItems.push(itemResult.rows[0]);
         }
@@ -156,8 +157,8 @@ export default async function (fastify, opts) {
             for (const item of items) {
                 const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
                 const itemResult = await query(
-                    `INSERT INTO quote_items (id, quote_id, product_id, product_name, quantity, unit_price, discount) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7) 
+                    `INSERT INTO quote_items (id, quote_id, product_id, product_name, quantity, unit_price, discount, note) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                      RETURNING 
                         id,
                         quote_id as "quoteId",
@@ -165,8 +166,9 @@ export default async function (fastify, opts) {
                         product_name as "productName",
                         quantity,
                         unit_price as "unitPrice",
-                        discount`,
-                    [itemId, id, item.productId, item.productName, item.quantity, item.unitPrice, item.discount || 0]
+                        discount,
+                        note`,
+                    [itemId, id, item.productId, item.productName, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
                 );
                 updatedItems.push(itemResult.rows[0]);
             }
@@ -180,7 +182,8 @@ export default async function (fastify, opts) {
                     product_name as "productName",
                     quantity,
                     unit_price as "unitPrice",
-                    discount
+                    discount,
+                    note
                 FROM quote_items
                 WHERE quote_id = $1`,
                 [id]

@@ -185,6 +185,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
             quantity: 1,
             unitPrice: 0,
             discount: 0,
+            note: ''
         };
         setFormData({
             ...formData,
@@ -334,12 +335,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
 
                                 {formData.items && formData.items.length > 0 && (
                                     <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                                        <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
+                                        <div className="col-span-12 md:col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Cost ({currency})</div>
                                         <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Mol %</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Sale Price ({currency})</div>
                                         <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Margin ({currency})</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Note</div>
                                     </div>
                                 )}
 
@@ -354,7 +356,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                     return (
                                         <div key={item.id} className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl">
                                             <div className="flex-1 grid grid-cols-12 gap-2">
-                                                <div className="col-span-4">
+                                                <div className="col-span-3">
                                                     <CustomSelect
                                                         options={activeProducts.map(p => ({ id: p.id, name: p.name }))}
                                                         value={item.productId}
@@ -396,6 +398,15 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, onAd
                                                 </div>
                                                 <div className="col-span-2 flex items-center">
                                                     <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
+                                                </div>
+                                                <div className="col-span-1">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Note"
+                                                        value={item.note || ''}
+                                                        onChange={(e) => updateProductRow(index, 'note', e.target.value)}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none min-w-0"
+                                                    />
                                                 </div>
                                             </div>
                                             <button

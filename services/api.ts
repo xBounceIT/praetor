@@ -73,7 +73,8 @@ const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
     ...item,
     quantity: Number(item.quantity || 0),
     unitPrice: Number(item.unitPrice || 0),
-    discount: Number(item.discount || 0)
+    discount: Number(item.discount || 0),
+    note: item.note || ''
 });
 
 const normalizeQuote = (q: Quote): Quote => ({

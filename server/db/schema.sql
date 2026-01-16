@@ -322,6 +322,7 @@ CREATE TABLE IF NOT EXISTS quote_items (
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
+    note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -114,6 +114,7 @@ export interface QuoteItem {
   quantity: number;
   unitPrice: number;
   discount?: number; // item-level discount percentage
+  note?: string;
 }
 
 export interface Quote {
