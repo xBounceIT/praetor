@@ -125,7 +125,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({ workUnits, users, userRol
         );
     }, [users, assignmentSearch]);
 
-    const managerOptions = users.map(u => ({ id: u.id, name: u.name }));
+    const managerOptions = users
+        .filter(u => u.role === 'manager')
+        .map(u => ({ id: u.id, name: u.name }));
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
