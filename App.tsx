@@ -32,6 +32,7 @@ import InvoicesView from './components/InvoicesView';
 import PaymentsView from './components/PaymentsView';
 import ExpensesView from './components/ExpensesView';
 import FinancialReportsView from './components/FinancialReportsView';
+import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 
 const TrackerView: React.FC<{
   entries: TimeEntry[];
@@ -450,30 +451,31 @@ const App: React.FC = () => {
     if (activeView === '404') return false;
 
     const permissions: Record<View, UserRole[]> = {
-      // Timesheets module - all users
-      'timesheets/tracker': ['admin', 'manager', 'user'],
-      'timesheets/reports': ['admin', 'manager', 'user'],
-      'timesheets/recurring': ['admin', 'manager', 'user'],
-      'timesheets/tasks': ['admin', 'manager', 'user'],
-      'timesheets/projects': ['admin', 'manager', 'user'],
-      // Configuration module - admin only (users is admin/manager)
+      // Timesheets module - manager and user
+      'timesheets/tracker': ['manager', 'user'],
+      'timesheets/reports': ['manager', 'user'],
+      'timesheets/recurring': ['manager', 'user'],
+      'timesheets/tasks': ['manager', 'user'],
+      'timesheets/projects': ['manager', 'user'],
+      // HR module - admin/manager
       'hr/workforce': ['admin', 'manager'],
-      'hr/work-units': ['admin'],
+      'hr/work-units': ['admin', 'manager'],
+      // Configuration module - admin only
       'configuration/authentication': ['admin'],
       'configuration/general': ['admin'],
-      // CRM module - admin/manager
-      'crm/clients': ['admin', 'manager'],
-      'crm/products': ['admin', 'manager'],
-      'crm/quotes': ['admin', 'manager'],
-      'crm/sales': ['admin', 'manager'],
-      // Finances module - admin/manager
-      'finances/invoices': ['admin', 'manager'],
-      'finances/payments': ['admin', 'manager'],
-      'finances/expenses': ['admin', 'manager'],
-      'finances/reports': ['admin', 'manager'],
-      // Projects module - admin/manager
-      'projects/manage': ['admin', 'manager'],
-      'projects/tasks': ['admin', 'manager'],
+      // CRM module - manager
+      'crm/clients': ['manager'],
+      'crm/products': ['manager'],
+      'crm/quotes': ['manager'],
+      'crm/sales': ['manager'],
+      // Finances module - manager
+      'finances/invoices': ['manager'],
+      'finances/payments': ['manager'],
+      'finances/expenses': ['manager'],
+      'finances/reports': ['manager'],
+      // Projects module - manager
+      'projects/manage': ['manager'],
+      'projects/tasks': ['manager'],
       // Standalone
       'settings': ['admin', 'manager', 'user']
     };
@@ -1296,233 +1298,236 @@ const App: React.FC = () => {
   if (!currentUser) return <Login users={users} onLogin={handleLogin} />;
 
   return (
-    <Layout
-      activeView={!isRouteAccessible ? 'tracker' : (activeView as View)}
-      onViewChange={setActiveView}
-      currentUser={currentUser}
-      onLogout={handleLogout}
-      isNotFound={!isRouteAccessible}
-    >
-      {!isRouteAccessible ? (
-        <NotFound onReturn={() => setActiveView('timesheets/tracker')} />
-      ) : (
-        <>
-          {activeView === 'timesheets/tracker' && (
-            <TrackerView
-              entries={entries.filter(e => e.userId === viewingUserId)}
-              clients={filteredClients} projects={filteredProjects} projectTasks={filteredTasks}
-              onAddEntry={handleAddEntry} onDeleteEntry={handleDeleteEntry} onUpdateEntry={handleUpdateEntry}
-              insights={insights} isInsightLoading={isInsightLoading} onRefreshInsights={generateInsights}
-              startOfWeek={generalSettings.startOfWeek}
-              treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-              onMakeRecurring={handleMakeRecurring} userRole={currentUser.role}
-              viewingUserId={viewingUserId}
-              onViewUserChange={setViewingUserId}
-              availableUsers={availableUsers}
-              currentUser={currentUser}
-              dailyGoal={generalSettings.dailyLimit}
-              onAddBulkEntries={handleAddBulkEntries}
-              enableAiInsights={generalSettings.enableAiInsights}
-              onRecurringAction={handleRecurringAction}
-            />
-          )}
-          {activeView === 'timesheets/reports' && (
-            <Reports
-              entries={
-                (currentUser.role === 'admin' || currentUser.role === 'manager')
-                  ? entries
-                  : entries.filter(e => e.userId === currentUser.id)
-              }
-              projects={projects}
-              clients={clients}
-              users={users}
-              currentUser={currentUser}
-              startOfWeek={generalSettings.startOfWeek}
-              treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-              dailyGoal={generalSettings.dailyLimit}
-              currency={generalSettings.currency}
-            />
-          )}
-
-          {activeView === 'crm/clients' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <ClientsView
-              clients={clients}
-              onAddClient={addClient}
-              onUpdateClient={handleUpdateClient}
-              onDeleteClient={handleDeleteClient}
-            />
-          )}
-
-          {activeView === 'crm/products' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <ProductsView
-              products={products}
-              onAddProduct={addProduct}
-              onUpdateProduct={handleUpdateProduct}
-              onDeleteProduct={handleDeleteProduct}
-            />
-          )}
-
-          {activeView === 'crm/quotes' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <QuotesView
-              quotes={quotes}
-              clients={clients}
-              products={products}
-              onAddQuote={addQuote}
-              onUpdateQuote={handleUpdateQuote}
-              onDeleteQuote={handleDeleteQuote}
-              onCreateSale={handleCreateSaleFromQuote}
-              currency={generalSettings.currency}
-            />
-          )}
-
-          {activeView === 'crm/sales' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <SalesView
-              sales={sales}
-              clients={clients}
-              products={products}
-              onAddSale={addSale}
-              onUpdateSale={handleUpdateSale}
-              onDeleteSale={handleDeleteSale}
-              currency={generalSettings.currency}
-              onViewQuote={(quoteId) => {
-                setActiveView('crm/quotes');
-              }}
-            />
-          )}
-
-          {activeView === 'finances/invoices' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <InvoicesView
-              invoices={invoices}
-              clients={clients}
-              products={products}
-              sales={sales}
-              onAddInvoice={addInvoice}
-              onUpdateInvoice={handleUpdateInvoice}
-              onDeleteInvoice={handleDeleteInvoice}
-              currency={generalSettings.currency}
-            />
-          )}
-
-          {activeView === 'finances/payments' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <PaymentsView
-              payments={payments}
-              clients={clients}
-              invoices={invoices}
-              onAddPayment={addPayment}
-              onUpdatePayment={handleUpdatePayment}
-              onDeletePayment={handleDeletePayment}
-              currency={generalSettings.currency}
-            />
-          )}
-
-          {activeView === 'finances/expenses' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <ExpensesView
-              expenses={expenses}
-              onAddExpense={addExpense}
-              onUpdateExpense={handleUpdateExpense}
-              onDeleteExpense={handleDeleteExpense}
-              currency={generalSettings.currency}
-            />
-          )}
-
-          {activeView === 'finances/reports' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-            <FinancialReportsView
-              invoices={invoices}
-              expenses={expenses}
-              payments={payments}
-              currency={generalSettings.currency}
-            />
-          )}
-
-          {activeView === 'timesheets/projects' && (
-            <ProjectsReadOnly
-              projects={projects}
-              clients={clients}
-            />
-          )}
-
-          {activeView === 'timesheets/tasks' && (
-            <TasksReadOnly
-              tasks={projectTasks}
-              projects={projects}
-              clients={clients}
-            />
-          )}
-
-          {activeView === 'projects/manage' && (
-            <ProjectsView
-              projects={projects}
-              clients={clients}
-              role={currentUser.role}
-              onAddProject={addProject}
-              onUpdateProject={handleUpdateProject}
-              onDeleteProject={handleDeleteProject}
-            />
-          )}
-
-          {activeView === 'projects/tasks' && (
-            <TasksView
-              tasks={projectTasks}
-              projects={projects}
-              clients={clients}
-              role={currentUser.role}
-              users={availableUsers}
-              onAddTask={addProjectTask}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={async (id) => {
-                try {
-                  await api.tasks.delete(id);
-                  setProjectTasks(projectTasks.filter(t => t.id !== id));
-                } catch (err) {
-                  console.error('Failed to delete task:', err);
-                  alert('Failed to delete task');
+    <>
+      <SessionTimeoutHandler onLogout={handleLogout} />
+      <Layout
+        activeView={!isRouteAccessible ? 'tracker' : (activeView as View)}
+        onViewChange={setActiveView}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        isNotFound={!isRouteAccessible}
+      >
+        {!isRouteAccessible ? (
+          <NotFound onReturn={() => setActiveView('timesheets/tracker')} />
+        ) : (
+          <>
+            {activeView === 'timesheets/tracker' && (
+              <TrackerView
+                entries={entries.filter(e => e.userId === viewingUserId)}
+                clients={filteredClients} projects={filteredProjects} projectTasks={filteredTasks}
+                onAddEntry={handleAddEntry} onDeleteEntry={handleDeleteEntry} onUpdateEntry={handleUpdateEntry}
+                insights={insights} isInsightLoading={isInsightLoading} onRefreshInsights={generateInsights}
+                startOfWeek={generalSettings.startOfWeek}
+                treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
+                onMakeRecurring={handleMakeRecurring} userRole={currentUser.role}
+                viewingUserId={viewingUserId}
+                onViewUserChange={setViewingUserId}
+                availableUsers={availableUsers}
+                currentUser={currentUser}
+                dailyGoal={generalSettings.dailyLimit}
+                onAddBulkEntries={handleAddBulkEntries}
+                enableAiInsights={generalSettings.enableAiInsights}
+                onRecurringAction={handleRecurringAction}
+              />
+            )}
+            {activeView === 'timesheets/reports' && (
+              <Reports
+                entries={
+                  (currentUser.role === 'admin' || currentUser.role === 'manager')
+                    ? entries
+                    : entries.filter(e => e.userId === currentUser.id)
                 }
-              }}
-            />
-          )}
+                projects={projects}
+                clients={clients}
+                users={users}
+                currentUser={currentUser}
+                startOfWeek={generalSettings.startOfWeek}
+                treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
+                dailyGoal={generalSettings.dailyLimit}
+                currency={generalSettings.currency}
+              />
+            )}
 
-          {(currentUser.role === 'admin' || currentUser.role === 'manager') && activeView === 'hr/workforce' && (
-            <UserManagement
-              users={users}
-              clients={clients}
-              projects={projects}
-              tasks={projectTasks}
-              onAddUser={addUser}
-              onDeleteUser={deleteUser}
-              onUpdateUser={handleUpdateUser}
-              currentUserId={currentUser.id}
-              currentUserRole={currentUser.role}
-              currency={generalSettings.currency}
-            />
-          )}
+            {activeView === 'crm/clients' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <ClientsView
+                clients={clients}
+                onAddClient={addClient}
+                onUpdateClient={handleUpdateClient}
+                onDeleteClient={handleDeleteClient}
+              />
+            )}
 
-          {currentUser.role === 'admin' && activeView === 'hr/work-units' && (
-            <WorkUnitsView
-              workUnits={workUnits}
-              users={users}
-              onAddWorkUnit={addWorkUnit}
-              onUpdateWorkUnit={updateWorkUnit}
-              onDeleteWorkUnit={deleteWorkUnit}
-              refreshWorkUnits={refreshWorkUnits}
-            />
-          )}
+            {activeView === 'crm/products' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <ProductsView
+                products={products}
+                onAddProduct={addProduct}
+                onUpdateProduct={handleUpdateProduct}
+                onDeleteProduct={handleDeleteProduct}
+              />
+            )}
 
-          {currentUser.role === 'admin' && activeView === 'configuration/general' && (
-            <GeneralSettings
-              settings={generalSettings}
-              onUpdate={handleUpdateGeneralSettings}
-            />
-          )}
+            {activeView === 'crm/quotes' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <QuotesView
+                quotes={quotes}
+                clients={clients}
+                products={products}
+                onAddQuote={addQuote}
+                onUpdateQuote={handleUpdateQuote}
+                onDeleteQuote={handleDeleteQuote}
+                onCreateSale={handleCreateSaleFromQuote}
+                currency={generalSettings.currency}
+              />
+            )}
 
-          {currentUser.role === 'admin' && activeView === 'configuration/authentication' && (
-            <AdminAuthentication config={ldapConfig} onSave={handleSaveLdapConfig} />
-          )}
+            {activeView === 'crm/sales' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <SalesView
+                sales={sales}
+                clients={clients}
+                products={products}
+                onAddSale={addSale}
+                onUpdateSale={handleUpdateSale}
+                onDeleteSale={handleDeleteSale}
+                currency={generalSettings.currency}
+                onViewQuote={(quoteId) => {
+                  setActiveView('crm/quotes');
+                }}
+              />
+            )}
 
-          {activeView === 'timesheets/recurring' && <RecurringManager tasks={projectTasks} projects={projects} clients={clients} onAction={handleRecurringAction} />}
-          {activeView === 'settings' && <Settings />}
-        </>
-      )}
-    </Layout>
+            {activeView === 'finances/invoices' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <InvoicesView
+                invoices={invoices}
+                clients={clients}
+                products={products}
+                sales={sales}
+                onAddInvoice={addInvoice}
+                onUpdateInvoice={handleUpdateInvoice}
+                onDeleteInvoice={handleDeleteInvoice}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {activeView === 'finances/payments' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <PaymentsView
+                payments={payments}
+                clients={clients}
+                invoices={invoices}
+                onAddPayment={addPayment}
+                onUpdatePayment={handleUpdatePayment}
+                onDeletePayment={handleDeletePayment}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {activeView === 'finances/expenses' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <ExpensesView
+                expenses={expenses}
+                onAddExpense={addExpense}
+                onUpdateExpense={handleUpdateExpense}
+                onDeleteExpense={handleDeleteExpense}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {activeView === 'finances/reports' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+              <FinancialReportsView
+                invoices={invoices}
+                expenses={expenses}
+                payments={payments}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {activeView === 'timesheets/projects' && (
+              <ProjectsReadOnly
+                projects={projects}
+                clients={clients}
+              />
+            )}
+
+            {activeView === 'timesheets/tasks' && (
+              <TasksReadOnly
+                tasks={projectTasks}
+                projects={projects}
+                clients={clients}
+              />
+            )}
+
+            {activeView === 'projects/manage' && (
+              <ProjectsView
+                projects={projects}
+                clients={clients}
+                role={currentUser.role}
+                onAddProject={addProject}
+                onUpdateProject={handleUpdateProject}
+                onDeleteProject={handleDeleteProject}
+              />
+            )}
+
+            {activeView === 'projects/tasks' && (
+              <TasksView
+                tasks={projectTasks}
+                projects={projects}
+                clients={clients}
+                role={currentUser.role}
+                users={availableUsers}
+                onAddTask={addProjectTask}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={async (id) => {
+                  try {
+                    await api.tasks.delete(id);
+                    setProjectTasks(projectTasks.filter(t => t.id !== id));
+                  } catch (err) {
+                    console.error('Failed to delete task:', err);
+                    alert('Failed to delete task');
+                  }
+                }}
+              />
+            )}
+
+            {(currentUser.role === 'admin' || currentUser.role === 'manager') && activeView === 'hr/workforce' && (
+              <UserManagement
+                users={users}
+                clients={clients}
+                projects={projects}
+                tasks={projectTasks}
+                onAddUser={addUser}
+                onDeleteUser={deleteUser}
+                onUpdateUser={handleUpdateUser}
+                currentUserId={currentUser.id}
+                currentUserRole={currentUser.role}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {currentUser.role === 'admin' && activeView === 'hr/work-units' && (
+              <WorkUnitsView
+                workUnits={workUnits}
+                users={users}
+                onAddWorkUnit={addWorkUnit}
+                onUpdateWorkUnit={updateWorkUnit}
+                onDeleteWorkUnit={deleteWorkUnit}
+                refreshWorkUnits={refreshWorkUnits}
+              />
+            )}
+
+            {currentUser.role === 'admin' && activeView === 'configuration/general' && (
+              <GeneralSettings
+                settings={generalSettings}
+                onUpdate={handleUpdateGeneralSettings}
+              />
+            )}
+
+            {currentUser.role === 'admin' && activeView === 'configuration/authentication' && (
+              <AdminAuthentication config={ldapConfig} onSave={handleSaveLdapConfig} />
+            )}
+
+            {activeView === 'timesheets/recurring' && <RecurringManager tasks={projectTasks} projects={projects} clients={clients} onAction={handleRecurringAction} />}
+            {activeView === 'settings' && <Settings />}
+          </>
+        )}
+      </Layout>
+    </>
   );
 };
 

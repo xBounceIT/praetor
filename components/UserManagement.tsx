@@ -279,22 +279,24 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cost per Hour</label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                    <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
-                      {currency}
+                {currentUserRole !== 'admin' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cost per Hour</label>
+                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+                      <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
+                        {currency}
+                      </div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editCostPerHour}
+                        onChange={(e) => setEditCostPerHour(e.target.value)}
+                        className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
+                        placeholder="0.00"
+                      />
                     </div>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={editCostPerHour}
-                      onChange={(e) => setEditCostPerHour(e.target.value)}
-                      className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
-                      placeholder="0.00"
-                    />
                   </div>
-                </div>
+                )}
 
                 {editingUser.id !== currentUserId && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">

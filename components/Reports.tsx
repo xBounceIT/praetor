@@ -97,6 +97,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
   const [noteSearch, setNoteSearch] = useState('');
 
   const canFilterUsers = currentUser.role === 'admin' || currentUser.role === 'manager';
+  const canSeeCost = currentUser.role === 'manager'; // Only managers can see cost
 
   const [visibleFields, setVisibleFields] = useState({
     user: canFilterUsers,
@@ -105,7 +106,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     task: true,
     duration: true,
     notes: true,
-    cost: canFilterUsers
+    cost: canSeeCost
   });
 
   const [grouping, setGrouping] = useState<GroupingType[]>(['none', 'none', 'none']);

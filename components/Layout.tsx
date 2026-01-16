@@ -63,10 +63,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
 
   // Filter modules based on user role
   const accessibleModules = modules.filter(m => {
+    // Admin only access to configuration
     if (m.id === 'configuration') return currentUser.role === 'admin';
-    if (m.id === 'crm' || m.id === 'projects' || m.id === 'hr' || m.id === 'finances') return currentUser.role === 'admin' || currentUser.role === 'manager';
+
+    // Admin and Manager access to HR
+    if (m.id === 'hr') return currentUser.role === 'admin' || currentUser.role === 'manager';
+
+    // Manager only access (Admin excluded as requested)
+    if (m.id === 'crm' || m.id === 'projects' || m.id === 'finances' || m.id === 'timesheets') {
+      return currentUser.role === 'manager' || currentUser.role === 'user';
+    }
+
     // employees and suppliers are placeholders for future
     if (m.id === 'employees' || m.id === 'suppliers') return false;
+
     return true;
   });
 
@@ -289,7 +299,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('hr/workforce'); setIsMobileMenuOpen(false); }}
               />
-              {isAdmin && (
+              {isManagement && (
                 <NavItem
                   icon="fa-sitemap"
                   label="Work Units"
