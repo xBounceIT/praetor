@@ -313,8 +313,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                             <input
                                                 type="number"
                                                 step="0.01"
-                                                value={formData.costo}
-                                                onChange={(e) => setFormData({ ...formData, costo: parseFloat(e.target.value) || 0 })}
+                                                value={formData.costo ?? ''}
+                                                onChange={(e) => setFormData({ ...formData, costo: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                                                 className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all min-w-0"
                                             />
                                         </div>
@@ -328,8 +328,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, onAddProduct, onU
                                                 step="0.01"
                                                 min="0"
                                                 max="99.99"
-                                                value={formData.molPercentage}
-                                                onChange={(e) => setFormData({ ...formData, molPercentage: parseFloat(e.target.value) || 0 })}
+                                                value={formData.molPercentage ?? ''}
+                                                onChange={(e) => setFormData({ ...formData, molPercentage: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                                                 className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all min-w-0"
                                             />
                                         </div>
