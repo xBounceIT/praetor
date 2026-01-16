@@ -349,12 +349,15 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, onAddSa
                                 )}
 
                                 {formData.items && formData.items.length > 0 && (
-                                    <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                                        <div className="col-span-12 md:col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Unit Price</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Discount</div>
-                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">Subtotal</div>
+                                    <div className="flex gap-2 px-3 mb-1 items-center">
+                                        <div className="flex-1 grid grid-cols-12 gap-2">
+                                            <div className="col-span-12 md:col-span-5 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Product / Service</div>
+                                            <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
+                                            <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Unit Price</div>
+                                            <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Discount</div>
+                                            <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">Subtotal</div>
+                                        </div>
+                                        <div className="w-10 flex-shrink-0"></div>
                                     </div>
                                 )}
 
