@@ -408,7 +408,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                                 <td colSpan={3} className="px-4 py-4">
                                     <button
                                         onClick={addRow}
-                                        className="text-xs font-bold text-praetor border-2 border-praetor bg-transparent hover:bg-praetor hover:text-white px-4 py-2 rounded-lg flex items-center gap-2 uppercase tracking-widest transition-all duration-300 ease-in-out hover:shadow-lg hover:shadow-slate-200"
+                                        className="text-xs font-bold text-praetor bg-transparent px-4 py-2 rounded-lg flex items-center gap-2 uppercase tracking-widest transition-all duration-300 ease-in-out"
                                     >
                                         <i className="fa-solid fa-plus"></i> Add Row
                                     </button>
