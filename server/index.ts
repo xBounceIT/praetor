@@ -24,7 +24,7 @@ import specialBidsRoutes from './routes/special-bids.js';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT ?? 3001);
 
 // Create Fastify instance with HTTP/2 support
 const fastify = Fastify({

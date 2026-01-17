@@ -3,7 +3,18 @@ import fs from 'fs';
 import { query } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
+type LdapConfig = {
+    enabled: boolean;
+    server_url: string;
+    bind_dn: string;
+    bind_password: string;
+    base_dn: string;
+    user_filter: string;
+};
+
 class LDAPService {
+    config: LdapConfig | null;
+
     constructor() {
         this.config = null;
     }
@@ -24,7 +35,12 @@ class LDAPService {
             return null;
         }
 
-        const tlsOptions = {
+        const tlsOptions: {
+            rejectUnauthorized: boolean;
+            ca?: Buffer;
+            cert?: Buffer;
+            key?: Buffer;
+        } = {
             rejectUnauthorized: process.env.LDAP_REJECT_UNAUTHORIZED !== 'false',
         };
 

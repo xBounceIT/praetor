@@ -2,11 +2,12 @@
     "name": "praetor-server",
     "version": "1.0.0",
     "description": "Praetor API Server",
-    "main": "index.js",
+    "main": "dist/index.js",
     "type": "module",
     "scripts": {
-        "start": "node index.js",
-        "dev": "node --watch index.js"
+        "build": "tsc -p tsconfig.json",
+        "start": "node dist/index.js",
+        "dev": "tsx watch index.ts"
     },
     "dependencies": {
         "bcryptjs": "^2.4.3",
@@ -17,5 +18,14 @@
         "ldapjs": "^3.0.7",
         "pg": "^8.13.0",
         "uuid": "^11.0.0"
+    },
+    "devDependencies": {
+        "@types/bcryptjs": "^2.4.2",
+        "@types/jsonwebtoken": "^9.0.6",
+        "@types/ldapjs": "^2.2.5",
+        "@types/node": "^22.14.0",
+        "@types/pg": "^8.11.6",
+        "tsx": "^4.19.2",
+        "typescript": "^5.8.2"
     }
 }

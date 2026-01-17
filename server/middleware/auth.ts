@@ -1,7 +1,12 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { query } from '../db/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
+
+type SessionJwtPayload = JwtPayload & {
+    userId: string;
+    sessionStart?: number;
+};
 
 export const authenticateToken = async (request, reply) => {
     const authHeader = request.headers['authorization'];
@@ -12,7 +17,7 @@ export const authenticateToken = async (request, reply) => {
     }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET) as SessionJwtPayload;
 
         // Check for max session duration (8 hours)
         const SESSION_MAX_DURATION = 8 * 60 * 60 * 1000; // 8 hours in ms
@@ -36,7 +41,7 @@ export const authenticateToken = async (request, reply) => {
 
         // Sliding window: Issue new token with same sessionStart
         // This resets the 30m idle timer but keeps the 8h max session limit
-        const newToken = generateToken(decoded.userId, decoded.sessionStart);
+        const newToken = generateToken(decoded.userId, decoded.sessionStart ?? Date.now());
         reply.header('x-auth-token', newToken);
     } catch (err) {
         return reply.code(403).send({ error: 'Invalid or expired token' });
@@ -55,7 +60,7 @@ export const requireRole = (...roles) => {
     };
 };
 
-export const generateToken = (userId, sessionStart = Date.now()) => {
+export const generateToken = (userId: string, sessionStart: number = Date.now()) => {
     // Token expires in 30 minutes (idle timeout)
     // sessionStart tracks the absolute start of the session (max 8 hours)
     return jwt.sign({ userId, sessionStart }, JWT_SECRET, { expiresIn: '30m' });
