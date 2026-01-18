@@ -490,6 +490,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 options={ROLE_OPTIONS}
                 value={newRole}
                 onChange={val => setNewRole(val as UserRole)}
+                buttonClassName="py-2 text-sm"
               />
               <p className="text-red-500 text-[10px] font-bold mt-1 min-h-[12px]"></p>
             </div>
