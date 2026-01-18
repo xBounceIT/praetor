@@ -102,23 +102,15 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const { id } = request.params;
+        const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = request.body;
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
-        const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = request.body;
-        const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [idResult.value]);
-        const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [idResult.value]);
-        if (!idResult.ok) return badRequest(reply, idResult.message);
-        const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [idResult.value]);
         const durationResult = optionalNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
         if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {
             const startResult = parseDateString(recurrenceStart, 'recurrenceStart');
             if (!startResult.ok) return badRequest(reply, startResult.message);
-        const idResult = requireNonEmptyString(id, 'id');
-        if (!idResult.ok) return badRequest(reply, idResult.message);
-        const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
-        if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
         }
 
         if (recurrenceEnd !== undefined && recurrenceEnd !== null && recurrenceEnd !== '') {
@@ -126,22 +118,33 @@ export default async function (fastify, opts) {
             if (!endResult.ok) return badRequest(reply, endResult.message);
         }
 
+        const isRecurringValue = (isRecurring === undefined || isRecurring === null || isRecurring === '')
+            ? null
+            : parseBoolean(isRecurring);
+
         const result = await query(
             `UPDATE tasks 
-       SET name = COALESCE($2, name),
-           description = COALESCE($3, description),
-            await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
-           is_recurring = COALESCE($4, is_recurring),
-           recurrence_pattern = $5,
-           recurrence_start = $6,
-            for (const userId of userIdsResult.value) {
-           recurrence_end = $7,
-           recurrence_duration = $8,
-                    [userId, idResult.value]
-       WHERE id = $1
-       RETURNING *`,
-            [idResult.value, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, durationResult.value || 0, isDisabled]
-            [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, request.body.recurrenceDuration || 0, isDisabled]
+             SET name = COALESCE($2, name),
+                 description = COALESCE($3, description),
+                 is_recurring = COALESCE($4, is_recurring),
+                 recurrence_pattern = COALESCE($5, recurrence_pattern),
+                 recurrence_start = COALESCE($6, recurrence_start),
+                 recurrence_end = COALESCE($7, recurrence_end),
+                 recurrence_duration = COALESCE($8, recurrence_duration),
+                 is_disabled = COALESCE($9, is_disabled)
+             WHERE id = $1
+             RETURNING *`,
+            [
+                idResult.value,
+                name || null,
+                description || null,
+                isRecurringValue,
+                recurrencePattern || null,
+                recurrenceStart || null,
+                recurrenceEnd || null,
+                durationResult.value,
+                isDisabled
+            ]
         );
 
         if (result.rows.length === 0) {
@@ -210,13 +213,12 @@ export default async function (fastify, opts) {
             await query('BEGIN');
 
             // Delete existing assignments
-        await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
+            await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
 
-        for (const userId of userIdsResult.value) {
-            for (const userId of userIds) {
+            for (const userId of userIdsResult.value) {
                 await query(
-                [idResult.value, userId]
-                    [userId, id]
+                    'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    [userId, idResult.value]
                 );
             }
 
