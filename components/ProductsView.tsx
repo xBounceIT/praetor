@@ -523,12 +523,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                             <tr key={p.id} onClick={() => openEditModal(p)} className="hover:bg-slate-50/50 transition-colors group cursor-pointer">
                                 <td className="px-8 py-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
+                                        <div className="w-10 h-10 flex-shrink-0 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
                                             <i className="fa-solid fa-box"></i>
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-slate-800">{p.name}</div>
-                                            <div className="text-[10px] font-black text-slate-400 uppercase">{p.category || 'No Category'}</div>
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                                            <div className="text-[10px] font-black text-slate-400 uppercase truncate">{p.category || 'No Category'}</div>
                                         </div>
                                     </div>
                                 </td>
