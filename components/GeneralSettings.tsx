@@ -50,8 +50,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         setGeminiApiKey(settings.geminiApiKey || '');
     }, [settings]);
 
+    const isApiKeyMissing = () => enableAiInsights && !geminiApiKey.trim();
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isApiKeyMissing()) return;
         setIsSaving(true);
         try {
             await onUpdate({
@@ -228,14 +231,19 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                                             value={geminiApiKey}
                                             onChange={e => setGeminiApiKey(e.target.value)}
                                             placeholder="Enter your Google Gemini API Key"
-                                            className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold pr-10"
+                                            className={`w-full px-4 py-2 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-sm font-semibold pr-10 ${isApiKeyMissing() ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                                         />
                                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
                                             <i className="fa-brands fa-google"></i>
                                         </div>
                                     </div>
-                                    <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
-                                        Required for AI features. Your key is stored securely. Get one at <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-praetor hover:underline">Google AI Studio</a>.
+                                    {isApiKeyMissing() && (
+                                        <p className="text-red-500 text-[10px] font-bold mt-1">
+                                            API Key is required when AI Coach is enabled
+                                        </p>
+                                    )}
+                                    <p className={`mt-2 text-[10px] italic leading-relaxed ${isApiKeyMissing() ? 'text-red-400' : 'text-slate-500'}`}>
+                                        Required for AI features. Your key is stored securely. Get one at <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className={isApiKeyMissing() ? 'text-red-400 hover:underline' : 'text-praetor hover:underline'}>Google AI Studio</a>.
                                     </p>
                                 </div>
                             )}
@@ -246,10 +254,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 <div className="flex justify-end pt-4">
                     <button
                         type="submit"
-                        disabled={isSaving || (!hasChanges && !isSaved)}
+                        disabled={isSaving || isApiKeyMissing() || (!hasChanges && !isSaved)}
                         className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${isSaved
                             ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                            : isSaving || !hasChanges
+                            : isSaving || isApiKeyMissing() || !hasChanges
                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                                 : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
                             }`}
