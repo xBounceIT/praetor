@@ -71,9 +71,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
     // Admin and Manager access to HR
     if (m.id === 'hr') return currentUser.role === 'admin' || currentUser.role === 'manager';
 
-    // Manager only access (Admin excluded as requested)
-    if (m.id === 'crm' || m.id === 'projects' || m.id === 'finances' || m.id === 'timesheets' || m.id === 'suppliers') {
-      return currentUser.role === 'manager' || currentUser.role === 'user';
+    // Timesheets access for managers and users
+    if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
+
+    // Manager only access (Admin and users excluded as requested)
+    if (m.id === 'crm' || m.id === 'projects' || m.id === 'finances' || m.id === 'suppliers') {
+      return currentUser.role === 'manager';
     }
 
     // employees and suppliers are placeholders for future
@@ -441,13 +444,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                     <p className="text-xs text-slate-500 capitalize">{currentUser.role}</p>
                   </div>
 
-                  <button
-                    onClick={() => { setIsProfileMenuOpen(false); onViewChange('settings'); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-slate-100 text-praetor' : 'text-slate-700 hover:bg-slate-50'}`}
-                  >
-                    <i className="fa-solid fa-gear w-4 text-center"></i>
-                    Settings
-                  </button>
+                  {(currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                    <button
+                      onClick={() => { setIsProfileMenuOpen(false); onViewChange('settings'); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-slate-100 text-praetor' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      <i className="fa-solid fa-gear w-4 text-center"></i>
+                      Settings
+                    </button>
+                  )}
 
                   <div className="border-t border-slate-100 mt-1 pt-1">
                     <button

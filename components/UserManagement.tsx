@@ -8,7 +8,7 @@ interface UserManagementProps {
   clients: Client[];
   projects: Project[];
   tasks: ProjectTask[];
-  onAddUser: (name: string, username: string, password: string, role: UserRole) => void;
+  onAddUser: (name: string, username: string, password: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
   currentUserId: string;
@@ -51,7 +51,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
   const canManageAssignments = currentUserRole === 'manager';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors({});
 
@@ -65,7 +65,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
       return;
     }
 
-    onAddUser(newName, newUsername, newPassword, newRole);
+    const result = await onAddUser(newName, newUsername, newPassword, newRole);
+    if (!result.success) {
+      if (result.error?.includes('Username already exists')) {
+        setFormErrors({ username: 'Username already exists' });
+      } else {
+        setFormErrors({ general: result.error || 'Failed to add user' });
+      }
+      return;
+    }
+
     setNewName('');
     setNewUsername('');
     setNewPassword('password');
@@ -434,7 +443,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 onChange={(e) => {
                   setNewName(e.target.value);
                   if (!newUsername) setNewUsername(e.target.value.toLowerCase());
-                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                  if (formErrors.name || formErrors.general) {
+                    setFormErrors({ ...formErrors, name: '', general: '' });
+                  }
                 }}
                 placeholder="e.g. Alice Smith"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
@@ -448,7 +459,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 value={newUsername}
                 onChange={(e) => {
                   setNewUsername(e.target.value);
-                  if (formErrors.username) setFormErrors({ ...formErrors, username: '' });
+                  if (formErrors.username || formErrors.general) {
+                    setFormErrors({ ...formErrors, username: '', general: '' });
+                  }
                 }}
                 placeholder="e.g. alice"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
@@ -462,7 +475,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 value={newPassword}
                 onChange={(e) => {
                   setNewPassword(e.target.value);
-                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                  if (formErrors.password || formErrors.general) {
+                    setFormErrors({ ...formErrors, password: '', general: '' });
+                  }
                 }}
                 placeholder="Password"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
@@ -486,6 +501,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
               </button>
             </div>
           </form>
+          {formErrors.general && (
+            <p className="mt-3 text-xs font-bold text-red-500">{formErrors.general}</p>
+          )}
         </div>
       )}
 

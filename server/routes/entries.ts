@@ -1,16 +1,16 @@
 import { query } from '../db/index.ts';
-import { authenticateToken } from '../middleware/auth.ts';
+import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import { requireNonEmptyString, parseDateString, parseNonNegativeNumber, optionalNonNegativeNumber, parseBoolean, optionalNonEmptyString, badRequest, parseQueryBoolean } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List time entries
     fastify.get('/', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager', 'user')]
     }, async (request, reply) => {
         let result;
 
-        if (request.user.role === 'admin' || request.user.role === 'manager') {
-            // Admins and managers can see all entries, optionally filtered by user
+        if (request.user.role === 'manager') {
+            // Managers can see all entries, optionally filtered by user
             const { userId } = request.query;
             if (userId) {
                 result = await query(
@@ -57,7 +57,7 @@ export default async function (fastify, opts) {
 
     // POST / - Create time entry
     fastify.post('/', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager', 'user')]
     }, async (request, reply) => {
         const { date, clientId, clientName, projectId, projectName, task, notes, duration, isPlaceholder, userId } = request.body;
 
@@ -84,9 +84,9 @@ export default async function (fastify, opts) {
 
         const isPlaceholderValue = parseBoolean(isPlaceholder);
 
-        // Allow admins/managers to create entries for other users
+        // Allow managers to create entries for other users
         let targetUserId = request.user.id;
-        if (userId && (request.user.role === 'admin' || request.user.role === 'manager')) {
+        if (userId && request.user.role === 'manager') {
             targetUserId = userId;
             const targetUserIdResult = requireNonEmptyString(targetUserId, 'userId');
             if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
@@ -124,7 +124,7 @@ export default async function (fastify, opts) {
 
     // PUT /:id - Update time entry
     fastify.put('/:id', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager', 'user')]
     }, async (request, reply) => {
         const { id } = request.params;
         const { duration, notes, isPlaceholder } = request.body;
@@ -181,7 +181,7 @@ export default async function (fastify, opts) {
 
     // DELETE /:id - Delete time entry
     fastify.delete('/:id', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager', 'user')]
     }, async (request, reply) => {
         const { id } = request.params;
         const idResult = requireNonEmptyString(id, 'id');
@@ -203,7 +203,7 @@ export default async function (fastify, opts) {
 
     // DELETE / - Bulk delete entries (for recurring cleanup)
     fastify.delete('/', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager', 'user')]
     }, async (request, reply) => {
         const { projectId, task, futureOnly, placeholderOnly } = request.query;
 
@@ -220,7 +220,7 @@ export default async function (fastify, opts) {
         const params = [projectIdResult.value, taskResult.value];
         let paramIndex = 3;
 
-        // Only delete user's own entries unless admin/manager
+        // Only delete user's own entries unless manager
         if (request.user.role === 'user') {
             sql += ` AND user_id = $${paramIndex++}`;
             params.push(request.user.id);

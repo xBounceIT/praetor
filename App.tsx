@@ -37,6 +37,19 @@ import SuppliersView from './components/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
 import SpecialBidsView from './components/SpecialBidsView';
 
+const getModuleFromView = (view: View | '404'): string | null => {
+  if (view === '404') return null;
+  if (view.startsWith('timesheets/')) return 'timesheets';
+  if (view.startsWith('crm/')) return 'crm';
+  if (view.startsWith('hr/')) return 'hr';
+  if (view.startsWith('projects/')) return 'projects';
+  if (view.startsWith('finances/')) return 'finances';
+  if (view.startsWith('suppliers/')) return 'suppliers';
+  if (view.startsWith('configuration/')) return 'configuration';
+  if (view === 'settings') return 'settings';
+  return null;
+};
+
 const TrackerView: React.FC<{
   entries: TimeEntry[];
   clients: Client[];
@@ -426,6 +439,9 @@ const App: React.FC = () => {
     enableAiInsights: false,
     geminiApiKey: ''
   });
+  const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
+  const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
+  const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
 
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
 
@@ -493,7 +509,7 @@ const App: React.FC = () => {
       'suppliers/manage': ['manager'],
       'suppliers/quotes': ['manager'],
       // Standalone
-      'settings': ['admin', 'manager', 'user']
+      'settings': ['admin', 'manager']
     };
 
     const allowedRoles = permissions[activeView as View];
@@ -565,75 +581,140 @@ const App: React.FC = () => {
     checkAuth();
   }, []);
 
-  // Load data when user is authenticated
   useEffect(() => {
     if (!currentUser) return;
+    if (!isRouteAccessible) return;
+    const module = getModuleFromView(activeView);
+    if (!module || module === 'settings') return;
+    if (loadedModules.has(module)) return;
 
-    const loadData = async () => {
+    const loadGeneralSettings = async () => {
+      if (hasLoadedGeneralSettings) return;
+      const genSettings = await api.generalSettings.get();
+      if (genSettings.currency === 'USD') {
+        genSettings.currency = '$';
+      }
+      setGeneralSettings(genSettings);
+      setHasLoadedGeneralSettings(true);
+    };
+
+    const loadLdapConfig = async () => {
+      if (hasLoadedLdapConfig) return;
+      const ldap = await api.ldap.getConfig();
+      setLdapConfig(ldap);
+      setHasLoadedLdapConfig(true);
+    };
+
+    const loadModuleData = async () => {
       try {
-        const [usersData, clientsData, projectsData, tasksData, settingsData, entriesData, productsData, specialBidsData, quotesData, salesData, invoicesData, paymentsData, expensesData, suppliersData, supplierQuotesData] = await Promise.all([
-          api.users.list(),
-          api.clients.list(),
-          api.projects.list(),
-          api.tasks.list(),
-          api.settings.get(),
-          api.entries.list(),
-          api.products.list(),
-          api.specialBids.list(),
-          api.quotes.list(),
-          api.sales.list(),
-          api.invoices.list(),
-          api.payments.list(),
-          api.expenses.list(),
-          api.suppliers.list(),
-          api.supplierQuotes.list()
-        ]);
-
-        setUsers(usersData);
-        setClients(clientsData);
-        setProjects(projectsData);
-        setProjectTasks(tasksData);
-        setSettings(settingsData);
-        setEntries(entriesData);
-        setProducts(productsData);
-        setSpecialBids(specialBidsData);
-        setQuotes(quotesData);
-        setSales(salesData);
-        setInvoices(invoicesData);
-        setPayments(paymentsData);
-        setExpenses(expensesData);
-        setSuppliers(suppliersData);
-        setSupplierQuotes(supplierQuotesData);
-
-        // Load global settings for all users
-        const genSettings = await api.generalSettings.get();
-        if (genSettings.currency === 'USD') {
-          genSettings.currency = '$';
-        }
-        setGeneralSettings(genSettings);
-
-        // Load LDAP config for admins
-        if (currentUser.role === 'admin') {
-          const ldap = await api.ldap.getConfig();
-          setLdapConfig(ldap);
-        }
-
-        // Load Work Units for admin/manager
-        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-          try {
-            const wu = await api.workUnits.list();
-            setWorkUnits(wu);
-          } catch (err) {
-            console.error('Failed to load work units', err);
+        switch (module) {
+          case 'timesheets': {
+            if (currentUser.role === 'admin') return;
+            const [entriesData, clientsData, projectsData, tasksData, usersData] = await Promise.all([
+              api.entries.list(),
+              api.clients.list(),
+              api.projects.list(),
+              api.tasks.list(),
+              api.users.list()
+            ]);
+            setEntries(entriesData);
+            setClients(clientsData);
+            setProjects(projectsData);
+            setProjectTasks(tasksData);
+            setUsers(usersData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'hr': {
+            if (currentUser.role !== 'admin' && currentUser.role !== 'manager') return;
+            const [usersData, workUnitsData] = await Promise.all([
+              api.users.list(),
+              api.workUnits.list()
+            ]);
+            setUsers(usersData);
+            setWorkUnits(workUnitsData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'configuration': {
+            if (currentUser.role !== 'admin') return;
+            await loadGeneralSettings();
+            await loadLdapConfig();
+            break;
+          }
+          case 'crm': {
+            if (currentUser.role !== 'manager') return;
+            const [clientsData, productsData, specialBidsData, quotesData, salesData] = await Promise.all([
+              api.clients.list(),
+              api.products.list(),
+              api.specialBids.list(),
+              api.quotes.list(),
+              api.sales.list()
+            ]);
+            setClients(clientsData);
+            setProducts(productsData);
+            setSpecialBids(specialBidsData);
+            setQuotes(quotesData);
+            setSales(salesData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'finances': {
+            if (currentUser.role !== 'manager') return;
+            const [invoicesData, paymentsData, expensesData, clientsData] = await Promise.all([
+              api.invoices.list(),
+              api.payments.list(),
+              api.expenses.list(),
+              api.clients.list()
+            ]);
+            setInvoices(invoicesData);
+            setPayments(paymentsData);
+            setExpenses(expensesData);
+            setClients(clientsData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'projects': {
+            if (currentUser.role !== 'manager') return;
+            const [projectsData, tasksData, clientsData, usersData] = await Promise.all([
+              api.projects.list(),
+              api.tasks.list(),
+              api.clients.list(),
+              api.users.list()
+            ]);
+            setProjects(projectsData);
+            setProjectTasks(tasksData);
+            setClients(clientsData);
+            setUsers(usersData);
+            break;
+          }
+          case 'suppliers': {
+            if (currentUser.role !== 'manager') return;
+            const [suppliersData, supplierQuotesData, productsData] = await Promise.all([
+              api.suppliers.list(),
+              api.supplierQuotes.list(),
+              api.products.list()
+            ]);
+            setSuppliers(suppliersData);
+            setSupplierQuotes(supplierQuotesData);
+            setProducts(productsData);
+            await loadGeneralSettings();
+            break;
           }
         }
+
+        setLoadedModules(prev => {
+          const next = new Set(prev);
+          next.add(module);
+          return next;
+        });
       } catch (err) {
-        console.error('Failed to load data:', err);
+        console.error('Failed to load module data:', err);
       }
     };
 
-    loadData();
-  }, [currentUser]);
+    loadModuleData();
+  }, [activeView, currentUser, isRouteAccessible, loadedModules, hasLoadedGeneralSettings, hasLoadedLdapConfig]);
 
   // Load entries and assignments when viewing user changes
   useEffect(() => {
@@ -1287,9 +1368,10 @@ const App: React.FC = () => {
     try {
       const user = await api.users.create(name, username, password, role);
       setUsers([...users, user]);
+      return { success: true };
     } catch (err) {
       console.error('Failed to add user:', err);
-      alert('Failed to add user: ' + (err as Error).message);
+      return { success: false, error: (err as Error).message };
     }
   };
 
@@ -1338,6 +1420,9 @@ const App: React.FC = () => {
     if (token) {
       setAuthToken(token);
     }
+    setLoadedModules(new Set());
+    setHasLoadedGeneralSettings(false);
+    setHasLoadedLdapConfig(false);
     setCurrentUser(user);
     setViewingUserId(user.id);
 
@@ -1357,6 +1442,9 @@ const App: React.FC = () => {
     setAuthToken(null);
     setCurrentUser(null);
     setViewingUserId('');
+    setLoadedModules(new Set());
+    setHasLoadedGeneralSettings(false);
+    setHasLoadedLdapConfig(false);
     setUsers([]);
     setClients([]);
     setProjects([]);
@@ -1468,7 +1556,7 @@ const App: React.FC = () => {
             {activeView === 'timesheets/reports' && (
               <Reports
                 entries={
-                  (currentUser.role === 'admin' || currentUser.role === 'manager')
+                  currentUser.role === 'manager'
                     ? entries
                     : entries.filter(e => e.userId === currentUser.id)
                 }
