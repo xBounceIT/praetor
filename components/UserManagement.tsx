@@ -491,6 +491,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 value={newRole}
                 onChange={val => setNewRole(val as UserRole)}
               />
+              <p className="text-red-500 text-[10px] font-bold mt-1 min-h-[12px]"></p>
             </div>
             <div className="lg:col-span-1">
               <button
@@ -499,6 +500,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
               >
                 <i className="fa-solid fa-plus"></i> Add
               </button>
+              <p className="text-red-500 text-[10px] font-bold mt-1 min-h-[12px]"></p>
             </div>
           </form>
           {formErrors.general && (
