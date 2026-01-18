@@ -69,6 +69,14 @@ export default async function (fastify, opts) {
         const costPerHourResult = optionalNonNegativeNumber(costPerHour, 'costPerHour');
         if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
 
+        const existingUser = await query(
+            'SELECT id FROM users WHERE username = $1',
+            [usernameResult.value]
+        );
+        if (existingUser.rows.length > 0) {
+            return badRequest(reply, 'Username already exists');
+        }
+
         const avatarInitials = nameResult.value.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
         const passwordHash = await bcrypt.hash(passwordResult.value, 12);
         const id = 'u-' + Date.now();

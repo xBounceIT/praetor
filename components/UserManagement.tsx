@@ -450,7 +450,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 placeholder="e.g. Alice Smith"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {formErrors.name && <p className="text-red-500 text-[10px] font-bold mt-1">{formErrors.name}</p>}
+              <p className="text-red-500 text-[10px] font-bold mt-1 min-h-[12px]">{formErrors.name || ''}</p>
             </div>
             <div className="lg:col-span-1">
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Username</label>
@@ -466,7 +466,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 placeholder="e.g. alice"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {formErrors.username && <p className="text-red-500 text-[10px] font-bold mt-1">{formErrors.username}</p>}
+              <p className="text-red-500 text-[10px] font-bold mt-1 min-h-[12px]">{formErrors.username || ''}</p>
             </div>
             <div className="lg:col-span-1">
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
@@ -482,7 +482,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 placeholder="Password"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {formErrors.password && <p className="text-red-500 text-[10px] font-bold mt-1">{formErrors.password}</p>}
+              <p className="text-red-500 text-[10px] font-bold mt-1 min-h-[12px]">{formErrors.password || ''}</p>
             </div>
             <div className="lg:col-span-1">
               <CustomSelect
