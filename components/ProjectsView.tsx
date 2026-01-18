@@ -23,19 +23,29 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const isManagement = role === 'admin' || role === 'manager';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && clientId) {
-      if (editingProject) {
-        onUpdateProject(editingProject.id, { name, clientId, description, color, isDisabled: tempIsDisabled });
-      } else {
-        onAddProject(name, clientId, description);
-      }
-      closeModal();
+    setErrors({});
+
+    const newErrors: Record<string, string> = {};
+    if (!name?.trim()) newErrors.name = 'Project name is required';
+    if (!clientId) newErrors.clientId = 'Client is required';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
     }
+
+    if (editingProject) {
+      onUpdateProject(editingProject.id, { name, clientId, description, color, isDisabled: tempIsDisabled });
+    } else {
+      onAddProject(name, clientId, description);
+    }
+    closeModal();
   };
 
   const openCreateModal = () => {
@@ -44,6 +54,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     setClientId('');
     setDescription('');
     setColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -54,6 +65,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     setDescription(project.description || '');
     setColor(project.color);
     setTempIsDisabled(project.isDisabled || false);
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -64,6 +76,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     setName('');
     setClientId('');
     setDescription('');
+    setErrors({});
   };
 
   const confirmDelete = () => {
@@ -140,10 +153,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                   label="Client"
                   options={clientOptions}
                   value={clientId}
-                  onChange={setClientId}
+                  onChange={(val) => {
+                    setClientId(val);
+                    if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                  }}
                   placeholder="Select Client..."
                   searchable={true}
+                  className={errors.clientId ? 'border-red-300' : ''}
                 />
+                {errors.clientId && <p className="text-red-500 text-[10px] font-bold">{errors.clientId}</p>}
               </div>
 
               <div className="space-y-2">
@@ -151,11 +169,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 <input
                   type="text"
                   value={name}
-                  onChange={e => setName(e.target.value)}
+                  onChange={e => {
+                    setName(e.target.value);
+                    if (errors.name) setErrors({ ...errors, name: '' });
+                  }}
                   placeholder="e.g. Website Redesign"
-                  className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-praetor bg-slate-50 focus:bg-white transition-all"
+                  className={`w-full text-sm px-4 py-3 border rounded-xl outline-none focus:ring-2 bg-slate-50 focus:bg-white transition-all ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                   autoFocus
                 />
+                {errors.name && <p className="text-red-500 text-[10px] font-bold">{errors.name}</p>}
               </div>
 
               <div className="space-y-2">

@@ -27,9 +27,45 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
   const [testResult, setTestResult] = useState<{ success: boolean, message: string, details?: any } | null>(null);
   const [isTestLoading, setIsTestLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [testErrors, setTestErrors] = useState<Record<string, string>>({});
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
+    if (!formData.enabled) {
+      onSave(formData);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+      return;
+    }
+
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.serverUrl?.trim()) newErrors.serverUrl = 'Server URL is required';
+    if (!formData.baseDn?.trim()) newErrors.baseDn = 'Base DN is required';
+    if (!formData.userFilter?.trim()) newErrors.userFilter = 'User filter is required';
+    if (!formData.groupBaseDn?.trim()) newErrors.groupBaseDn = 'Group Base DN is required';
+    if (!formData.groupFilter?.trim()) newErrors.groupFilter = 'Group filter is required';
+
+    if ((formData.bindDn && !formData.bindPassword) || (!formData.bindDn && formData.bindPassword)) {
+      newErrors.bindCredentials = 'Both Bind DN and Bind Password are required together';
+    }
+
+    if (formData.roleMappings) {
+      formData.roleMappings.forEach((mapping, idx) => {
+        if (!mapping.ldapGroup?.trim()) {
+          newErrors[`roleMapping_${idx}`] = 'LDAP Group is required';
+        }
+      });
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     onSave(formData);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -37,10 +73,20 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
 
   const handleTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!testUser || !testPass) return;
+    setTestErrors({});
+    setTestResult(null);
+
+    const newErrors: Record<string, string> = {};
+    if (!testUser?.trim()) newErrors.testUser = 'Test username is required';
+    if (!testPass?.trim()) newErrors.testPass = 'Test password is required';
+    if (!formData.enabled) newErrors.enabled = 'LDAP must be enabled to test';
+
+    if (Object.keys(newErrors).length > 0) {
+      setTestErrors(newErrors);
+      return;
+    }
 
     setIsTestLoading(true);
-    setTestResult(null);
 
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -92,6 +138,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
     const newMappings = [...formData.roleMappings];
     newMappings[index] = { ...newMappings[index], [field]: value };
     setFormData({ ...formData, roleMappings: newMappings });
+    if (errors[`roleMapping_${index}`]) setErrors({ ...errors, [`roleMapping_${index}`]: '' });
   };
 
   return (
@@ -135,10 +182,14 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <input
                 type="text"
                 value={formData.serverUrl}
-                onChange={e => setFormData({ ...formData, serverUrl: e.target.value })}
+                onChange={e => {
+                  setFormData({ ...formData, serverUrl: e.target.value });
+                  if (errors.serverUrl) setErrors({ ...errors, serverUrl: '' });
+                }}
                 placeholder="ldap://ldap.example.com:389"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.serverUrl ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
+              {errors.serverUrl && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.serverUrl}</p>}
             </div>
 
             <div>
@@ -146,10 +197,14 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <input
                 type="text"
                 value={formData.baseDn}
-                onChange={e => setFormData({ ...formData, baseDn: e.target.value })}
+                onChange={e => {
+                  setFormData({ ...formData, baseDn: e.target.value });
+                  if (errors.baseDn) setErrors({ ...errors, baseDn: '' });
+                }}
                 placeholder="dc=example,dc=com"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.baseDn ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
+              {errors.baseDn && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.baseDn}</p>}
             </div>
 
             <div>
@@ -157,10 +212,14 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <input
                 type="text"
                 value={formData.userFilter}
-                onChange={e => setFormData({ ...formData, userFilter: e.target.value })}
+                onChange={e => {
+                  setFormData({ ...formData, userFilter: e.target.value });
+                  if (errors.userFilter) setErrors({ ...errors, userFilter: '' });
+                }}
                 placeholder="(uid={0}) or (sAMAccountName={0})"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.userFilter ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
+              {errors.userFilter && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.userFilter}</p>}
             </div>
 
             <div>
@@ -168,9 +227,12 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <input
                 type="text"
                 value={formData.bindDn}
-                onChange={e => setFormData({ ...formData, bindDn: e.target.value })}
+                onChange={e => {
+                  setFormData({ ...formData, bindDn: e.target.value });
+                  if (errors.bindCredentials) setErrors({ ...errors, bindCredentials: '' });
+                }}
                 placeholder="cn=admin,dc=example,dc=com"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.bindCredentials ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
             </div>
 
@@ -179,9 +241,13 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <input
                 type="password"
                 value={formData.bindPassword}
-                onChange={e => setFormData({ ...formData, bindPassword: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                onChange={e => {
+                  setFormData({ ...formData, bindPassword: e.target.value });
+                  if (errors.bindCredentials) setErrors({ ...errors, bindCredentials: '' });
+                }}
+                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.bindCredentials ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
+              {errors.bindCredentials && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.bindCredentials}</p>}
             </div>
           </div>
         </section>
@@ -200,20 +266,28 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                 <input
                   type="text"
                   value={formData.groupBaseDn}
-                  onChange={e => setFormData({ ...formData, groupBaseDn: e.target.value })}
+                  onChange={e => {
+                    setFormData({ ...formData, groupBaseDn: e.target.value });
+                    if (errors.groupBaseDn) setErrors({ ...errors, groupBaseDn: '' });
+                  }}
                   placeholder="ou=groups,dc=example,dc=com"
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.groupBaseDn ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
+                {errors.groupBaseDn && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.groupBaseDn}</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Group Member Filter</label>
                 <input
                   type="text"
                   value={formData.groupFilter}
-                  onChange={e => setFormData({ ...formData, groupFilter: e.target.value })}
+                  onChange={e => {
+                    setFormData({ ...formData, groupFilter: e.target.value });
+                    if (errors.groupFilter) setErrors({ ...errors, groupFilter: '' });
+                  }}
                   placeholder="(member={0}) or (memberUid={0})"
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-mono text-sm"
+                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.groupFilter ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
+                {errors.groupFilter && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.groupFilter}</p>}
               </div>
             </div>
 
@@ -241,8 +315,9 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                           value={mapping.ldapGroup}
                           onChange={e => updateRoleMapping(idx, 'ldapGroup', e.target.value)}
                           placeholder="LDAP Group CN (e.g. cn=admins)"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-praetor outline-none"
+                          className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-sm font-mono focus:ring-2 outline-none ${errors[`roleMapping_${idx}`] ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'focus:ring-praetor border-slate-200'}`}
                         />
+                        {errors[`roleMapping_${idx}`] && <p className="text-red-500 text-[10px] font-bold mt-1">{errors[`roleMapping_${idx}`]}</p>}
                       </div>
                       <i className="fa-solid fa-arrow-right text-slate-300 text-xs"></i>
                       <div className="w-40">
@@ -292,18 +367,27 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                 <input
                   type="text"
                   value={testUser}
-                  onChange={e => setTestUser(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold text-slate-700"
+                  onChange={e => {
+                    setTestUser(e.target.value);
+                    if (testErrors.testUser) setTestErrors({ ...testErrors, testUser: '' });
+                  }}
+                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold text-slate-700 ${testErrors.testUser ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
+                {testErrors.testUser && <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testUser}</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Test Password</label>
                 <input
                   type="password"
                   value={testPass}
-                  onChange={e => setTestPass(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold text-slate-700"
+                  onChange={e => {
+                    setTestPass(e.target.value);
+                    if (testErrors.testPass) setTestErrors({ ...testErrors, testPass: '' });
+                  }}
+                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold text-slate-700 ${testErrors.testPass ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
+                {testErrors.testPass && <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testPass}</p>}
+                {testErrors.enabled && <p className="text-amber-600 text-[10px] font-bold mt-1">{testErrors.enabled}</p>}
               </div>
               <button
                 type="submit"

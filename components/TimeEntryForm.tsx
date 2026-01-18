@@ -71,7 +71,8 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
-  const [errors, setErrors] = useState<{ hours?: string }>({});
+  const [errors, setErrors] = useState<{ hours?: string; clientId?: string; projectId?: string; task?: string; smartInput?: string; recurrenceEndDate?: string }>({});
+  const [smartError, setSmartError] = useState('');
 
   // New user controls
   const [makeRecurring, setMakeRecurring] = useState(false);
@@ -122,13 +123,30 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     e.preventDefault();
     setErrors({});
 
+    const newErrors: typeof errors = {};
+
+    // Validate duration
     const durationVal = parseFloat(duration);
     if (!duration || isNaN(durationVal) || durationVal <= 0) {
-      setErrors({ hours: 'Hours are required and must be greater than 0' });
-      return;
+      newErrors.hours = 'Hours are required and must be greater than 0';
     }
 
-    if (!selectedTaskName || !selectedProjectId) return;
+    // Validate client/project/task
+    if (!selectedClientId) newErrors.clientId = 'Client is required';
+    if (!selectedProjectId) newErrors.projectId = 'Project is required';
+    if (!selectedTaskName || (!selectedTaskId && !selectedTaskName)) {
+      newErrors.task = 'Task is required';
+    }
+
+    // Validate recurrence date if enabled
+    if (makeRecurring && recurrenceEndDate && date && recurrenceEndDate < date) {
+      newErrors.recurrenceEndDate = 'End date must be after start date';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
 
     const project = projects.find(p => p.id === selectedProjectId);
     const client = clients.find(c => c.id === selectedClientId);
@@ -168,13 +186,20 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
   const handleSmartSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!smartInput.trim()) return;
+    setSmartError('');
+
+    if (!smartInput.trim()) {
+      setSmartError('Please enter a time entry description');
+      return;
+    }
 
     setIsLoading(true);
+    setSmartError('');
+
     const parsed = await parseSmartEntry(smartInput, geminiApiKey);
     setIsLoading(false);
 
-    if (parsed) {
+    if (parsed && parsed.duration > 0) {
       const projectMatch = projects.find(p => p.name.toLowerCase().includes(parsed.project.toLowerCase()));
       const clientMatch = projectMatch ? clients.find(c => c.id === projectMatch.clientId) : clients[0];
 
@@ -191,7 +216,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
       setSmartInput('');
       setIsSmartMode(false);
     } else {
-      alert("Couldn't parse that. Try something like 'Spent 2 hours on design for Acme Corp'");
+      setSmartError("Couldn't parse entry. Try format like: '2.5 hours on task name for project'");
     }
   };
 
@@ -207,6 +232,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         setSelectedTaskId(task.id);
       }
     }
+    if (errors.task) setErrors({ ...errors, task: '' });
   };
 
   const isExceedingGoal = useMemo(() => {
@@ -259,9 +285,12 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
             <input
               type="text"
               value={smartInput}
-              onChange={(e) => setSmartInput(e.target.value)}
+              onChange={(e) => {
+                setSmartInput(e.target.value);
+                if (smartError) setSmartError('');
+              }}
               placeholder="e.g., '3 hours on Frontend Dev for Website Redesign with some extra notes'"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor focus:outline-none transition-all pr-12 text-slate-700"
+              className={`w-full px-4 py-3 bg-slate-50 border rounded-lg focus:ring-2 outline-none transition-all pr-12 text-slate-700 ${smartError ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-praetor'}`}
               disabled={isLoading}
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -271,6 +300,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 <i className="fa-solid fa-wand-magic-sparkles text-slate-300"></i>
               )}
             </div>
+            {smartError && <p className="text-red-500 text-[10px] font-bold mt-1 animate-in fade-in">{smartError}</p>}
           </div>
           <button
             type="submit"
@@ -288,19 +318,29 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 label="Client"
                 options={clientOptions}
                 value={selectedClientId}
-                onChange={setSelectedClientId}
+                onChange={(val) => {
+                  setSelectedClientId(val);
+                  if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                }}
                 searchable={true}
+                className={errors.clientId ? 'border-red-300' : ''}
               />
+              {errors.clientId && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>}
             </div>
             <div className="md:col-span-1">
               <CustomSelect
                 label="Project"
                 options={projectOptions}
                 value={selectedProjectId}
-                onChange={setSelectedProjectId}
+                onChange={(val) => {
+                  setSelectedProjectId(val);
+                  if (errors.projectId) setErrors({ ...errors, projectId: '' });
+                }}
                 placeholder={filteredProjects.length === 0 ? "No projects" : "Select project..."}
                 searchable={true}
+                className={errors.projectId ? 'border-red-300' : ''}
               />
+              {errors.projectId && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>}
             </div>
             <div className="md:col-span-2">
               <CustomSelect
@@ -310,14 +350,20 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 onChange={handleTaskChange}
                 placeholder={filteredTasks.length === 0 && !canCreateCustomTask ? "No tasks" : "Select task..."}
                 searchable={true}
+                className={errors.task ? 'border-red-300' : ''}
               />
+              {errors.task && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.task}</p>}
               {selectedTaskName === 'custom' && canCreateCustomTask && (
                 <input
                   type="text"
                   autoFocus
                   placeholder="Type custom task name..."
                   value={selectedTaskName === 'custom' ? '' : selectedTaskName}
-                  onChange={(e) => { setSelectedTaskName(e.target.value); setSelectedTaskId(''); }}
+                  onChange={(e) => {
+                    setSelectedTaskName(e.target.value);
+                    setSelectedTaskId('');
+                    if (errors.task) setErrors({ ...errors, task: '' });
+                  }}
                   className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
                 />
               )}
@@ -396,9 +442,13 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                           <input
                             type="date"
                             value={recurrenceEndDate}
-                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                            className="text-xs bg-white border border-slate-200 text-praetor font-medium rounded-md px-2 py-2 outline-none focus:ring-1 focus:ring-praetor"
+                            onChange={(e) => {
+                              setRecurrenceEndDate(e.target.value);
+                              if (errors.recurrenceEndDate) setErrors({ ...errors, recurrenceEndDate: '' });
+                            }}
+                            className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
                           />
+                          {errors.recurrenceEndDate && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.recurrenceEndDate}</p>}
                         </div>
                       )}
                     </div>

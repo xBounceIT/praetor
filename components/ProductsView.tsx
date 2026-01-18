@@ -16,6 +16,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -70,6 +71,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             type: 'item',
             supplierId: ''
         });
+        setErrors({});
         setIsModalOpen(true);
     };
 
@@ -85,19 +87,28 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             type: product.type || 'item',
             supplierId: product.supplierId || ''
         });
+        setErrors({});
         setIsModalOpen(true);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData.name?.trim()) {
-            if (editingProduct) {
-                onUpdateProduct(editingProduct.id, formData);
-            } else {
-                onAddProduct(formData);
-            }
-            setIsModalOpen(false);
+        setErrors({});
+
+        const newErrors: Record<string, string> = {};
+        if (!formData.name?.trim()) newErrors.name = 'Product name is required';
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
         }
+
+        if (editingProduct) {
+            onUpdateProduct(editingProduct.id, formData);
+        } else {
+            onAddProduct(formData);
+        }
+        setIsModalOpen(false);
     };
 
     const handleAddCategory = () => {
@@ -249,10 +260,14 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                             type="text"
                                             required
                                             value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, name: e.target.value });
+                                                if (errors.name) setErrors({ ...errors, name: '' });
+                                            }}
                                             placeholder="e.g. Consulting Services"
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                                            className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                                         />
+                                        {errors.name && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>}
                                     </div>
 
                                     <div className="space-y-1.5">
