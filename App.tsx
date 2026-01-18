@@ -455,7 +455,7 @@ const App: React.FC = () => {
       'suppliers/manage', 'suppliers/quotes',
       'settings'
     ];
-    return validViews.includes(hash) ? hash : (rawHash === '' ? 'timesheets/tracker' : '404');
+    return validViews.includes(hash) ? hash : (rawHash === '' || rawHash === 'login' ? 'timesheets/tracker' : '404');
   });
 
   const isRouteAccessible = useMemo(() => {
@@ -511,13 +511,24 @@ const App: React.FC = () => {
 
   // Sync hash with activeView
   useEffect(() => {
+    if (isLoading) return;
+    if (!currentUser) {
+      if (window.location.hash !== '#/login') window.location.hash = '/login';
+      return;
+    }
     window.location.hash = '/' + activeView;
-  }, [activeView]);
+  }, [activeView, currentUser, isLoading]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
     const handleHashChange = () => {
       const rawHash = window.location.hash.replace('#/', '').replace('#', '');
+      if (rawHash === 'login') {
+        if (currentUser) {
+          setActiveView('timesheets/tracker');
+        }
+        return;
+      }
       const hash = rawHash as View;
       const nextView = VALID_VIEWS.includes(hash) ? hash : (rawHash === '' ? 'timesheets/tracker' : '404');
       if (nextView !== activeView) {
@@ -526,7 +537,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, VALID_VIEWS]);
+  }, [activeView, VALID_VIEWS, currentUser]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
