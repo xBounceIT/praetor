@@ -196,7 +196,7 @@ export const usersApi = {
     getAssignments: (id: string): Promise<{ clientIds: string[], projectIds: string[], taskIds: string[] }> =>
         fetchApi(`/users/${id}/assignments`),
 
-    updateAssignments: (id: string, clientIds: string[], projectIds: string[], taskIds: string[]): Promise<void> =>
+    updateAssignments: (id: string, clientIds: string[], projectIds: string[], taskIds?: string[]): Promise<void> =>
         fetchApi(`/users/${id}/assignments`, {
             method: 'POST',
             body: JSON.stringify({ clientIds, projectIds, taskIds }),

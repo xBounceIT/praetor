@@ -49,6 +49,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
 
+  const canAssignTaskAssignments = currentUserRole === 'manager';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors({});
@@ -95,7 +97,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const saveAssignments = async () => {
     if (!managingUserId) return;
     try {
-      await usersApi.updateAssignments(managingUserId, assignments.clientIds, assignments.projectIds, assignments.taskIds);
+      await usersApi.updateAssignments(
+        managingUserId,
+        assignments.clientIds,
+        assignments.projectIds,
+        canAssignTaskAssignments ? assignments.taskIds : undefined
+      );
       closeAssignments();
     } catch (err) {
       console.error("Failed to save assignments", err);
@@ -606,7 +613,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                   <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className={`grid grid-cols-1 ${canAssignTaskAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
                   {/* Clients Column */}
                   <div className="space-y-3">
                     <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
@@ -684,49 +691,50 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                     </div>
                   </div>
 
-                  {/* Tasks Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                  {canAssignTaskAssignments && (
+                    <div className="space-y-3">
+                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                        <div className="flex items-center justify-between py-2">
+                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
+                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Search tasks..."
+                          value={taskSearch}
+                          onChange={(e) => setTaskSearch(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        placeholder="Search tasks..."
-                        value={taskSearch}
-                        onChange={(e) => setTaskSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                      />
+                      <div className="space-y-2">
+                        {visibleTasks.map(task => {
+                          const project = projects.find(p => p.id === task.projectId);
+                          return (
+                            <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)
+                              ? 'bg-slate-50 border-slate-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}>
+                              <input
+                                type="checkbox"
+                                checked={assignments.taskIds.includes(task.id)}
+                                onChange={() => toggleAssignment('task', task.id)}
+                                className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
+                              />
+                              <div className="flex flex-col">
+                                <span className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                                  {task.name}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {project?.name || 'Unknown Project'}
+                                </span>
+                              </div>
+                            </label>
+                          );
+                        })}
+                        {tasks.length === 0 && <p className="text-xs text-slate-400 italic">No tasks found.</p>}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {visibleTasks.map(task => {
-                        const project = projects.find(p => p.id === task.projectId);
-                        return (
-                          <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)
-                            ? 'bg-slate-50 border-slate-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                            }`}>
-                            <input
-                              type="checkbox"
-                              checked={assignments.taskIds.includes(task.id)}
-                              onChange={() => toggleAssignment('task', task.id)}
-                              className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                            />
-                            <div className="flex flex-col">
-                              <span className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}>
-                                {task.name}
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                {project?.name || 'Unknown Project'}
-                              </span>
-                            </div>
-                          </label>
-                        );
-                      })}
-                      {tasks.length === 0 && <p className="text-xs text-slate-400 italic">No tasks found.</p>}
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

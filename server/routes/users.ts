@@ -235,6 +235,10 @@ export default async function (fastify, opts) {
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
+        if (request.user.role === 'admin' && taskIds !== undefined) {
+            return reply.code(403).send({ error: 'Admins cannot assign tasks' });
+        }
+
         const clientIdsResult = optionalArrayOfStrings(clientIds, 'clientIds');
         if (!clientIdsResult.ok) return badRequest(reply, clientIdsResult.message);
 

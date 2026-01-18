@@ -1,5 +1,5 @@
 import { query } from '../db/index.ts';
-import { authenticateToken } from '../middleware/auth.ts';
+import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalNonNegativeNumber, requireNonEmptyArrayOfStrings, parseBoolean, optionalDateString, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
@@ -46,7 +46,7 @@ export default async function (fastify, opts) {
 
     // POST / - Create task
     fastify.post('/', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager')]
     }, async (request, reply) => {
         const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } = request.body;
 
@@ -99,7 +99,7 @@ export default async function (fastify, opts) {
 
     // PUT /:id - Update task
     fastify.put('/:id', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager')]
     }, async (request, reply) => {
         const { id } = request.params;
         const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = request.body;
@@ -168,7 +168,7 @@ export default async function (fastify, opts) {
 
     // DELETE /:id - Delete task
     fastify.delete('/:id', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager')]
     }, async (request, reply) => {
         const { id } = request.params;
         const idResult = requireNonEmptyString(id, 'id');
@@ -194,7 +194,7 @@ export default async function (fastify, opts) {
 
     // POST /:id/users - Update assigned users
     fastify.post('/:id/users', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager')]
     }, async (request, reply) => {
         const { id } = request.params;
         const { userIds } = request.body;
@@ -203,11 +203,6 @@ export default async function (fastify, opts) {
 
         const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
         if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
-
-        // Only admin/manager can assign users
-        if (request.user.role !== 'admin' && request.user.role !== 'manager') {
-            return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
 
         try {
             await query('BEGIN');

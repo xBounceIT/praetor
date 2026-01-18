@@ -31,7 +31,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [userSearch, setUserSearch] = useState('');
 
-  const isManagement = role === 'admin' || role === 'manager';
+  const isManagement = role === 'manager';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -470,8 +470,12 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
               return (
                 <tr
                   key={task.id}
-                  onClick={() => startEditing(task)}
-                  className={`group hover:bg-slate-50 transition-colors cursor-pointer ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
+                  onClick={() => {
+                    if (isManagement) {
+                      startEditing(task);
+                    }
+                  }}
+                  className={`group hover:bg-slate-50 transition-colors ${isManagement ? 'cursor-pointer' : 'cursor-default'} ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
                 >
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
