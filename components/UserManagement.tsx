@@ -106,11 +106,40 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const toggleAssignment = (type: 'client' | 'project' | 'task', id: string) => {
     setAssignments(prev => {
       const list = type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
-      const newList = list.includes(id) ? list.filter(item => item !== id) : [...list, id];
+      const isAdding = !list.includes(id);
+      const newList = isAdding ? [...list, id] : list.filter(item => item !== id);
+
+      let newClientIds = prev.clientIds;
+      let newProjectIds = prev.projectIds;
+      let newTaskIds = prev.taskIds;
+
+      if (type === 'task') {
+        newTaskIds = newList;
+        if (isAdding) {
+          const task = tasks.find(t => t.id === id);
+          if (task) {
+            const project = projects.find(p => p.id === task.projectId);
+            if (project && !newProjectIds.includes(project.id)) {
+              newProjectIds = [...newProjectIds, project.id];
+            }
+            if (project) {
+              const client = clients.find(c => c.id === project.clientId);
+              if (client && !newClientIds.includes(client.id)) {
+                newClientIds = [...newClientIds, client.id];
+              }
+            }
+          }
+        }
+      } else if (type === 'project') {
+        newProjectIds = newList;
+      } else {
+        newClientIds = newList;
+      }
 
       return {
-        ...prev,
-        [type === 'client' ? 'clientIds' : type === 'project' ? 'projectIds' : 'taskIds']: newList
+        clientIds: newClientIds,
+        projectIds: newProjectIds,
+        taskIds: newTaskIds
       };
     });
   };
