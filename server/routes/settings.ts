@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseNonNegativeNumber, parseBoolean, optionalEmail, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - Get current user's settings
@@ -49,6 +50,17 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const { fullName, email, dailyGoal, startOfWeek, treatSaturdayAsHoliday, enableAiInsights } = request.body;
+        const fullNameResult = optionalNonEmptyString(fullName, 'fullName');
+        if (!fullNameResult.ok) return badRequest(reply, fullNameResult.message);
+
+        const emailResult = optionalEmail(email, 'email');
+        if (!emailResult.ok) return badRequest(reply, emailResult.message);
+
+        const dailyGoalResult = optionalNonNegativeNumber(dailyGoal, 'dailyGoal');
+        if (!dailyGoalResult.ok) return badRequest(reply, dailyGoalResult.message);
+
+        const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
+        const enableAiInsightsValue = parseBoolean(enableAiInsights);
 
         const result = await query(
             `INSERT INTO settings (user_id, full_name, email, daily_goal, start_of_week, treat_saturday_as_holiday, enable_ai_insights)
@@ -62,6 +74,7 @@ export default async function (fastify, opts) {
          enable_ai_insights = COALESCE($7, settings.enable_ai_insights),
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
+            [request.user.id, fullNameResult.value, emailResult.value, dailyGoalResult.value, startOfWeek, treatSaturdayAsHolidayValue, enableAiInsightsValue]
             [request.user.id, fullName, email, dailyGoal, startOfWeek, treatSaturdayAsHoliday, enableAiInsights]
         );
 
@@ -81,27 +94,33 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const { currentPassword, newPassword } = request.body;
+        const currentPasswordResult = requireNonEmptyString(currentPassword, 'currentPassword');
+        if (!currentPasswordResult.ok) return badRequest(reply, currentPasswordResult.message);
 
-        if (!currentPassword || !newPassword) {
-            return reply.code(400).send({ error: 'Current and new passwords are required' });
+        const newPasswordResult = requireNonEmptyString(newPassword, 'newPassword');
+        if (!newPasswordResult.ok) return badRequest(reply, newPasswordResult.message);
+
+        if (newPasswordResult.value.length < 8) {
+            return badRequest(reply, 'New password must be at least 8 characters long');
+        }
         }
 
         // Get user's current password hash
         const userRes = await query('SELECT password_hash FROM users WHERE id = $1', [request.user.id]);
-        if (userRes.rows.length === 0) {
+            return reply.code(404).send({ error: 'User not found' });
             return reply.code(404).send({ error: 'User not found' });
         }
 
         const { password_hash } = userRes.rows[0];
 
-        // Verify current password
+        const isMatch = await bcrypt.compare(currentPasswordResult.value, password_hash);
         const isMatch = await bcrypt.compare(currentPassword, password_hash);
-        if (!isMatch) {
+            return badRequest(reply, 'Incorrect current password');
             return reply.code(400).send({ error: 'Incorrect current password' });
         }
 
         // Hash new password
-        const salt = await bcrypt.genSalt(12);
+        const newHash = await bcrypt.hash(newPasswordResult.value, salt);
         const newHash = await bcrypt.hash(newPassword, salt);
 
         // Update password

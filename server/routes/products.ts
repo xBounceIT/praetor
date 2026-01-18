@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseNonNegativeNumber, parseBoolean, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All product routes require at least manager role
@@ -21,15 +22,24 @@ export default async function (fastify, opts) {
     fastify.post('/', async (request, reply) => {
         const { name, costo, molPercentage, costUnit, category, taxRate, type, supplierId } = request.body;
 
-        if (!name) {
-            return reply.code(400).send({ error: 'Product name is required' });
-        }
+        const nameResult = requireNonEmptyString(name, 'name');
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+        const costoResult = parseNonNegativeNumber(costo, 'costo');
+        if (!costoResult.ok) return badRequest(reply, costoResult.message);
+
+        const molPercentageResult = parseNonNegativeNumber(molPercentage, 'molPercentage');
+        if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+
+        const taxRateResult = parseNonNegativeNumber(taxRate, 'taxRate');
+        if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
 
         const id = 'p-' + Date.now();
         const result = await query(
             `INSERT INTO products (id, name, costo, mol_percentage, cost_unit, category, tax_rate, type, supplier_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
              RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
+            [id, nameResult.value, costoResult.value, molPercentageResult.value, costUnit || 'unit', category, taxRateResult.value, type || 'item', supplierId || null]
             [id, name, costo || 0, molPercentage || 0, costUnit || 'unit', category, taxRate || 0, type || 'item', supplierId || null]
         );
         
@@ -48,6 +58,32 @@ export default async function (fastify, opts) {
     fastify.put('/:id', async (request, reply) => {
         const { id } = request.params;
         const { name, costo, molPercentage, costUnit, category, taxRate, type, isDisabled, supplierId } = request.body;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
+
+        if (name !== undefined) {
+            const nameResult = optionalNonEmptyString(name, 'name');
+            if (!nameResult.ok) return badRequest(reply, nameResult.message);
+        }
+
+        if (costo !== undefined) {
+            const costoResult = parseNonNegativeNumber(costo, 'costo');
+            if (!costoResult.ok) return badRequest(reply, costoResult.message);
+        }
+
+        if (molPercentage !== undefined) {
+            const molPercentageResult = parseNonNegativeNumber(molPercentage, 'molPercentage');
+            if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+        }
+
+        if (taxRate !== undefined) {
+            const taxRateResult = parseNonNegativeNumber(taxRate, 'taxRate');
+            if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+        }
+
+        if (isDisabled !== undefined) {
+            const isDisabledValue = parseBoolean(isDisabled);
+        }
 
         const result = await query(
             `UPDATE products 
@@ -61,7 +97,7 @@ export default async function (fastify, opts) {
                  supplier_id = $8
              WHERE id = $9 
              RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"`,
-            [name, costo, molPercentage, costUnit, category, taxRate, isDisabled, supplierId !== undefined ? supplierId : null, id]
+            [name, costo, molPercentage, costUnit, category, taxRate, isDisabled || false, supplierId !== undefined ? supplierId : null, idResult.value]
         );
 
         if (result.rows.length === 0) {
@@ -82,8 +118,11 @@ export default async function (fastify, opts) {
     // DELETE /:id - Delete product
     fastify.delete('/:id', async (request, reply) => {
         const { id } = request.params;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
+        const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [idResult.value]);
+        const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [idResult.value]);
 
         if (result.rows.length === 0) {
             return reply.code(404).send({ error: 'Product not found' });

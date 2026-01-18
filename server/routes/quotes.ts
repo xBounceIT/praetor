@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { requireNonEmptyString, parseDateString, parsePositiveNumber, parseNonNegativeNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All quote routes require at least manager role
@@ -63,9 +64,31 @@ export default async function (fastify, opts) {
     fastify.post('/', async (request, reply) => {
         const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } = request.body;
 
-        if (!clientId || !clientName || !items || items.length === 0 || !expirationDate) {
-            return reply.code(400).send({ error: 'Client, items, and expiration date are required' });
+        const clientIdResult = requireNonEmptyString(clientId, 'clientId');
+        if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+
+        const clientNameResult = requireNonEmptyString(clientName, 'clientName');
+        if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return badRequest(reply, 'Items must be a non-empty array');
         }
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
+            if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
+            const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
+            if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
+            const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+            if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+        }
+
+        const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
+        if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
+
+        const discountResult = parseNonNegativeNumber(discount, 'discount');
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
         const quoteId = 'q-' + Date.now();
 

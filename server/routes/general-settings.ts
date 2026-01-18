@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { optionalNonEmptyString, parseNonNegativeNumber, parseBoolean, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - Get global settings (available to all authenticated users)
@@ -36,6 +37,14 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken, requireRole('admin')]
     }, async (request, reply) => {
         const { currency, dailyLimit, startOfWeek, treatSaturdayAsHoliday, enableAiInsights, geminiApiKey } = request.body;
+        const currencyResult = optionalNonEmptyString(currency, 'currency');
+        if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
+
+        const dailyLimitResult = parseNonNegativeNumber(dailyLimit, 'dailyLimit');
+        if (!dailyLimitResult.ok) return badRequest(reply, dailyLimitResult.message);
+
+        const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
+        const enableAiInsightsValue = parseBoolean(enableAiInsights);
 
         const result = await query(
             `UPDATE general_settings 
@@ -48,7 +57,7 @@ export default async function (fastify, opts) {
                  updated_at = CURRENT_TIMESTAMP 
              WHERE id = 1 
              RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key`,
-            [currency, dailyLimit, startOfWeek, treatSaturdayAsHoliday, enableAiInsights, geminiApiKey]
+            [currencyResult.value, dailyLimitResult.value, startOfWeek, treatSaturdayAsHolidayValue, enableAiInsightsValue, geminiApiKey]
         );
 
         const s = result.rows[0];

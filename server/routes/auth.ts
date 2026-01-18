@@ -1,19 +1,26 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../db/index.ts';
 import { generateToken, authenticateToken } from '../middleware/auth.ts';
+import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // POST /login
     fastify.post('/login', async (request, reply) => {
         const { username, password } = request.body;
 
-        if (!username || !password) {
-            return reply.code(400).send({ error: 'Username and password are required' });
+        const usernameResult = requireNonEmptyString(username, 'username');
+        if (!usernameResult.ok) {
+            return badRequest(reply, usernameResult.message);
+        }
+
+        const passwordResult = requireNonEmptyString(password, 'password');
+        if (!passwordResult.ok) {
+            return badRequest(reply, passwordResult.message);
         }
 
         const result = await query(
             'SELECT id, name, username, password_hash, role, avatar_initials, is_disabled FROM users WHERE username = $1',
-            [username]
+            [usernameResult.value]
         );
 
         if (result.rows.length === 0) {
@@ -30,7 +37,7 @@ export default async function (fastify, opts) {
         let ldapAuthSuccess = false;
         try {
             const ldapService = (await import('../services/ldap.ts')).default;
-            ldapAuthSuccess = await ldapService.authenticate(username, password);
+            ldapAuthSuccess = await ldapService.authenticate(usernameResult.value, passwordResult.value);
         } catch (err) {
             console.error('LDAP Auth Attempt Failed:', err.message);
         }
@@ -39,7 +46,7 @@ export default async function (fastify, opts) {
         if (ldapAuthSuccess) {
             validPassword = true;
         } else {
-            validPassword = await bcrypt.compare(password, user.password_hash);
+            validPassword = await bcrypt.compare(passwordResult.value, user.password_hash);
         }
 
         if (!validPassword) {

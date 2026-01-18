@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { parseBoolean, optionalNonEmptyString, ensureArrayOfStrings, requireNonEmptyString, validateEnum, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET /config - Get LDAP configuration (admin only)
@@ -45,6 +46,48 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken, requireRole('admin')]
     }, async (request, reply) => {
         const { enabled, serverUrl, baseDn, bindDn, bindPassword, userFilter, groupBaseDn, groupFilter, roleMappings } = request.body;
+        const enabledValue = parseBoolean(enabled);
+
+        if (enabledValue) {
+            const serverUrlResult = requireNonEmptyString(serverUrl, 'serverUrl');
+            if (!serverUrlResult.ok) return badRequest(reply, serverUrlResult.message);
+
+            const baseDnResult = requireNonEmptyString(baseDn, 'baseDn');
+            if (!baseDnResult.ok) return badRequest(reply, baseDnResult.message);
+
+            const userFilterResult = requireNonEmptyString(userFilter, 'userFilter');
+            if (!userFilterResult.ok) return badRequest(reply, userFilterResult.message);
+
+            const groupBaseDnResult = requireNonEmptyString(groupBaseDn, 'groupBaseDn');
+            if (!groupBaseDnResult.ok) return badRequest(reply, groupBaseDnResult.message);
+
+            const groupFilterResult = requireNonEmptyString(groupFilter, 'groupFilter');
+            if (!groupFilterResult.ok) return badRequest(reply, groupFilterResult.message);
+        }
+
+        // bindDn and bindPassword must be provided together or not at all
+        const hasBindDn = bindDn !== undefined && bindDn !== null && bindDn !== '';
+        const hasBindPassword = bindPassword !== undefined && bindPassword !== null && bindPassword !== '';
+        if (hasBindDn !== hasBindPassword) {
+            return badRequest(reply, 'bindDn and bindPassword must be provided together or not at all');
+        }
+
+        // Validate roleMappings if provided
+        if (roleMappings !== undefined && roleMappings !== null) {
+            if (!Array.isArray(roleMappings)) {
+                return badRequest(reply, 'roleMappings must be an array');
+            }
+            for (let i = 0; i < roleMappings.length; i++) {
+                const mapping = roleMappings[i];
+                if (typeof mapping !== 'object' || mapping === null) {
+                    return badRequest(reply, `roleMappings[${i}] must be an object`);
+                }
+                const ldapGroupResult = requireNonEmptyString(mapping.ldapGroup, `roleMappings[${i}].ldapGroup`);
+                if (!ldapGroupResult.ok) return badRequest(reply, ldapGroupResult.message);
+                const roleResult = validateEnum(mapping.role, ['admin', 'manager', 'user'], `roleMappings[${i}].role`);
+                if (!roleResult.ok) return badRequest(reply, roleResult.message);
+            }
+        }
 
         const result = await query(
             `UPDATE ldap_config SET
@@ -60,7 +103,7 @@ export default async function (fastify, opts) {
          updated_at = CURRENT_TIMESTAMP
        WHERE id = 1
        RETURNING *`,
-            [enabled, serverUrl, baseDn, bindDn, bindPassword, userFilter, groupBaseDn, groupFilter, JSON.stringify(roleMappings || [])]
+            [enabledValue, serverUrl, baseDn, bindDn, bindPassword, userFilter, groupBaseDn, groupFilter, JSON.stringify(roleMappings || [])]
         );
 
         const c = result.rows[0];

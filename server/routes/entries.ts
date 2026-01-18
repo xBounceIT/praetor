@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
+import { requireNonEmptyString, parseDateString, parseNonNegativeNumber, parseBoolean, optionalNonEmptyString, badRequest, parseQueryBoolean } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List time entries
@@ -60,14 +61,36 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { date, clientId, clientName, projectId, projectName, task, notes, duration, isPlaceholder, userId } = request.body;
 
-        if (!date || !clientId || !clientName || !projectId || !projectName || !task) {
-            return reply.code(400).send({ error: 'Missing required fields' });
-        }
+        const dateResult = parseDateString(date, 'date');
+        if (!dateResult.ok) return badRequest(reply, dateResult.message);
+
+        const clientIdResult = requireNonEmptyString(clientId, 'clientId');
+        if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+
+        const clientNameResult = requireNonEmptyString(clientName, 'clientName');
+        if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
+
+        const projectIdResult = requireNonEmptyString(projectId, 'projectId');
+        if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
+
+        const projectNameResult = requireNonEmptyString(projectName, 'projectName');
+        if (!projectNameResult.ok) return badRequest(reply, projectNameResult.message);
+
+        const taskResult = requireNonEmptyString(task, 'task');
+        if (!taskResult.ok) return badRequest(reply, taskResult.message);
+
+        const durationResult = parseNonNegativeNumber(duration, 'duration');
+        if (!durationResult.ok) return badRequest(reply, durationResult.message);
+
+        const isPlaceholderValue = parseBoolean(isPlaceholder);
 
         // Allow admins/managers to create entries for other users
         let targetUserId = request.user.id;
         if (userId && (request.user.role === 'admin' || request.user.role === 'manager')) {
             targetUserId = userId;
+            const targetUserIdResult = requireNonEmptyString(targetUserId, 'userId');
+            if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
+            targetUserId = targetUserIdResult.value;
         }
 
         // Fetch user's current cost
@@ -79,22 +102,22 @@ export default async function (fastify, opts) {
         await query(
             `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-            [id, targetUserId, date, clientId, clientName, projectId, projectName, task, notes || null, duration || 0, hourlyCost, isPlaceholder || false]
+            [id, targetUserId, dateResult.value, clientIdResult.value, clientNameResult.value, projectIdResult.value, projectNameResult.value, taskResult.value, notes || null, durationResult.value, hourlyCost, isPlaceholderValue]
         );
 
         return reply.code(201).send({
             id,
             userId: targetUserId,
-            date,
-            clientId,
-            clientName,
-            projectId,
-            projectName,
-            task,
+            date: dateResult.value,
+            clientId: clientIdResult.value,
+            clientName: clientNameResult.value,
+            projectId: projectIdResult.value,
+            projectName: projectNameResult.value,
+            task: taskResult.value,
             notes,
-            duration: duration || 0,
+            duration: durationResult.value,
             hourlyCost: parseFloat(hourlyCost),
-            isPlaceholder: isPlaceholder || false,
+            isPlaceholder: isPlaceholderValue,
             createdAt: Date.now()
         });
     });
@@ -105,9 +128,21 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { id } = request.params;
         const { duration, notes, isPlaceholder } = request.body;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
+
+        if (duration !== undefined) {
+            const durationResult = parseNonNegativeNumber(duration, 'duration');
+            if (!durationResult.ok) return badRequest(reply, durationResult.message);
+        }
+
+        if (notes !== undefined) {
+            const notesResult = optionalNonEmptyString(notes, 'notes');
+            if (!notesResult.ok) return badRequest(reply, notesResult.message);
+        }
 
         // Check ownership or admin/manager role
-        const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [id]);
+        const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [idResult.value]);
         if (existing.rows.length === 0) {
             return reply.code(404).send({ error: 'Entry not found' });
         }
@@ -123,7 +158,7 @@ export default async function (fastify, opts) {
            is_placeholder = COALESCE($4, is_placeholder)
        WHERE id = $1
        RETURNING *`,
-            [id, duration, notes, isPlaceholder]
+            [idResult.value, duration, notes, isPlaceholder]
         );
 
         const e = result.rows[0];
@@ -149,9 +184,11 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const { id } = request.params;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
 
         // Check ownership or admin/manager role
-        const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [id]);
+        const existing = await query('SELECT user_id FROM time_entries WHERE id = $1', [idResult.value]);
         if (existing.rows.length === 0) {
             return reply.code(404).send({ error: 'Entry not found' });
         }
@@ -160,7 +197,7 @@ export default async function (fastify, opts) {
             return reply.code(403).send({ error: 'Not authorized to delete this entry' });
         }
 
-        await query('DELETE FROM time_entries WHERE id = $1', [id]);
+        await query('DELETE FROM time_entries WHERE id = $1', [idResult.value]);
         return { message: 'Entry deleted' };
     });
 
@@ -170,12 +207,17 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { projectId, task, futureOnly, placeholderOnly } = request.query;
 
-        if (!projectId || !task) {
-            return reply.code(400).send({ error: 'projectId and task are required' });
-        }
+        const projectIdResult = requireNonEmptyString(projectId, 'projectId');
+        if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
+
+        const taskResult = requireNonEmptyString(task, 'task');
+        if (!taskResult.ok) return badRequest(reply, taskResult.message);
+
+        const futureOnlyValue = parseQueryBoolean(futureOnly) || false;
+        const placeholderOnlyValue = parseQueryBoolean(placeholderOnly) || false;
 
         let sql = 'DELETE FROM time_entries WHERE project_id = $1 AND task = $2';
-        const params = [projectId, task];
+        const params = [projectIdResult.value, taskResult.value];
         let paramIndex = 3;
 
         // Only delete user's own entries unless admin/manager
@@ -184,12 +226,12 @@ export default async function (fastify, opts) {
             params.push(request.user.id);
         }
 
-        if (futureOnly === 'true') {
+        if (futureOnlyValue === true) {
             sql += ` AND date >= $${paramIndex++}`;
             params.push(new Date().toISOString().split('T')[0]);
         }
 
-        if (placeholderOnly === 'true') {
+        if (placeholderOnlyValue === true) {
             sql += ' AND is_placeholder = true';
         }
 

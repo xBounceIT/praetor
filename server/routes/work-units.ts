@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { requireNonEmptyString, requireNonEmptyArrayOfStrings, optionalNonEmptyString, optionalArrayOfStrings, badRequest } from '../utils/validation.ts';
 
 // Helper to fetch unit with managers and user count
 const fetchUnitDetails = async (unitId) => {
@@ -59,7 +60,18 @@ export default async function (fastify, opts) {
         }
 
         const workUnits = result.rows.map(w => ({
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
             id: w.id,
+        if (name !== undefined) {
+            const nameResult = optionalNonEmptyString(name, 'name');
+            if (!nameResult.ok) return badRequest(reply, nameResult.message);
+        }
+
+        if (managerIds !== undefined) {
+            const managerIdsResult = optionalArrayOfStrings(managerIds, 'managerIds');
+            if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
+        }
             name: w.name,
             managers: w.managers,
             description: w.description,
@@ -72,19 +84,17 @@ export default async function (fastify, opts) {
 
     // POST / - Create work unit (Admin only)
     fastify.post('/', {
-        onRequest: [authenticateToken, requireRole('admin')]
+                    values.push(optionalNonEmptyString(name, 'name').value);
     }, async (request, reply) => {
         const { name, managerIds, description } = request.body;
 
         if (!name) {
-            return reply.code(400).send({ error: 'Name is required' });
+            const nameResult = requireNonEmptyString(name, 'name');
+            if (!nameResult.ok) return badRequest(reply, nameResult.message);
         }
 
-        // managerIds is optional but if provided must be array
-        const managers = Array.isArray(managerIds) ? managerIds : [];
-        if (managers.length === 0) {
-            return reply.code(400).send({ error: 'At least one manager is required' });
-        }
+        const managerIdsResult = requireNonEmptyArrayOfStrings(managerIds, 'managerIds');
+        if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
 
         try {
             await query('BEGIN');
@@ -92,10 +102,10 @@ export default async function (fastify, opts) {
             const id = 'wu-' + Date.now();
             await query(
                 'INSERT INTO work_units (id, name, description) VALUES ($1, $2, $3)',
-                [id, name, description]
+                [id, nameResult.value, description]
             );
 
-            for (const managerId of managers) {
+            for (const managerId of managerIdsResult.value) {
                 await query(
                     'INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)',
                     [id, managerId]
@@ -154,7 +164,7 @@ export default async function (fastify, opts) {
                 }
 
                 if (updates.length > 0) {
-                    values.push(id);
+                    values.push(idResult.value);
                     const result = await query(
                         `UPDATE work_units SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
                         values
@@ -168,16 +178,12 @@ export default async function (fastify, opts) {
 
             // Update managers if provided
             if (managerIds !== undefined) {
-                if (!Array.isArray(managerIds)) {
-                    await query('ROLLBACK');
-                    return reply.code(400).send({ error: 'managerIds must be an array' });
-                }
 
                 // Delete existing managers
-                await query('DELETE FROM work_unit_managers WHERE work_unit_id = $1', [id]);
+                await query('DELETE FROM work_unit_managers WHERE work_unit_id = $1', [idResult.value]);
 
                 // Insert new managers
-                for (const managerId of managerIds) {
+                for (const managerId of optionalArrayOfStrings(managerIds, 'managerIds').value) {
                     await query(
                         'INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)',
                         [id, managerId]
@@ -257,19 +263,20 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { id } = request.params;
         const { userIds } = request.body;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        if (!Array.isArray(userIds)) {
-            return reply.code(400).send({ error: 'userIds must be an array' });
-        }
+        const userIdsResult = optionalArrayOfStrings(userIds, 'userIds');
+        if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
 
         try {
             await query('BEGIN');
-            await query('DELETE FROM user_work_units WHERE work_unit_id = $1', [id]);
+            await query('DELETE FROM user_work_units WHERE work_unit_id = $1', [idResult.value]);
 
-            for (const userId of userIds) {
+            for (const userId of userIdsResult.value || []) {
                 await query(
                     'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                    [userId, id]
+                    [userId, idResult.value]
                 );
             }
 

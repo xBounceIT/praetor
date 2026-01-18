@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalNonNegativeNumber, requireNonEmptyArrayOfStrings, parseBoolean, optionalDateString, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List all tasks
@@ -49,29 +50,41 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } = request.body;
 
-        if (!name || !projectId) {
-            return reply.code(400).send({ error: 'Task name and project ID are required' });
+        const nameResult = requireNonEmptyString(name, 'name');
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+        const projectIdResult = requireNonEmptyString(projectId, 'projectId');
+        if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
+
+        const durationResult = optionalNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
+        if (!durationResult.ok) return badRequest(reply, durationResult.message);
+
+        const isRecurringValue = parseBoolean(isRecurring);
+        let start = null;
+        if (isRecurringValue) {
+            const recurrenceStartResult = optionalDateString(recurrenceStart, 'recurrenceStart');
+            if (!recurrenceStartResult.ok) return badRequest(reply, recurrenceStartResult.message);
+            start = recurrenceStartResult.value || new Date().toISOString().split('T')[0];
         }
 
         const id = 't-' + Date.now();
-        const start = isRecurring ? (recurrenceStart || new Date().toISOString().split('T')[0]) : null;
 
         try {
             await query(
                 `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, is_disabled) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                [id, name, projectId, description || null, isRecurring || false, recurrencePattern || null, start, request.body.recurrenceDuration || 0, false]
+                [id, nameResult.value, projectIdResult.value, description || null, isRecurringValue, recurrencePattern || null, start, durationResult.value || 0, false]
             );
 
             return reply.code(201).send({
                 id,
-                name,
-                projectId,
+                name: nameResult.value,
+                projectId: projectIdResult.value,
                 description,
-                isRecurring: isRecurring || false,
+                isRecurring: isRecurringValue,
                 recurrencePattern,
                 recurrenceStart: start,
-                recurrenceDuration: request.body.recurrenceDuration || 0,
+                recurrenceDuration: durationResult.value || 0,
                 isDisabled: false
             });
         } catch (err) {
@@ -87,20 +100,45 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const { id } = request.params;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
         const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = request.body;
+        const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [idResult.value]);
+        const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [idResult.value]);
+        if (!idResult.ok) return badRequest(reply, idResult.message);
+        const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [idResult.value]);
+        const durationResult = optionalNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
+        if (!durationResult.ok) return badRequest(reply, durationResult.message);
+
+        if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {
+            const startResult = parseDateString(recurrenceStart, 'recurrenceStart');
+            if (!startResult.ok) return badRequest(reply, startResult.message);
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
+        const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
+        if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
+        }
+
+        if (recurrenceEnd !== undefined && recurrenceEnd !== null && recurrenceEnd !== '') {
+            const endResult = parseDateString(recurrenceEnd, 'recurrenceEnd');
+            if (!endResult.ok) return badRequest(reply, endResult.message);
+        }
 
         const result = await query(
             `UPDATE tasks 
        SET name = COALESCE($2, name),
            description = COALESCE($3, description),
+            await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
            is_recurring = COALESCE($4, is_recurring),
            recurrence_pattern = $5,
            recurrence_start = $6,
+            for (const userId of userIdsResult.value) {
            recurrence_end = $7,
            recurrence_duration = $8,
-           is_disabled = COALESCE($9, is_disabled)
+                    [userId, idResult.value]
        WHERE id = $1
        RETURNING *`,
+            [idResult.value, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, durationResult.value || 0, isDisabled]
             [id, name, description, isRecurring, recurrencePattern || null, recurrenceStart || null, recurrenceEnd || null, request.body.recurrenceDuration || 0, isDisabled]
         );
 
@@ -128,8 +166,11 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const { id } = request.params;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
         const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [id]);
 
+        const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [idResult.value]);
         if (result.rows.length === 0) {
             return reply.code(404).send({ error: 'Task not found' });
         }

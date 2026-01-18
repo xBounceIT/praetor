@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { requireNonEmptyString, optionalNonEmptyString, optionalEmail, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List all clients
@@ -48,10 +49,11 @@ export default async function (fastify, opts) {
             address, vatNumber, taxCode, billingCode, paymentTerms
         } = request.body;
 
-        if (!name) {
-            return reply.code(400).send({ error: 'Client name is required' });
-        }
+        const nameResult = requireNonEmptyString(name, 'name');
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
+        const emailResult = optionalEmail(email, 'email');
+        if (!emailResult.ok) return badRequest(reply, emailResult.message);
         const id = 'c-' + Date.now();
         await query(`
             INSERT INTO clients (
@@ -59,12 +61,12 @@ export default async function (fastify, opts) {
                 email, phone, address, vat_number, tax_code, billing_code, payment_terms
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         `, [
-            id, name, false, type || 'company', contactName, clientCode,
-            email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
+            id, nameResult.value, false, type || 'company', contactName, clientCode,
+            emailResult.value, phone, address, vatNumber, taxCode, billingCode, paymentTerms
         ]);
 
         return reply.code(201).send({
-            id, name, isDisabled: false, type, contactName, clientCode,
+            id, name: nameResult.value, isDisabled: false, type, contactName, clientCode,
             email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
         });
     });
@@ -78,6 +80,11 @@ export default async function (fastify, opts) {
             name, isDisabled, type, contactName, clientCode, email, phone,
             address, vatNumber, taxCode, billingCode, paymentTerms
         } = request.body;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
+
+        const emailResult = optionalEmail(email, 'email');
+        if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
         const result = await query(`
             UPDATE clients SET 
@@ -97,7 +104,7 @@ export default async function (fastify, opts) {
             RETURNING *
         `, [
             name || null, isDisabled, type, contactName, clientCode, email, phone,
-            address, vatNumber, taxCode, billingCode, paymentTerms, id
+            emailResult.value, phone, address, vatNumber, taxCode, billingCode, paymentTerms, idResult.value
         ]);
 
         if (result.rows.length === 0) {
@@ -128,8 +135,10 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken, requireRole('admin')]
     }, async (request, reply) => {
         const { id } = request.params;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
         const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [id]);
-
+        const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [idResult.value]);
         if (result.rows.length === 0) {
             return reply.code(404).send({ error: 'Client not found' });
         }

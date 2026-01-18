@@ -1,5 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { requireNonEmptyString, optionalNonEmptyString, validateHexColor, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List all projects
@@ -43,24 +44,29 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { name, clientId, description, color } = request.body;
 
-        if (!name || !clientId) {
-            return reply.code(400).send({ error: 'Project name and client ID are required' });
-        }
+        const nameResult = requireNonEmptyString(name, 'name');
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+        const clientIdResult = requireNonEmptyString(clientId, 'clientId');
+        if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
 
         const id = 'p-' + Date.now();
-        const projectColor = color || '#3b82f6';
+        const projectColor = color ? validateHexColor(color, 'color').ok ? validateHexColor(color, 'color').value : '#3b82f6' : '#3b82f6';
+        if (color && !validateHexColor(color, 'color').ok) {
+            return badRequest(reply, validateHexColor(color, 'color').message);
+        }
 
         try {
             await query(
                 `INSERT INTO projects (id, name, client_id, color, description, is_disabled) 
            VALUES ($1, $2, $3, $4, $5, $6)`,
-                [id, name, clientId, projectColor, description || null, false]
+                [id, nameResult.value, clientIdResult.value, projectColor, description || null, false]
             );
 
             return reply.code(201).send({
                 id,
-                name,
-                clientId,
+                name: nameResult.value,
+                clientId: clientIdResult.value,
                 color: projectColor,
                 description,
                 isDisabled: false
@@ -78,8 +84,10 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken, requireRole('admin', 'manager')]
     }, async (request, reply) => {
         const { id } = request.params;
-        const result = await query('DELETE FROM projects WHERE id = $1 RETURNING id', [id]);
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
 
+        const result = await query('DELETE FROM projects WHERE id = $1 RETURNING id', [idResult.value]);
         if (result.rows.length === 0) {
             return reply.code(404).send({ error: 'Project not found' });
         }
@@ -93,6 +101,12 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const { id } = request.params;
         const { name, clientId, description, color, isDisabled } = request.body;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
+        if (color !== undefined && color !== null && color !== '') {
+            const colorResult = validateHexColor(color, 'color');
+            if (!colorResult.ok) return badRequest(reply, colorResult.message);
+        }
 
         try {
             const result = await query(
@@ -104,7 +118,7 @@ export default async function (fastify, opts) {
                      is_disabled = COALESCE($5, is_disabled)
                  WHERE id = $6
                  RETURNING id, name, client_id, color, description, is_disabled`,
-                [name || null, clientId || null, color || null, description || null, isDisabled, id]
+                [name || null, clientId || null, color || null, description || null, isDisabled, idResult.value]
             );
 
             if (result.rows.length === 0) {
