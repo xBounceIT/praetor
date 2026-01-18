@@ -219,11 +219,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
   const saveEdit = () => {
     if (editingUser) {
-      onUpdateUser(editingUser.id, {
+      const updates: Partial<User> = {
         name: editName,
-        isDisabled: editIsDisabled,
-        costPerHour: parseFloat(editCostPerHour) || 0
-      });
+        isDisabled: editIsDisabled
+      };
+
+      if (currentUserRole !== 'admin') {
+        updates.costPerHour = parseFloat(editCostPerHour) || 0;
+      }
+
+      onUpdateUser(editingUser.id, updates);
       setEditingUser(null);
     }
   };
