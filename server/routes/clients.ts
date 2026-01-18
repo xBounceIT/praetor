@@ -138,7 +138,6 @@ export default async function (fastify, opts) {
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
         const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [idResult.value]);
-        const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [idResult.value]);
         if (result.rows.length === 0) {
             return reply.code(404).send({ error: 'Client not found' });
         }
