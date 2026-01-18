@@ -113,7 +113,7 @@ export default async function (fastify, opts) {
                 managers: w.managers,
                 description: w.description,
                 isDisabled: !!w.is_disabled,
-                userCount: 0
+                userCount: Number.parseInt(w.user_count ?? '0', 10)
             });
         } catch (err) {
             await query('ROLLBACK');
