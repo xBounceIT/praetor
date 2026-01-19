@@ -31,6 +31,7 @@ interface QuotesViewProps {
     onUpdateQuote: (id: string, updates: Partial<Quote>) => void;
     onDeleteQuote: (id: string) => void;
     onCreateSale?: (quote: Quote) => void;
+    quoteFilterId?: string | null;
     currency: string;
 }
 
@@ -39,7 +40,7 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
     return costo / (1 - molPercentage / 100);
 };
 
-const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, specialBids, onAddQuote, onUpdateQuote, onDeleteQuote, onCreateSale, currency }) => {
+const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, specialBids, onAddQuote, onUpdateQuote, onDeleteQuote, onCreateSale, quoteFilterId, currency }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -67,22 +68,25 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
 
     // Filter Logic
     const filteredQuotes = useMemo(() => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
         return quotes.filter(quote => {
-            const matchesSearch = searchTerm === '' ||
-                quote.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                quote.items.some(item => item.productName.toLowerCase().includes(searchTerm.toLowerCase()));
+            const matchesSearch = normalizedSearch === '' ||
+                quote.id.toLowerCase().includes(normalizedSearch) ||
+                quote.clientName.toLowerCase().includes(normalizedSearch) ||
+                quote.items.some(item => item.productName.toLowerCase().includes(normalizedSearch));
 
             const matchesClient = filterClientId === 'all' || quote.clientId === filterClientId;
             const matchesStatus = filterStatus === 'all' || quote.status === filterStatus;
+            const matchesQuoteId = !quoteFilterId || quote.id === quoteFilterId;
 
-            return matchesSearch && matchesClient && matchesStatus;
+            return matchesQuoteId && (quoteFilterId ? true : (matchesSearch && matchesClient && matchesStatus));
         });
-    }, [quotes, searchTerm, filterClientId, filterStatus]);
+    }, [quotes, searchTerm, filterClientId, filterStatus, quoteFilterId]);
 
     // Reset page on filter change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterClientId, filterStatus]);
+    }, [searchTerm, filterClientId, filterStatus, quoteFilterId]);
 
     // Form State
     const [formData, setFormData] = useState<Partial<Quote>>({
@@ -846,6 +850,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                 <i className="fa-solid fa-file-invoice"></i>
                                             </div>
                                             <div>
+                                                <div className="text-[10px] font-black text-slate-400 tracking-wider">ID {quote.id}</div>
                                                 <div className="font-bold text-slate-800">{quote.clientName}</div>
                                                 <div className="text-[10px] font-black text-slate-400 uppercase">{quote.items.length} item{quote.items.length !== 1 ? 's' : ''}</div>
                                             </div>
@@ -905,16 +910,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                     <i className="fa-solid fa-cart-plus"></i>
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    confirmDelete(quote);
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                title="Delete Quote"
-                                            >
-                                                <i className="fa-solid fa-trash-can"></i>
-                                            </button>
+                                            {quote.status !== 'confirmed' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        confirmDelete(quote);
+                                                    }}
+                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                    title="Delete Quote"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

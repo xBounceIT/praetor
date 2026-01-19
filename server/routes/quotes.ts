@@ -284,13 +284,19 @@ export default async function (fastify, opts) {
     // DELETE /:id - Delete quote
     fastify.delete('/:id', async (request, reply) => {
         const { id } = request.params;
+        const idResult = requireNonEmptyString(id, 'id');
+        if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        // Items will be deleted automatically via CASCADE
-        const result = await query('DELETE FROM quotes WHERE id = $1 RETURNING id', [id]);
-
-        if (result.rows.length === 0) {
+        const statusResult = await query('SELECT status FROM quotes WHERE id = $1', [idResult.value]);
+        if (statusResult.rows.length === 0) {
             return reply.code(404).send({ error: 'Quote not found' });
         }
+        if (statusResult.rows[0].status === 'confirmed') {
+            return reply.code(409).send({ error: 'Cannot delete a confirmed quote' });
+        }
+
+        // Items will be deleted automatically via CASCADE
+        await query('DELETE FROM quotes WHERE id = $1 RETURNING id', [idResult.value]);
 
         return reply.code(204).send();
     });

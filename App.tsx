@@ -473,6 +473,7 @@ const App: React.FC = () => {
     ];
     return validViews.includes(hash) ? hash : (rawHash === '' || rawHash === 'login' ? 'timesheets/tracker' : '404');
   });
+  const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
 
   const isRouteAccessible = useMemo(() => {
     if (!currentUser) return false;
@@ -534,6 +535,12 @@ const App: React.FC = () => {
     }
     window.location.hash = '/' + activeView;
   }, [activeView, currentUser, isLoading]);
+
+  useEffect(() => {
+    if (activeView !== 'crm/quotes' && quoteFilterId) {
+      setQuoteFilterId(null);
+    }
+  }, [activeView, quoteFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -1613,6 +1620,7 @@ const App: React.FC = () => {
                 onUpdateQuote={handleUpdateQuote}
                 onDeleteQuote={handleDeleteQuote}
                 onCreateSale={handleCreateSaleFromQuote}
+                quoteFilterId={quoteFilterId}
                 currency={generalSettings.currency}
               />
             )}
@@ -1627,6 +1635,7 @@ const App: React.FC = () => {
                 onDeleteSale={handleDeleteSale}
                 currency={generalSettings.currency}
                 onViewQuote={(quoteId) => {
+                  setQuoteFilterId(quoteId);
                   setActiveView('crm/quotes');
                 }}
               />
