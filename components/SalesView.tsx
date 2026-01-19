@@ -535,7 +535,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
                                                                 <div className="relative">
-                                                                    <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)}</span>
+                                                                    <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)} {currency}</span>
                                                                     {selectedBid && (
                                                                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-praetor uppercase tracking-wider bg-slate-50/50 px-1 whitespace-nowrap">Bid</div>
                                                                     )}
@@ -545,11 +545,11 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                 <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(1)}%</span>
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
-                                                                <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)}</span>
+                                                                <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)} {currency}</span>
                                                             </div>
                                                             <div className="col-span-2 flex items-center justify-center">
                                                                 <span className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}>
-                                                                    {salePrice.toFixed(2)}
+                                                                    {salePrice.toFixed(2)} {currency}
                                                                 </span>
                                                             </div>
                                                         </div>

@@ -49,6 +49,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
 
   const isExpired = (endDate: string) => new Date(endDate) < new Date();
   const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
+  const isActiveBid = (bid: SpecialBid) => !isExpired(bid.endDate) && !isNotStarted(bid.startDate);
 
   const filteredBids = useMemo(() => {
     return bids.filter(bid => {
@@ -150,11 +151,14 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     }
 
     if (formData.clientId && formData.productId) {
-      const existingBid = bids.find(b => b.clientId === formData.clientId && b.productId === formData.productId && b.id !== editingBid?.id);
+      const existingBid = bids.find(b =>
+        b.clientId === formData.clientId &&
+        b.productId === formData.productId &&
+        b.id !== editingBid?.id &&
+        isActiveBid(b)
+      );
       if (existingBid) {
-        newErrors.productId = isExpired(existingBid.endDate)
-          ? 'An expired bid already exists for this client and product. Edit or delete it to create a new one.'
-          : 'Special bid already exists for this client and product';
+        newErrors.productId = 'An active special bid already exists for this client and product';
       }
     }
 

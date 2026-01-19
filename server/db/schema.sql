@@ -390,7 +390,8 @@ ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS start_date DATE;
 UPDATE special_bids SET start_date = CURRENT_DATE WHERE start_date IS NULL;
 ALTER TABLE special_bids ALTER COLUMN start_date SET NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_special_bids_unique ON special_bids(client_id, product_id);
+DROP INDEX IF EXISTS idx_special_bids_unique;
+CREATE INDEX IF NOT EXISTS idx_special_bids_client_product ON special_bids(client_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_client_id ON special_bids(client_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_product_id ON special_bids(product_id);
 

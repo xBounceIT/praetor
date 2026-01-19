@@ -54,11 +54,17 @@ export default async function (fastify, opts) {
         }
 
         const existing = await query(
-            'SELECT id FROM special_bids WHERE client_id = $1 AND product_id = $2',
-            [clientIdResult.value, productIdResult.value]
+            `SELECT id FROM special_bids
+             WHERE client_id = $1
+               AND product_id = $2
+               AND start_date <= CURRENT_DATE
+               AND end_date >= CURRENT_DATE
+               AND $3::date <= CURRENT_DATE
+               AND $4::date >= CURRENT_DATE`,
+            [clientIdResult.value, productIdResult.value, startDateResult.value, endDateResult.value]
         );
         if (existing.rows.length > 0) {
-            return reply.code(409).send({ error: 'Special bid already exists for this client and product' });
+            return reply.code(409).send({ error: 'An active special bid already exists for this client and product' });
         }
 
         const id = 'sb-' + Date.now();
@@ -143,13 +149,41 @@ export default async function (fastify, opts) {
             if (end < start) return badRequest(reply, 'endDate must be on or after startDate');
         }
 
-        if (clientId && productId) {
+        const currentBidResult = await query(
+            `SELECT
+                client_id as "clientId",
+                product_id as "productId",
+                start_date as "startDate",
+                end_date as "endDate"
+             FROM special_bids
+             WHERE id = $1`,
+            [idResult.value]
+        );
+
+        if (currentBidResult.rows.length === 0) {
+            return reply.code(404).send({ error: 'Special bid not found' });
+        }
+
+        const currentBid = currentBidResult.rows[0];
+        const updatedClientId = clientIdValue ?? currentBid.clientId;
+        const updatedProductId = productIdValue ?? currentBid.productId;
+        const updatedStartDate = startDateValue ?? currentBid.startDate;
+        const updatedEndDate = endDateValue ?? currentBid.endDate;
+
+        if (updatedClientId && updatedProductId) {
             const existing = await query(
-                'SELECT id FROM special_bids WHERE client_id = $1 AND product_id = $2 AND id <> $3',
-                [clientId, productId, idResult.value]
+                `SELECT id FROM special_bids
+                 WHERE client_id = $1
+                   AND product_id = $2
+                   AND id <> $3
+                   AND start_date <= CURRENT_DATE
+                   AND end_date >= CURRENT_DATE
+                   AND $4::date <= CURRENT_DATE
+                   AND $5::date >= CURRENT_DATE`,
+                [updatedClientId, updatedProductId, idResult.value, updatedStartDate, updatedEndDate]
             );
             if (existing.rows.length > 0) {
-                return reply.code(409).send({ error: 'Special bid already exists for this client and product' });
+                return reply.code(409).send({ error: 'An active special bid already exists for this client and product' });
             }
         }
 
