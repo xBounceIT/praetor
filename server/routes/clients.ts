@@ -52,6 +52,19 @@ export default async function (fastify, opts) {
         const nameResult = requireNonEmptyString(name, 'name');
         if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
+        const clientCodeResult = requireNonEmptyString(clientCode, 'clientCode');
+        if (!clientCodeResult.ok) return badRequest(reply, clientCodeResult.message);
+
+        const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
+        if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
+
+        const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
+        if (!taxCodeResult.ok) return badRequest(reply, taxCodeResult.message);
+
+        if (!vatNumberResult.value && !taxCodeResult.value) {
+            return badRequest(reply, 'Either VAT Number or Fiscal Code is required');
+        }
+
         const emailResult = optionalEmail(email, 'email');
         if (!emailResult.ok) return badRequest(reply, emailResult.message);
         const id = 'c-' + Date.now();
@@ -61,13 +74,13 @@ export default async function (fastify, opts) {
                 email, phone, address, vat_number, tax_code, billing_code, payment_terms
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         `, [
-            id, nameResult.value, false, type || 'company', contactName, clientCode,
-            emailResult.value, phone, address, vatNumber, taxCode, billingCode, paymentTerms
+            id, nameResult.value, false, type || 'company', contactName, clientCodeResult.value,
+            emailResult.value, phone, address, vatNumberResult.value, taxCodeResult.value, billingCode, paymentTerms
         ]);
 
         return reply.code(201).send({
-            id, name: nameResult.value, isDisabled: false, type, contactName, clientCode,
-            email, phone, address, vatNumber, taxCode, billingCode, paymentTerms
+            id, name: nameResult.value, isDisabled: false, type, contactName, clientCode: clientCodeResult.value,
+            email: emailResult.value, phone, address, vatNumber: vatNumberResult.value, taxCode: taxCodeResult.value, billingCode, paymentTerms
         });
     });
 
@@ -80,8 +93,45 @@ export default async function (fastify, opts) {
             name, isDisabled, type, contactName, clientCode, email, phone,
             address, vatNumber, taxCode, billingCode, paymentTerms
         } = request.body;
+        const body = request.body ?? {};
+        const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
+        const hasClientCode = Object.prototype.hasOwnProperty.call(body, 'clientCode');
+        const hasVatNumber = Object.prototype.hasOwnProperty.call(body, 'vatNumber');
+        const hasTaxCode = Object.prototype.hasOwnProperty.call(body, 'taxCode');
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
+
+        let nameValue: string | null = null;
+        if (hasName) {
+            const nameResult = requireNonEmptyString(name, 'name');
+            if (!nameResult.ok) return badRequest(reply, nameResult.message);
+            nameValue = nameResult.value;
+        }
+
+        let clientCodeValue: string | null = null;
+        if (hasClientCode) {
+            const clientCodeResult = requireNonEmptyString(clientCode, 'clientCode');
+            if (!clientCodeResult.ok) return badRequest(reply, clientCodeResult.message);
+            clientCodeValue = clientCodeResult.value;
+        }
+
+        let vatNumberValue: string | null = null;
+        if (hasVatNumber) {
+            const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
+            if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
+            vatNumberValue = vatNumberResult.value;
+        }
+
+        let taxCodeValue: string | null = null;
+        if (hasTaxCode) {
+            const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
+            if (!taxCodeResult.ok) return badRequest(reply, taxCodeResult.message);
+            taxCodeValue = taxCodeResult.value;
+        }
+
+        if ((hasVatNumber || hasTaxCode) && !vatNumberValue && !taxCodeValue) {
+            return badRequest(reply, 'Either VAT Number or Fiscal Code is required');
+        }
 
         const emailResult = optionalEmail(email, 'email');
         if (!emailResult.ok) return badRequest(reply, emailResult.message);
@@ -103,8 +153,8 @@ export default async function (fastify, opts) {
             WHERE id = $13 
             RETURNING *
         `, [
-            name || null, isDisabled, type, contactName, clientCode,
-            emailResult.value, phone, address, vatNumber, taxCode, billingCode, paymentTerms, idResult.value
+            nameValue, isDisabled, type, contactName, clientCodeValue,
+            emailResult.value, phone, address, vatNumberValue, taxCodeValue, billingCode, paymentTerms, idResult.value
         ]);
 
         if (result.rows.length === 0) {

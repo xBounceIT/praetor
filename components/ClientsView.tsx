@@ -89,14 +89,18 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     e.preventDefault();
 
     // Validation
+    const trimmedName = formData.name?.trim() || '';
+    const trimmedClientCode = formData.clientCode?.trim() || '';
+    const trimmedVatNumber = formData.vatNumber?.trim() || '';
+    const trimmedTaxCode = formData.taxCode?.trim() || '';
     const newErrors: Record<string, string> = {};
-    if (!formData.name?.trim()) {
+    if (!trimmedName) {
       newErrors.name = 'Name is required';
     }
-    if (!formData.clientCode?.trim()) {
+    if (!trimmedClientCode) {
       newErrors.clientCode = 'Client ID is required';
     }
-    if (!formData.vatNumber?.trim() && !formData.taxCode?.trim()) {
+    if (!trimmedVatNumber && !trimmedTaxCode) {
       const msg = 'Either VAT Number or Fiscal Code is required';
       newErrors.vatNumber = msg;
       newErrors.taxCode = msg;
@@ -107,10 +111,18 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       return;
     }
 
+    const payload = {
+      ...formData,
+      name: trimmedName,
+      clientCode: trimmedClientCode,
+      vatNumber: trimmedVatNumber,
+      taxCode: trimmedTaxCode
+    };
+
     if (editingClient) {
-      onUpdateClient(editingClient.id, formData);
+      onUpdateClient(editingClient.id, payload);
     } else {
-      onAddClient(formData);
+      onAddClient(payload);
     }
     setIsModalOpen(false);
   };

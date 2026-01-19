@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseNonNegativeNumber, optionalNonNegativeNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseNonNegativeNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     fastify.addHook('onRequest', authenticateToken);
@@ -40,7 +40,7 @@ export default async function (fastify, opts) {
         const productNameResult = requireNonEmptyString(productName, 'productName');
         if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
 
-        const unitPriceResult = optionalNonNegativeNumber(unitPrice, 'unitPrice');
+        const unitPriceResult = parseNonNegativeNumber(unitPrice, 'unitPrice');
         if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
 
         const startDateResult = parseDateString(startDate, 'startDate');
@@ -76,7 +76,7 @@ export default async function (fastify, opts) {
                 end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-            [id, clientIdResult.value, clientNameResult.value, productIdResult.value, productNameResult.value, unitPriceResult.value || 0, startDateResult.value, endDateResult.value]
+            [id, clientIdResult.value, clientNameResult.value, productIdResult.value, productNameResult.value, unitPriceResult.value, startDateResult.value, endDateResult.value]
         );
 
         return reply.code(201).send(result.rows[0]);
@@ -118,7 +118,7 @@ export default async function (fastify, opts) {
 
         let unitPriceValue = unitPrice;
         if (unitPrice !== undefined) {
-            const unitPriceResult = optionalNonNegativeNumber(unitPrice, 'unitPrice');
+            const unitPriceResult = parseNonNegativeNumber(unitPrice, 'unitPrice');
             if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
             unitPriceValue = unitPriceResult.value;
         }

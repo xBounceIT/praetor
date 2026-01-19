@@ -103,6 +103,17 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         if (formData.molPercentage === undefined || formData.molPercentage === null || Number.isNaN(formData.molPercentage)) {
             newErrors.molPercentage = 'MOL % is required';
         }
+        if (formData.taxRate === undefined || formData.taxRate === null || Number.isNaN(formData.taxRate)) {
+            newErrors.taxRate = 'Tax rate is required';
+        }
+        const typeValue = formData.type;
+        if (!typeValue || !['item', 'service'].includes(typeValue)) {
+            newErrors.type = 'Type is required';
+        }
+        const costUnitValue = formData.costUnit;
+        if (!costUnitValue || !['unit', 'hours'].includes(costUnitValue)) {
+            newErrors.costUnit = 'Unit of measure is required';
+        }
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
@@ -180,6 +191,9 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             type,
             costUnit: unit
         });
+        if (errors.type || errors.costUnit) {
+            setErrors({ ...errors, type: '', costUnit: '' });
+        }
     };
 
     const hasPricing =
@@ -311,10 +325,19 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                         <input
                                             type="number"
                                             step="0.01"
-                                            value={formData.taxRate}
-                                            onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) })}
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                                            min="0"
+                                            value={formData.taxRate ?? ''}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                setFormData({
+                                                    ...formData,
+                                                    taxRate: value === '' ? undefined : parseFloat(value)
+                                                });
+                                                if (errors.taxRate) setErrors({ ...errors, taxRate: '' });
+                                            }}
+                                            className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.taxRate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                                         />
+                                        {errors.taxRate && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.taxRate}</p>}
                                     </div>
 
                                     <div className="space-y-1.5">
@@ -326,17 +349,20 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                             value={formData.type || 'item'}
                                             onChange={handleTypeChange}
                                             searchable={false}
+                                            buttonClassName={errors.type ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200' : 'py-2.5 text-sm'}
                                         />
+                                        {errors.type && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>}
                                     </div>
 
                                     <div className="space-y-1.5">
                                         <div className="flex items-center ml-1 min-h-[16px]">
                                             <label className="text-xs font-bold text-slate-500 font-black">Unit of Measure</label>
                                         </div>
-                                        <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-bold flex items-center gap-2">
+                                        <div className={`w-full text-sm px-4 py-2.5 border rounded-xl font-bold flex items-center gap-2 ${errors.costUnit ? 'border-red-500 bg-red-50 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
                                             <i className={`fa-solid ${formData.type === 'service' ? 'fa-clock' : 'fa-box-open'}`}></i>
                                             {formData.type === 'service' ? 'Hours' : 'Unit'}
                                         </div>
+                                        {errors.costUnit && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costUnit}</p>}
                                         <p className="text-[10px] text-slate-400 ml-1">Automatically set based on Type</p>
                                     </div>
 

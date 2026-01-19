@@ -65,6 +65,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
     const [searchTerm, setSearchTerm] = useState('');
     const [filterClientId, setFilterClientId] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [filterQuoteId, setFilterQuoteId] = useState('all');
+
+    React.useEffect(() => {
+        setFilterQuoteId(quoteFilterId || 'all');
+    }, [quoteFilterId]);
+
+    const quoteIdOptions = useMemo(() => ([
+        { id: 'all', name: 'All Quotes' },
+        ...quotes.map(quote => ({ id: quote.id, name: `${quote.id} · ${quote.clientName}` }))
+    ]), [quotes]);
 
     // Filter Logic
     const filteredQuotes = useMemo(() => {
@@ -77,16 +87,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
 
             const matchesClient = filterClientId === 'all' || quote.clientId === filterClientId;
             const matchesStatus = filterStatus === 'all' || quote.status === filterStatus;
-            const matchesQuoteId = !quoteFilterId || quote.id === quoteFilterId;
+            const matchesQuoteId = filterQuoteId === 'all' || quote.id === filterQuoteId;
 
-            return matchesQuoteId && (quoteFilterId ? true : (matchesSearch && matchesClient && matchesStatus));
+            return matchesQuoteId && (filterQuoteId === 'all' ? (matchesSearch && matchesClient && matchesStatus) : true);
         });
-    }, [quotes, searchTerm, filterClientId, filterStatus, quoteFilterId]);
+    }, [quotes, searchTerm, filterClientId, filterStatus, filterQuoteId]);
 
     // Reset page on filter change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterClientId, filterStatus, quoteFilterId]);
+    }, [searchTerm, filterClientId, filterStatus, filterQuoteId]);
 
     // Form State
     const [formData, setFormData] = useState<Partial<Quote>>({
@@ -731,7 +741,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
             </div>
 
             {/* Search and Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="md:col-span-2 relative">
                     <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
@@ -740,6 +750,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
+                    />
+                </div>
+                <div>
+                    <CustomSelect
+                        options={quoteIdOptions}
+                        value={filterQuoteId}
+                        onChange={setFilterQuoteId}
+                        placeholder="Filter by Quote ID"
+                        searchable={true}
+                        buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
                     />
                 </div>
                 <div>

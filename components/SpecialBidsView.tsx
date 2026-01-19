@@ -122,6 +122,14 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     if (!formData.productId) {
       newErrors.productId = 'Product is required';
     }
+    if (
+      formData.unitPrice === undefined ||
+      formData.unitPrice === null ||
+      Number.isNaN(formData.unitPrice) ||
+      formData.unitPrice < 0
+    ) {
+      newErrors.unitPrice = 'Special price must be zero or greater';
+    }
     if (!formData.startDate) {
       newErrors.dates = 'Start date is required';
     }
@@ -331,9 +339,22 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                       min="0"
                       required
                       value={formData.unitPrice ?? ''}
-                      onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData({ ...formData, unitPrice: value === '' ? 0 : parseFloat(value) });
+                        if (errors.unitPrice) {
+                          setErrors(prev => {
+                            const next = { ...prev };
+                            delete next.unitPrice;
+                            return next;
+                          });
+                        }
+                      }}
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.unitPrice ? 'border-red-300' : ''}`}
                     />
+                    {errors.unitPrice && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.unitPrice}</p>
+                    )}
                   </div>
                 </div>
               </div>
