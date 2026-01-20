@@ -1015,7 +1015,7 @@ const App: React.FC = () => {
       setClients([...clients, client]);
     } catch (err) {
       console.error('Failed to add client:', err);
-      alert((err as Error).message || 'Failed to add client');
+      throw err;
     }
   };
 
@@ -1025,7 +1025,7 @@ const App: React.FC = () => {
       setClients(clients.map(c => c.id === id ? updated : c));
     } catch (err) {
       console.error('Failed to update client:', err);
-      alert('Failed to update client');
+      throw err;
     }
   };
 

@@ -5,9 +5,9 @@ import StandardTable from './StandardTable';
 
 interface ClientsViewProps {
   clients: Client[];
-  onAddClient: (clientData: Partial<Client>) => void;
-  onUpdateClient: (id: string, updates: Partial<Client>) => void;
-  onDeleteClient: (id: string) => void;
+  onAddClient: (clientData: Partial<Client>) => Promise<void>;
+  onUpdateClient: (id: string, updates: Partial<Client>) => Promise<void>;
+  onDeleteClient: (id: string) => Promise<void>;
   userRole: 'admin' | 'manager' | 'user';
 }
 
@@ -118,7 +118,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
@@ -152,12 +152,23 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       taxCode: trimmedTaxCode
     };
 
-    if (editingClient) {
-      onUpdateClient(editingClient.id, payload);
-    } else {
-      onAddClient(payload);
+    try {
+      if (editingClient) {
+        await onUpdateClient(editingClient.id, payload);
+      } else {
+        await onAddClient(payload);
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message.toLowerCase().includes('vat number')) {
+        setErrors({ ...newErrors, vatNumber: message });
+      } else if (message.toLowerCase().includes('client id') || message.toLowerCase().includes('client code')) {
+        setErrors({ ...newErrors, clientCode: message });
+      } else {
+        setErrors({ ...newErrors, general: message });
+      }
     }
-    setIsModalOpen(false);
   };
 
   const confirmDelete = (client: Client) => {
@@ -418,6 +429,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                   </div>
                 </div>
               </div>
+
+              {errors.general && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
+                  <i className="fa-solid fa-circle-exclamation text-lg"></i>
+                  <p className="text-sm font-bold">{errors.general}</p>
+                </div>
+              )}
 
               <div className="flex justify-between items-center pt-4 border-t border-slate-100">
                 <button
