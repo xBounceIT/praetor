@@ -528,12 +528,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                     <h2 className="text-2xl font-black text-slate-800">Invoices</h2>
                     <p className="text-slate-500 text-sm">Manage and track customer invoices</p>
                 </div>
-                <button
-                    onClick={openAddModal}
-                    className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
-                >
-                    <i className="fa-solid fa-plus"></i> Create Invoice
-                </button>
             </div>
 
             {/* Filters */}
@@ -584,6 +578,14 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                 title="All Invoices"
                 totalCount={filteredInvoices.length}
                 containerClassName="overflow-visible"
+                headerAction={
+                    <button
+                        onClick={openAddModal}
+                        className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                    >
+                        <i className="fa-solid fa-plus"></i> Create Invoice
+                    </button>
+                }
                 footer={
                     <>
                         <div className="flex items-center gap-3">

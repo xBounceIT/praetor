@@ -40,6 +40,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const [clientSearch, setClientSearch] = useState('');
   const [projectSearch, setProjectSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
+  const [filterClientId, setFilterClientId] = useState('all');
+  const [filterProjectId, setFilterProjectId] = useState('all');
 
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -117,6 +119,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     setDisabledCurrentPage(1);
   }, [disabledSearch]);
 
+  React.useEffect(() => {
+    if (filterClientId === 'all' || filterProjectId === 'all') return;
+    const selectedProject = projects.find(project => project.id === filterProjectId);
+    if (!selectedProject || selectedProject.clientId !== filterClientId) {
+      setFilterProjectId('all');
+    }
+  }, [filterClientId, filterProjectId, projects]);
+
   const openAssignments = async (userId: string) => {
     if (!canManageAssignments) return;
     setManagingUserId(userId);
@@ -138,6 +148,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     setClientSearch('');
     setProjectSearch('');
     setTaskSearch('');
+    setFilterClientId('all');
+    setFilterProjectId('all');
   };
 
   const saveAssignments = async () => {
@@ -216,6 +228,29 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
         }
       } else if (type === 'project') {
         newProjectIds = newList;
+        const project = projects.find(p => p.id === id);
+        if (project) {
+          if (isAdding) {
+            if (!newClientIds.includes(project.clientId)) {
+              newClientIds = [...newClientIds, project.clientId];
+            }
+          } else {
+            const hasProjectForClient = newProjectIds.some(projectId => {
+              const remainingProject = projects.find(p => p.id === projectId);
+              return remainingProject?.clientId === project.clientId;
+            });
+
+            const hasTaskForClient = newTaskIds.some(taskId => {
+              const remainingTask = tasks.find(t => t.id === taskId);
+              const remainingProject = remainingTask ? projects.find(p => p.id === remainingTask.projectId) : null;
+              return remainingProject?.clientId === project.clientId;
+            });
+
+            if (!hasProjectForClient && !hasTaskForClient) {
+              newClientIds = newClientIds.filter(clientId => clientId !== project.clientId);
+            }
+          }
+        }
       } else {
         newClientIds = newList;
       }
@@ -284,19 +319,38 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     (canEditRole && editRole !== editingUser.role)
   );
 
+  const filteredProjectsForFilter = filterClientId === 'all'
+    ? projects
+    : projects.filter(project => project.clientId === filterClientId);
+
+  const clientFilterOptions = [
+    { id: 'all', name: 'All Clients' },
+    ...clients.map(client => ({ id: client.id, name: client.name }))
+  ];
+
+  const projectFilterOptions = [
+    { id: 'all', name: 'All Projects' },
+    ...filteredProjectsForFilter.map(project => ({ id: project.id, name: project.name }))
+  ];
+
   // Synchronized Filtering Logic
   const getFilteredData = () => {
     const searchClient = clientSearch.toLowerCase();
     const searchProject = projectSearch.toLowerCase();
     const searchTask = taskSearch.toLowerCase();
+    const selectedClientFilter = filterClientId !== 'all' ? filterClientId : null;
+    const selectedProjectFilter = filterProjectId !== 'all' ? filterProjectId : null;
 
     // 1. Visible Tasks
     const visibleTasks = tasks.filter(t => {
+      if (selectedProjectFilter && t.projectId !== selectedProjectFilter) return false;
       // Must match task search
       if (searchTask && !t.name.toLowerCase().includes(searchTask)) return false;
 
       const project = projects.find(p => p.id === t.projectId);
       if (!project) return false;
+
+      if (selectedClientFilter && project.clientId !== selectedClientFilter) return false;
 
       // Must match project search (via parent project)
       if (searchProject && !project.name.toLowerCase().includes(searchProject)) return false;
@@ -312,6 +366,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
     // 2. Visible Projects
     const visibleProjects = projects.filter(p => {
+      if (selectedProjectFilter && p.id !== selectedProjectFilter) return false;
+      if (selectedClientFilter && p.clientId !== selectedClientFilter) return false;
       // Must match project search
       if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
 
@@ -334,6 +390,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
     // 3. Visible Clients
     const visibleClients = clients.filter(c => {
+      if (selectedClientFilter && c.id !== selectedClientFilter) return false;
+
+      if (selectedProjectFilter) {
+        const selectedProject = projects.find(project => project.id === selectedProjectFilter);
+        if (!selectedProject || selectedProject.clientId !== c.id) return false;
+      }
       // Must match client search
       if (searchClient && !c.name.toLowerCase().includes(searchClient)) return false;
 
@@ -341,6 +403,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
       if (searchProject || searchTask) {
         const hasMatchingPath = projects.some(p => {
           if (p.clientId !== c.id) return false;
+
+          if (selectedProjectFilter && p.id !== selectedProjectFilter) return false;
 
           if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
 
@@ -1026,129 +1090,151 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                   <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
                 </div>
               ) : (
-                <div className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
-                  {/* Clients Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Clients</h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.clientIds.length}</span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Search clients..."
-                        value={clientSearch}
-                        onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      {visibleClients.map(client => (
-                        <label key={client.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.clientIds.includes(client.id)
-                          ? 'bg-slate-50 border-slate-300 shadow-sm'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}>
-                          <input
-                            type="checkbox"
-                            checked={assignments.clientIds.includes(client.id)}
-                            onChange={() => toggleAssignment('client', client.id)}
-                            className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                          />
-                          <span className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}>
-                            {client.name}
-                          </span>
-                        </label>
-                      ))}
-                      {clients.length === 0 && <p className="text-xs text-slate-400 italic">No clients found.</p>}
-                    </div>
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <CustomSelect
+                      options={clientFilterOptions}
+                      value={filterClientId}
+                      onChange={setFilterClientId}
+                      placeholder="Filter by Client"
+                      searchable={true}
+                      buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                    />
+                    <CustomSelect
+                      options={projectFilterOptions}
+                      value={filterProjectId}
+                      onChange={setFilterProjectId}
+                      placeholder="Filter by Project"
+                      searchable={true}
+                      buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                      disabled={projectFilterOptions.length === 1}
+                    />
                   </div>
 
-                  {/* Projects Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Projects</h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.projectIds.length}</span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Search projects..."
-                        value={projectSearch}
-                        onChange={(e) => setProjectSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      {visibleProjects.map(project => (
-                        <label key={project.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.projectIds.includes(project.id)
-                          ? 'bg-slate-50 border-slate-300 shadow-sm'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}>
-                          <input
-                            type="checkbox"
-                            checked={assignments.projectIds.includes(project.id)}
-                            onChange={() => toggleAssignment('project', project.id)}
-                            className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                          />
-                          <div className="flex flex-col">
-                            <span className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}>
-                              {project.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {clients.find(c => c.id === project.clientId)?.name || 'Unknown Client'}
-                            </span>
-                          </div>
-                        </label>
-                      ))}
-                      {projects.length === 0 && <p className="text-xs text-slate-400 italic">No projects found.</p>}
-                    </div>
-                  </div>
-
-                  {canManageAssignments && (
+                  <div className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
+                    {/* Clients Column */}
                     <div className="space-y-3">
                       <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
                         <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Clients</h4>
+                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.clientIds.length}</span>
                         </div>
                         <input
                           type="text"
-                          placeholder="Search tasks..."
-                          value={taskSearch}
-                          onChange={(e) => setTaskSearch(e.target.value)}
+                          placeholder="Search clients..."
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
                           className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                         />
                       </div>
                       <div className="space-y-2">
-                        {visibleTasks.map(task => {
-                          const project = projects.find(p => p.id === task.projectId);
-                          return (
-                            <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
-                              }`}>
-                              <input
-                                type="checkbox"
-                                checked={assignments.taskIds.includes(task.id)}
-                                onChange={() => toggleAssignment('task', task.id)}
-                                className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                              />
-                              <div className="flex flex-col">
-                                <span className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}>
-                                  {task.name}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {project?.name || 'Unknown Project'}
-                                </span>
-                              </div>
-                            </label>
-                          );
-                        })}
-                        {tasks.length === 0 && <p className="text-xs text-slate-400 italic">No tasks found.</p>}
+                        {visibleClients.map(client => (
+                          <label key={client.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.clientIds.includes(client.id)
+                            ? 'bg-slate-50 border-slate-300 shadow-sm'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}>
+                            <input
+                              type="checkbox"
+                              checked={assignments.clientIds.includes(client.id)}
+                              onChange={() => toggleAssignment('client', client.id)}
+                              className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
+                            />
+                            <span className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                              {client.name}
+                            </span>
+                          </label>
+                        ))}
+                        {clients.length === 0 && <p className="text-xs text-slate-400 italic">No clients found.</p>}
                       </div>
                     </div>
-                  )}
-                </div>
+
+                    {/* Projects Column */}
+                    <div className="space-y-3">
+                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                        <div className="flex items-center justify-between py-2">
+                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Projects</h4>
+                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.projectIds.length}</span>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Search projects..."
+                          value={projectSearch}
+                          onChange={(e) => setProjectSearch(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        {visibleProjects.map(project => (
+                          <label key={project.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.projectIds.includes(project.id)
+                            ? 'bg-slate-50 border-slate-300 shadow-sm'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}>
+                            <input
+                              type="checkbox"
+                              checked={assignments.projectIds.includes(project.id)}
+                              onChange={() => toggleAssignment('project', project.id)}
+                              className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
+                            />
+                            <div className="flex flex-col">
+                              <span className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                                {project.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {clients.find(c => c.id === project.clientId)?.name || 'Unknown Client'}
+                              </span>
+                            </div>
+                          </label>
+                        ))}
+                        {projects.length === 0 && <p className="text-xs text-slate-400 italic">No projects found.</p>}
+                      </div>
+                    </div>
+
+                    {canManageAssignments && (
+                      <div className="space-y-3">
+                        <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                          <div className="flex items-center justify-between py-2">
+                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
+                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Search tasks..."
+                            value={taskSearch}
+                            onChange={(e) => setTaskSearch(e.target.value)}
+                            className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          {visibleTasks.map(task => {
+                            const project = projects.find(p => p.id === task.projectId);
+                            return (
+                              <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)
+                                ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                : 'bg-white border-slate-200 hover:border-slate-300'
+                                }`}>
+                                <input
+                                  type="checkbox"
+                                  checked={assignments.taskIds.includes(task.id)}
+                                  onChange={() => toggleAssignment('task', task.id)}
+                                  className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
+                                />
+                                <div className="flex flex-col">
+                                  <span className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                                    {task.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {project?.name || 'Unknown Project'}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                          {tasks.length === 0 && <p className="text-xs text-slate-400 italic">No tasks found.</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 

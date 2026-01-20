@@ -257,12 +257,6 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                     <h2 className="text-2xl font-black text-slate-800">Expenses</h2>
                     <p className="text-slate-500 text-sm">Track company spending</p>
                 </div>
-                <button
-                    onClick={openAddModal}
-                    className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
-                >
-                    <i className="fa-solid fa-plus"></i> Record Expense
-                </button>
             </div>
 
             {/* Filters */}
@@ -304,6 +298,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                 title="All Expenses"
                 totalCount={filteredExpenses.length}
                 containerClassName="overflow-visible"
+                headerAction={
+                    <button
+                        onClick={openAddModal}
+                        className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                    >
+                        <i className="fa-solid fa-plus"></i> Record Expense
+                    </button>
+                }
                 footer={
                     <>
                         <div className="flex items-center gap-3">

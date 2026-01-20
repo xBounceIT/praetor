@@ -291,12 +291,6 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                     <h2 className="text-2xl font-black text-slate-800">Payments</h2>
                     <p className="text-slate-500 text-sm">Track all incoming payments</p>
                 </div>
-                <button
-                    onClick={openAddModal}
-                    className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
-                >
-                    <i className="fa-solid fa-plus"></i> Record Payment
-                </button>
             </div>
 
             {/* Filters */}
@@ -338,6 +332,14 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                 title="All Payments"
                 totalCount={filteredPayments.length}
                 containerClassName="overflow-visible"
+                headerAction={
+                    <button
+                        onClick={openAddModal}
+                        className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                    >
+                        <i className="fa-solid fa-plus"></i> Record Payment
+                    </button>
+                }
                 footer={
                     <>
                         <div className="flex items-center gap-3">

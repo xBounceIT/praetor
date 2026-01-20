@@ -5,6 +5,7 @@ type StandardTableProps = {
   totalCount?: number;
   totalLabel?: string;
   headerExtras?: ReactNode;
+  headerAction?: ReactNode;
   containerClassName?: string;
   tableContainerClassName?: string;
   footer?: ReactNode;
@@ -17,6 +18,7 @@ const StandardTable = ({
   totalCount,
   totalLabel = 'TOTAL',
   headerExtras,
+  headerAction,
   containerClassName,
   tableContainerClassName,
   footer,
@@ -29,10 +31,15 @@ const StandardTable = ({
         <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">{title}</h4>
         <div className="flex items-center gap-3">
           {headerExtras}
-          {typeof totalCount === 'number' && (
-            <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">
-              {totalCount} {totalLabel}
-            </span>
+          {(typeof totalCount === 'number' || headerAction) && (
+            <div className="flex items-center gap-2">
+              {typeof totalCount === 'number' && (
+                <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">
+                  {totalCount} {totalLabel}
+                </span>
+              )}
+              {headerAction}
+            </div>
           )}
         </div>
       </div>

@@ -516,12 +516,6 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
           <h2 className="text-2xl font-black text-slate-800">Special Bids</h2>
           <p className="text-slate-500 text-sm">Define special prices for dedicated clients</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-        >
-          <i className="fa-solid fa-plus"></i> Create Special Bid
-        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -561,6 +555,14 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       <StandardTable
         title="Active Special Bids"
         totalCount={filteredActiveBids.length}
+        headerAction={
+          <button
+            onClick={openAddModal}
+            className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i> Create Special Bid
+          </button>
+        }
         footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
         footer={
           <>

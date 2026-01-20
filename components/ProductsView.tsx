@@ -601,12 +601,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                     <h2 className="text-2xl font-black text-slate-800">Products</h2>
                     <p className="text-slate-500 text-sm">Manage products and services for billing</p>
                 </div>
-                <button
-                    onClick={openAddModal}
-                    className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-                >
-                    <i className="fa-solid fa-plus"></i> Add New Product
-                </button>
             </div>
 
             {/* Search and Filters */}
@@ -667,6 +661,14 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             <StandardTable
                 title="Active Products"
                 totalCount={filteredActiveProductsTotal.length}
+                headerAction={
+                    <button
+                        onClick={openAddModal}
+                        className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+                    >
+                        <i className="fa-solid fa-plus"></i> Add New Product
+                    </button>
+                }
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
                 footer={
                     <>
