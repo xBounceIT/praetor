@@ -7,12 +7,21 @@ export default async function (fastify, opts) {
     fastify.addHook('onRequest', authenticateToken);
     fastify.addHook('onRequest', requireRole('manager'));
 
-    const isQuoteExpired = (status, expirationDate) => {
+    const isQuoteExpired = (status: string, expirationDate: string | Date | null | undefined) => {
         if (status === 'confirmed') return false;
-        const normalizedDate = expirationDate.includes('T') ? expirationDate : `${expirationDate}T00:00:00`;
+        if (!expirationDate) return false;
+
+        let normalizedDate: string;
+        if (expirationDate instanceof Date) {
+            normalizedDate = expirationDate.toISOString().split('T')[0];
+        } else {
+            normalizedDate = expirationDate.toString().includes('T') ? expirationDate.toString().split('T')[0] : expirationDate.toString();
+        }
+
         const expiry = new Date(normalizedDate);
-        expiry.setDate(expiry.getDate() + 1);
-        return new Date() >= expiry;
+        // Set time to end of day to avoid premature expiration
+        expiry.setHours(23, 59, 59, 999);
+        return new Date() > expiry;
     };
 
     // GET / - List all quotes with their items
