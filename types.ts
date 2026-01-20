@@ -142,6 +142,7 @@ export interface Quote {
   discount: number; // global discount percentage
   status: 'quoted' | 'confirmed';
   expirationDate: string; // ISO date string
+  isExpired?: boolean;
   notes?: string;
   createdAt: number;
   updatedAt: number;

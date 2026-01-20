@@ -50,6 +50,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
+    const [expiredPage, setExpiredPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(() => {
         const saved = localStorage.getItem('praetor_quotes_rowsPerPage');
         return saved ? parseInt(saved, 10) : 5;
@@ -60,6 +61,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         setRowsPerPage(value);
         localStorage.setItem('praetor_quotes_rowsPerPage', value.toString());
         setCurrentPage(1); // Reset to first page
+        setExpiredPage(1);
     };
 
     // Filter State
@@ -97,6 +99,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
     // Reset page on filter change
     React.useEffect(() => {
         setCurrentPage(1);
+        setExpiredPage(1);
     }, [searchTerm, filterClientId, filterStatus, filterQuoteId]);
 
     const hasActiveFilters =
@@ -111,6 +114,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         setFilterStatus('all');
         setFilterQuoteId('all');
         setCurrentPage(1);
+        setExpiredPage(1);
     };
 
     // Form State
@@ -389,18 +393,121 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         return bid ? `${bid.clientName} · ${bid.productName}` : 'No Special Bid';
     };
 
-    // Pagination Logic
-    // Pagination Logic
-    const totalPages = Math.ceil(filteredQuotes.length / rowsPerPage);
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    const paginatedQuotes = filteredQuotes.slice(startIndex, startIndex + rowsPerPage);
-
     // Check if quote is expired
     const isExpired = (expirationDate: string) => {
         const normalizedDate = expirationDate.includes('T') ? expirationDate : `${expirationDate}T00:00:00`;
         const expiry = new Date(normalizedDate);
         expiry.setDate(expiry.getDate() + 1);
         return new Date() >= expiry;
+    };
+
+    const isQuoteExpired = (quote: Quote) => quote.status !== 'confirmed' && (quote.isExpired ?? isExpired(quote.expirationDate));
+    const filteredActiveQuotes = filteredQuotes.filter(quote => !isQuoteExpired(quote));
+    const filteredExpiredQuotes = filteredQuotes.filter(quote => isQuoteExpired(quote));
+
+    // Pagination Logic
+    const activeTotalPages = Math.ceil(filteredActiveQuotes.length / rowsPerPage);
+    const activeStartIndex = (currentPage - 1) * rowsPerPage;
+    const paginatedActiveQuotes = filteredActiveQuotes.slice(activeStartIndex, activeStartIndex + rowsPerPage);
+
+    const expiredTotalPages = Math.ceil(filteredExpiredQuotes.length / rowsPerPage);
+    const expiredStartIndex = (expiredPage - 1) * rowsPerPage;
+    const paginatedExpiredQuotes = filteredExpiredQuotes.slice(expiredStartIndex, expiredStartIndex + rowsPerPage);
+
+    const renderQuoteRow = (quote: Quote) => {
+        const { total } = calculateTotals(quote.items, quote.discount);
+        const expired = isQuoteExpired(quote);
+        const isRevertLocked = quote.status === 'confirmed' && quoteIdsWithSales?.has(quote.id);
+        return (
+            <tr
+                key={quote.id}
+                onClick={() => openEditModal(quote)}
+                className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : ''}`}
+            >
+                <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
+                            <i className="fa-solid fa-file-invoice"></i>
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-black text-slate-400 tracking-wider">ID {quote.id}</div>
+                            <div className="font-bold text-slate-800">{quote.clientName}</div>
+                            <div className="text-[10px] font-black text-slate-400 uppercase">{quote.items.length} item{quote.items.length !== 1 ? 's' : ''}</div>
+                        </div>
+                    </div>
+                </td>
+                <td className="px-8 py-5">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${quote.status === 'confirmed'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                        }`}>
+                        {quote.status.toUpperCase()}
+                    </span>
+                </td>
+                <td className="px-8 py-5 text-sm font-bold text-slate-700">
+                    {total.toFixed(2)} {currency}
+                </td>
+                <td className="px-8 py-5 text-sm font-semibold text-slate-600">
+                    {quote.paymentTerms === 'immediate' ? 'Immediate' : quote.paymentTerms}
+                </td>
+                <td className="px-8 py-5">
+                    <div className={`text-sm ${expired ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
+                        {new Date(quote.expirationDate).toLocaleDateString()}
+                        {expired && <span className="ml-2 text-[10px] font-black">(EXPIRED)</span>}
+                    </div>
+                </td>
+                <td className="px-8 py-5">
+                    <div className="flex justify-end gap-2">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openEditModal(quote);
+                            }}
+                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                            title="Edit Quote"
+                        >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (isRevertLocked) return;
+                                onUpdateQuote(quote.id, { status: quote.status === 'quoted' ? 'confirmed' : 'quoted' });
+                            }}
+                            disabled={isRevertLocked}
+                            className={`p-2 text-slate-400 rounded-lg transition-all ${isRevertLocked ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
+                            title={isRevertLocked ? 'Cannot revert: linked sale order exists' : (quote.status === 'quoted' ? 'Mark as Confirmed' : 'Mark as Quoted')}
+                        >
+                            <i className={`fa-solid ${quote.status === 'quoted' ? 'fa-check' : 'fa-rotate-left'}`}></i>
+                        </button>
+                        {quote.status === 'confirmed' && onCreateSale && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onCreateSale(quote);
+                                }}
+                                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                                title="Create Sale Order"
+                            >
+                                <i className="fa-solid fa-cart-plus"></i>
+                            </button>
+                        )}
+                        {quote.status !== 'confirmed' && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    confirmDelete(quote);
+                                }}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                title="Delete Quote"
+                            >
+                                <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                        )}
+                    </div>
+                </td>
+            </tr>
+        );
     };
 
     return (
@@ -802,7 +909,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                         type="button"
                         onClick={handleClearFilters}
                         disabled={!hasActiveFilters}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="fa-solid fa-rotate-left"></i>
                         Clear filters
@@ -811,8 +918,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
             </div>
 
             <StandardTable
-                title="All Quotes"
-                totalCount={filteredQuotes.length}
+                title="Active Quotes"
+                totalCount={filteredActiveQuotes.length}
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
                 footer={
                     <>
@@ -832,7 +939,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 searchable={false}
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                Showing {paginatedQuotes.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredQuotes.length)} of {filteredQuotes.length}
+                                Showing {paginatedActiveQuotes.length > 0 ? activeStartIndex + 1 : 0}-{Math.min(activeStartIndex + rowsPerPage, filteredActiveQuotes.length)} of {filteredActiveQuotes.length}
                             </span>
                         </div>
 
@@ -845,7 +952,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 <i className="fa-solid fa-chevron-left text-xs"></i>
                             </button>
                             <div className="flex items-center gap-1">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map(page => (
                                     <button
                                         key={page}
                                         onClick={() => setCurrentPage(page)}
@@ -859,8 +966,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 ))}
                             </div>
                             <button
-                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                disabled={currentPage === totalPages || totalPages === 0}
+                                onClick={() => setCurrentPage(prev => Math.min(activeTotalPages, prev + 1))}
+                                disabled={currentPage === activeTotalPages || activeTotalPages === 0}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
                             >
                                 <i className="fa-solid fa-chevron-right text-xs"></i>
@@ -881,109 +988,103 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {paginatedQuotes.map(quote => {
-                            const { total } = calculateTotals(quote.items, quote.discount);
-                            const expired = isExpired(quote.expirationDate);
-                            const isRevertLocked = quote.status === 'confirmed' && quoteIdsWithSales?.has(quote.id);
-                            return (
-                                <tr
-                                    key={quote.id}
-                                    onClick={() => openEditModal(quote)}
-                                    className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : ''}`}
-                                >
-                                    <td className="px-8 py-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-                                                <i className="fa-solid fa-file-invoice"></i>
-                                            </div>
-                                            <div>
-                                                <div className="text-[10px] font-black text-slate-400 tracking-wider">ID {quote.id}</div>
-                                                <div className="font-bold text-slate-800">{quote.clientName}</div>
-                                                <div className="text-[10px] font-black text-slate-400 uppercase">{quote.items.length} item{quote.items.length !== 1 ? 's' : ''}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black ${quote.status === 'confirmed'
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : 'bg-amber-100 text-amber-700'
-                                            }`}>
-                                            {quote.status.toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-bold text-slate-700">
-                                        {total.toFixed(2)} {currency}
-                                    </td>
-                                    <td className="px-8 py-5 text-sm font-semibold text-slate-600">
-                                        {quote.paymentTerms === 'immediate' ? 'Immediate' : quote.paymentTerms}
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <div className={`text-sm ${expired ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
-                                            {new Date(quote.expirationDate).toLocaleDateString()}
-                                            {expired && <span className="ml-2 text-[10px] font-black">(EXPIRED)</span>}
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <div className="flex justify-end gap-2">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openEditModal(quote);
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                                title="Edit Quote"
-                                            >
-                                                <i className="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (isRevertLocked) return;
-                                                    onUpdateQuote(quote.id, { status: quote.status === 'quoted' ? 'confirmed' : 'quoted' });
-                                                }}
-                                                disabled={isRevertLocked}
-                                                className={`p-2 text-slate-400 rounded-lg transition-all ${isRevertLocked ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
-                                                title={isRevertLocked ? 'Cannot revert: linked sale order exists' : (quote.status === 'quoted' ? 'Mark as Confirmed' : 'Mark as Quoted')}
-                                            >
-                                                <i className={`fa-solid ${quote.status === 'quoted' ? 'fa-check' : 'fa-rotate-left'}`}></i>
-                                            </button>
-                                            {quote.status === 'confirmed' && onCreateSale && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onCreateSale(quote);
-                                                    }}
-                                                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                                    title="Create Sale Order"
-                                                >
-                                                    <i className="fa-solid fa-cart-plus"></i>
-                                                </button>
-                                            )}
-                                            {quote.status !== 'confirmed' && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        confirmDelete(quote);
-                                                    }}
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                    title="Delete Quote"
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {filteredQuotes.length === 0 && (
+                        {paginatedActiveQuotes.map(renderQuoteRow)}
+                        {filteredActiveQuotes.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="p-12 text-center">
                                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                                         <i className="fa-solid fa-file-invoice text-2xl"></i>
                                     </div>
-                                    <p className="text-slate-400 text-sm font-bold">No quotes found.</p>
+                                    <p className="text-slate-400 text-sm font-bold">No active quotes found.</p>
                                     <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">Create your first quote</button>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </StandardTable>
+
+            <StandardTable
+                title="Expired Quotes"
+                totalCount={filteredExpiredQuotes.length}
+                totalLabel="EXPIRED"
+                containerClassName="border-dashed bg-slate-50"
+                footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
+                footer={
+                    <>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+                            <CustomSelect
+                                options={[
+                                    { id: '5', name: '5' },
+                                    { id: '10', name: '10' },
+                                    { id: '20', name: '20' },
+                                    { id: '50', name: '50' }
+                                ]}
+                                value={rowsPerPage.toString()}
+                                onChange={(val) => handleRowsPerPageChange(val)}
+                                className="w-20"
+                                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+                                searchable={false}
+                            />
+                            <span className="text-xs font-bold text-slate-400 ml-2">
+                                Showing {paginatedExpiredQuotes.length > 0 ? expiredStartIndex + 1 : 0}-{Math.min(expiredStartIndex + rowsPerPage, filteredExpiredQuotes.length)} of {filteredExpiredQuotes.length}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setExpiredPage(prev => Math.max(1, prev - 1))}
+                                disabled={expiredPage === 1}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                <i className="fa-solid fa-chevron-left text-xs"></i>
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: expiredTotalPages }, (_, i) => i + 1).map(page => (
+                                    <button
+                                        key={page}
+                                        onClick={() => setExpiredPage(page)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${expiredPage === page
+                                            ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                                            : 'text-slate-500 hover:bg-slate-100'
+                                            }`}
+                                    >
+                                        {page}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => setExpiredPage(prev => Math.min(expiredTotalPages, prev + 1))}
+                                disabled={expiredPage === expiredTotalPages || expiredTotalPages === 0}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                <i className="fa-solid fa-chevron-right text-xs"></i>
+                            </button>
+                        </div>
+                    </>
+                }
+            >
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Payment Terms</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Expiration</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {paginatedExpiredQuotes.map(renderQuoteRow)}
+                        {filteredExpiredQuotes.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="p-12 text-center">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
+                                        <i className="fa-solid fa-file-invoice text-2xl"></i>
+                                    </div>
+                                    <p className="text-slate-400 text-sm font-bold">No expired quotes found.</p>
                                 </td>
                             </tr>
                         )}

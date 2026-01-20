@@ -30,6 +30,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         return saved ? parseInt(saved, 10) : 5;
     });
 
+    // Filters
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterCategory, setFilterCategory] = useState('all');
+    const [filterType, setFilterType] = useState('all');
+    const [filterSupplierId, setFilterSupplierId] = useState('all');
+
     const handleRowsPerPageChange = (val: string) => {
         const value = parseInt(val, 10);
         setRowsPerPage(value);
@@ -43,6 +49,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         localStorage.setItem('praetor_products_disabled_rowsPerPage', value.toString());
         setDisabledCurrentPage(1);
     };
+
+    // Reset pages on filter change
+    React.useEffect(() => {
+        setCurrentPage(1);
+        setDisabledCurrentPage(1);
+    }, [searchTerm, filterCategory, filterType, filterSupplierId]);
 
     // Category Management State
     const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
@@ -69,6 +81,43 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     };
     const calcMargine = (costo: number, molPercentage: number) => {
         return calcSalePrice(costo, molPercentage) - costo;
+    };
+
+    const numericInputPattern = /^[0-9]*([.,][0-9]*)?$/;
+
+    const isValidNumericInput = (value: string) => value === '' || numericInputPattern.test(value);
+
+    const normalizeNumericInput = (value: string) => value.replace(',', '.');
+
+    const handleNumericKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.ctrlKey || event.metaKey) return;
+        const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+        if (allowedKeys.includes(event.key)) return;
+
+        if (event.key === '.' || event.key === ',') {
+            const currentValue = event.currentTarget.value;
+            if (currentValue.includes('.') || currentValue.includes(',')) {
+                event.preventDefault();
+            }
+            return;
+        }
+
+        if (!/^[0-9]$/.test(event.key)) {
+            event.preventDefault();
+        }
+    };
+
+    const handleNumericChange = (field: 'taxRate' | 'costo' | 'molPercentage') => (event: React.ChangeEvent<HTMLInputElement>) => {
+        const rawValue = event.target.value;
+        if (!isValidNumericInput(rawValue)) return;
+        const normalizedValue = normalizeNumericInput(rawValue);
+        setFormData({
+            ...formData,
+            [field]: normalizedValue === '' ? undefined : parseFloat(normalizedValue)
+        });
+        if (errors[field]) {
+            setErrors({ ...errors, [field]: '' });
+        }
     };
 
     const openAddModal = () => {
@@ -165,16 +214,55 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         }
     };
 
-    const activeProductsTotal = products.filter(p => !p.isDisabled);
-    const disabledProducts = products.filter(p => p.isDisabled);
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const hasActiveFilters =
+        normalizedSearch !== '' ||
+        filterCategory !== 'all' ||
+        filterType !== 'all' ||
+        filterSupplierId !== 'all';
+
+    const handleClearFilters = () => {
+        setSearchTerm('');
+        setFilterCategory('all');
+        setFilterType('all');
+        setFilterSupplierId('all');
+        setCurrentPage(1);
+        setDisabledCurrentPage(1);
+    };
+
+    const matchesProductFilters = (product: Product) => {
+        const matchesSearch =
+            normalizedSearch === '' ||
+            product.name.toLowerCase().includes(normalizedSearch) ||
+            (product.category ?? '').toLowerCase().includes(normalizedSearch) ||
+            (product.supplierName ?? '').toLowerCase().includes(normalizedSearch);
+
+        const matchesCategory = filterCategory === 'all' || (product.category ?? '') === filterCategory;
+        const matchesType = filterType === 'all' || product.type === (filterType as Product['type']);
+        const matchesSupplier =
+            filterSupplierId === 'all' ||
+            (filterSupplierId === 'none' ? !product.supplierId : product.supplierId === filterSupplierId);
+
+        return matchesSearch && matchesCategory && matchesType && matchesSupplier;
+    };
+
+    const filteredActiveProductsTotal = React.useMemo(() => {
+        return products.filter(p => !p.isDisabled).filter(matchesProductFilters);
+    }, [products, normalizedSearch, filterCategory, filterType, filterSupplierId]);
+
+    const filteredDisabledProductsTotal = React.useMemo(() => {
+        return products.filter(p => p.isDisabled).filter(matchesProductFilters);
+    }, [products, normalizedSearch, filterCategory, filterType, filterSupplierId]);
+
+    const hasAnyDisabledProducts = products.some(p => p.isDisabled);
 
     // Pagination Logic
-    const totalPages = Math.ceil(activeProductsTotal.length / rowsPerPage);
+    const totalPages = Math.ceil(filteredActiveProductsTotal.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
-    const activeProducts = activeProductsTotal.slice(startIndex, startIndex + rowsPerPage);
-    const disabledTotalPages = Math.ceil(disabledProducts.length / disabledRowsPerPage);
+    const activeProducts = filteredActiveProductsTotal.slice(startIndex, startIndex + rowsPerPage);
+    const disabledTotalPages = Math.ceil(filteredDisabledProductsTotal.length / disabledRowsPerPage);
     const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-    const disabledProductsPage = disabledProducts.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
+    const disabledProductsPage = filteredDisabledProductsTotal.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
 
     // Get unique categories from existing products + custom ones
     const existingCategories = Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)));
@@ -195,6 +283,14 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     const activeSuppliers = suppliers.filter(s => !s.isDisabled);
     const supplierOptions: Option[] = [
         { id: '', name: 'No Supplier' },
+        ...activeSuppliers.map(s => ({ id: s.id, name: s.name }))
+    ];
+
+    const filterCategoryOptions: Option[] = [{ id: 'all', name: 'All Categories' }, ...categoryOptions];
+    const filterTypeOptions: Option[] = [{ id: 'all', name: 'All Types' }, ...typeOptions];
+    const filterSupplierOptions: Option[] = [
+        { id: 'all', name: 'All Suppliers' },
+        { id: 'none', name: 'No Supplier' },
         ...activeSuppliers.map(s => ({ id: s.id, name: s.name }))
     ];
 
@@ -338,18 +434,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                             <label className="text-xs font-bold text-slate-500">Tax Rate (%)</label>
                                         </div>
                                         <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="^[0-9]*([.,][0-9]*)?$"
                                             value={formData.taxRate ?? ''}
-                                            onChange={(e) => {
-                                                const value = e.target.value;
-                                                setFormData({
-                                                    ...formData,
-                                                    taxRate: value === '' ? undefined : parseFloat(value)
-                                                });
-                                                if (errors.taxRate) setErrors({ ...errors, taxRate: '' });
-                                            }}
+                                            onKeyDown={handleNumericKeyDown}
+                                            onChange={handleNumericChange('taxRate')}
                                             className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.taxRate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                                         />
                                         {errors.taxRate && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.taxRate}</p>}
@@ -406,17 +496,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                         <label className="text-xs font-bold text-slate-500 ml-1">Costo</label>
                                         <div className="flex gap-2">
                                             <input
-                                                type="number"
-                                                step="0.01"
+                                                type="text"
+                                                inputMode="decimal"
+                                                pattern="^[0-9]*([.,][0-9]*)?$"
                                                 value={formData.costo ?? ''}
-                                                onChange={(e) => {
-                                                    const value = e.target.value;
-                                                    setFormData({
-                                                        ...formData,
-                                                        costo: value === '' ? undefined : parseFloat(value)
-                                                    });
-                                                    if (errors.costo) setErrors({ ...errors, costo: '' });
-                                                }}
+                                                onKeyDown={handleNumericKeyDown}
+                                                onChange={handleNumericChange('costo')}
                                                 className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                                             />
                                         </div>
@@ -427,19 +512,12 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                         <label className="text-xs font-bold text-slate-500 ml-1">MOL %</label>
                                         <div className="flex gap-2">
                                             <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max="99.99"
+                                                type="text"
+                                                inputMode="decimal"
+                                                pattern="^[0-9]*([.,][0-9]*)?$"
                                                 value={formData.molPercentage ?? ''}
-                                                onChange={(e) => {
-                                                    const value = e.target.value;
-                                                    setFormData({
-                                                        ...formData,
-                                                        molPercentage: value === '' ? undefined : parseFloat(value)
-                                                    });
-                                                    if (errors.molPercentage) setErrors({ ...errors, molPercentage: '' });
-                                                }}
+                                                onKeyDown={handleNumericKeyDown}
+                                                onChange={handleNumericChange('molPercentage')}
                                                 className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                                             />
                                         </div>
@@ -531,9 +609,64 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                 </button>
             </div>
 
+            {/* Search and Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div className="md:col-span-2 relative">
+                    <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input
+                        type="text"
+                        placeholder="Search products, categories, or suppliers..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
+                    />
+                </div>
+                <div>
+                    <CustomSelect
+                        options={filterCategoryOptions}
+                        value={filterCategory}
+                        onChange={setFilterCategory}
+                        placeholder="Filter by Category"
+                        searchable={true}
+                        buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
+                    />
+                </div>
+                <div>
+                    <CustomSelect
+                        options={filterTypeOptions}
+                        value={filterType}
+                        onChange={setFilterType}
+                        placeholder="Filter by Type"
+                        searchable={false}
+                        buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
+                    />
+                </div>
+                <div>
+                    <CustomSelect
+                        options={filterSupplierOptions}
+                        value={filterSupplierId}
+                        onChange={setFilterSupplierId}
+                        placeholder="Filter by Supplier"
+                        searchable={true}
+                        buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
+                    />
+                </div>
+                <div className="flex items-center justify-end">
+                    <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        disabled={!hasActiveFilters}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <i className="fa-solid fa-rotate-left"></i>
+                        Clear filters
+                    </button>
+                </div>
+            </div>
+
             <StandardTable
                 title="Active Products"
-                totalCount={activeProducts.length}
+                totalCount={filteredActiveProductsTotal.length}
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
                 footer={
                     <>
@@ -553,7 +686,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                 searchable={false}
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                Showing {activeProducts.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeProductsTotal.length)} of {activeProductsTotal.length}
+                                Showing {activeProducts.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredActiveProductsTotal.length)} of {filteredActiveProductsTotal.length}
                             </span>
                         </div>
 
@@ -689,107 +822,113 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                 </table>
             </StandardTable>
 
-            {
-                disabledProducts.length > 0 && (
-                    <StandardTable
-                        title="Disabled Products"
-                        totalCount={disabledProducts.length}
-                        totalLabel="DISABLED"
-                        containerClassName="border-dashed bg-slate-50"
-                        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-                        footer={
-                            <>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs font-bold text-slate-500">Rows per page:</span>
-                                    <CustomSelect
-                                        options={[
-                                            { id: '5', name: '5' },
-                                            { id: '10', name: '10' },
-                                            { id: '20', name: '20' },
-                                            { id: '50', name: '50' }
-                                        ]}
-                                        value={disabledRowsPerPage.toString()}
-                                        onChange={(val) => handleDisabledRowsPerPageChange(val)}
-                                        className="w-20"
-                                        buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                                        searchable={false}
-                                    />
-                                    <span className="text-xs font-bold text-slate-400 ml-2">
-                                        Showing {disabledProductsPage.length > 0 ? disabledStartIndex + 1 : 0}-{Math.min(disabledStartIndex + disabledRowsPerPage, disabledProducts.length)} of {disabledProducts.length}
-                                    </span>
-                                </div>
+            {hasAnyDisabledProducts && (
+                <StandardTable
+                    title="Disabled Products"
+                    totalCount={filteredDisabledProductsTotal.length}
+                    totalLabel="DISABLED"
+                    containerClassName="border-dashed bg-slate-50"
+                    footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
+                    footer={
+                        <>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+                                <CustomSelect
+                                    options={[
+                                        { id: '5', name: '5' },
+                                        { id: '10', name: '10' },
+                                        { id: '20', name: '20' },
+                                        { id: '50', name: '50' }
+                                    ]}
+                                    value={disabledRowsPerPage.toString()}
+                                    onChange={(val) => handleDisabledRowsPerPageChange(val)}
+                                    className="w-20"
+                                    buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+                                    searchable={false}
+                                />
+                                <span className="text-xs font-bold text-slate-400 ml-2">
+                                    Showing {disabledProductsPage.length > 0 ? disabledStartIndex + 1 : 0}-{Math.min(disabledStartIndex + disabledRowsPerPage, filteredDisabledProductsTotal.length)} of {filteredDisabledProductsTotal.length}
+                                </span>
+                            </div>
 
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setDisabledCurrentPage(prev => Math.max(1, prev - 1))}
-                                        disabled={disabledCurrentPage === 1}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                                    >
-                                        <i className="fa-solid fa-chevron-left text-xs"></i>
-                                    </button>
-                                    <div className="flex items-center gap-1">
-                                        {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map(page => (
-                                            <button
-                                                key={page}
-                                                onClick={() => setDisabledCurrentPage(page)}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${disabledCurrentPage === page
-                                                    ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                                                    : 'text-slate-500 hover:bg-slate-100'
-                                                    }`}
-                                            >
-                                                {page}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <button
-                                        onClick={() => setDisabledCurrentPage(prev => Math.min(disabledTotalPages, prev + 1))}
-                                        disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                                    >
-                                        <i className="fa-solid fa-chevron-right text-xs"></i>
-                                    </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setDisabledCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={disabledCurrentPage === 1}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                                >
+                                    <i className="fa-solid fa-chevron-left text-xs"></i>
+                                </button>
+                                <div className="flex items-center gap-1">
+                                    {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map(page => (
+                                        <button
+                                            key={page}
+                                            onClick={() => setDisabledCurrentPage(page)}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${disabledCurrentPage === page
+                                                ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                                                : 'text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    ))}
                                 </div>
-                            </>
-                        }
-                    >
-                        <div className="divide-y divide-slate-100">
-                            {disabledProductsPage.map(p => (
-                                <div key={p.id} onClick={() => openEditModal(p)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4 cursor-pointer">
-                                    <div className="flex gap-4 items-center">
-                                        <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
-                                            <i className="fa-solid fa-box"></i>
-                                        </div>
-                                        <div>
-                                            <h5 className="font-bold text-slate-500 line-through">{p.name}</h5>
-                                            <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
-                                        </div>
+                                <button
+                                    onClick={() => setDisabledCurrentPage(prev => Math.min(disabledTotalPages, prev + 1))}
+                                    disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                                >
+                                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                                </button>
+                            </div>
+                        </>
+                    }
+                >
+                    <div className="divide-y divide-slate-100">
+                        {disabledProductsPage.map(p => (
+                            <div key={p.id} onClick={() => openEditModal(p)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex items-center justify-between gap-4 cursor-pointer">
+                                <div className="flex gap-4 items-center">
+                                    <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
+                                        <i className="fa-solid fa-box"></i>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onUpdateProduct(p.id, { isDisabled: false });
-                                            }}
-                                            className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                                        >
-                                            <i className="fa-solid fa-rotate-left"></i>
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                confirmDelete(p);
-                                            }}
-                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                        >
-                                            <i className="fa-solid fa-trash-can"></i>
-                                        </button>
+                                    <div>
+                                        <h5 className="font-bold text-slate-500 line-through">{p.name}</h5>
+                                        <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </StandardTable>
-                )
-            }
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onUpdateProduct(p.id, { isDisabled: false });
+                                        }}
+                                        className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                        <i className="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            confirmDelete(p);
+                                        }}
+                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                        <i className="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                        {disabledProductsPage.length === 0 && (
+                            <div className="p-12 text-center">
+                                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
+                                    <i className="fa-solid fa-ban text-2xl"></i>
+                                </div>
+                                <p className="text-slate-400 text-sm font-bold">No disabled products found.</p>
+                            </div>
+                        )}
+                    </div>
+                </StandardTable>
+            )}
         </div >
     );
 };

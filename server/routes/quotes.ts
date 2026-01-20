@@ -7,6 +7,14 @@ export default async function (fastify, opts) {
     fastify.addHook('onRequest', authenticateToken);
     fastify.addHook('onRequest', requireRole('manager'));
 
+    const isQuoteExpired = (status, expirationDate) => {
+        if (status === 'confirmed') return false;
+        const normalizedDate = expirationDate.includes('T') ? expirationDate : `${expirationDate}T00:00:00`;
+        const expiry = new Date(normalizedDate);
+        expiry.setDate(expiry.getDate() + 1);
+        return new Date() >= expiry;
+    };
+
     // GET / - List all quotes with their items
     fastify.get('/', async (request, reply) => {
         // Get all quotes
@@ -54,7 +62,8 @@ export default async function (fastify, opts) {
         // Attach items to quotes
         const quotes = quotesResult.rows.map(quote => ({
             ...quote,
-            items: itemsByQuote[quote.id] || []
+            items: itemsByQuote[quote.id] || [],
+            isExpired: isQuoteExpired(quote.status, quote.expirationDate)
         }));
 
         return quotes;
@@ -141,7 +150,8 @@ export default async function (fastify, opts) {
 
         return reply.code(201).send({
             ...quoteResult.rows[0],
-            items: createdItems
+            items: createdItems,
+            isExpired: isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate)
         });
     });
 
@@ -287,7 +297,8 @@ export default async function (fastify, opts) {
 
         return {
             ...quoteResult.rows[0],
-            items: updatedItems
+            items: updatedItems,
+            isExpired: isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate)
         };
     });
 

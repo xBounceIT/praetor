@@ -44,6 +44,26 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     setDisabledCurrentPage(1);
   };
 
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterClientType, setFilterClientType] = useState('all');
+
+  // Reset pages on filter change
+  React.useEffect(() => {
+    setCurrentPage(1);
+    setDisabledCurrentPage(1);
+  }, [searchTerm, filterClientType]);
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const hasActiveFilters = normalizedSearch !== '' || filterClientType !== 'all';
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterClientType('all');
+    setCurrentPage(1);
+    setDisabledCurrentPage(1);
+  };
+
 
   // Form State
   const [formData, setFormData] = useState<Partial<Client>>({
@@ -154,16 +174,45 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     }
   };
 
-  const activeClientsTotal = clients.filter(c => !c.isDisabled);
-  const disabledClients = clients.filter(c => c.isDisabled);
+  const matchesClientFilters = (client: Client) => {
+    const matchesSearch =
+      normalizedSearch === '' ||
+      client.name.toLowerCase().includes(normalizedSearch) ||
+      (client.clientCode ?? '').toLowerCase().includes(normalizedSearch) ||
+      (client.email ?? '').toLowerCase().includes(normalizedSearch) ||
+      (client.phone ?? '').toLowerCase().includes(normalizedSearch) ||
+      (client.vatNumber ?? '').toLowerCase().includes(normalizedSearch) ||
+      (client.taxCode ?? '').toLowerCase().includes(normalizedSearch);
+
+    const clientType = client.type ?? 'company';
+    const matchesType = filterClientType === 'all' || clientType === (filterClientType as Client['type']);
+
+    return matchesSearch && matchesType;
+  };
+
+  const filteredActiveClientsTotal = React.useMemo(() => {
+    return clients.filter(c => !c.isDisabled).filter(matchesClientFilters);
+  }, [clients, normalizedSearch, filterClientType]);
+
+  const filteredDisabledClientsTotal = React.useMemo(() => {
+    return clients.filter(c => c.isDisabled).filter(matchesClientFilters);
+  }, [clients, normalizedSearch, filterClientType]);
+
+  const hasAnyDisabledClients = clients.some(c => c.isDisabled);
 
   // Pagination Logic
-  const totalPages = Math.ceil(activeClientsTotal.length / rowsPerPage);
+  const totalPages = Math.ceil(filteredActiveClientsTotal.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
-  const activeClients = activeClientsTotal.slice(startIndex, startIndex + rowsPerPage);
-  const disabledTotalPages = Math.ceil(disabledClients.length / disabledRowsPerPage);
+  const activeClients = filteredActiveClientsTotal.slice(startIndex, startIndex + rowsPerPage);
+  const disabledTotalPages = Math.ceil(filteredDisabledClientsTotal.length / disabledRowsPerPage);
   const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-  const disabledClientsPage = disabledClients.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
+  const disabledClientsPage = filteredDisabledClientsTotal.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
+
+  const clientTypeFilterOptions = [
+    { id: 'all', name: 'All Types' },
+    { id: 'company', name: 'Companies' },
+    { id: 'individual', name: 'Individuals' }
+  ];
 
 
   return (
@@ -437,11 +486,100 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm">
-        <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
-          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Active Clients</h4>
-          <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{activeClientsTotal.length} TOTAL</span>
+      {/* Search and Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="md:col-span-2 relative">
+          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input
+            type="text"
+            placeholder="Search clients (name, code, email, phone, VAT, tax code)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
+          />
         </div>
+        <div>
+          <CustomSelect
+            options={clientTypeFilterOptions}
+            value={filterClientType}
+            onChange={setFilterClientType}
+            placeholder="Filter by Type"
+            searchable={false}
+            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
+          />
+        </div>
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            disabled={!hasActiveFilters}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i className="fa-solid fa-rotate-left"></i>
+            Clear filters
+          </button>
+        </div>
+      </div>
+
+      <StandardTable
+        title="Active Clients"
+        totalCount={filteredActiveClientsTotal.length}
+        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
+        footer={
+          <>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+              <CustomSelect
+                options={[
+                  { id: '5', name: '5' },
+                  { id: '10', name: '10' },
+                  { id: '20', name: '20' },
+                  { id: '50', name: '50' }
+                ]}
+                value={rowsPerPage.toString()}
+                onChange={(val) => handleRowsPerPageChange(val)}
+                className="w-20"
+                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+                searchable={false}
+              />
+              <span className="text-xs font-bold text-slate-400 ml-2">
+                Showing {activeClients.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredActiveClientsTotal.length)} of {filteredActiveClientsTotal.length}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+              >
+                <i className="fa-solid fa-chevron-left text-xs"></i>
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
+                      ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                      : 'text-slate-500 hover:bg-slate-100'
+                      }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+              >
+                <i className="fa-solid fa-chevron-right text-xs"></i>
+              </button>
+            </div>
+          </>
+        }
+      >
         <div className="divide-y divide-slate-100">
           {activeClients.map(c => (
             <div key={c.id} onClick={() => openEditModal(c)} className="p-6 hover:bg-slate-50/50 active:bg-slate-100 active:scale-[0.98] transition-all group cursor-pointer select-none">
@@ -512,7 +650,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
               </div>
             </div>
           ))}
-          {activeClientsTotal.length === 0 && (
+          {filteredActiveClientsTotal.length === 0 && (
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                 <i className="fa-solid fa-users text-2xl"></i>
@@ -522,66 +660,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
             </div>
           )}
         </div>
+      </StandardTable>
 
-        {/* Pagination UI */}
-        <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-3xl">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
-            <CustomSelect
-              options={[
-                { id: '5', name: '5' },
-                { id: '10', name: '10' },
-                { id: '20', name: '20' },
-                { id: '50', name: '50' }
-              ]}
-              value={rowsPerPage.toString()}
-              onChange={(val) => handleRowsPerPageChange(val)}
-              className="w-20"
-              buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-              searchable={false}
-            />
-            <span className="text-xs font-bold text-slate-400 ml-2">
-              Showing {activeClients.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeClientsTotal.length)} of {activeClientsTotal.length}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-            >
-              <i className="fa-solid fa-chevron-left text-xs"></i>
-            </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
-                    ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                    : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                >
-                  {page}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-            >
-              <i className="fa-solid fa-chevron-right text-xs"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {disabledClients.length > 0 && (
+      {hasAnyDisabledClients && (
         <StandardTable
           title="Disabled Clients"
-          totalCount={disabledClients.length}
+          totalCount={filteredDisabledClientsTotal.length}
           totalLabel="DISABLED"
           containerClassName="border-dashed bg-slate-50"
           footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
@@ -603,7 +687,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                   searchable={false}
                 />
                 <span className="text-xs font-bold text-slate-400 ml-2">
-                  Showing {disabledClientsPage.length > 0 ? disabledStartIndex + 1 : 0}-{Math.min(disabledStartIndex + disabledRowsPerPage, disabledClients.length)} of {disabledClients.length}
+                  Showing {disabledClientsPage.length > 0 ? disabledStartIndex + 1 : 0}-{Math.min(disabledStartIndex + disabledRowsPerPage, filteredDisabledClientsTotal.length)} of {filteredDisabledClientsTotal.length}
                 </span>
               </div>
 
@@ -676,6 +760,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 </div>
               </div>
             ))}
+            {disabledClientsPage.length === 0 && (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
+                  <i className="fa-solid fa-user-slash text-2xl"></i>
+                </div>
+                <p className="text-slate-400 text-sm font-bold">No disabled clients found.</p>
+              </div>
+            )}
           </div>
         </StandardTable>
       )}
