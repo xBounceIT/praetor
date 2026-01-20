@@ -109,53 +109,59 @@ export default async function (fastify, opts) {
         const discountResult = optionalNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
-        const quoteId = 'q-' + Date.now();
+        try {
+            const quoteId = 'q-' + Date.now();
 
-        // Insert quote
-        const quoteResult = await query(
-            `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-             RETURNING 
-                id, 
-                client_id as "clientId", 
-                client_name as "clientName", 
-                payment_terms as "paymentTerms", 
-                discount, 
-                status, 
-                expiration_date as "expirationDate", 
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-            [quoteId, clientIdResult.value, clientNameResult.value, paymentTerms || 'immediate', discountResult.value || 0, status || 'quoted', expirationDateResult.value, notes]
-        );
-
-        // Insert quote items
-        const createdItems = [];
-        for (const item of normalizedItems) {
-            const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            const itemResult = await query(
-                `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            // Insert quote
+            const quoteResult = await query(
+                `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                  RETURNING 
-                    id,
-                    quote_id as "quoteId",
-                    product_id as "productId",
-                    product_name as "productName",
-                    special_bid_id as "specialBidId",
-                    quantity,
-                    unit_price as "unitPrice",
-                    discount,
-                    note`,
-                [itemId, quoteId, item.productId, item.productName, item.specialBidId || null, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
+                    id, 
+                    client_id as "clientId", 
+                    client_name as "clientName", 
+                    payment_terms as "paymentTerms", 
+                    discount, 
+                    status, 
+                    expiration_date as "expirationDate", 
+                    notes,
+                    EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                    EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+                [quoteId, clientIdResult.value, clientNameResult.value, paymentTerms || 'immediate', discountResult.value || 0, status || 'quoted', expirationDateResult.value, notes]
             );
-            createdItems.push(itemResult.rows[0]);
-        }
 
-        return reply.code(201).send({
-            ...quoteResult.rows[0],
-            items: createdItems,
-            isExpired: isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate)
-        });
+            // Insert quote items
+            const createdItems = [];
+            for (const item of normalizedItems) {
+                const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                const itemResult = await query(
+                    `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                     RETURNING 
+                        id,
+                        quote_id as "quoteId",
+                        product_id as "productId",
+                        product_name as "productName",
+                        special_bid_id as "specialBidId",
+                        quantity,
+                        unit_price as "unitPrice",
+                        discount,
+                        note`,
+                    [itemId, quoteId, item.productId, item.productName, item.specialBidId || null, item.quantity, item.unitPrice, item.discount || 0, item.note || null]
+                );
+                createdItems.push(itemResult.rows[0]);
+            }
+
+            return reply.code(201).send({
+                ...quoteResult.rows[0],
+                items: createdItems,
+                isExpired: isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate)
+            });
+        } catch (err) {
+            console.error('CRITICAL ERROR creating quote:', err);
+            // Return the specific error message to the frontend for debugging
+            return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
+        }
     });
 
     // PUT /:id - Update quote
