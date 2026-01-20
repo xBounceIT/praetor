@@ -558,7 +558,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
         headerAction={
           <button
             onClick={openAddModal}
-            className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
           >
             <i className="fa-solid fa-plus"></i> Create Special Bid
           </button>

@@ -335,7 +335,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                 headerAction={
                     <button
                         onClick={openAddModal}
-                        className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                        className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
                     >
                         <i className="fa-solid fa-plus"></i> Record Payment
                     </button>
