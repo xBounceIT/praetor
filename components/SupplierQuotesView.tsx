@@ -760,7 +760,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   type="button"
                   onClick={toggleExpirationSort}
                   title={expirationSortTitle}
-                  className="w-full inline-flex items-center gap-1 leading-normal hover:text-slate-600"
+                  className="w-full inline-flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none hover:text-slate-600"
                 >
                   Expiration
                   {expirationSortIndicator && <span className="text-[10px]">{expirationSortIndicator}</span>}
