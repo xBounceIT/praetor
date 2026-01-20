@@ -607,7 +607,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                             const margin = Number(item.unitPrice || 0) - cost;
                                             return (
                                                 <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
-                                                    <div className="flex gap-3 items-stretch">
+                                                    <div className="flex gap-3 items-center">
                                                         <div className="flex-1 grid grid-cols-12 gap-3 items-center">
                                                             <div className="col-span-3">
                                                                 <CustomSelect
@@ -645,21 +645,19 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                                     className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center"
                                                                 />
                                                             </div>
-                                                            <div className="col-span-1 flex items-center justify-center self-stretch">
-                                                                <div className="relative">
-                                                                    <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)} {currency}</span>
-                                                                    {selectedBid && (
-                                                                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-praetor uppercase tracking-wider bg-slate-50/50 px-1 whitespace-nowrap">Bid</div>
-                                                                    )}
-                                                                </div>
+                                                            <div className="col-span-1 flex flex-col items-center justify-center">
+                                                                <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)} {currency}</span>
+                                                                {selectedBid && (
+                                                                    <div className="text-[8px] font-black text-praetor uppercase tracking-wider">Bid</div>
+                                                                )}
                                                             </div>
-                                                            <div className="col-span-1 flex items-center justify-center self-stretch">
+                                                            <div className="col-span-1 flex items-center justify-center">
                                                                 <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(1)}%</span>
                                                             </div>
-                                                            <div className="col-span-1 flex items-center justify-center self-stretch">
+                                                            <div className="col-span-1 flex items-center justify-center">
                                                                 <span className="text-xs font-bold text-emerald-600">{margin.toFixed(2)} {currency}</span>
                                                             </div>
-                                                            <div className="col-span-2 flex items-center justify-center self-stretch">
+                                                            <div className="col-span-2 flex items-center justify-center">
                                                                 <span className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}>
                                                                     {Number(item.unitPrice).toFixed(2)} {currency}
                                                                 </span>
@@ -668,7 +666,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                         <button
                                                             type="button"
                                                             onClick={() => removeProductRow(index)}
-                                                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 self-center"
+                                                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
                                                         >
                                                             <i className="fa-solid fa-trash-can"></i>
                                                         </button>
