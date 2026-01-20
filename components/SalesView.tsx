@@ -500,7 +500,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
 
                                             return (
                                                 <div key={item.id} className="bg-slate-50 p-3 rounded-xl">
-                                                    <div className="flex gap-3 items-center">
+                                                    <div className="flex gap-3 items-stretch">
                                                         <div className="flex-1 grid grid-cols-12 gap-3 items-center">
                                                             <div className="col-span-3">
                                                                 <CustomSelect
@@ -601,7 +601,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
 
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-500 ml-1">Global Discount</label>
-                                        <div className={`flex items-center rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden ${isLinkedQuote ? '' : 'bg-slate-50 border border-slate-200'}`}>
+                                        <div className={`flex items-center rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden bg-slate-50 border border-slate-200 ${isLinkedQuote ? 'opacity-50' : ''}`}>
                                             <div className="w-12 self-stretch flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 bg-slate-100/30">
                                                 %
                                             </div>

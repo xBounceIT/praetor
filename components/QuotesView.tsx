@@ -607,7 +607,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                             const margin = Number(item.unitPrice || 0) - cost;
                                             return (
                                                 <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
-                                                    <div className="flex gap-3 items-center">
+                                                    <div className="flex gap-3 items-stretch">
                                                         <div className="flex-1 grid grid-cols-12 gap-3 items-center">
                                                             <div className="col-span-3">
                                                                 <CustomSelect
