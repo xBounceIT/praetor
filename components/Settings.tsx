@@ -40,8 +40,9 @@ const Settings: React.FC = () => {
     const loadSettings = async () => {
       try {
         const data = await api.settings.get();
-        setSettings(data);
-        setInitialSettings(data);
+        const profile = { fullName: data.fullName, email: data.email };
+        setSettings(profile);
+        setInitialSettings(profile);
       } catch (err) {
         console.error('Failed to load settings:', err);
       } finally {
@@ -55,8 +56,9 @@ const Settings: React.FC = () => {
     if (e) e.preventDefault();
     setIsSaving(true);
     try {
-      await api.settings.update(settings);
-      setInitialSettings(settings);
+      const payload = { fullName: settings.fullName, email: settings.email };
+      await api.settings.update(payload);
+      setInitialSettings(payload);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (err) {

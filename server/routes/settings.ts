@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, optionalNonNegativeNumber, parseBoolean, optionalEmail, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, optionalEmail, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - Get current user's settings
@@ -9,7 +9,7 @@ export default async function (fastify, opts) {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
         const result = await query(
-            `SELECT full_name, email, daily_goal, start_of_week, treat_saturday_as_holiday, enable_ai_insights
+            `SELECT full_name, email
        FROM settings WHERE user_id = $1`,
             [request.user.id]
         );
@@ -26,22 +26,14 @@ export default async function (fastify, opts) {
             const s = insertResult.rows[0];
             return {
                 fullName: s.full_name,
-                email: s.email,
-                dailyGoal: parseFloat(s.daily_goal || 8),
-                startOfWeek: s.start_of_week,
-                treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-                enableAiInsights: s.enable_ai_insights
+                email: s.email
             };
         }
 
         const s = result.rows[0];
         return {
             fullName: s.full_name,
-            email: s.email,
-            dailyGoal: parseFloat(s.daily_goal || 8),
-            startOfWeek: s.start_of_week,
-            treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-            enableAiInsights: s.enable_ai_insights
+            email: s.email
         };
     });
 
@@ -49,42 +41,28 @@ export default async function (fastify, opts) {
     fastify.put('/', {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
-        const { fullName, email, dailyGoal, startOfWeek, treatSaturdayAsHoliday, enableAiInsights } = request.body;
+        const { fullName, email } = request.body;
         const fullNameResult = optionalNonEmptyString(fullName, 'fullName');
         if (!fullNameResult.ok) return badRequest(reply, fullNameResult.message);
 
         const emailResult = optionalEmail(email, 'email');
         if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-        const dailyGoalResult = optionalNonNegativeNumber(dailyGoal, 'dailyGoal');
-        if (!dailyGoalResult.ok) return badRequest(reply, dailyGoalResult.message);
-
-        const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
-        const enableAiInsightsValue = parseBoolean(enableAiInsights);
-
         const result = await query(
-            `INSERT INTO settings (user_id, full_name, email, daily_goal, start_of_week, treat_saturday_as_holiday, enable_ai_insights)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO settings (user_id, full_name, email)
+       VALUES ($1, $2, $3)
        ON CONFLICT (user_id) DO UPDATE SET
          full_name = COALESCE($2, settings.full_name),
          email = COALESCE($3, settings.email),
-         daily_goal = COALESCE($4, settings.daily_goal),
-         start_of_week = COALESCE($5, settings.start_of_week),
-         treat_saturday_as_holiday = COALESCE($6, settings.treat_saturday_as_holiday),
-         enable_ai_insights = COALESCE($7, settings.enable_ai_insights),
          updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-            [request.user.id, fullNameResult.value, emailResult.value, dailyGoalResult.value, startOfWeek, treatSaturdayAsHolidayValue, enableAiInsightsValue]
+       RETURNING full_name, email`,
+            [request.user.id, fullNameResult.value, emailResult.value]
         );
 
         const s = result.rows[0];
         return {
             fullName: s.full_name,
-            email: s.email,
-            dailyGoal: parseFloat(s.daily_goal || 8),
-            startOfWeek: s.start_of_week,
-            treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-            enableAiInsights: s.enable_ai_insights
+            email: s.email
         };
     });
 

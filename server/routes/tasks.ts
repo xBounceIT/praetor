@@ -183,7 +183,7 @@ export default async function (fastify, opts) {
 
     // GET /:id/users - Get assigned users
     fastify.get('/:id/users', {
-        onRequest: [authenticateToken]
+        onRequest: [authenticateToken, requireRole('manager')]
     }, async (request, reply) => {
         const { id } = request.params;
         const idResult = requireNonEmptyString(id, 'id');

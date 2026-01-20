@@ -7,12 +7,13 @@ export default async function (fastify, opts) {
     fastify.get('/', {
         onRequest: [authenticateToken]
     }, async (request, reply) => {
+        const isStandardUser = request.user.role === 'user';
         let queryText = 'SELECT * FROM clients ORDER BY name';
         let queryParams = [];
 
-        if (request.user.role === 'user') {
+        if (isStandardUser) {
             queryText = `
-                SELECT c.*
+                SELECT c.id, c.name
                 FROM clients c
                 INNER JOIN user_clients uc ON c.id = uc.client_id
                 WHERE uc.user_id = $1
@@ -22,21 +23,31 @@ export default async function (fastify, opts) {
         }
 
         const result = await query(queryText, queryParams);
-        const clients = result.rows.map(c => ({
-            id: c.id,
-            name: c.name,
-            isDisabled: c.is_disabled,
-            type: c.type,
-            contactName: c.contact_name,
-            clientCode: c.client_code,
-            email: c.email,
-            phone: c.phone,
-            address: c.address,
-            vatNumber: c.vat_number,
-            taxCode: c.tax_code,
-            billingCode: c.billing_code,
-            paymentTerms: c.payment_terms
-        }));
+        const clients = result.rows.map(c => {
+            if (isStandardUser) {
+                return {
+                    id: c.id,
+                    name: c.name,
+                    description: null
+                };
+            }
+
+            return {
+                id: c.id,
+                name: c.name,
+                isDisabled: c.is_disabled,
+                type: c.type,
+                contactName: c.contact_name,
+                clientCode: c.client_code,
+                email: c.email,
+                phone: c.phone,
+                address: c.address,
+                vatNumber: c.vat_number,
+                taxCode: c.tax_code,
+                billingCode: c.billing_code,
+                paymentTerms: c.payment_terms
+            };
+        });
         return clients;
     });
 
