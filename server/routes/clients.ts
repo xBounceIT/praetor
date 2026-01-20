@@ -78,10 +78,24 @@ export default async function (fastify, opts) {
 
         const emailResult = optionalEmail(email, 'email');
         if (!emailResult.ok) return badRequest(reply, emailResult.message);
+
+        // Check for existing VAT number
+        if (vatNumberResult.value) {
+            const existingVat = await query(
+                'SELECT id FROM clients WHERE LOWER(vat_number) = LOWER($1)',
+                [vatNumberResult.value]
+            );
+            if (existingVat.rows.length > 0) {
+                return badRequest(reply, 'VAT number already exists');
+            }
+        }
+
         const id = 'c-' + Date.now();
-        await query(`
+
+        try {
+            await query(`
             INSERT INTO clients (
-                id, name, is_disabled, type, contact_name, client_code, 
+                id, name, is_disabled, type, contact_name, client_code,
                 email, phone, address, vat_number, tax_code, billing_code, payment_terms
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         `, [
@@ -89,10 +103,16 @@ export default async function (fastify, opts) {
             emailResult.value, phone, address, vatNumberResult.value, taxCodeResult.value, billingCode, paymentTerms
         ]);
 
-        return reply.code(201).send({
+            return reply.code(201).send({
             id, name: nameResult.value, isDisabled: false, type, contactName, clientCode: clientCodeResult.value,
             email: emailResult.value, phone, address, vatNumber: vatNumberResult.value, taxCode: taxCodeResult.value, billingCode, paymentTerms
         });
+        } catch (err) {
+            if (err.code === '23505') { // Unique violation
+                return badRequest(reply, 'VAT number already exists');
+            }
+            throw err;
+        }
     });
 
     // PUT /:id - Update client (manager only)
@@ -147,7 +167,19 @@ export default async function (fastify, opts) {
         const emailResult = optionalEmail(email, 'email');
         if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-        const result = await query(`
+        // Check for existing VAT number on other clients
+        if (vatNumberValue) {
+            const existingVat = await query(
+                'SELECT id FROM clients WHERE LOWER(vat_number) = LOWER($1) AND id <> $2',
+                [vatNumberValue, idResult.value]
+            );
+            if (existingVat.rows.length > 0) {
+                return badRequest(reply, 'VAT number already exists');
+            }
+        }
+
+        try {
+            const result = await query(`
             UPDATE clients SET 
                 name = COALESCE($1, name), 
                 is_disabled = COALESCE($2, is_disabled),
@@ -189,6 +221,12 @@ export default async function (fastify, opts) {
             billingCode: c.billing_code,
             paymentTerms: c.payment_terms
         };
+        } catch (err) {
+            if (err.code === '23505') { // Unique violation
+                return badRequest(reply, 'VAT number already exists');
+            }
+            throw err;
+        }
     });
 
     // DELETE /:id - Delete client (manager only)

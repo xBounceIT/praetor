@@ -373,6 +373,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
         return bid ? `${bid.clientName} · ${bid.productName}` : 'No Special Bid';
     };
 
+    const isLinkedQuote = Boolean(formData.linkedQuoteId);
+
     // Pagination Logic
     const totalPages = Math.ceil(filteredSales.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
@@ -413,6 +415,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                         <div>
                                             <div className="text-sm font-bold text-slate-900">Linked to Quote</div>
                                             <div className="text-xs text-praetor">Created from quote #{formData.linkedQuoteId}</div>
+                                            <div className="text-[10px] text-slate-400 mt-0.5">(Quote details are read-only)</div>
                                         </div>
                                     </div>
                                     {onViewQuote && (
@@ -441,6 +444,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                         onChange={handleClientChange}
                                         placeholder="Select a client..."
                                         searchable={true}
+                                        disabled={isLinkedQuote}
                                         className={errors.clientId ? 'border-red-300' : ''}
                                     />
                                     {errors.clientId && (
@@ -459,7 +463,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                     <button
                                         type="button"
                                         onClick={addProductRow}
-                                        className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
+                                        disabled={isLinkedQuote}
+                                        className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <i className="fa-solid fa-plus"></i> Add Product
                                     </button>
@@ -508,6 +513,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                     placeholder="Select bid..."
                                                                     displayValue={getBidDisplayValue(item.specialBidId)}
                                                                     searchable={true}
+                                                                    disabled={isLinkedQuote}
                                                                     buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                                                                 />
                                                             </div>
@@ -518,6 +524,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                     onChange={(val) => updateProductRow(index, 'productId', val)}
                                                                     placeholder="Select product..."
                                                                     searchable={true}
+                                                                    disabled={isLinkedQuote}
                                                                     buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                                                                 />
                                                             </div>
@@ -530,7 +537,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                     placeholder="Qty"
                                                                     value={item.quantity}
                                                                     onChange={(e) => updateProductRow(index, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                    className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center"
+                                                                    disabled={isLinkedQuote}
+                                                                    className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
                                                                 />
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
@@ -556,7 +564,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                         <button
                                                             type="button"
                                                             onClick={() => removeProductRow(index)}
-                                                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
+                                                            disabled={isLinkedQuote}
+                                                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
                                                             <i className="fa-solid fa-trash-can"></i>
                                                         </button>
@@ -586,12 +595,13 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                             value={formData.paymentTerms || 'immediate'}
                                             onChange={(val) => setFormData({ ...formData, paymentTerms: val as any })}
                                             searchable={false}
+                                            disabled={isLinkedQuote}
                                         />
                                     </div>
 
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-500 ml-1">Global Discount</label>
-                                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+                                        <div className={`flex items-center rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden ${isLinkedQuote ? '' : 'bg-slate-50 border border-slate-200'}`}>
                                             <div className="w-12 self-stretch flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 bg-slate-100/30">
                                                 %
                                             </div>
@@ -602,7 +612,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                 max="100"
                                                 value={formData.discount}
                                                 onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
-                                                className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold"
+                                                disabled={isLinkedQuote}
+                                                className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold disabled:bg-transparent"
                                             />
                                         </div>
                                     </div>
@@ -624,7 +635,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                             value={formData.notes}
                                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                             placeholder="Additional notes or terms..."
-                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                                            disabled={isLinkedQuote}
+                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:bg-slate-50 disabled:text-slate-400"
                                         />
                                     </div>
                                 </div>

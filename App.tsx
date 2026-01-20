@@ -1015,6 +1015,7 @@ const App: React.FC = () => {
       setClients([...clients, client]);
     } catch (err) {
       console.error('Failed to add client:', err);
+      alert((err as Error).message || 'Failed to add client');
     }
   };
 
