@@ -80,6 +80,38 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [isCustomRepeatModalOpen, setIsCustomRepeatModalOpen] = useState(false);
 
+  const durationInputPattern = /^[0-9]*([.,][0-9]*)?$/;
+
+  const isValidDurationInput = (value: string) => value === '' || durationInputPattern.test(value);
+
+  const normalizeDurationInput = (value: string) => value.replace(',', '.');
+
+  const handleDurationKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.ctrlKey || event.metaKey) return;
+    const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (allowedKeys.includes(event.key)) return;
+
+    if (event.key === '.' || event.key === ',') {
+      const currentValue = event.currentTarget.value;
+      if (currentValue.includes('.') || currentValue.includes(',')) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (!/^[0-9]$/.test(event.key)) {
+      event.preventDefault();
+    }
+  };
+
+  const handleDurationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.target.value;
+    if (!isValidDurationInput(rawValue)) return;
+    const normalizedValue = normalizeDurationInput(rawValue);
+    setDuration(normalizedValue);
+    if (errors.hours) setErrors({ ...errors, hours: '' });
+  };
+
   // Sync internal date when calendar selection changes
   useEffect(() => {
     if (selectedDate) {
@@ -371,16 +403,14 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
             <div className="md:col-span-1">
               <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Hours <span className="text-red-500">*</span></label>
               <input
-                type="number"
-                step="0.1"
-                min="0.1"
+                type="text"
+                inputMode="decimal"
+                pattern="^[0-9]*([.,][0-9]*)?$"
                 value={duration}
-                onChange={(e) => {
-                  setDuration(e.target.value);
-                  if (errors.hours) setErrors({});
-                }}
+                onKeyDown={handleDurationKeyDown}
+                onChange={handleDurationChange}
                 placeholder="0.0"
-                className={`w-full px-3 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-praetor'}`}
+                className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-praetor'}`}
               />
               {errors.hours && <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">{errors.hours}</p>}
             </div>
