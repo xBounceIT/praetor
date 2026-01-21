@@ -51,7 +51,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/praetor-logo.png" alt="Praetor Logo" className="h-56 mx-auto object-contain" />
-          <p className="text-slate-500 text-sm">{t('auth:login.subtitle')}</p>
+          <p className="text-slate-500 text-sm">{t('auth:login.title')}</p>
         </div>
 
         {logoutReason === 'inactivity' && (
