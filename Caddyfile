@@ -1,4 +1,6 @@
-admin off
+{
+    admin off
+}
 
 # Caddyfile for Praetor
 # Serves static frontend files and proxies API requests to backend via h2c
