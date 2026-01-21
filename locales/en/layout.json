@@ -9,9 +9,11 @@
     "configuration": "Configuration"
   },
   "routes": {
+    "timeTracker": "Time Tracker",
     "tracker": "Tracker",
     "reports": "Reports",
     "recurring": "Recurring",
+    "recurringTasks": "Recurring Tasks",
     "tasks": "Tasks",
     "projects": "Projects",
     "clients": "Clients",
@@ -46,5 +48,8 @@
     "toggle": "Toggle Sidebar",
     "expand": "Expand",
     "collapse": "Collapse"
-  }
+  },
+  "workspace": "Workspace",
+  "module": "Module",
+  "modules": "Modules"
 }
