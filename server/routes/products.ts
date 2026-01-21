@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseNonNegativeNumber, parseBoolean, validateEnum, optionalEnum, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseLocalizedNonNegativeNumber, parseBoolean, validateEnum, optionalEnum, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All product routes require manager role
@@ -28,20 +28,26 @@ export default async function (fastify, opts) {
         if (costo === undefined || costo === null || costo === '') {
             return badRequest(reply, 'costo is required');
         }
-        const costoResult = parseNonNegativeNumber(costo, 'costo');
+        const costoResult = parseLocalizedNonNegativeNumber(costo, 'costo');
         if (!costoResult.ok) return badRequest(reply, costoResult.message);
 
         if (molPercentage === undefined || molPercentage === null || molPercentage === '') {
             return badRequest(reply, 'molPercentage is required');
         }
-        const molPercentageResult = parseNonNegativeNumber(molPercentage, 'molPercentage');
+        const molPercentageResult = parseLocalizedNonNegativeNumber(molPercentage, 'molPercentage');
         if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+        if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
+            return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
+        }
 
         if (taxRate === undefined || taxRate === null || taxRate === '') {
             return badRequest(reply, 'taxRate is required');
         }
-        const taxRateResult = parseNonNegativeNumber(taxRate, 'taxRate');
+        const taxRateResult = parseLocalizedNonNegativeNumber(taxRate, 'taxRate');
         if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+        if (taxRateResult.value < 0 || taxRateResult.value > 100) {
+            return badRequest(reply, 'taxRate must be between 0 and 100');
+        }
 
         if (costUnit === undefined || costUnit === null || costUnit === '') {
             return badRequest(reply, 'costUnit is required');
@@ -88,22 +94,28 @@ export default async function (fastify, opts) {
 
         let costoValue = costo;
         if (costo !== undefined) {
-            const costoResult = parseNonNegativeNumber(costo, 'costo');
+            const costoResult = parseLocalizedNonNegativeNumber(costo, 'costo');
             if (!costoResult.ok) return badRequest(reply, costoResult.message);
             costoValue = costoResult.value;
         }
 
         let molPercentageValue = molPercentage;
         if (molPercentage !== undefined) {
-            const molPercentageResult = parseNonNegativeNumber(molPercentage, 'molPercentage');
+            const molPercentageResult = parseLocalizedNonNegativeNumber(molPercentage, 'molPercentage');
             if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+            if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
+                return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
+            }
             molPercentageValue = molPercentageResult.value;
         }
 
         let taxRateValue = taxRate;
         if (taxRate !== undefined) {
-            const taxRateResult = parseNonNegativeNumber(taxRate, 'taxRate');
+            const taxRateResult = parseLocalizedNonNegativeNumber(taxRate, 'taxRate');
             if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+            if (taxRateResult.value < 0 || taxRateResult.value > 100) {
+                return badRequest(reply, 'taxRate must be between 0 and 100');
+            }
             taxRateValue = taxRateResult.value;
         }
 

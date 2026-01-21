@@ -4,6 +4,12 @@ const numberInputPattern = /^[0-9]*([.,][0-9]*)?$/;
 
 const normalizeNumberInput = (value: string) => value.replace(',', '.');
 
+export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
+  if (value === '') return fallback;
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
 type ValidatedNumberInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange' | 'value'> & {
   value?: string | number;
   onValueChange: (value: string) => void;

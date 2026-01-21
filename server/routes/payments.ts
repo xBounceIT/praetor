@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parsePositiveNumber, optionalPositiveNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseLocalizedPositiveNumber, optionalLocalizedPositiveNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All payments routes require manager role
@@ -48,7 +48,7 @@ export default async function (fastify, opts) {
         const invoiceIdResult = optionalNonEmptyString(invoiceId, 'invoiceId');
         if (!invoiceIdResult.ok) return badRequest(reply, invoiceIdResult.message);
 
-        const amountResult = parsePositiveNumber(amount, 'amount');
+        const amountResult = parseLocalizedPositiveNumber(amount, 'amount');
         if (!amountResult.ok) return badRequest(reply, amountResult.message);
 
         const paymentDateResult = parseDateString(paymentDate, 'paymentDate');
@@ -140,7 +140,7 @@ export default async function (fastify, opts) {
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        const amountResult = optionalPositiveNumber(amount, 'amount');
+        const amountResult = optionalLocalizedPositiveNumber(amount, 'amount');
         if (!amountResult.ok) return badRequest(reply, amountResult.message);
 
         const paymentDateResult = optionalDateString(paymentDate, 'paymentDate');

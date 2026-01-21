@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
+import ValidatedNumberInput, { parseNumberInputValue } from './ValidatedNumberInput';
 import Calendar from './Calendar';
 
 interface SpecialBidsViewProps {
@@ -133,13 +133,18 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     if (!formData.productId) {
       newErrors.productId = 'Product is required';
     }
+    const selectedProduct = formData.productId ? products.find(p => p.id === formData.productId) : undefined;
+    const originalPrice = selectedProduct ? Number(selectedProduct.costo) : undefined;
+    const normalizedOriginalPrice = originalPrice !== undefined && !Number.isNaN(originalPrice) ? originalPrice : undefined;
     if (
       formData.unitPrice === undefined ||
       formData.unitPrice === null ||
       Number.isNaN(formData.unitPrice) ||
-      formData.unitPrice < 0
+      formData.unitPrice <= 0 ||
+      normalizedOriginalPrice === undefined ||
+      formData.unitPrice >= normalizedOriginalPrice
     ) {
-      newErrors.unitPrice = 'Special price must be zero or greater';
+      newErrors.unitPrice = 'Special price must be greater than 0 and lower than original price';
     }
     if (!formData.startDate) {
       newErrors.dates = 'Start date is required';
@@ -213,14 +218,21 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       productId,
       productName: product?.name || ''
     });
-    if (errors.productId) {
+    if (errors.productId || errors.unitPrice) {
       setErrors(prev => {
         const next = { ...prev };
         delete next.productId;
+        delete next.unitPrice;
         return next;
       });
     }
   };
+
+  const selectedProductForPrice = formData.productId ? products.find(p => p.id === formData.productId) : undefined;
+  const originalPriceValue = selectedProductForPrice ? Number(selectedProductForPrice.costo) : undefined;
+  const originalPriceDisplay = originalPriceValue !== undefined && !Number.isNaN(originalPriceValue)
+    ? `${originalPriceValue.toFixed(2)} ${currency}`
+    : '--';
 
   const activeClients = clients.filter(c => !c.isDisabled);
   const activeProducts = products.filter(p => !p.isDisabled && p.type === 'item');
@@ -394,26 +406,32 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.productId}</p>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Special Price ({currency})</label>
-                    <ValidatedNumberInput
-                      step="0.01"
-                      min="0"
-                      required
-                      value={formData.unitPrice ?? ''}
-                      onValueChange={(value) => {
-                        const parsed = parseFloat(value);
-                        setFormData({ ...formData, unitPrice: value === '' || Number.isNaN(parsed) ? 0 : parsed });
-                        if (errors.unitPrice) {
-                          setErrors(prev => {
-                            const next = { ...prev };
-                            delete next.unitPrice;
-                            return next;
-                          });
-                        }
-                      }}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.unitPrice ? 'border-red-300' : ''}`}
-                    />
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-slate-500 ml-1">Original Price → Special Price ({currency})</label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                        {originalPriceDisplay}
+                      </div>
+                      <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                      <ValidatedNumberInput
+                        step="0.01"
+                        min="0.01"
+                        required
+                        value={formData.unitPrice ?? ''}
+                        onValueChange={(value) => {
+                          const parsed = parseNumberInputValue(value);
+                          setFormData({ ...formData, unitPrice: parsed });
+                          if (errors.unitPrice) {
+                            setErrors(prev => {
+                              const next = { ...prev };
+                              delete next.unitPrice;
+                              return next;
+                            });
+                          }
+                        }}
+                        className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.unitPrice ? 'border-red-300' : 'border-slate-200'}`}
+                      />
+                    </div>
                     {errors.unitPrice && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.unitPrice}</p>
                     )}

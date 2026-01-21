@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parsePositiveNumber, parseNonNegativeNumber, optionalNonNegativeNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseLocalizedPositiveNumber, parseLocalizedNonNegativeNumber, optionalLocalizedNonNegativeNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All invoices routes require manager role
@@ -108,13 +108,13 @@ export default async function (fastify, opts) {
             const item = items[i];
             const descriptionResult = requireNonEmptyString(item.description, `items[${i}].description`);
             if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
-            const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
+            const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
             if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-            const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+            const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
             if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-            const taxRateResult = parseNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
+            const taxRateResult = parseLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
             if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-            const discountResult = optionalNonNegativeNumber(item.discount, `items[${i}].discount`);
+            const discountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
             if (!discountResult.ok) return badRequest(reply, discountResult.message);
             normalizedItems.push({
                 ...item,
@@ -126,16 +126,16 @@ export default async function (fastify, opts) {
             });
         }
 
-        const subtotalResult = optionalNonNegativeNumber(subtotal, 'subtotal');
+        const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
         if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
 
-        const taxAmountResult = optionalNonNegativeNumber(taxAmount, 'taxAmount');
+        const taxAmountResult = optionalLocalizedNonNegativeNumber(taxAmount, 'taxAmount');
         if (!taxAmountResult.ok) return badRequest(reply, taxAmountResult.message);
 
-        const totalResult = optionalNonNegativeNumber(total, 'total');
+        const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
         if (!totalResult.ok) return badRequest(reply, totalResult.message);
 
-        const amountPaidResult = optionalNonNegativeNumber(amountPaid, 'amountPaid');
+        const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
         if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
 
         const invoiceId = 'inv-' + Date.now();
@@ -268,28 +268,28 @@ export default async function (fastify, opts) {
 
         let subtotalValue = subtotal;
         if (subtotal !== undefined) {
-            const subtotalResult = optionalNonNegativeNumber(subtotal, 'subtotal');
+            const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
             if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
             subtotalValue = subtotalResult.value;
         }
 
         let taxAmountValue = taxAmount;
         if (taxAmount !== undefined) {
-            const taxAmountResult = optionalNonNegativeNumber(taxAmount, 'taxAmount');
+            const taxAmountResult = optionalLocalizedNonNegativeNumber(taxAmount, 'taxAmount');
             if (!taxAmountResult.ok) return badRequest(reply, taxAmountResult.message);
             taxAmountValue = taxAmountResult.value;
         }
 
         let totalValue = total;
         if (total !== undefined) {
-            const totalResult = optionalNonNegativeNumber(total, 'total');
+            const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
             if (!totalResult.ok) return badRequest(reply, totalResult.message);
             totalValue = totalResult.value;
         }
 
         let amountPaidValue = amountPaid;
         if (amountPaid !== undefined) {
-            const amountPaidResult = optionalNonNegativeNumber(amountPaid, 'amountPaid');
+            const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
             if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
             amountPaidValue = amountPaidResult.value;
         }
@@ -345,13 +345,13 @@ export default async function (fastify, opts) {
                     const item = items[i];
                     const descriptionResult = requireNonEmptyString(item.description, `items[${i}].description`);
                     if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
-                    const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
+                    const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
                     if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-                    const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+                    const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
                     if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-                    const taxRateResult = parseNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
+                    const taxRateResult = parseLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
                     if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-                    const discountResult = optionalNonNegativeNumber(item.discount, `items[${i}].discount`);
+                    const discountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
                     if (!discountResult.ok) return badRequest(reply, discountResult.message);
                     normalizedItems.push({
                         ...item,

@@ -1,6 +1,53 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parsePositiveNumber, parseNonNegativeNumber, optionalNonNegativeNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseLocalizedPositiveNumber, parseLocalizedNonNegativeNumber, optionalLocalizedNonNegativeNumber, badRequest } from '../utils/validation.ts';
+
+const getProductTaxRates = async (productIds: string[]) => {
+    const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
+    if (uniqueIds.length === 0) {
+        return new Map<string, number>();
+    }
+    const result = await query('SELECT id, tax_rate FROM products WHERE id = ANY($1)', [uniqueIds]);
+    const rates = new Map<string, number>();
+    result.rows.forEach(row => {
+        const rate = parseFloat(row.tax_rate);
+        rates.set(row.id, Number.isFinite(rate) ? rate : 0);
+    });
+    return rates;
+};
+
+const calculateQuoteTotals = async (
+    items: Array<{ productId: string; quantity: number; unitPrice: number; discount?: number }>,
+    globalDiscount: number
+) => {
+    const taxRates = await getProductTaxRates(items.map(item => item.productId));
+    const normalizedGlobalDiscount = Number.isFinite(globalDiscount) ? globalDiscount : 0;
+    let subtotal = 0;
+    let totalTax = 0;
+
+    for (const item of items) {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unitPrice);
+        const itemDiscount = Number(item.discount ?? 0);
+        if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice) || !Number.isFinite(itemDiscount)) {
+            return { total: Number.NaN, subtotal: Number.NaN, taxableAmount: Number.NaN, totalTax: Number.NaN };
+        }
+        const lineSubtotal = quantity * unitPrice;
+        const lineDiscount = lineSubtotal * (itemDiscount / 100);
+        const lineNet = lineSubtotal - lineDiscount;
+        subtotal += lineNet;
+
+        const taxRate = taxRates.get(item.productId) ?? 0;
+        const lineNetAfterGlobal = lineNet * (1 - normalizedGlobalDiscount / 100);
+        const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+        totalTax += taxAmount;
+    }
+
+    const discountAmount = subtotal * (normalizedGlobalDiscount / 100);
+    const taxableAmount = subtotal - discountAmount;
+    const total = taxableAmount + totalTax;
+    return { total, subtotal, taxableAmount, totalTax };
+};
 
 export default async function (fastify, opts) {
     // All quote routes require manager role
@@ -99,24 +146,33 @@ export default async function (fastify, opts) {
             if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
             const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
             if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-            const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
+            const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
             if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-            const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+            const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
             if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+            const itemDiscountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
+            if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
             normalizedItems.push({
                 ...item,
                 productId: productIdResult.value,
                 productName: productNameResult.value,
                 quantity: quantityResult.value,
-                unitPrice: unitPriceResult.value
+                unitPrice: unitPriceResult.value,
+                discount: itemDiscountResult.value || 0
             });
         }
 
         const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
         if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
 
-        const discountResult = optionalNonNegativeNumber(discount, 'discount');
+        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        const discountValue = discountResult.value || 0;
+
+        const totals = await calculateQuoteTotals(normalizedItems, discountValue);
+        if (!Number.isFinite(totals.total) || totals.total <= 0) {
+            return badRequest(reply, 'Total must be greater than 0');
+        }
 
         try {
             const quoteId = 'q-' + Date.now();
@@ -136,7 +192,7 @@ export default async function (fastify, opts) {
                     notes,
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                     EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-                [quoteId, clientIdResult.value, clientNameResult.value, paymentTerms || 'immediate', discountResult.value || 0, status || 'quoted', expirationDateResult.value, notes]
+                [quoteId, clientIdResult.value, clientNameResult.value, paymentTerms || 'immediate', discountValue, status || 'quoted', expirationDateResult.value, notes]
             );
 
             // Insert quote items
@@ -180,11 +236,13 @@ export default async function (fastify, opts) {
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        const currentStatusResult = await query('SELECT status FROM quotes WHERE id = $1', [idResult.value]);
+        const currentStatusResult = await query('SELECT status, discount FROM quotes WHERE id = $1', [idResult.value]);
         if (currentStatusResult.rows.length === 0) {
             return reply.code(404).send({ error: 'Quote not found' });
         }
         const currentStatus = currentStatusResult.rows[0].status;
+        const existingDiscountRaw = parseFloat(currentStatusResult.rows[0].discount || 0);
+        const existingDiscount = Number.isFinite(existingDiscountRaw) ? existingDiscountRaw : 0;
         const hasNonStatusUpdates = clientId !== undefined
             || clientName !== undefined
             || items !== undefined
@@ -219,10 +277,12 @@ export default async function (fastify, opts) {
 
         let discountValue = discount;
         if (discount !== undefined) {
-            const discountResult = optionalNonNegativeNumber(discount, 'discount');
+            const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
             if (!discountResult.ok) return badRequest(reply, discountResult.message);
             discountValue = discountResult.value;
         }
+
+        const effectiveDiscount = discountValue ?? existingDiscount;
 
         if (status === 'quoted') {
             const linkedSaleResult = await query(
@@ -231,6 +291,60 @@ export default async function (fastify, opts) {
             );
             if (linkedSaleResult.rows.length > 0) {
                 return reply.code(409).send({ error: 'Cannot revert quote with existing sale orders' });
+            }
+        }
+
+        let normalizedItems: Array<{ productId: string; productName: string; quantity: number; unitPrice: number; discount: number; specialBidId?: string | null; note?: string | null }> | null = null;
+        if (items !== undefined) {
+            if (!Array.isArray(items) || items.length === 0) {
+                return badRequest(reply, 'Items must be a non-empty array');
+            }
+            normalizedItems = [];
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
+                if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
+                const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
+                if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
+                const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
+                if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
+                const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+                if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+                const itemDiscountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
+                if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
+                normalizedItems.push({
+                    ...item,
+                    productId: productIdResult.value,
+                    productName: productNameResult.value,
+                    quantity: quantityResult.value,
+                    unitPrice: unitPriceResult.value,
+                    discount: itemDiscountResult.value || 0
+                });
+            }
+            const totals = await calculateQuoteTotals(normalizedItems, effectiveDiscount);
+            if (!Number.isFinite(totals.total) || totals.total <= 0) {
+                return badRequest(reply, 'Total must be greater than 0');
+            }
+        } else if (discount !== undefined) {
+            const itemsResult = await query(
+                `SELECT
+                    product_id as "productId",
+                    quantity,
+                    unit_price as "unitPrice",
+                    discount
+                FROM quote_items
+                WHERE quote_id = $1`,
+                [idResult.value]
+            );
+            const itemsForTotal = itemsResult.rows.map(row => ({
+                productId: row.productId,
+                quantity: parseFloat(row.quantity),
+                unitPrice: parseFloat(row.unitPrice),
+                discount: parseFloat(row.discount || 0)
+            }));
+            const totals = await calculateQuoteTotals(itemsForTotal, effectiveDiscount);
+            if (!Number.isFinite(totals.total) || totals.total <= 0) {
+                return badRequest(reply, 'Total must be greater than 0');
             }
         }
 
@@ -266,29 +380,7 @@ export default async function (fastify, opts) {
 
         // If items are provided, update them
         let updatedItems = [];
-        if (items) {
-            if (!Array.isArray(items) || items.length === 0) {
-                return badRequest(reply, 'Items must be a non-empty array');
-            }
-            const normalizedItems = [];
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
-                if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
-                const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
-                if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-                const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
-                if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-                const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
-                if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-                normalizedItems.push({
-                    ...item,
-                    productId: productIdResult.value,
-                    productName: productNameResult.value,
-                    quantity: quantityResult.value,
-                    unitPrice: unitPriceResult.value
-                });
-            }
+        if (normalizedItems) {
             // Delete existing items
             await query('DELETE FROM quote_items WHERE quote_id = $1', [idResult.value]);
 

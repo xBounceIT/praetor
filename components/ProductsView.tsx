@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Product, Supplier } from '../types';
 import CustomSelect, { Option } from './CustomSelect';
 import StandardTable from './StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
+import ValidatedNumberInput, { parseNumberInputValue } from './ValidatedNumberInput';
 
 interface ProductsViewProps {
     products: Product[];
@@ -70,7 +70,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         molPercentage: undefined,
         costUnit: 'unit',
         category: '',
-        taxRate: 0,
+        taxRate: 22,
         type: 'item',
         supplierId: ''
     });
@@ -85,10 +85,10 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     };
 
     const handleNumericValueChange = (field: 'taxRate' | 'costo' | 'molPercentage') => (value: string) => {
-        const parsed = value === '' ? undefined : parseFloat(value);
+        const parsed = parseNumberInputValue(value, undefined);
         setFormData({
             ...formData,
-            [field]: parsed === undefined || Number.isNaN(parsed) ? undefined : parsed
+            [field]: parsed
         });
         if (errors[field]) {
             setErrors({ ...errors, [field]: '' });
@@ -103,7 +103,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             molPercentage: undefined,
             costUnit: 'unit',
             category: '',
-            taxRate: 0,
+            taxRate: 22,
             type: 'item',
             supplierId: ''
         });
@@ -139,8 +139,28 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         if (formData.molPercentage === undefined || formData.molPercentage === null || Number.isNaN(formData.molPercentage)) {
             newErrors.molPercentage = 'MOL % is required';
         }
+        if (
+            !newErrors.molPercentage &&
+            formData.molPercentage !== undefined &&
+            formData.molPercentage !== null &&
+            !Number.isNaN(formData.molPercentage)
+        ) {
+            if (formData.molPercentage <= 0 || formData.molPercentage >= 100) {
+                newErrors.molPercentage = 'MOL % must be greater than 0 and less than 100';
+            }
+        }
         if (formData.taxRate === undefined || formData.taxRate === null || Number.isNaN(formData.taxRate)) {
             newErrors.taxRate = 'Tax rate is required';
+        }
+        if (
+            !newErrors.taxRate &&
+            formData.taxRate !== undefined &&
+            formData.taxRate !== null &&
+            !Number.isNaN(formData.taxRate)
+        ) {
+            if (formData.taxRate < 0 || formData.taxRate > 100) {
+                newErrors.taxRate = 'Tax rate must be between 0 and 100';
+            }
         }
         const typeValue = formData.type;
         if (!typeValue || !['item', 'service'].includes(typeValue)) {
@@ -290,6 +310,13 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         formData.molPercentage !== null &&
         !Number.isNaN(formData.molPercentage);
 
+    const showTaxRateWarning =
+        formData.taxRate !== undefined &&
+        formData.taxRate !== null &&
+        !Number.isNaN(formData.taxRate) &&
+        formData.taxRate > 30 &&
+        formData.taxRate <= 100;
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Add Category Modal */}
@@ -405,7 +432,10 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                        <div className="ml-1 space-y-1">
+                                            {showTaxRateWarning && (
+                                                <p className="text-amber-600 text-[10px] font-bold">Unusual tax rate (over 30%).</p>
+                                            )}
                                             <label className="text-xs font-bold text-slate-500">Tax Rate (%)</label>
                                         </div>
                                         <ValidatedNumberInput

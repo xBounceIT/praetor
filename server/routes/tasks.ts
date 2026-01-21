@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalNonNegativeNumber, requireNonEmptyArrayOfStrings, parseBoolean, optionalDateString, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalLocalizedNonNegativeNumber, requireNonEmptyArrayOfStrings, parseBoolean, optionalDateString, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List all tasks
@@ -56,7 +56,7 @@ export default async function (fastify, opts) {
         const projectIdResult = requireNonEmptyString(projectId, 'projectId');
         if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
 
-        const durationResult = optionalNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
+        const durationResult = optionalLocalizedNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
         const isRecurringValue = parseBoolean(isRecurring);
@@ -105,7 +105,7 @@ export default async function (fastify, opts) {
         const { name, description, isRecurring, recurrencePattern, recurrenceStart, recurrenceEnd, isDisabled } = request.body;
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
-        const durationResult = optionalNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
+        const durationResult = optionalLocalizedNonNegativeNumber(request.body.recurrenceDuration, 'recurrenceDuration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
         if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {

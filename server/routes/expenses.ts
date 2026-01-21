@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parsePositiveNumber, optionalPositiveNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseLocalizedPositiveNumber, optionalLocalizedPositiveNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All expenses routes require manager role
@@ -40,7 +40,7 @@ export default async function (fastify, opts) {
         const descriptionResult = requireNonEmptyString(description, 'description');
         if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
 
-        const amountResult = parsePositiveNumber(amount, 'amount');
+        const amountResult = parseLocalizedPositiveNumber(amount, 'amount');
         if (!amountResult.ok) return badRequest(reply, amountResult.message);
 
         const expenseDateResult = parseDateString(expenseDate, 'expenseDate');
@@ -110,7 +110,7 @@ export default async function (fastify, opts) {
 
         let amountValue = amount;
         if (amount !== undefined) {
-            const amountResult = optionalPositiveNumber(amount, 'amount');
+            const amountResult = optionalLocalizedPositiveNumber(amount, 'amount');
             if (!amountResult.ok) return badRequest(reply, amountResult.message);
             amountValue = amountResult.value;
         }

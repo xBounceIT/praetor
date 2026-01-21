@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, validateEnum, optionalNonNegativeNumber, optionalArrayOfStrings, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, validateEnum, optionalLocalizedNonNegativeNumber, optionalArrayOfStrings, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List users
@@ -66,7 +66,7 @@ export default async function (fastify, opts) {
         const roleResult = validateEnum(role, ['admin', 'manager', 'user'], 'role');
         if (!roleResult.ok) return badRequest(reply, roleResult.message);
 
-        const costPerHourResult = optionalNonNegativeNumber(costPerHour, 'costPerHour');
+        const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
         if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
 
         const existingUser = await query(
@@ -137,7 +137,7 @@ export default async function (fastify, opts) {
         }
 
         if (costPerHour !== undefined) {
-            const costPerHourResult = optionalNonNegativeNumber(costPerHour, 'costPerHour');
+            const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
             if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
         }
 
@@ -189,7 +189,7 @@ export default async function (fastify, opts) {
 
         if (costPerHour !== undefined) {
             updates.push(`cost_per_hour = $${paramIdx++}`);
-            values.push(optionalNonNegativeNumber(costPerHour, 'costPerHour').value);
+            values.push(optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour').value);
         }
 
         if (role !== undefined) {

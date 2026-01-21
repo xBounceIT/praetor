@@ -58,6 +58,46 @@ export function parseNumber(value: unknown, fieldName: string = 'value'): { ok: 
   return { ok: false, message: `${fieldName} must be a valid number` };
 }
 
+const localizedNumberPattern = /^[0-9]*([.][0-9]*)?$/;
+
+const normalizeLocalizedNumber = (value: string) => value.replace(/,/g, '.');
+
+export function parseLocalizedNumber(value: unknown, fieldName: string = 'value'): { ok: true; value: number } | { ok: false; message: string } {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { ok: true, value };
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return { ok: false, message: `${fieldName} cannot be an empty string` };
+    }
+    const normalized = normalizeLocalizedNumber(trimmed);
+    if (!localizedNumberPattern.test(normalized) || !/[0-9]/.test(normalized)) {
+      return { ok: false, message: `${fieldName} must be a valid number` };
+    }
+    const parsed = parseFloat(normalized);
+    if (!Number.isFinite(parsed)) {
+      return { ok: false, message: `${fieldName} must be a valid number` };
+    }
+    return { ok: true, value: parsed };
+  }
+  return { ok: false, message: `${fieldName} must be a valid number` };
+}
+
+export function optionalLocalizedNumber(
+  value: unknown,
+  fieldName: string = 'value'
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: null };
+  }
+  const result = parseLocalizedNumber(value, fieldName);
+  if (!result.ok) {
+    return { ok: false, message: result.message };
+  }
+  return result;
+}
+
 /**
  * Parse optional number (accept number, numeric string, null, or undefined)
  */
@@ -92,6 +132,20 @@ export function parseNonNegativeNumber(
   return result;
 }
 
+export function parseLocalizedNonNegativeNumber(
+  value: unknown,
+  fieldName: string = 'value'
+): { ok: true; value: number } | { ok: false; message: string } {
+  const result = parseLocalizedNumber(value, fieldName);
+  if (!result.ok) {
+    return result;
+  }
+  if (result.value < 0) {
+    return { ok: false, message: `${fieldName} must be zero or positive` };
+  }
+  return result;
+}
+
 /**
  * Parse optional non-negative number
  */
@@ -103,6 +157,20 @@ export function optionalNonNegativeNumber(
     return { ok: true, value: null };
   }
   const result = parseNonNegativeNumber(value, fieldName);
+  if (!result.ok) {
+    return { ok: false, message: result.message };
+  }
+  return result;
+}
+
+export function optionalLocalizedNonNegativeNumber(
+  value: unknown,
+  fieldName: string = 'value'
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: null };
+  }
+  const result = parseLocalizedNonNegativeNumber(value, fieldName);
   if (!result.ok) {
     return { ok: false, message: result.message };
   }
@@ -126,6 +194,20 @@ export function parsePositiveNumber(
   return result;
 }
 
+export function parseLocalizedPositiveNumber(
+  value: unknown,
+  fieldName: string = 'value'
+): { ok: true; value: number } | { ok: false; message: string } {
+  const result = parseLocalizedNumber(value, fieldName);
+  if (!result.ok) {
+    return result;
+  }
+  if (result.value <= 0) {
+    return { ok: false, message: `${fieldName} must be greater than zero` };
+  }
+  return result;
+}
+
 /**
  * Parse optional positive number
  */
@@ -137,6 +219,20 @@ export function optionalPositiveNumber(
     return { ok: true, value: null };
   }
   const result = parsePositiveNumber(value, fieldName);
+  if (!result.ok) {
+    return { ok: false, message: result.message };
+  }
+  return result;
+}
+
+export function optionalLocalizedPositiveNumber(
+  value: unknown,
+  fieldName: string = 'value'
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: null };
+  }
+  const result = parseLocalizedPositiveNumber(value, fieldName);
   if (!result.ok) {
     return { ok: false, message: result.message };
   }

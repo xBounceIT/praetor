@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseNonNegativeNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseLocalizedPositiveNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     fastify.addHook('onRequest', authenticateToken);
@@ -40,8 +40,20 @@ export default async function (fastify, opts) {
         const productNameResult = requireNonEmptyString(productName, 'productName');
         if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
 
-        const unitPriceResult = parseNonNegativeNumber(unitPrice, 'unitPrice');
+        const unitPriceResult = parseLocalizedPositiveNumber(unitPrice, 'unitPrice');
         if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+
+        const productCostResult = await query('SELECT costo FROM products WHERE id = $1', [productIdResult.value]);
+        if (productCostResult.rows.length === 0) {
+            return badRequest(reply, 'productId is invalid');
+        }
+        const productCost = parseFloat(productCostResult.rows[0].costo);
+        if (!Number.isFinite(productCost)) {
+            return badRequest(reply, 'Product cost is invalid');
+        }
+        if (unitPriceResult.value >= productCost) {
+            return badRequest(reply, 'unitPrice must be less than product cost');
+        }
 
         const startDateResult = parseDateString(startDate, 'startDate');
         if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
@@ -124,7 +136,7 @@ export default async function (fastify, opts) {
 
         let unitPriceValue = unitPrice;
         if (unitPrice !== undefined) {
-            const unitPriceResult = parseNonNegativeNumber(unitPrice, 'unitPrice');
+            const unitPriceResult = parseLocalizedPositiveNumber(unitPrice, 'unitPrice');
             if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
             unitPriceValue = unitPriceResult.value;
         }
@@ -153,6 +165,7 @@ export default async function (fastify, opts) {
             `SELECT
                 client_id as "clientId",
                 product_id as "productId",
+                unit_price as "unitPrice",
                 start_date as "startDate",
                 end_date as "endDate"
              FROM special_bids
@@ -169,6 +182,28 @@ export default async function (fastify, opts) {
         const updatedProductId = productIdValue ?? currentBid.productId;
         const updatedStartDate = startDateValue ?? currentBid.startDate;
         const updatedEndDate = endDateValue ?? currentBid.endDate;
+        const updatedUnitPrice = unitPriceValue ?? currentBid.unitPrice;
+
+        if (updatedProductId) {
+            const productCostResult = await query('SELECT costo FROM products WHERE id = $1', [updatedProductId]);
+            if (productCostResult.rows.length === 0) {
+                return badRequest(reply, 'productId is invalid');
+            }
+            const productCost = parseFloat(productCostResult.rows[0].costo);
+            if (!Number.isFinite(productCost)) {
+                return badRequest(reply, 'Product cost is invalid');
+            }
+            const normalizedUnitPrice = Number(updatedUnitPrice);
+            if (!Number.isFinite(normalizedUnitPrice)) {
+                return badRequest(reply, 'unitPrice must be a valid number');
+            }
+            if (normalizedUnitPrice <= 0) {
+                return badRequest(reply, 'unitPrice must be greater than zero');
+            }
+            if (normalizedUnitPrice >= productCost) {
+                return badRequest(reply, 'unitPrice must be less than product cost');
+            }
+        }
 
         if (updatedClientId && updatedProductId) {
             const existing = await query(

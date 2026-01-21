@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { optionalNonEmptyString, optionalNonNegativeNumber, parseBoolean, badRequest } from '../utils/validation.ts';
+import { optionalNonEmptyString, optionalLocalizedNonNegativeNumber, parseBoolean, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - Get global settings (available to all authenticated users)
@@ -40,7 +40,7 @@ export default async function (fastify, opts) {
         const currencyResult = optionalNonEmptyString(currency, 'currency');
         if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
 
-        const dailyLimitResult = optionalNonNegativeNumber(dailyLimit, 'dailyLimit');
+        const dailyLimitResult = optionalLocalizedNonNegativeNumber(dailyLimit, 'dailyLimit');
         if (!dailyLimitResult.ok) return badRequest(reply, dailyLimitResult.message);
 
         const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);

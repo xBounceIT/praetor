@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parsePositiveNumber, parseNonNegativeNumber, optionalNonNegativeNumber, badRequest } from '../utils/validation.ts';
+import { requireNonEmptyString, optionalNonEmptyString, parseLocalizedPositiveNumber, parseLocalizedNonNegativeNumber, optionalLocalizedNonNegativeNumber, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // All sales routes require manager role
@@ -78,19 +78,22 @@ export default async function (fastify, opts) {
             const item = items[i];
             const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
             if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-            const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
+            const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
             if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-            const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+            const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
             if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+            const itemDiscountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
+            if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
             normalizedItems.push({
                 ...item,
                 productName: productNameResult.value,
                 quantity: quantityResult.value,
-                unitPrice: unitPriceResult.value
+                unitPrice: unitPriceResult.value,
+                discount: itemDiscountResult.value || 0
             });
         }
 
-        const discountResult = optionalNonNegativeNumber(discount, 'discount');
+        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
         const saleId = 's-' + Date.now();
@@ -167,7 +170,7 @@ export default async function (fastify, opts) {
 
         let discountValue = discount;
         if (discount !== undefined) {
-            const discountResult = optionalNonNegativeNumber(discount, 'discount');
+            const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
             if (!discountResult.ok) return badRequest(reply, discountResult.message);
             discountValue = discountResult.value;
         }
@@ -188,21 +191,27 @@ export default async function (fastify, opts) {
                     badRequest(reply, productNameResult.message);
                     return null;
                 }
-                const quantityResult = parsePositiveNumber(item.quantity, `items[${i}].quantity`);
+                const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
                 if (!quantityResult.ok) {
                     badRequest(reply, quantityResult.message);
                     return null;
                 }
-                const unitPriceResult = parseNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+                const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
                 if (!unitPriceResult.ok) {
                     badRequest(reply, unitPriceResult.message);
+                    return null;
+                }
+                const itemDiscountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
+                if (!itemDiscountResult.ok) {
+                    badRequest(reply, itemDiscountResult.message);
                     return null;
                 }
                 normalizedItems.push({
                     ...item,
                     productName: productNameResult.value,
                     quantity: quantityResult.value,
-                    unitPrice: unitPriceResult.value
+                    unitPrice: unitPriceResult.value,
+                    discount: itemDiscountResult.value || 0
                 });
             }
 

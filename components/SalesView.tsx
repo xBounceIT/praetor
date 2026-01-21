@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Sale, SaleItem, Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
+import ValidatedNumberInput, { parseNumberInputValue } from './ValidatedNumberInput';
 
 const PAYMENT_TERMS_OPTIONS = [
     { id: 'immediate', name: 'Immediate' },
@@ -626,8 +626,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                 max="100"
                                                 value={formData.discount}
                                                 onValueChange={(value) => {
-                                                    const parsed = parseFloat(value);
-                                                    setFormData({ ...formData, discount: value === '' || Number.isNaN(parsed) ? 0 : parsed });
+                                                    const parsed = parseNumberInputValue(value);
+                                                    setFormData({ ...formData, discount: parsed });
                                                 }}
                                                 disabled={isLinkedQuote}
                                                 className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold disabled:bg-transparent"

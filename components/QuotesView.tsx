@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Quote, QuoteItem, Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
+import ValidatedNumberInput, { parseNumberInputValue } from './ValidatedNumberInput';
 
 const PAYMENT_TERMS_OPTIONS = [
     { id: 'immediate', name: 'Immediate' },
@@ -186,6 +186,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         }
 
         const newErrors: Record<string, string> = {};
+        const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
 
         if (!formData.clientId) {
             newErrors.clientId = 'Client is required';
@@ -194,10 +195,24 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         if (!formData.items || formData.items.length === 0) {
             newErrors.items = 'At least one product is required';
         } else {
-            // Check that all items have a product selected
             const invalidItem = formData.items.find(item => !item.productId);
             if (invalidItem) {
                 newErrors.items = 'Please select a product for all items';
+            }
+            const invalidQuantity = formData.items.find(item =>
+                item.quantity === undefined ||
+                item.quantity === null ||
+                Number.isNaN(item.quantity) ||
+                item.quantity <= 0
+            );
+            if (!newErrors.items && invalidQuantity) {
+                newErrors.items = 'All items must have quantity greater than 0.';
+            }
+            if (!newErrors.items) {
+                const { total } = calculateTotals(formData.items, discountValue);
+                if (!Number.isFinite(total) || total <= 0) {
+                    newErrors.total = 'Total must be greater than 0.';
+                }
             }
         }
 
@@ -778,8 +793,15 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                             max="100"
                                             value={formData.discount}
                                             onValueChange={(value) => {
-                                                const parsed = parseFloat(value);
-                                                setFormData({ ...formData, discount: value === '' || Number.isNaN(parsed) ? 0 : parsed });
+                                                const parsed = parseNumberInputValue(value);
+                                                setFormData({ ...formData, discount: parsed });
+                                                if (errors.total) {
+                                                    setErrors(prev => {
+                                                        const next = { ...prev };
+                                                        delete next.total;
+                                                        return next;
+                                                    });
+                                                }
                                             }}
                                             disabled={isReadOnly}
                                             className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
@@ -816,9 +838,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                             {formData.items && formData.items.length > 0 && (
                                 <div className="pt-8 border-t border-slate-100">
                                     {(() => {
-                                        const { subtotal, discountAmount, totalTax, total, margin, marginPercentage, taxGroups } = calculateTotals(formData.items, formData.discount || 0);
+                                        const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
+                                        const { subtotal, discountAmount, totalTax, total, margin, marginPercentage, taxGroups } = calculateTotals(formData.items, discountValue);
                                         return (
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+                                            <>
+                                                {errors.total && (
+                                                    <p className="text-red-500 text-[10px] font-bold ml-1 mb-2">{errors.total}</p>
+                                                )}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
                                                 {/* Left Column: Detailed Breakdown */}
                                                 <div className="flex flex-col justify-center space-y-3 h-full">
                                                     <div className="flex justify-between items-center px-2">
@@ -858,7 +885,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                         <div className="text-xs font-black text-emerald-500 opacity-60">({marginPercentage.toFixed(1)}%)</div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                                </div>
+                                            </>
                                         );
                                     })()}
                                 </div>

@@ -1,6 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, parseDateString, parseNonNegativeNumber, optionalNonNegativeNumber, parseBoolean, optionalNonEmptyString, badRequest, parseQueryBoolean } from '../utils/validation.ts';
+import { requireNonEmptyString, parseDateString, parseLocalizedNonNegativeNumber, optionalLocalizedNonNegativeNumber, parseBoolean, optionalNonEmptyString, badRequest, parseQueryBoolean } from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
     // GET / - List time entries
@@ -79,7 +79,7 @@ export default async function (fastify, opts) {
         const taskResult = requireNonEmptyString(task, 'task');
         if (!taskResult.ok) return badRequest(reply, taskResult.message);
 
-        const durationResult = optionalNonNegativeNumber(duration, 'duration');
+        const durationResult = optionalLocalizedNonNegativeNumber(duration, 'duration');
         if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
         const isPlaceholderValue = parseBoolean(isPlaceholder);
@@ -132,7 +132,7 @@ export default async function (fastify, opts) {
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
         if (duration !== undefined) {
-            const durationResult = parseNonNegativeNumber(duration, 'duration');
+            const durationResult = parseLocalizedNonNegativeNumber(duration, 'duration');
             if (!durationResult.ok) return badRequest(reply, durationResult.message);
         }
 
