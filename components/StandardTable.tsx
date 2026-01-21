@@ -33,7 +33,7 @@ const StandardTable = ({
         <div className="flex items-center gap-3">
           <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">{title}</h4>
           {typeof totalCount === 'number' && (
-            <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">
+            <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
               {totalCount} {totalLabel || t('table.total')}
             </span>
           )}
