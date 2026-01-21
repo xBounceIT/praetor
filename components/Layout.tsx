@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, User } from '../types';
 
@@ -52,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
   const moduleSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Create modules array with localized names
-  const modules: Module[] = [
+  const modules: Module[] = useMemo(() => [
     { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
     { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
     { id: 'hr', name: t('modules.hr'), icon: 'fa-user-group', active: false },
@@ -61,7 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
     { id: 'employees', name: 'Employees', icon: 'fa-user-tie', active: false },
     { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
     { id: 'configuration', name: t('modules.configuration'), icon: 'fa-gears', active: false },
-  ];
+  ], [t]);
 
   // Compute active module from current route
   const activeModule = modules.find(m => m.id === getModuleFromRoute(activeView)) || modules[0];

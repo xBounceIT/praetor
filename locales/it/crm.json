@@ -80,7 +80,7 @@
     "pricingAndUnit": "Prezzi e Unità"
   },
   "specialBids": {
-    "title": "Offerte Speciali",
+    "title": "Special Bid",
     "subtitle": "Gestisci prezzi speciali e sconti per i clienti",
     "addSpecialBid": "Aggiungi Offerta Speciale",
     "editSpecialBid": "Modifica Offerta Speciale",
