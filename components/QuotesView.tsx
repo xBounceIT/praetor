@@ -717,11 +717,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                                     className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 />
                                                             </div>
-                                                            <div className="col-span-1 flex flex-col items-center justify-center">
-                                                                <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)} {currency}</span>
+                                                            <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                                                                 {selectedBid && (
-                                                                    <div className="text-[8px] font-black text-praetor uppercase tracking-wider">Bid</div>
+                                                                    <span className="px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">Bid</span>
                                                                 )}
+                                                                <span className="text-xs font-bold text-slate-600">{cost.toFixed(2)} {currency}</span>
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-center">
                                                                 <span className="text-xs font-bold text-slate-600">{molPercentage.toFixed(1)}%</span>
