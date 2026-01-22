@@ -246,8 +246,13 @@ const Settings: React.FC = () => {
                 onClick={() => handleLanguageChange('en')}
                 className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'en' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center text-2xl">
-                  {settings.language === 'en' && <i className="fa-solid fa-check text-xs"></i>}
+                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
+                  <span className={`fi fi-gb text-xl ${settings.language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}></span>
+                  {settings.language === 'en' && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                      <i className="fa-solid fa-check text-white text-[8px]"></i>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-800 mb-1">{t('language.english')}</h4>
@@ -261,8 +266,13 @@ const Settings: React.FC = () => {
                 onClick={() => handleLanguageChange('it')}
                 className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'it' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center text-2xl">
-                  {settings.language === 'it' && <i className="fa-solid fa-check text-xs"></i>}
+                <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
+                  <span className={`fi fi-it text-xl ${settings.language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}></span>
+                  {settings.language === 'it' && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                      <i className="fa-solid fa-check text-white text-[8px]"></i>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-800 mb-1">{t('language.italian')}</h4>

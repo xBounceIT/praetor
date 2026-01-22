@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import App from './App';
 import i18n from './i18n';
+import 'flag-icons/css/flag-icons.min.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
