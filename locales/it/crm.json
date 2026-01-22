@@ -110,6 +110,7 @@
     "editProductTooltip": "Modifica Prodotto",
     "disableProduct": "Disabilita Prodotto",
     "deleteProductTooltip": "Elimina Prodotto"
+  },
   "specialBids": {
     "title": "Special Bid",
     "subtitle": "Gestisci prezzi speciali e sconti per i clienti",
