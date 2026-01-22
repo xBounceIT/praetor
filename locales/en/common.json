@@ -77,7 +77,8 @@
     "noOptionsFound": "No options found",
     "clearFilters": "Clear filters",
     "searchPlaceholder": "Search...",
-    "rowsPerPage": "Rows per page"
+    "rowsPerPage": "Rows per page",
+    "actions": "Actions"
   },
   "validation": {
     "required": "This field is required",

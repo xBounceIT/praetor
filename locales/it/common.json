@@ -77,7 +77,8 @@
     "noOptionsFound": "Nessuna opzione trovata",
     "clearFilters": "Cancella filtri",
     "searchPlaceholder": "Cerca...",
-    "rowsPerPage": "Righe per pagina"
+    "rowsPerPage": "Righe per pagina",
+    "actions": "Azioni"
   },
   "validation": {
     "required": "Questo campo è obbligatorio",
@@ -208,6 +209,7 @@
     "individuals": "Privati",
     "allCategories": "Tutte le Categorie",
     "allStatus": "Tutti gli Stati",
+    "allSuppliers": "Tutti i Fornitori",
     "active": "Attivo",
     "disabled": "Disabilitato",
     "all": "Tutti"
