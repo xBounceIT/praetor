@@ -29,7 +29,9 @@
     "expenses": "Expenses",
     "financialReports": "Financial Reports",
     "authentication": "Authentication",
-    "general": "General Settings"
+    "general": "General Settings",
+    "suppliers": "Suppliers",
+    "supplierQuotes": "Supplier Quotes"
   },
   "menu": {
     "settings": "Settings",
@@ -51,5 +53,15 @@
   },
   "workspace": "Workspace",
   "module": "Module",
-  "modules": "Modules"
+  "modules_label": "Modules",
+  "notFound": "Page Not Found",
+  "titles": {
+    "authSettings": "Authentication Settings",
+    "generalAdmin": "General Administration",
+    "projects": "Projects",
+    "tasks": "Tasks",
+    "specialBids": "Special Bids",
+    "suppliers": "Suppliers",
+    "supplierQuotes": "Supplier Quotes"
+  }
 }

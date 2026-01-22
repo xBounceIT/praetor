@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Supplier } from '../types';
 import CustomSelect from './CustomSelect';
 
@@ -10,6 +11,7 @@ interface SuppliersViewProps {
 }
 
 const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier, onUpdateSupplier, onDeleteSupplier }) => {
+  const { t } = useTranslation('suppliers');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -83,10 +85,10 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
 
     const newErrors: Record<string, string> = {};
     if (!formData.name?.trim()) {
-      newErrors.name = 'Name is required';
+      newErrors.name = t('suppliers.nameRequired', { defaultValue: 'Name is required' });
     }
     if (!formData.supplierCode?.trim()) {
-      newErrors.supplierCode = 'Supplier ID is required';
+      newErrors.supplierCode = t('suppliers.codeRequired', { defaultValue: 'Supplier ID is required' });
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -132,7 +134,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
                   <i className={`fa-solid ${editingSupplier ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
                 </div>
-                {editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}
+                {editingSupplier ? t('suppliers.editSupplier') : t('suppliers.addSupplier')}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -146,11 +148,11 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
               <div className="space-y-4">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  Supplier Details
+                  {t('suppliers.supplierDetails')}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Supplier ID</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.supplierCode')}</label>
                     <input
                       type="text"
                       value={formData.supplierCode}
@@ -166,7 +168,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Supplier Name</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.title')}</label>
                     <input
                       type="text"
                       value={formData.name}
@@ -182,7 +184,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     )}
                   </div>
                   <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Contact</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.contactName')}</label>
                     <input
                       type="text"
                       value={formData.contactName}
@@ -197,11 +199,11 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
               <div className="space-y-4">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  Contacts
+                  {t('suppliers.contacts', { defaultValue: 'Contacts' })}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Email</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.email')}</label>
                     <input
                       type="email"
                       value={formData.email}
@@ -211,7 +213,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Phone</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.phone')}</label>
                     <input
                       type="text"
                       value={formData.phone}
@@ -221,7 +223,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     />
                   </div>
                   <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Address</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.address')}</label>
                     <textarea
                       rows={2}
                       value={formData.address}
@@ -236,11 +238,11 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
               <div className="space-y-4">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  Administrative Details
+                  {t('suppliers.administrativeDetails', { defaultValue: 'Administrative Details' })}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">VAT Number</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.vatNumber')}</label>
                     <input
                       type="text"
                       value={formData.vatNumber}
@@ -250,7 +252,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Tax Code</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.taxCode')}</label>
                     <input
                       type="text"
                       value={formData.taxCode}
@@ -259,7 +261,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Payment Terms</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.paymentTerms')}</label>
                     <input
                       type="text"
                       value={formData.paymentTerms}
@@ -269,7 +271,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">{t('suppliers.notes')}</label>
                     <input
                       type="text"
                       value={formData.notes}
@@ -286,13 +288,13 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                   onClick={() => setIsModalOpen(false)}
                   className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                 >
-                  {editingSupplier ? 'Update Supplier' : 'Save Supplier'}
+                  {editingSupplier ? t('common.update') : t('common.save')}
                 </button>
               </div>
             </form>
@@ -308,10 +310,10 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                 <i className="fa-solid fa-triangle-exclamation text-xl"></i>
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-800">Delete Supplier?</h3>
+                <h3 className="text-lg font-black text-slate-800">{t('suppliers.deleteConfirmTitle', { defaultValue: 'Delete Supplier?' })}</h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  Are you sure you want to delete <span className="font-bold text-slate-800">{supplierToDelete?.name}</span>?
-                  This action cannot be undone.
+                  {t('suppliers.deleteConfirm', { name: supplierToDelete?.name })}
+                  {t('suppliers.actionUndone', { defaultValue: ' This action cannot be undone.' })}
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
@@ -319,13 +321,13 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                   onClick={() => setIsDeleteConfirmOpen(false)}
                   className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleDelete}
                   className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
                 >
-                  Yes, Delete
+                  {t('common.yesDelete')}
                 </button>
               </div>
             </div>
@@ -335,21 +337,21 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">Suppliers</h2>
-          <p className="text-slate-500 text-sm">Manage suppliers and purchasing contacts</p>
+          <h2 className="text-2xl font-black text-slate-800">{t('suppliers.title')}</h2>
+          <p className="text-slate-500 text-sm">{t('suppliers.subtitle')}</p>
         </div>
         <button
           onClick={openAddModal}
           className="bg-praetor text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
         >
-          <i className="fa-solid fa-plus"></i> Add New Supplier
+          <i className="fa-solid fa-plus"></i> {t('suppliers.addSupplier')}
         </button>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm">
         <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
-          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Active Suppliers</h4>
-          <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{activeSuppliersTotal.length} TOTAL</span>
+          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">{t('common.active')}</h4>
+          <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black">{activeSuppliersTotal.length} {t('common.total')}</span>
         </div>
         <div className="divide-y divide-slate-100">
           {activeSuppliers.map(s => (
@@ -391,7 +393,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                       openEditModal(s);
                     }}
                     className="p-2.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-xl transition-all"
-                    title="Edit Supplier"
+                    title={t('suppliers.editSupplier')}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -401,7 +403,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                       onUpdateSupplier(s.id, { isDisabled: true });
                     }}
                     className="p-2.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
-                    title="Disable Supplier"
+                    title={t('suppliers.isDisabled')}
                   >
                     <i className="fa-solid fa-ban"></i>
                   </button>
@@ -411,7 +413,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                       confirmDelete(s);
                     }}
                     className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                    title="Delete Supplier"
+                    title={t('common.delete')}
                   >
                     <i className="fa-solid fa-trash-can"></i>
                   </button>
@@ -424,15 +426,15 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                 <i className="fa-solid fa-truck text-2xl"></i>
               </div>
-              <p className="text-slate-400 text-sm font-bold">No active suppliers found.</p>
-              <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">Add your first supplier</button>
+              <p className="text-slate-400 text-sm font-bold">{t('suppliers.noSuppliers')}.</p>
+              <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">{t('suppliers.createFirst')}</button>
             </div>
           )}
         </div>
 
         <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-3xl">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+            <span className="text-xs font-bold text-slate-500">{t('common.rowsPerPage')}</span>
             <CustomSelect
               options={[
                 { id: '5', name: '5' },
@@ -447,7 +449,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
               searchable={false}
             />
             <span className="text-xs font-bold text-slate-400 ml-2">
-              Showing {activeSuppliers.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeSuppliersTotal.length)} of {activeSuppliersTotal.length}
+              {t('common.showing')} {activeSuppliers.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, activeSuppliersTotal.length)} {t('common.of')} {activeSuppliersTotal.length}
             </span>
           </div>
 
@@ -487,8 +489,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
       {disabledSuppliers.length > 0 && (
         <div className="bg-slate-50 rounded-3xl border border-slate-200 shadow-sm overflow-hidden border-dashed">
           <div className="px-8 py-4 bg-slate-100/50 border-b border-slate-200 flex justify-between items-center">
-            <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Disabled Suppliers</h4>
-            <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black">{disabledSuppliers.length} DISABLED</span>
+            <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">{t('common.disabled')}</h4>
+            <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black">{disabledSuppliers.length} {disabledSuppliers.length === 1 ? t('common.disabled').toUpperCase() : t('common.disabled').toUpperCase()}</span>
           </div>
           <div className="divide-y divide-slate-100">
             {disabledSuppliers.map(s => (
@@ -499,7 +501,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, onAddSupplier,
                   </div>
                   <div>
                     <h5 className="font-bold text-slate-500 line-through">{s.name}</h5>
-                    <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
+                    <span className="text-[10px] font-black text-amber-500 uppercase">{t('common.disabled')}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">

@@ -40,6 +40,20 @@
     "statusReceived": "Received",
     "statusApproved": "Approved",
     "statusRejected": "Rejected",
+    "statusPending": "Pending",
+    "paymentTermsOptions": {
+      "immediate": "Immediate",
+      "15gg": "15 days",
+      "21gg": "21 days",
+      "30gg": "30 days",
+      "45gg": "45 days",
+      "60gg": "60 days",
+      "90gg": "90 days",
+      "120gg": "120 days",
+      "180gg": "180 days",
+      "240gg": "240 days",
+      "365gg": "365 days"
+    },
     "noQuotes": "No supplier quotes found",
     "createFirst": "Create your first supplier quote",
     "quoteSaved": "Quote saved successfully",
@@ -47,5 +61,21 @@
     "deleteConfirm": "Are you sure you want to delete this quote?",
     "expiresIn": "Expires in {{days}} days",
     "expiredOn": "Expired on {{date}}"
+  },
+  "common": {
+    "active": "Active",
+    "disabled": "Disabled",
+    "rowsPerPage": "Rows per page:",
+    "showing": "Showing",
+    "of": "of",
+    "total": "TOTAL",
+    "cancel": "Cancel",
+    "save": "Save",
+    "update": "Update",
+    "delete": "Delete",
+    "yesDelete": "Yes, Delete",
+    "actions": "Actions",
+    "search": "Search...",
+    "clearFilters": "Clear filters"
   }
 }

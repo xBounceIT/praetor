@@ -1,16 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Payment, Client, Invoice } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
-
-const PAYMENT_METHOD_OPTIONS = [
-    { id: 'bank_transfer', name: 'Bank Transfer' },
-    { id: 'credit_card', name: 'Credit Card' },
-    { id: 'cash', name: 'Cash' },
-    { id: 'check', name: 'Check' },
-    { id: 'other', name: 'Other' },
-];
 
 interface PaymentsViewProps {
     payments: Payment[];
@@ -23,11 +16,20 @@ interface PaymentsViewProps {
 }
 
 const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices, onAddPayment, onUpdatePayment, onDeletePayment, currency }) => {
+    const { t } = useTranslation('finances');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const paymentMethodOptions = useMemo(() => [
+        { id: 'bank_transfer', name: t('payments.methods.bankTransfer') },
+        { id: 'credit_card', name: t('payments.methods.creditCard') },
+        { id: 'cash', name: t('payments.methods.cash') },
+        { id: 'check', name: t('payments.methods.check') },
+        { id: 'other', name: t('payments.methods.other') },
+    ], [t]);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -97,9 +99,9 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
         e.preventDefault();
         const newErrors: Record<string, string> = {};
 
-        if (!formData.clientId) newErrors.clientId = 'Client is required';
+        if (!formData.clientId) newErrors.clientId = t('payments.client') + ' is required';
         if (!formData.amount || formData.amount <= 0) newErrors.amount = 'Valid amount is required';
-        if (!formData.paymentDate) newErrors.paymentDate = 'Payment date is required';
+        if (!formData.paymentDate) newErrors.paymentDate = t('payments.paymentDate') + ' is required';
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
@@ -167,7 +169,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
                                     <i className={`fa-solid ${editingPayment ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
                                 </div>
-                                {editingPayment ? 'Edit Payment' : 'Record Payment'}
+                                {editingPayment ? t('payments.editPayment') : t('payments.addPayment')}
                             </h3>
                             <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
                                 <i className="fa-solid fa-xmark text-lg"></i>
@@ -177,12 +179,12 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                         <form onSubmit={handleSubmit} className="p-8 space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Client</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.client')}</label>
                                     <CustomSelect
                                         options={activeClients.map(c => ({ id: c.id, name: c.name }))}
                                         value={formData.clientId || ''}
                                         onChange={handleClientChange}
-                                        placeholder="Select Client"
+                                        placeholder={t('invoices.allClients')}
                                         searchable={true}
                                         className={errors.clientId ? 'border-red-300' : ''}
                                         // Disable client change if linking to invoice is enforced or complex, but keeping simple for now
@@ -191,12 +193,12 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                     {errors.clientId && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Invoice (Optional)</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.invoice')} ({t('common.common.optional')})</label>
                                     <CustomSelect
-                                        options={[{ id: '', name: 'No Invoice' }, ...clientInvoices.map(i => ({ id: i.id, name: `#${i.invoiceNumber} - ${(i.total ?? 0).toFixed(2)} ${currency}` }))]}
+                                        options={[{ id: '', name: t('payments.noInvoice') }, ...clientInvoices.map(i => ({ id: i.id, name: `#${i.invoiceNumber} - ${(i.total ?? 0).toFixed(2)} ${currency}` }))]}
                                         value={formData.invoiceId || ''}
                                         onChange={handleInvoiceChange}
-                                        placeholder="Link to Invoice"
+                                        placeholder={t('payments.linkToInvoice')}
                                         searchable={true}
                                         disabled={!formData.clientId} // Disable if no client selected
                                     />
@@ -205,7 +207,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Amount ({currency})</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.amount')} ({currency})</label>
                                     <ValidatedNumberInput
                                         step="0.01"
                                         required
@@ -219,7 +221,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                     {errors.amount && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.amount}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Date</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('common.labels.date')}</label>
                                     <input
                                         type="date"
                                         required
@@ -230,9 +232,9 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                     {errors.paymentDate && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.paymentDate}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Method</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.paymentMethod')}</label>
                                     <CustomSelect
-                                        options={PAYMENT_METHOD_OPTIONS}
+                                        options={paymentMethodOptions}
                                         value={formData.paymentMethod || 'bank_transfer'}
                                         onChange={(val) => setFormData({ ...formData, paymentMethod: val as any })}
                                         searchable={false}
@@ -241,7 +243,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Reference</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.reference')}</label>
                                 <input
                                     type="text"
                                     placeholder="Transaction ID / Check #"
@@ -252,7 +254,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.notes')}</label>
                                 <textarea
                                     rows={3}
                                     value={formData.notes || ''}
@@ -263,8 +265,8 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                             </div>
 
                             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancel</button>
-                                <button type="submit" className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200">Save Payment</button>
+                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">{t('common.buttons.cancel')}</button>
+                                <button type="submit" className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200">{t('common.buttons.save')}</button>
                             </div>
                         </form>
                     </div>
@@ -278,11 +280,11 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
                             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
                         </div>
-                        <h3 className="text-lg font-black text-slate-800">Delete Payment?</h3>
-                        <p className="text-sm text-slate-500">Are you sure you want to delete this payment of <b>{paymentToDelete?.amount} {currency}</b>? This will update the invoice balance.</p>
+                        <h3 className="text-lg font-black text-slate-800">{t('payments.paymentDeleted')}?</h3>
+                        <p className="text-sm text-slate-500">{t('payments.deleteConfirm', { amount: paymentToDelete?.amount, currency: currency })}</p>
                         <div className="flex gap-3 pt-2">
-                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancel</button>
-                            <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Delete</button>
+                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">{t('common.buttons.cancel')}</button>
+                            <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">{t('common.buttons.delete')}</button>
                         </div>
                     </div>
                 </div>
@@ -291,8 +293,8 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-800">Payments</h2>
-                    <p className="text-slate-500 text-sm">Track all incoming payments</p>
+                    <h2 className="text-2xl font-black text-slate-800">{t('payments.title')}</h2>
+                    <p className="text-slate-500 text-sm">{t('payments.subtitle')}</p>
                 </div>
             </div>
 
@@ -302,7 +304,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                     <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
                         type="text"
-                        placeholder="Search payments by reference or client..."
+                        placeholder={t('payments.searchPayments')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
@@ -310,10 +312,10 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                 </div>
                 <div>
                     <CustomSelect
-                        options={[{ id: 'all', name: 'All Clients' }, ...activeClients.map(c => ({ id: c.id, name: c.name }))]}
+                        options={[{ id: 'all', name: t('invoices.allClients') }, ...activeClients.map(c => ({ id: c.id, name: c.name }))]}
                         value={filterClientId}
                         onChange={setFilterClientId}
-                        placeholder="Filter by Client"
+                        placeholder={t('invoices.filterClient')}
                         searchable={true}
                     />
                 </div>
@@ -325,14 +327,14 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                         className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="fa-solid fa-rotate-left"></i>
-                        Clear filters
+                        {t('common.labels.clearFilters')}
                     </button>
                 </div>
             </div>
 
             {/* Table */}
             <StandardTable
-                title="All Payments"
+                title={t('payments.title')}
                 totalCount={filteredPayments.length}
                 containerClassName="overflow-visible"
                 headerAction={
@@ -340,13 +342,13 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                         onClick={openAddModal}
                         className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
                     >
-                        <i className="fa-solid fa-plus"></i> Record Payment
+                        <i className="fa-solid fa-plus"></i> {t('payments.recordPayment')}
                     </button>
                 }
                 footer={
                     <>
                         <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold text-slate-500">Rows:</span>
+                            <span className="text-xs font-bold text-slate-500">{t('common.pagination.rowsPerPage')}:</span>
                             <CustomSelect
                                 options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
                                 value={rowsPerPage.toString()}
@@ -356,7 +358,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                 buttonClassName="text-xs py-1"
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                Showing {paginatedPayments.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredPayments.length)} of {filteredPayments.length}
+                                {t('common.pagination.showing', { start: paginatedPayments.length > 0 ? startIndex + 1 : 0, end: Math.min(startIndex + rowsPerPage, filteredPayments.length), total: filteredPayments.length })}
                             </span>
                         </div>
                         <div className="flex gap-2">
@@ -376,13 +378,13 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Invoice</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('common.labels.date')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('payments.client')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('payments.invoice')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('payments.amount')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('payments.paymentMethod')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('payments.reference')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('common.common.more')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -399,11 +401,13 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                                                 #{invoice.invoiceNumber}
                                             </span>
                                         ) : (
-                                            <span className="text-slate-400 text-xs italic">Unlinked</span>
+                                            <span className="text-slate-400 text-xs italic">{t('payments.unlinked')}</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-4 font-bold text-emerald-600">{payment.amount.toFixed(2)} {currency}</td>
-                                    <td className="px-6 py-4 text-sm text-slate-600 capitalize">{payment.paymentMethod.replace('_', ' ')}</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600 capitalize">
+                                        {paymentMethodOptions.find(opt => opt.id === payment.paymentMethod)?.name || payment.paymentMethod}
+                                    </td>
                                     <td className="px-6 py-4 text-sm text-slate-500 font-mono">{payment.reference || '-'}</td>
                                     <td className="px-6 py-4 text-right">
                                         <button
@@ -425,7 +429,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({ payments, clients, invoices
                         {paginatedPayments.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="p-12 text-center text-slate-400 text-sm font-bold">
-                                    No payments found.
+                                    {t('payments.noPayments')}
                                 </td>
                             </tr>
                         )}

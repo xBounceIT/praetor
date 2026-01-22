@@ -1,16 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Invoice, InvoiceItem, Client, Product, Sale } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
-
-const INVOICE_STATUS_OPTIONS = [
-    { id: 'draft', name: 'Draft' },
-    { id: 'sent', name: 'Sent' },
-    { id: 'paid', name: 'Paid' },
-    { id: 'overdue', name: 'Overdue' },
-    { id: 'cancelled', name: 'Cancelled' },
-];
 
 interface InvoicesViewProps {
     invoices: Invoice[];
@@ -29,11 +22,20 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
 };
 
 const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products, sales, onAddInvoice, onUpdateInvoice, onDeleteInvoice, currency }) => {
+    const { t } = useTranslation('finances');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const statusOptions = useMemo(() => [
+        { id: 'draft', name: t('invoices.statusDraft') },
+        { id: 'sent', name: t('invoices.statusSent') },
+        { id: 'paid', name: t('invoices.statusPaid') },
+        { id: 'overdue', name: t('invoices.statusOverdue') },
+        { id: 'cancelled', name: t('invoices.statusCancelled') },
+    ], [t]);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -138,10 +140,10 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
 
         const newErrors: Record<string, string> = {};
 
-        if (!formData.clientId) newErrors.clientId = 'Client is required';
-        if (!formData.invoiceNumber) newErrors.invoiceNumber = 'Invoice number is required';
-        if (!formData.issueDate) newErrors.issueDate = 'Issue date is required';
-        if (!formData.dueDate) newErrors.dueDate = 'Due date is required';
+        if (!formData.clientId) newErrors.clientId = t('invoices.client') + ' is required';
+        if (!formData.invoiceNumber) newErrors.invoiceNumber = t('invoices.invoiceNumber') + ' is required';
+        if (!formData.issueDate) newErrors.issueDate = t('invoices.issueDate') + ' is required';
+        if (!formData.dueDate) newErrors.dueDate = t('invoices.dueDate') + ' is required';
         if (!formData.items || formData.items.length === 0) newErrors.items = 'At least one item is required';
 
         if (Object.keys(newErrors).length > 0) {
@@ -285,7 +287,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
                                     <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
                                 </div>
-                                {editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}
+                                {editingInvoice ? t('invoices.editInvoice') : t('invoices.addInvoice')}
                             </h3>
                             <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
                                 <i className="fa-solid fa-xmark text-lg"></i>
@@ -296,7 +298,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                             {/* Header Info */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Invoice Number</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('invoices.invoiceNumber')}</label>
                                     <input
                                         type="text"
                                         required
@@ -308,7 +310,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                     {errors.invoiceNumber && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.invoiceNumber}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Issue Date</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('invoices.issueDate')}</label>
                                     <input
                                         type="date"
                                         required
@@ -318,7 +320,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Due Date</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('invoices.dueDate')}</label>
                                     <input
                                         type="date"
                                         required
@@ -331,21 +333,21 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Client</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('invoices.client')}</label>
                                     <CustomSelect
                                         options={activeClients.map(c => ({ id: c.id, name: c.name }))}
                                         value={formData.clientId || ''}
                                         onChange={handleClientChange}
-                                        placeholder="Select a client..."
+                                        placeholder={t('invoices.selectProductPlaceholder')}
                                         searchable={true}
                                         className={errors.clientId ? 'border-red-300' : ''}
                                     />
                                     {errors.clientId && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Status</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('invoices.status')}</label>
                                     <CustomSelect
-                                        options={INVOICE_STATUS_OPTIONS}
+                                        options={statusOptions}
                                         value={formData.status || 'draft'}
                                         onChange={(val) => setFormData({ ...formData, status: val as any })}
                                         searchable={false}
@@ -358,22 +360,22 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                 <div className="flex justify-between items-center">
                                     <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                                         <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                                        Items
+                                        {t('invoices.items')}
                                     </h4>
                                     <button type="button" onClick={addItemRow} className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1">
-                                        <i className="fa-solid fa-plus"></i> Add Line
+                                        <i className="fa-solid fa-plus"></i> {t('invoices.addItem')}
                                     </button>
                                 </div>
                                 {errors.items && <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>}
 
                                 {formData.items && formData.items.length > 0 && (
                                     <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                                        <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Description / Product</div>
-                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Qty</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Price</div>
-                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Tax%</div>
-                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">Disc%</div>
-                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">Total</div>
+                                        <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">{t('invoices.items')} / {t('common.labels.product')}</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">{t('common.labels.quantity')}</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">{t('common.labels.price')}</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">{t('invoices.tax')}%</div>
+                                        <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">{t('common.labels.discount')}%</div>
+                                        <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">{t('invoices.total')}</div>
                                         <div className="hidden md:block md:col-span-1"></div>
                                     </div>
                                 )}
@@ -384,71 +386,71 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                             <div className="flex-1 grid grid-cols-12 gap-2">
                                                 <div className="col-span-4 space-y-2">
                                                     <CustomSelect
-                                                        options={[{ id: '', name: 'Custom Item' }, ...activeProducts.map(p => ({ id: p.id, name: p.name }))]}
+                                                        options={[{ id: '', name: t('invoices.customItem') }, ...activeProducts.map(p => ({ id: p.id, name: p.name }))]}
                                                         value={item.productId || ''}
                                                         onChange={(val) => updateItemRow(index, 'productId', val)}
-                                                        placeholder="Select product (optional)..."
+                                                        placeholder={t('invoices.selectProductPlaceholder')}
                                                         searchable={true}
                                                         buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
                                                     />
                                                     <input
                                                         type="text"
                                                         required
-                                                        placeholder="Description"
+                                                        placeholder={t('invoices.descriptionPlaceholder')}
                                                         value={item.description}
                                                         onChange={(e) => updateItemRow(index, 'description', e.target.value)}
                                                         className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
                                                     />
                                                 </div>
                                                 <div className="col-span-1">
-                                                <ValidatedNumberInput
-                                                    min="0"
-                                                    step="0.01"
-                                                    required
-                                                    value={item.quantity}
-                                                    onValueChange={(value) => {
-                                                        const parsed = parseFloat(value);
-                                                        updateItemRow(index, 'quantity', value === '' || Number.isNaN(parsed) ? 0 : parsed);
-                                                    }}
-                                                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                                                />
+                                                    <ValidatedNumberInput
+                                                        min="0"
+                                                        step="0.01"
+                                                        required
+                                                        value={item.quantity}
+                                                        onValueChange={(value) => {
+                                                            const parsed = parseFloat(value);
+                                                            updateItemRow(index, 'quantity', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                                                        }}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                                                    />
                                                 </div>
                                                 <div className="col-span-2">
-                                                <ValidatedNumberInput
-                                                    min="0"
-                                                    step="0.01"
-                                                    required
-                                                    value={item.unitPrice}
-                                                    onValueChange={(value) => {
-                                                        const parsed = parseFloat(value);
-                                                        updateItemRow(index, 'unitPrice', value === '' || Number.isNaN(parsed) ? 0 : parsed);
-                                                    }}
-                                                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                                                />
+                                                    <ValidatedNumberInput
+                                                        min="0"
+                                                        step="0.01"
+                                                        required
+                                                        value={item.unitPrice}
+                                                        onValueChange={(value) => {
+                                                            const parsed = parseFloat(value);
+                                                            updateItemRow(index, 'unitPrice', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                                                        }}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                                                    />
                                                 </div>
                                                 <div className="col-span-1">
-                                                <ValidatedNumberInput
-                                                    min="0"
-                                                    max="100"
-                                                    value={item.taxRate}
-                                                    onValueChange={(value) => {
-                                                        const parsed = parseFloat(value);
-                                                        updateItemRow(index, 'taxRate', value === '' || Number.isNaN(parsed) ? 0 : parsed);
-                                                    }}
-                                                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                                                />
+                                                    <ValidatedNumberInput
+                                                        min="0"
+                                                        max="100"
+                                                        value={item.taxRate}
+                                                        onValueChange={(value) => {
+                                                            const parsed = parseFloat(value);
+                                                            updateItemRow(index, 'taxRate', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                                                        }}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                                                    />
                                                 </div>
                                                 <div className="col-span-1">
-                                                <ValidatedNumberInput
-                                                    min="0"
-                                                    max="100"
-                                                    value={item.discount || 0}
-                                                    onValueChange={(value) => {
-                                                        const parsed = parseFloat(value);
-                                                        updateItemRow(index, 'discount', value === '' || Number.isNaN(parsed) ? 0 : parsed);
-                                                    }}
-                                                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                                                />
+                                                    <ValidatedNumberInput
+                                                        min="0"
+                                                        max="100"
+                                                        value={item.discount || 0}
+                                                        onValueChange={(value) => {
+                                                            const parsed = parseFloat(value);
+                                                            updateItemRow(index, 'discount', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                                                        }}
+                                                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                                                    />
                                                 </div>
                                                 <div className="col-span-2 flex items-center justify-end font-bold text-slate-600 text-sm">
                                                     {((item.quantity * item.unitPrice) * (1 - (item.discount || 0) / 100)).toFixed(2)}
@@ -461,7 +463,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                     ))}
                                     {(!formData.items || formData.items.length === 0) && (
                                         <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl">
-                                            No items yet. Add a line to start.
+                                            {t('invoices.noItems')}
                                         </div>
                                     )}
                                 </div>
@@ -471,44 +473,44 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                             <div className="flex flex-col md:flex-row gap-8 justify-end border-t border-slate-100 pt-6">
                                 <div className="w-full md:w-1/3 space-y-3">
                                     <div className="flex justify-between">
-                                        <span className="text-sm font-bold text-slate-500">Subtotal</span>
+                                        <span className="text-sm font-bold text-slate-500">{t('invoices.subtotal')}</span>
                                         <span className="text-sm font-bold text-slate-700">{subtotal.toFixed(2)} {currency}</span>
                                     </div>
                                     {Object.entries(taxGroups).map(([rate, amount]) => (
                                         <div key={rate} className="flex justify-between text-xs">
-                                            <span className="font-semibold text-slate-500">VAT {rate}%</span>
+                                            <span className="font-semibold text-slate-500">{t('invoices.vat')} {rate}%</span>
                                             <span className="font-semibold text-slate-700">{amount.toFixed(2)} {currency}</span>
                                         </div>
                                     ))}
                                     <div className="flex justify-between pt-3 border-t border-slate-200">
-                                        <span className="text-lg font-black text-slate-800">Total</span>
+                                        <span className="text-lg font-black text-slate-800">{t('invoices.total')}</span>
                                         <span className="text-lg font-black text-praetor">{total.toFixed(2)} {currency}</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="font-bold text-slate-500">Amount Paid</span>
+                                        <span className="font-bold text-slate-500">{t('invoices.amountPaid')}</span>
                                         <span className="font-bold text-emerald-600">{formData.amountPaid?.toFixed(2)} {currency}</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="font-bold text-slate-500">Balance Due</span>
+                                        <span className="font-bold text-slate-500">{t('invoices.balanceDue')}</span>
                                         <span className="font-bold text-red-500">{(total - (formData.amountPaid || 0)).toFixed(2)} {currency}</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="pt-6">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.notes')}</label>
                                 <textarea
                                     rows={2}
                                     value={formData.notes || ''}
                                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                     className="w-full text-sm px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none"
-                                    placeholder="Payment instructions, thank you note, etc..."
+                                    placeholder={t('expenses.notesPlaceholder')}
                                 />
                             </div>
 
                             <div className="flex justify-end gap-3 pt-4">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancel</button>
-                                <button type="submit" className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200">Save Invoice</button>
+                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">{t('common.buttons.cancel')}</button>
+                                <button type="submit" className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200">{t('common.buttons.save')}</button>
                             </div>
                         </form>
                     </div>
@@ -521,11 +523,11 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
                             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
                         </div>
-                        <h3 className="text-lg font-black text-slate-800">Delete Invoice?</h3>
-                        <p className="text-sm text-slate-500">Are you sure you want to delete invoice <b>{invoiceToDelete?.invoiceNumber}</b>? This cannot be undone.</p>
+                        <h3 className="text-lg font-black text-slate-800">{t('invoices.deleteConfirm')}?</h3>
+                        <p className="text-sm text-slate-500">{t('invoices.deleteConfirm')} <b>{invoiceToDelete?.invoiceNumber}</b>? {t('common.messages.unsavedChanges')}</p>
                         <div className="flex gap-3 pt-2">
-                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancel</button>
-                            <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Delete</button>
+                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">{t('common.buttons.cancel')}</button>
+                            <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">{t('common.buttons.delete')}</button>
                         </div>
                     </div>
                 </div>
@@ -534,18 +536,17 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-800">Invoices</h2>
-                    <p className="text-slate-500 text-sm">Manage and track customer invoices</p>
+                    <h2 className="text-2xl font-black text-slate-800">{t('invoices.title')}</h2>
+                    <p className="text-slate-500 text-sm">{t('invoices.manageAndTrack')}</p>
                 </div>
             </div>
 
-            {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="md:col-span-2 relative">
                     <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
                         type="text"
-                        placeholder="Search invoices..."
+                        placeholder={t('invoices.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
@@ -553,19 +554,19 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                 </div>
                 <div>
                     <CustomSelect
-                        options={[{ id: 'all', name: 'All Clients' }, ...activeClients.map(c => ({ id: c.id, name: c.name }))]}
+                        options={[{ id: 'all', name: t('invoices.allClients') }, ...activeClients.map(c => ({ id: c.id, name: c.name }))]}
                         value={filterClientId}
                         onChange={setFilterClientId}
-                        placeholder="Filter by Client"
+                        placeholder={t('invoices.filterClient')}
                         searchable={true}
                     />
                 </div>
                 <div>
                     <CustomSelect
-                        options={[{ id: 'all', name: 'All Statuses' }, ...INVOICE_STATUS_OPTIONS]}
+                        options={[{ id: 'all', name: t('invoices.statusAll') }, ...statusOptions]}
                         value={filterStatus}
                         onChange={setFilterStatus}
-                        placeholder="Filter by Status"
+                        placeholder={t('invoices.filterStatus')}
                         searchable={false}
                     />
                 </div>
@@ -577,14 +578,14 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                         className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="fa-solid fa-rotate-left"></i>
-                        Clear filters
+                        {t('common.labels.clearFilters')}
                     </button>
                 </div>
             </div>
 
             {/* Table */}
             <StandardTable
-                title="All Invoices"
+                title={t('invoices.allInvoices')}
                 totalCount={filteredInvoices.length}
                 containerClassName="overflow-visible"
                 headerAction={
@@ -592,13 +593,13 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                         onClick={openAddModal}
                         className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
                     >
-                        <i className="fa-solid fa-plus"></i> Create Invoice
+                        <i className="fa-solid fa-plus"></i> {t('invoices.addInvoice')}
                     </button>
                 }
                 footer={
                     <>
                         <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold text-slate-500">Rows:</span>
+                            <span className="text-xs font-bold text-slate-500">{t('common.pagination.rowsPerPage')}:</span>
                             <CustomSelect
                                 options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
                                 value={rowsPerPage.toString()}
@@ -608,7 +609,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                 buttonClassName="text-xs py-1"
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                Showing {paginatedInvoices.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredInvoices.length)} of {filteredInvoices.length}
+                                {t('common.pagination.showing', { start: paginatedInvoices.length > 0 ? startIndex + 1 : 0, end: Math.min(startIndex + rowsPerPage, filteredInvoices.length), total: filteredInvoices.length })}
                             </span>
                         </div>
                         <div className="flex gap-2">
@@ -628,14 +629,14 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Number</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Due Date</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Balance</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('invoices.invoiceNumber')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('invoices.client')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('common.labels.date')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('invoices.dueDate')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('common.labels.amount')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('invoices.balance')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('invoices.status')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('common.common.more')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -658,7 +659,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                                                     invoice.status === 'cancelled' ? 'bg-slate-100 text-slate-500' :
                                                         'bg-amber-100 text-amber-700'
                                             }`}>
-                                            {invoice.status}
+                                            {statusOptions.find(opt => opt.id === invoice.status)?.name || invoice.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -681,7 +682,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ invoices, clients, products
                         {paginatedInvoices.length === 0 && (
                             <tr>
                                 <td colSpan={8} className="p-12 text-center text-slate-400 text-sm font-bold">
-                                    No invoices found.
+                                    {t('common.emptyStates.noResults')}
                                 </td>
                             </tr>
                         )}

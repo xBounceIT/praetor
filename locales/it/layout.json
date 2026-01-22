@@ -29,7 +29,9 @@
     "expenses": "Spese",
     "financialReports": "Report Finanziari",
     "authentication": "Autenticazione",
-    "general": "Impostazioni Generali"
+    "general": "Impostazioni Generali",
+    "suppliers": "Fornitori",
+    "supplierQuotes": "Preventivi Fornitori"
   },
   "menu": {
     "settings": "Impostazioni",
@@ -51,5 +53,15 @@
   },
   "workspace": "Area di Lavoro",
   "module": "Modulo",
-  "modules": "Moduli"
+  "modules_label": "Moduli",
+  "notFound": "Pagina Non Trovata",
+  "titles": {
+    "authSettings": "Impostazioni Autenticazione",
+    "generalAdmin": "Amministrazione Generale",
+    "projects": "Progetti",
+    "tasks": "Attività",
+    "specialBids": "Special Bid",
+    "suppliers": "Fornitori",
+    "supplierQuotes": "Preventivi Fornitore"
+  }
 }

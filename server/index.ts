@@ -120,6 +120,14 @@ try {
     } catch (err) {
       console.error('Failed to run default clients data update:', err);
     }
+
+    // Run settings language migration
+    try {
+      const { migrate: addLanguageToSettings } = await import('./db/add_language_to_settings.ts');
+      await addLanguageToSettings();
+    } catch (err) {
+      console.error('Failed to run settings language migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

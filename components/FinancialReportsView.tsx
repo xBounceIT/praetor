@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Invoice, Expense, Payment } from '../types';
 import CustomSelect from './CustomSelect';
 import Calendar from './Calendar';
@@ -11,24 +12,25 @@ interface FinancialReportsViewProps {
 }
 
 const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, expenses, payments, currency }) => {
+    const { t } = useTranslation('finances');
     const [timePeriod, setTimePeriod] = useState<string>('6'); // Default to 6 months
     const [customRange, setCustomRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [isRangeModalOpen, setIsRangeModalOpen] = useState(false);
 
-    const timeFrameOptions = [
-        { id: '3', name: 'Last 3 Months' },
-        { id: '6', name: 'Last 6 Months' },
-        { id: '12', name: 'Last 12 Months' },
-        { id: 'custom', name: 'Custom Range' },
-    ];
+    const timeFrameOptions = useMemo(() => [
+        { id: '3', name: t('reports.last3Months') },
+        { id: '6', name: t('reports.last6Months') },
+        { id: '12', name: t('reports.last12Months') },
+        { id: 'custom', name: t('reports.customRange') },
+    ], [t]);
 
     // Compute the display value for the selected time period
     const displayValue = useMemo(() => {
         if (timePeriod === 'custom' && customRange.start && customRange.end) {
             return `${customRange.start} - ${customRange.end}`;
         }
-        return timeFrameOptions.find(opt => opt.id === timePeriod)?.name || 'Last 6 Months';
-    }, [timePeriod, customRange]);
+        return timeFrameOptions.find(opt => opt.id === timePeriod)?.name || t('reports.last6Months');
+    }, [timePeriod, customRange, timeFrameOptions, t]);
 
     const resolveDateRange = useMemo(() => {
         if (timePeriod === 'custom' && customRange.start && customRange.end) {
@@ -154,8 +156,8 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-end gap-4">
                 <div className="flex-1 min-w-0">
-                    <h2 className="text-2xl font-black text-slate-800">Financial Reports</h2>
-                    <p className="text-slate-500 text-sm">Overview of your business performance</p>
+                    <h2 className="text-2xl font-black text-slate-800">{t('reports.title')}</h2>
+                    <p className="text-slate-500 text-sm">{t('reports.subtitle')}</p>
                 </div>
                 <div className="w-full md:w-fit flex-shrink-0 flex flex-col md:flex-row md:items-center gap-2">
                     <CustomSelect
@@ -172,7 +174,7 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                         className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="fa-solid fa-rotate-left"></i>
-                        Clear filters
+                        {t('common.labels.clearFilters')}
                     </button>
                 </div>
             </div>
@@ -180,25 +182,25 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Total Income</div>
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t('reports.income')}</div>
                     <div className="text-3xl font-black text-emerald-600 truncate" title={`${stats.totalIncome.toFixed(2)} ${currency}`}>
                         {stats.totalIncome.toLocaleString()} <span className="text-lg opacity-60 text-emerald-400">{currency}</span>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Total Expenses</div>
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t('reports.expenses')}</div>
                     <div className="text-3xl font-black text-red-500 truncate" title={`${stats.totalExpenses.toFixed(2)} ${currency}`}>
                         {stats.totalExpenses.toLocaleString()} <span className="text-lg opacity-60 text-red-300">{currency}</span>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Net Profit</div>
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t('reports.netProfit')}</div>
                     <div className={`text-3xl font-black truncate ${stats.netProfit >= 0 ? 'text-praetor' : 'text-red-600'}`} title={`${stats.netProfit.toFixed(2)} ${currency}`}>
                         {stats.netProfit.toLocaleString()} <span className="text-lg opacity-60">{currency}</span>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Accounts Receivable</div>
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t('reports.accountsReceivable')}</div>
                     <div className="text-3xl font-black text-amber-500 truncate" title={`${stats.accountsReceivable.toFixed(2)} ${currency}`}>
                         {stats.accountsReceivable.toLocaleString()} <span className="text-lg opacity-60 text-amber-300">{currency}</span>
                     </div>
@@ -208,12 +210,12 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Monthly Performance Chart (Visual Representation using CSS bars for simplicity) */}
                 <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-black text-slate-800 mb-6">Cash Flow</h3>
+                    <h3 className="text-lg font-black text-slate-800 mb-6">{t('reports.cashFlow')}</h3>
                     <div className="flex items-end justify-between h-64 gap-4 custom-horizontal-scrollbar" style={{ paddingBottom: '8px' }}>
                         {/* Added horizontal scroll for many months */}
                         {stats.monthlyData.length === 0 ? (
                             <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm italic">
-                                No data for this period
+                                {t('reports.noData')}
                             </div>
                         ) : (
                             stats.monthlyData.map((data, index) => {
@@ -251,17 +253,17 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                     </div>
                     <div className="flex justify-center gap-6 mt-6">
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                            <span className="w-3 h-3 rounded-full bg-emerald-400"></span> Income
+                            <span className="w-3 h-3 rounded-full bg-emerald-400"></span> {t('reports.income')}
                         </div>
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                            <span className="w-3 h-3 rounded-full bg-red-400"></span> Expenses
+                            <span className="w-3 h-3 rounded-full bg-red-400"></span> {t('reports.expenses')}
                         </div>
                     </div>
                 </div>
 
                 {/* Expenses Breakdown */}
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-black text-slate-800 mb-6">Expenses Breakdown</h3>
+                    <h3 className="text-lg font-black text-slate-800 mb-6">{t('reports.expenseBreakdown')}</h3>
                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                         {Object.entries(stats.expenseCategories).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([category, amount]) => {
                             const numAmount = amount as number;
@@ -282,7 +284,7 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                             );
                         })}
                         {Object.keys(stats.expenseCategories).length === 0 && (
-                            <div className="text-slate-400 text-sm italic text-center py-8">No expenses recorded</div>
+                            <div className="text-slate-400 text-sm italic text-center py-8">{t('reports.noData')}</div>
                         )}
                     </div>
                 </div>
@@ -295,9 +297,9 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                         <div className="p-6 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <i className="fa-solid fa-calendar-range text-praetor"></i>
-                                Select Date Range
+                                {t('reports.selectRange')}
                             </h3>
-                            <p className="text-xs text-slate-500 mt-1">Pick a start and end date</p>
+                            <p className="text-xs text-slate-500 mt-1">{t('reports.pickRange')}</p>
                         </div>
                         <div className="p-6 flex flex-col items-center">
                             <Calendar
@@ -308,11 +310,11 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                             />
                             <div className="mt-4 flex gap-4 w-full text-center text-sm">
                                 <div className="flex-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                    <div className="text-xs font-bold text-slate-400 uppercase">Start</div>
+                                    <div className="text-xs font-bold text-slate-400 uppercase">{t('reports.start')}</div>
                                     <div className="font-bold text-slate-700">{customRange.start || '-'}</div>
                                 </div>
                                 <div className="flex-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                    <div className="text-xs font-bold text-slate-400 uppercase">End</div>
+                                    <div className="text-xs font-bold text-slate-400 uppercase">{t('reports.end')}</div>
                                     <div className="font-bold text-slate-700">{customRange.end || '-'}</div>
                                 </div>
                             </div>
@@ -322,14 +324,14 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ invoices, e
                                 onClick={() => setIsRangeModalOpen(false)}
                                 className="flex-1 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-xl transition-colors"
                             >
-                                Cancel
+                                {t('common.buttons.cancel')}
                             </button>
                             <button
                                 onClick={handleRangeConfirm}
                                 disabled={!customRange.start || !customRange.end}
                                 className="flex-1 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Apply Range
+                                {t('reports.applyRange')}
                             </button>
                         </div>
                     </div>

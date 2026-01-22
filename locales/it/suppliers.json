@@ -40,6 +40,20 @@
     "statusReceived": "Ricevuto",
     "statusApproved": "Approvato",
     "statusRejected": "Rifiutato",
+    "statusPending": "In attesa",
+    "paymentTermsOptions": {
+      "immediate": "Immediato",
+      "15gg": "15 giorni",
+      "21gg": "21 giorni",
+      "30gg": "30 giorni",
+      "45gg": "45 giorni",
+      "60gg": "60 giorni",
+      "90gg": "90 giorni",
+      "120gg": "120 giorni",
+      "180gg": "180 giorni",
+      "240gg": "240 giorni",
+      "365gg": "365 giorni"
+    },
     "noQuotes": "Nessun preventivo fornitore trovato",
     "createFirst": "Crea il tuo primo preventivo fornitore",
     "quoteSaved": "Preventivo salvato con successo",
@@ -47,5 +61,21 @@
     "deleteConfirm": "Sei sicuro di voler eliminare questo preventivo?",
     "expiresIn": "Scade tra {{days}} giorni",
     "expiredOn": "Scaduto il {{date}}"
+  },
+  "common": {
+    "active": "Attivi",
+    "disabled": "Disabilitati",
+    "rowsPerPage": "Righe per pagina:",
+    "showing": "Visualizzati",
+    "of": "di",
+    "total": "TOTALE",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "update": "Aggiorna",
+    "delete": "Elimina",
+    "yesDelete": "Sì, Elimina",
+    "actions": "Azioni",
+    "search": "Cerca...",
+    "clearFilters": "Cancella filtri"
   }
 }

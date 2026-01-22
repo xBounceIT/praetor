@@ -14,7 +14,7 @@ export interface UserSettings {
 
 const Settings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
-  
+
   const [settings, setSettings] = useState<UserSettings>({
     fullName: '',
     email: '',
@@ -46,8 +46,8 @@ const Settings: React.FC = () => {
     const loadSettings = async () => {
       try {
         const data = await api.settings.get();
-        const profile = { 
-          fullName: data.fullName, 
+        const profile = {
+          fullName: data.fullName,
           email: data.email,
           language: data.language || 'en'
         };
@@ -82,7 +82,7 @@ const Settings: React.FC = () => {
   const handleLanguageChange = async (language: 'en' | 'it') => {
     i18n.changeLanguage(language);
     setSettings({ ...settings, language });
-    await handleSave({ preventDefault: () => {} } as React.FormEvent);
+    await handleSave({ preventDefault: () => { } } as React.FormEvent);
   };
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
@@ -91,12 +91,12 @@ const Settings: React.FC = () => {
     setPasswordSuccess(false);
 
     if (newPassword !== confirmPassword) {
-      setPasswordError('New passwords do not match');
+      setPasswordError(t('password.passwordsDoNotMatch'));
       return;
     }
 
     if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters long');
+      setPasswordError(t('password.passwordMinLength'));
       return;
     }
 
@@ -121,7 +121,7 @@ const Settings: React.FC = () => {
       <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
         <div className="text-center">
           <i className="fa-solid fa-circle-notch fa-spin text-praetor text-3xl mb-3"></i>
-          <p className="text-slate-500 font-medium">{t('states.loading')}</p>
+          <p className="text-slate-500 font-medium">{t('common:states.loading')}</p>
         </div>
       </div>
     );
@@ -131,22 +131,21 @@ const Settings: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">{t('settings.title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{t('settings.subtitle')}</p>
+          <h2 className="text-2xl font-bold text-slate-800">{t('title')}</h2>
+          <p className="text-sm text-slate-500 mt-1">{t('subtitle')}</p>
         </div>
       </div>
-
 
       <div className="space-y-8">
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
             <i className="fa-solid fa-user text-praetor"></i>
-            <h3 className="font-bold text-slate-800">User Profile</h3>
+            <h3 className="font-bold text-slate-800">{t('userProfile.title')}</h3>
           </div>
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Full Name</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('userProfile.fullName')}</label>
                 <input
                   type="text"
                   value={settings.fullName}
@@ -155,7 +154,7 @@ const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('userProfile.email')}</label>
                 <input
                   type="email"
                   value={settings.email}
@@ -173,15 +172,15 @@ const Settings: React.FC = () => {
                 {isSaving ? (
                   <>
                     <i className="fa-solid fa-circle-notch fa-spin"></i>
-                    Saving...
+                    {t('general.saving')}
                   </>
                 ) : isSaved ? (
                   <>
-                    <i className="fa-solid fa-check"></i> Changes Saved
+                    <i className="fa-solid fa-check"></i> {t('general.changesSaved')}
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-save"></i> Save Changes
+                    <i className="fa-solid fa-save"></i> {t('general.saveChanges')}
                   </>
                 )}
               </button>
@@ -192,7 +191,7 @@ const Settings: React.FC = () => {
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
             <i className="fa-solid fa-palette text-praetor"></i>
-            <h3 className="font-bold text-slate-800">Appearance</h3>
+            <h3 className="font-bold text-slate-800">{t('appearance.title')}</h3>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -204,9 +203,9 @@ const Settings: React.FC = () => {
                   {currentTheme === 'default' && <i className="fa-solid fa-check text-xs"></i>}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">Default</h4>
+                  <h4 className="font-bold text-slate-800 mb-1">{t('appearance.default.name')}</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    The classic Praetor experience with slate blue branding. Professional and distinct.
+                    {t('appearance.default.description')}
                   </p>
                 </div>
               </button>
@@ -219,9 +218,9 @@ const Settings: React.FC = () => {
                   {currentTheme === 'tempo' && <i className="fa-solid fa-check text-xs"></i>}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">Tempo</h4>
+                  <h4 className="font-bold text-slate-800 mb-1">{t('appearance.tempo.name')}</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    A vibrant indigo theme. Modern, energetic, and clean.
+                    {t('appearance.tempo.description')}
                   </p>
                 </div>
               </button>
@@ -232,7 +231,7 @@ const Settings: React.FC = () => {
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
             <i className="fa-solid fa-language text-praetor"></i>
-            <h3 className="font-bold text-slate-800">{t('settings.language.title')}</h3>
+            <h3 className="font-bold text-slate-800">{t('language.title')}</h3>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -244,9 +243,9 @@ const Settings: React.FC = () => {
                   {settings.language === 'en' && <i className="fa-solid fa-check text-xs"></i>}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('settings.language.english')}</h4>
+                  <h4 className="font-bold text-slate-800 mb-1">{t('language.english')}</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    {t('settings.language.englishDesc')}
+                    {t('language.englishDesc')}
                   </p>
                 </div>
               </button>
@@ -259,9 +258,9 @@ const Settings: React.FC = () => {
                   {settings.language === 'it' && <i className="fa-solid fa-check text-xs"></i>}
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-1">{t('settings.language.italian')}</h4>
+                  <h4 className="font-bold text-slate-800 mb-1">{t('language.italian')}</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    {t('settings.language.italianDesc')}
+                    {t('language.italianDesc')}
                   </p>
                 </div>
               </button>
@@ -272,7 +271,7 @@ const Settings: React.FC = () => {
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
             <i className="fa-solid fa-lock text-praetor"></i>
-            <h3 className="font-bold text-slate-800">Password Settings</h3>
+            <h3 className="font-bold text-slate-800">{t('password.title')}</h3>
           </div>
           <div className="p-6">
             {passwordError && (
@@ -284,7 +283,7 @@ const Settings: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Current Password</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('password.currentPassword')}</label>
                 <input
                   type="password"
                   value={currentPassword}
@@ -296,7 +295,7 @@ const Settings: React.FC = () => {
               </div>
               <div className="hidden md:block"></div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">New Password</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('password.newPassword')}</label>
                 <input
                   type="password"
                   value={newPassword}
@@ -307,7 +306,7 @@ const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Confirm New Password</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('password.confirmNewPassword')}</label>
                 <input
                   type="password"
                   value={confirmPassword}
@@ -328,15 +327,15 @@ const Settings: React.FC = () => {
                 {isSavingPassword ? (
                   <>
                     <i className="fa-solid fa-circle-notch fa-spin"></i>
-                    Updating...
+                    {t('password.updating')}
                   </>
                 ) : passwordSuccess ? (
                   <>
-                    <i className="fa-solid fa-check"></i> Password Updated
+                    <i className="fa-solid fa-check"></i> {t('password.passwordUpdated')}
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-key"></i> Update Password
+                    <i className="fa-solid fa-key"></i> {t('password.updatePassword')}
                   </>
                 )}
               </button>

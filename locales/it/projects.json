@@ -73,6 +73,15 @@
     "taskNamePlaceholder": "es. Design UI",
     "taskDescriptionPlaceholder": "Descrivi l'attività...",
     "assignUsers": "Assegna Utenti",
-    "manageMembers": "Gestisci Membri"
+    "manageMembers": "Gestisci Membri",
+    "deleteTaskTitle": "Elimina Attività?",
+    "deleteConfirmDesc": "Sei sicuro di voler eliminare <span class=\"font-bold text-slate-800\">{{name}}</span>? Questa azione non può essere annullata.",
+    "yesDelete": "Sì, Elimina",
+    "searchUsers": "Cerca utenti...",
+    "taskHeader": "Attività: {{name}}",
+    "noUsersFound": "Nessun utente trovato.",
+    "inheritedFromDisabledProject": "Ereditato da Progetto disabilitato: {{projectName}}",
+    "createNewTask": "Crea Nuova Attività",
+    "tasksDirectoryWithCount": "Directory Attività ({{count}})"
   }
 }

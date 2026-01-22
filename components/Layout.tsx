@@ -43,7 +43,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, currentUser, onLogout, isNotFound }) => {
-  const { t } = useTranslation('layout');
+  const { t, i18n } = useTranslation(['layout', 'hr']);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -151,7 +151,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
         {!isCollapsed && (
           <div className="px-6 mb-4 animate-in fade-in duration-300 hidden md:block">
             <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">
-              {currentUser.role} {t('workspace')}
+              {t(`roles.${currentUser.role}`, { ns: 'hr' })} {t('workspace')}
             </div>
           </div>
         )}
@@ -212,7 +212,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
 
             {isCollapsed && (
               <div className="absolute left-full ml-4 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700 top-1/2 -translate-y-1/2">
-                {t('modules')}
+                {t('modules_label')}
                 <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-800 border-l border-b border-slate-700 rotate-45"></div>
               </div>
             )}
@@ -362,14 +362,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             <>
               <NavItem
                 icon="fa-industry"
-                label={t('modules.suppliers')}
+                label={t('routes.suppliers')}
                 active={activeView === 'suppliers/manage'}
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('suppliers/manage'); setIsMobileMenuOpen(false); }}
               />
               <NavItem
                 icon="fa-file-invoice"
-                label={t('routes.quotes')}
+                label={t('routes.supplierQuotes')}
                 active={activeView === 'suppliers/quotes'}
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('suppliers/quotes'); setIsMobileMenuOpen(false); }}
@@ -410,19 +410,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-slate-800 capitalize flex items-center gap-3">
             <span className="md:hidden w-2 h-6 bg-praetor rounded-full"></span>
-            {isNotFound ? 'Page Not Found' :
-              activeView === 'configuration/authentication' ? 'Authentication Settings' :
-                activeView === 'configuration/general' ? 'General Administration' :
-                  activeView === 'projects/manage' ? 'Projects' :
-                    activeView === 'projects/tasks' ? 'Tasks' :
-                      activeView === 'crm/special-bids' ? 'Special Bids' :
-                      activeView === 'suppliers/manage' ? 'Suppliers' :
-                        activeView === 'suppliers/quotes' ? 'Supplier Quotes' :
-                      activeView.split('/').pop()?.replace('-', ' ') || activeView}
+            {isNotFound ? t('notFound') :
+              activeView === 'configuration/authentication' ? t('titles.authSettings') :
+                activeView === 'configuration/general' ? t('titles.generalAdmin') :
+                  activeView === 'projects/manage' ? t('titles.projects') :
+                    activeView === 'projects/tasks' ? t('titles.tasks') :
+                      activeView === 'crm/special-bids' ? t('titles.specialBids') :
+                        activeView === 'suppliers/manage' ? t('titles.suppliers') :
+                          activeView === 'suppliers/quotes' ? t('titles.supplierQuotes') :
+                            t(`routes.${activeView.split('/').pop()?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`, { defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView })}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {new Date().toLocaleDateString(i18n.language, { weekday: 'long', month: 'long', day: 'numeric' })}
             </span>
 
             <div className="relative" ref={menuRef}>
@@ -434,7 +434,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                   {currentUser.avatarInitials}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-0.5">{currentUser.role}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-0.5">{t(`roles.${currentUser.role}`, { ns: 'hr' })}</p>
                   <p className="text-xs font-bold text-slate-700 leading-none">{currentUser.name}</p>
                 </div>
                 <i className={`fa-solid fa-chevron-down text-[10px] text-slate-300 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}></i>
@@ -444,7 +444,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-30 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                   <div className="px-4 py-3 border-b border-slate-100 mb-1 sm:hidden">
                     <p className="text-sm font-bold text-slate-800">{currentUser.name}</p>
-                    <p className="text-xs text-slate-500 capitalize">{currentUser.role}</p>
+                    <p className="text-xs text-slate-500 capitalize">{t(`roles.${currentUser.role}`, { ns: 'hr' })}</p>
                   </div>
 
                   {(currentUser.role === 'admin' || currentUser.role === 'manager') && (

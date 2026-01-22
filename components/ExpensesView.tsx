@@ -1,17 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Expense } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
-
-const EXPENSE_CATEGORY_OPTIONS = [
-    { id: 'office_supplies', name: 'Office Supplies' },
-    { id: 'travel', name: 'Travel' },
-    { id: 'software', name: 'Software' },
-    { id: 'marketing', name: 'Marketing' },
-    { id: 'utilities', name: 'Utilities' },
-    { id: 'other', name: 'Other' },
-];
 
 interface ExpensesViewProps {
     expenses: Expense[];
@@ -22,11 +14,21 @@ interface ExpensesViewProps {
 }
 
 const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onUpdateExpense, onDeleteExpense, currency }) => {
+    const { t } = useTranslation('finances');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const categoryOptions = useMemo(() => [
+        { id: 'office_supplies', name: t('expenses.categories.officeSupplies') },
+        { id: 'travel', name: t('expenses.categories.travel') },
+        { id: 'software', name: t('expenses.categories.software') },
+        { id: 'marketing', name: t('expenses.categories.marketing') },
+        { id: 'utilities', name: t('expenses.categories.utilities') },
+        { id: 'other', name: t('expenses.categories.other') },
+    ], [t]);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -93,7 +95,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
         e.preventDefault();
         const newErrors: Record<string, string> = {};
 
-        if (!formData.description) newErrors.description = 'Description is required';
+        if (!formData.description) newErrors.description = t('expenses.description') + ' is required';
         if (!formData.amount || formData.amount <= 0) newErrors.amount = 'Valid amount is required';
         if (!formData.expenseDate) newErrors.expenseDate = 'Date is required';
 
@@ -135,7 +137,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
                                     <i className={`fa-solid ${editingExpense ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
                                 </div>
-                                {editingExpense ? 'Edit Expense' : 'Record Expense'}
+                                {editingExpense ? t('expenses.editExpense') : t('expenses.recordExpense')}
                             </h3>
                             <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
                                 <i className="fa-solid fa-xmark text-lg"></i>
@@ -144,11 +146,11 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
 
                         <form onSubmit={handleSubmit} className="p-8 space-y-6">
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Description</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.description')}</label>
                                 <input
                                     type="text"
                                     required
-                                    placeholder="What was this expense for?"
+                                    placeholder={t('expenses.descriptionPlaceholder')}
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
@@ -158,16 +160,16 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Category</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.category')}</label>
                                     <CustomSelect
-                                        options={EXPENSE_CATEGORY_OPTIONS}
+                                        options={categoryOptions}
                                         value={formData.category || 'other'}
                                         onChange={(val) => setFormData({ ...formData, category: val as any })}
                                         searchable={false}
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Amount ({currency})</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.amount')} ({currency})</label>
                                     <ValidatedNumberInput
                                         step="0.01"
                                         required
@@ -184,7 +186,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Date</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.expenseDate')}</label>
                                     <input
                                         type="date"
                                         required
@@ -195,10 +197,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                                     {errors.expenseDate && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.expenseDate}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 ml-1">Vendor (Optional)</label>
+                                    <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.vendor')} ({t('common.common.optional')})</label>
                                     <input
                                         type="text"
-                                        placeholder="Samsung, Amazon, etc."
+                                        placeholder={t('expenses.vendorPlaceholder')}
                                         value={formData.vendor || ''}
                                         onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
                                         className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
@@ -207,10 +209,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Receipt Reference / Link</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.receiptReference')}</label>
                                 <input
                                     type="text"
-                                    placeholder="Invoice # or URL to receipt"
+                                    placeholder={t('expenses.receiptPlaceholder')}
                                     value={formData.receiptReference || ''}
                                     onChange={(e) => setFormData({ ...formData, receiptReference: e.target.value })}
                                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
@@ -218,19 +220,19 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.notes')}</label>
                                 <textarea
                                     rows={3}
                                     value={formData.notes || ''}
                                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    placeholder="Additional details..."
+                                    placeholder={t('expenses.notesPlaceholder')}
                                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none resize-none"
                                 />
                             </div>
 
                             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancel</button>
-                                <button type="submit" className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200">Save Expense</button>
+                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">{t('common.buttons.cancel')}</button>
+                                <button type="submit" className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200">{t('common.buttons.save')}</button>
                             </div>
                         </form>
                     </div>
@@ -244,11 +246,11 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
                             <i className="fa-solid fa-triangle-exclamation text-xl"></i>
                         </div>
-                        <h3 className="text-lg font-black text-slate-800">Delete Expense?</h3>
-                        <p className="text-sm text-slate-500">Are you sure you want to delete this expense record? This cannot be undone.</p>
+                        <h3 className="text-lg font-black text-slate-800">{t('expenses.expenseDeleted')}?</h3>
+                        <p className="text-sm text-slate-500">{t('expenses.deleteConfirm')}</p>
                         <div className="flex gap-3 pt-2">
-                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancel</button>
-                            <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Delete</button>
+                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">{t('common.buttons.cancel')}</button>
+                            <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">{t('common.buttons.delete')}</button>
                         </div>
                     </div>
                 </div>
@@ -257,8 +259,8 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-800">Expenses</h2>
-                    <p className="text-slate-500 text-sm">Track company spending</p>
+                    <h2 className="text-2xl font-black text-slate-800">{t('expenses.title')}</h2>
+                    <p className="text-slate-500 text-sm">{t('expenses.subtitle')}</p>
                 </div>
             </div>
 
@@ -268,7 +270,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                     <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
                         type="text"
-                        placeholder="Search expenses by description or vendor..."
+                        placeholder={t('expenses.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
@@ -276,10 +278,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                 </div>
                 <div>
                     <CustomSelect
-                        options={[{ id: 'all', name: 'All Categories' }, ...EXPENSE_CATEGORY_OPTIONS]}
+                        options={[{ id: 'all', name: t('expenses.allCategories') }, ...categoryOptions]}
                         value={filterCategory}
                         onChange={setFilterCategory}
-                        placeholder="Filter by Category"
+                        placeholder={t('expenses.filterCategory')}
                         searchable={false}
                     />
                 </div>
@@ -291,14 +293,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                         className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="fa-solid fa-rotate-left"></i>
-                        Clear filters
+                        {t('common.labels.clearFilters')}
                     </button>
                 </div>
             </div>
 
             {/* Table */}
             <StandardTable
-                title="All Expenses"
+                title={t('expenses.title')}
                 totalCount={filteredExpenses.length}
                 containerClassName="overflow-visible"
                 headerAction={
@@ -306,13 +308,13 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                         onClick={openAddModal}
                         className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
                     >
-                        <i className="fa-solid fa-plus"></i> Record Expense
+                        <i className="fa-solid fa-plus"></i> {t('expenses.recordExpense')}
                     </button>
                 }
                 footer={
                     <>
                         <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold text-slate-500">Rows:</span>
+                            <span className="text-xs font-bold text-slate-500">{t('common.labels.rowsPerPage')}:</span>
                             <CustomSelect
                                 options={[{ id: '10', name: '10' }, { id: '20', name: '20' }, { id: '50', name: '50' }]}
                                 value={rowsPerPage.toString()}
@@ -322,7 +324,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                                 buttonClassName="text-xs py-1"
                             />
                             <span className="text-xs font-bold text-slate-400 ml-2">
-                                Showing {paginatedExpenses.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + rowsPerPage, filteredExpenses.length)} of {filteredExpenses.length}
+                                {t('common.pagination.showing', { start: paginatedExpenses.length > 0 ? startIndex + 1 : 0, end: Math.min(startIndex + rowsPerPage, filteredExpenses.length), total: filteredExpenses.length })}
                             </span>
                         </div>
                         <div className="flex gap-2">
@@ -342,12 +344,12 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Description</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendor</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expenses.expenseDate')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expenses.description')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expenses.category')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expenses.vendor')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expenses.amount')}</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('common.common.more')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -357,7 +359,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                                 <td className="px-6 py-4 font-bold text-slate-800">{expense.description}</td>
                                 <td className="px-6 py-4">
                                     <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold capitalize">
-                                        {expense.category.replace('_', ' ')}
+                                        {categoryOptions.find(opt => opt.id === expense.category)?.name || expense.category}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-600">{expense.vendor || '-'}</td>
@@ -381,7 +383,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onU
                         {paginatedExpenses.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="p-12 text-center text-slate-400 text-sm font-bold">
-                                    No expenses found.
+                                    {t('expenses.noExpenses')}
                                 </td>
                             </tr>
                         )}

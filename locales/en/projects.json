@@ -73,6 +73,15 @@
     "taskNamePlaceholder": "e.g. UI Design",
     "taskDescriptionPlaceholder": "Describe the task...",
     "assignUsers": "Assign Users",
-    "manageMembers": "Manage Members"
+    "manageMembers": "Manage Members",
+    "deleteTaskTitle": "Delete Task?",
+    "deleteConfirmDesc": "Are you sure you want to delete <span class=\"font-bold text-slate-800\">{{name}}</span>? This action cannot be undone.",
+    "yesDelete": "Yes, Delete",
+    "searchUsers": "Search users...",
+    "taskHeader": "Task: {{name}}",
+    "noUsersFound": "No users found.",
+    "inheritedFromDisabledProject": "Inherited from disabled Project: {{projectName}}",
+    "createNewTask": "Create New Task",
+    "tasksDirectoryWithCount": "Tasks Directory ({{count}})"
   }
 }

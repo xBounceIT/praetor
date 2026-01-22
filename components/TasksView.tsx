@@ -18,7 +18,7 @@ interface TasksViewProps {
 }
 
 const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, users, onAddTask, onUpdateTask, onDeleteTask }) => {
-    const { t } = useTranslation(['projects', 'common']);
+  const { t } = useTranslation(['projects', 'common']);
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
@@ -152,10 +152,9 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                 <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-800">Delete Task?</h3>
+                <h3 className="text-lg font-black text-slate-800">{t('tasks.deleteTaskTitle')}</h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  Are you sure you want to delete <span className="font-bold text-slate-800">{editingTask?.name}</span>?
-                  This action cannot be undone.
+                  <span dangerouslySetInnerHTML={{ __html: t('tasks.deleteConfirmDesc', { name: editingTask?.name }) }} />
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
@@ -163,13 +162,13 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                   onClick={cancelDelete}
                   className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
                 >
-                  Cancel
+                  {t('common:buttons.cancel')}
                 </button>
                 <button
                   onClick={handleDelete}
                   className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
                 >
-                  Yes, Delete
+                  {t('tasks.yesDelete')}
                 </button>
               </div>
             </div>
@@ -183,8 +182,8 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <h3 className="font-bold text-lg text-slate-800 flex flex-col">
-                <span>Assign Users</span>
-                <span className="text-xs font-normal text-slate-500 mt-0.5">Task: <span className="font-bold text-praetor">{managingTask?.name}</span></span>
+                <span>{t('tasks.assignUsers')}</span>
+                <span className="text-xs font-normal text-slate-500 mt-0.5">{t('common:labels.task')}: <span className="font-bold text-praetor">{managingTask?.name}</span></span>
               </h3>
               <button onClick={closeAssignments} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -194,7 +193,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
             <div className="p-4 border-b border-slate-100 bg-white">
               <input
                 type="text"
-                placeholder="Search users..."
+                placeholder={t('tasks.searchUsers')}
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-medium"
@@ -213,8 +212,8 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                     <label
                       key={user.id}
                       className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${assignedUserIds.includes(user.id)
-                          ? 'bg-white border-praetor shadow-sm ring-1 ring-praetor/10'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
+                        ? 'bg-white border-praetor shadow-sm ring-1 ring-praetor/10'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
                         }`}
                     >
                       <div className="flex items-center gap-3">
@@ -245,7 +244,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                   ))}
                   {filteredUsers.length === 0 && (
                     <div className="text-center py-8 text-slate-400 italic text-sm">
-                      No users found.
+                      {t('tasks.noUsersFound')}
                     </div>
                   )}
                 </div>
@@ -257,13 +256,13 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                 onClick={closeAssignments}
                 className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors text-sm"
               >
-                Cancel
+                {t('common:buttons.cancel')}
               </button>
               <button
                 onClick={saveAssignments}
                 className="px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-800 transition-all shadow-sm active:scale-95 text-sm"
               >
-                Save
+                {t('common:buttons.save')}
               </button>
             </div>
           </div>
@@ -277,7 +276,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <i className="fa-solid fa-pen-to-square text-praetor"></i>
-                Edit Task
+                {t('tasks.editTask')}
               </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -287,33 +286,33 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div className="space-y-2">
                 <CustomSelect
-                  label="Project"
+                  label={t('tasks.project')}
                   options={projectOptions}
                   value={projectId}
                   onChange={setProjectId}
-                  placeholder="Select Project..."
+                  placeholder={t('projects.selectProject')}
                   searchable={true}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Task Name</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">{t('tasks.name')}</label>
                 <input
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Frontend Implementation"
+                  placeholder={t('tasks.taskNamePlaceholder')}
                   className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-praetor bg-slate-50 focus:bg-white transition-all"
                   autoFocus
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Description</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">{t('tasks.description')}</label>
                 <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
-                  placeholder="Task context..."
+                  placeholder={t('tasks.taskDescriptionPlaceholder')}
                   rows={3}
                   className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-praetor bg-slate-50 focus:bg-white transition-all resize-none"
                 />
@@ -331,7 +330,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <div>
-                        <p className={`text-sm font-bold ${isInheritedDisabled ? 'text-slate-400' : 'text-slate-700'}`}>Task is Disabled</p>
+                        <p className={`text-sm font-bold ${isInheritedDisabled ? 'text-slate-400' : 'text-slate-700'}`}>{t('tasks.isDisabled')}</p>
                       </div>
                       <button
                         type="button"
@@ -350,8 +349,8 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                       <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1 px-1">
                         <i className="fa-solid fa-circle-info"></i>
                         {isClientDisabled
-                          ? `Inherited from disabled Client: ${client?.name}`
-                          : `Inherited from disabled Project: ${project?.name}`}
+                          ? t('projects.inheritedFromDisabledClient', { clientName: client?.name })
+                          : t('tasks.inheritedFromDisabledProject', { projectName: project?.name })}
                       </p>
                     )}
                   </div>
@@ -366,7 +365,7 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                   onClick={confirmDelete}
                   className="px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-red-500 shadow-red-200 hover:bg-red-600"
                 >
-                  Delete
+                  {t('common:buttons.delete')}
                 </button>
 
                 <div className="flex gap-3 ml-auto">
@@ -375,13 +374,13 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                     onClick={closeModal}
                     className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
                   >
-                    Cancel
+                    {t('common:buttons.cancel')}
                   </button>
                   <button
                     type="submit"
                     className="px-6 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-praetor shadow-slate-200 hover:bg-slate-700"
                   >
-                    Save Changes
+                    {t('projects.saveChanges')}
                   </button>
                 </div>
               </div>
@@ -395,45 +394,45 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <i className="fa-solid fa-list-check text-praetor"></i>
-            Create New Task
+            {t('tasks.createNewTask')}
           </h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div className="lg:col-span-1">
               <CustomSelect
-                label="Project"
+                label={t('tasks.project')}
                 options={projectOptions}
                 value={projectId}
                 onChange={setProjectId}
-                placeholder="Select Project..."
+                placeholder={t('projects.selectProject')}
                 searchable={true}
               />
             </div>
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Task Name</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('tasks.name')}</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Frontend Implementation"
+                placeholder={t('tasks.taskNamePlaceholder')}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
               />
             </div>
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Description</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('tasks.description')}</label>
               <input
                 type="text"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                placeholder="Task context..."
+                placeholder={t('tasks.taskDescriptionPlaceholder')}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
               />
             </div>
             <div className="lg:col-span-1">
               <button
                 type="submit"
-                className="w-full px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-700 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                className="w-full px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-800 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
               >
-                <i className="fa-solid fa-plus"></i> Add Task
+                <i className="fa-solid fa-plus"></i> {t('tasks.addTask')}
               </button>
             </div>
           </form>
@@ -441,24 +440,24 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
       )}
 
       <StandardTable
-        title={`Tasks Directory (${tasks.length})`}
+        title={t('tasks.tasksDirectoryWithCount', { count: tasks.length })}
         totalCount={undefined}
         containerClassName="rounded-xl overflow-hidden"
       >
         <table className="w-full text-left">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Project</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Task Name</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Status</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('tasks.project')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('tasks.name')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('tasks.description')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('projects.tableHeaders.status')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">{t('projects.tableHeaders.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {tasks.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">No tasks found.</td>
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">{t('tasks.noTasks')}</td>
               </tr>
             ) : tasks.map(task => {
               const project = projects.find(p => p.id === task.projectId);
@@ -484,13 +483,13 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project?.color || '#ccc' }}></div>
                         <span className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${isProjectDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-praetor'}`}>
-                          {project?.name || 'Unknown'}
-                          {isProjectDisabled && <span className="ml-1 text-[8px]">(DISABLED)</span>}
+                          {project?.name || t('projects.unknown')}
+                          {isProjectDisabled && <span className="ml-1 text-[8px]">{t('projects.disabledLabel')}</span>}
                         </span>
                       </div>
                       {client && (
                         <span className={`text-[9px] font-bold ${isClientDisabled ? 'text-amber-500' : 'text-slate-400'}`}>
-                          Client: {client.name} {isClientDisabled && '(DISABLED)'}
+                          {t('projects.client')}: {client.name} {isClientDisabled && t('projects.disabledLabel')}
                         </span>
                       )}
                     </div>
@@ -499,15 +498,15 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                     <span className={`text-sm font-bold ${isEffectivelyDisabled ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-800'}`}>{task.name}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-xs text-slate-500 max-w-md italic">{task.description || 'No description provided.'}</p>
+                    <p className="text-xs text-slate-500 max-w-md italic">{task.description || t('projects.noDescriptionProvided')}</p>
                   </td>
                   <td className="px-6 py-4">
                     {task.isDisabled ? (
-                      <span className="text-[10px] font-black text-amber-500 uppercase">Disabled</span>
+                      <span className="text-[10px] font-black text-amber-500 uppercase">{t('projects.statusDisabled')}</span>
                     ) : isInheritedDisabled ? (
-                      <span className="text-[10px] font-black text-amber-400 uppercase">Inherited Disable</span>
+                      <span className="text-[10px] font-black text-amber-400 uppercase">{t('projects.statusInheritedDisable')}</span>
                     ) : (
-                      <span className="text-[10px] font-black text-emerald-500 uppercase">Active</span>
+                      <span className="text-[10px] font-black text-emerald-500 uppercase">{t('projects.statusActive')}</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -519,14 +518,14 @@ const TasksView: React.FC<TasksViewProps> = ({ tasks, projects, clients, role, u
                             openAssignments(task.id);
                           }}
                           className="text-slate-400 hover:text-praetor transition-colors p-2"
-                          title="Manage Assigned Users"
+                          title={t('tasks.manageMembers')}
                         >
                           <i className="fa-solid fa-users"></i>
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); startEditing(task); }}
                           className="text-slate-400 hover:text-praetor transition-colors p-2"
-                          title="Edit Task"
+                          title={t('tasks.editTask')}
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
                         </button>
