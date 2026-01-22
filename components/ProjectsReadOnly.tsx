@@ -108,7 +108,7 @@ const ProjectsReadOnly: React.FC<ProjectsReadOnlyProps> = ({ projects, clients }
             <StandardTable
                 title={t('projects.projectsDirectory')}
                 totalCount={filteredProjectsTotal.length}
-                containerClassName="rounded-xl overflow-hidden"
+                containerClassName="rounded-xl"
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
                 footer={
                     <>
