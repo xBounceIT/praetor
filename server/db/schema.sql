@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS quotes (
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
     discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'quoted' CHECK (status IN ('quoted', 'confirmed')),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('quoted', 'confirmed', 'draft', 'sent', 'accepted', 'denied')),
     expiration_date DATE NOT NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -349,6 +349,19 @@ CREATE TABLE IF NOT EXISTS quotes (
 
 CREATE INDEX IF NOT EXISTS idx_quotes_client_id ON quotes(client_id);
 CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
+
+-- Migration: Update quotes status check constraint to allow new statuses
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'quotes_status_check'
+    ) THEN
+        ALTER TABLE quotes DROP CONSTRAINT quotes_status_check;
+        ALTER TABLE quotes ADD CONSTRAINT quotes_status_check CHECK (status IN ('quoted', 'confirmed', 'draft', 'sent', 'accepted', 'denied'));
+    END IF;
+END $$;
 
 -- Quote items table
 CREATE TABLE IF NOT EXISTS quote_items (
