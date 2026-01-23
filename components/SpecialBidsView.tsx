@@ -669,7 +669,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       <StandardTable
         title={t('specialBids.expiredSpecialBids')}
         totalCount={filteredExpiredBids.length}
-        totalLabel="EXPIRED"
+        totalLabel={t('specialBids.expired')}
         containerClassName="border-dashed bg-slate-50"
         footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
         footer={
