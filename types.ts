@@ -145,7 +145,7 @@ export interface Quote {
   items: QuoteItem[];
   paymentTerms: 'immediate' | '15gg' | '21gg' | '30gg' | '45gg' | '60gg' | '90gg' | '120gg' | '180gg' | '240gg' | '365gg';
   discount: number; // global discount percentage
-  status: 'quoted' | 'confirmed';
+  status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string; // ISO date string
   isExpired?: boolean;
   notes?: string;

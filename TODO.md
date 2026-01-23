@@ -38,8 +38,8 @@
     - Clients: Condizioni Commerciali / Pagamento può essere rimossa da qui (DONE)
     - Quotes
         - sarebbe possibile avere tutto più ordinato su unica riga i dettaglio dei prodotti e quote?
-        - La conferma sta per "inviata"? Se si, è possibile cambiare label?
-        - Un preventivo ha 3 stati: bozza, inviata, accettato/rifiutato (la cancellazione è possibile solo nello stato di bozza) 
+        - La conferma sta per "inviata"? Se si, è possibile cambiare label? (DONE)
+        - Un preventivo ha 3 stati: bozza, inviata, accettato/rifiutato (la cancellazione è possibile solo nello stato di bozza) (DONE)
     - Sales
         - Lo stato di pending a che serve?
         - Gli stati di un offerta sono: bozza, inviata, accettato/rifiutato (la cancellazione è possibile solo nello stato di bozza; la cancellazione della bozza se il preventivo associato è accettato non deve essere possibile)

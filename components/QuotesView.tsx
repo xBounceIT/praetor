@@ -42,8 +42,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
     ], [t]);
 
     const STATUS_OPTIONS = useMemo(() => [
-        { id: 'quoted', name: t('crm:quotes.statusQuoted') },
-        { id: 'confirmed', name: t('crm:quotes.statusConfirmed') },
+        { id: 'draft', name: t('crm:quotes.statusQuoted') },
+        { id: 'sent', name: t('crm:quotes.statusConfirmed') },
+        { id: 'accepted', name: t('crm:quotes.statusAccepted') },
+        { id: 'denied', name: t('crm:quotes.statusDenied') },
     ], [t]);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -141,11 +143,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         items: [],
         paymentTerms: 'immediate',
         discount: 0,
-        status: 'quoted',
+        status: 'draft',
         expirationDate: new Date().toISOString().split('T')[0],
         notes: '',
     });
-    const isReadOnly = Boolean(editingQuote && editingQuote.status === 'confirmed');
+    const isReadOnly = Boolean(editingQuote && (editingQuote.status === 'sent' || editingQuote.status === 'accepted' || editingQuote.status === 'denied'));
 
     const openAddModal = () => {
         setEditingQuote(null);
@@ -155,7 +157,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
             items: [],
             paymentTerms: 'immediate',
             discount: 0,
-            status: 'quoted',
+            status: 'draft',
             expirationDate: new Date().toISOString().split('T')[0],
             notes: '',
         });
@@ -455,7 +457,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         return new Date() >= expiry;
     };
 
-    const isQuoteExpired = (quote: Quote) => quote.status !== 'confirmed' && (quote.isExpired ?? isExpired(quote.expirationDate));
+    const isQuoteExpired = (quote: Quote) => quote.status !== 'accepted' && quote.status !== 'denied' && (quote.isExpired ?? isExpired(quote.expirationDate));
     const sortedQuotes = useMemo(() => {
         if (expirationSort === 'none') return filteredQuotes;
         const direction = expirationSort === 'asc' ? 1 : -1;
@@ -476,14 +478,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
     const renderQuoteRow = (quote: Quote) => {
         const { total } = calculateTotals(quote.items, quote.discount);
         const expired = isQuoteExpired(quote);
-        const isRevertLocked = quote.status === 'confirmed' && quoteIdsWithSales?.has(quote.id);
+        const isRevertLocked = quoteIdsWithSales?.has(quote.id);
         const isConfirmDisabled = expired || isRevertLocked;
-        const isDeleteDisabled = expired;
-        const confirmTitle = expired
-            ? t('crm:quotes.errors.expiredCannotModify')
-            : isRevertLocked
-                ? t('crm:quotes.cannotRevertLinkedSale')
-                : (quote.status === 'quoted' ? t('crm:quotes.markAsConfirmed') : t('crm:quotes.markAsQuoted'));
+        const isDeleteDisabled = expired || quote.status !== 'draft';
+        const getStatusBadgeClass = (status: string) => {
+            switch (status) {
+                case 'draft': return 'bg-amber-100 text-amber-700';
+                case 'sent': return 'bg-blue-100 text-blue-700';
+                case 'accepted': return 'bg-emerald-100 text-emerald-700';
+                case 'denied': return 'bg-red-100 text-red-700';
+                default: return 'bg-amber-100 text-amber-700';
+            }
+        };
         const deleteTitle = expired ? t('crm:quotes.errors.expiredCannotDelete') : t('crm:quotes.deleteQuote');
         return (
             <tr
@@ -504,10 +510,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                     </div>
                 </td>
                 <td className="px-8 py-5">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${quote.status === 'confirmed'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700'
-                        }`}>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${getStatusBadgeClass(quote.status)}`}>
                         {quote.status.toUpperCase()}
                     </span>
                 </td>
@@ -535,19 +538,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                         >
                             <i className="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (isConfirmDisabled) return;
-                                onUpdateQuote(quote.id, { status: quote.status === 'quoted' ? 'confirmed' : 'quoted' });
-                            }}
-                            disabled={isConfirmDisabled}
-                            className={`p-2 text-slate-400 rounded-lg transition-all ${isConfirmDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
-                            title={confirmTitle}
-                        >
-                            <i className={`fa-solid ${quote.status === 'quoted' ? 'fa-check' : 'fa-rotate-left'}`}></i>
-                        </button>
-                        {quote.status === 'confirmed' && onCreateSale && (
+                        {quote.status === 'accepted' && onCreateSale && (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -559,7 +550,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 <i className="fa-solid fa-cart-plus"></i>
                             </button>
                         )}
-                        {quote.status !== 'confirmed' && (
+                        {quote.status === 'draft' && (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
