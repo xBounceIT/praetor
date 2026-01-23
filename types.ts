@@ -191,10 +191,11 @@ export type View =
   | 'configuration/general'
   // CRM module
   | 'crm/clients'
-  | 'crm/products'
-  | 'crm/special-bids'
   | 'crm/quotes'
   | 'crm/sales'
+  // Catalog module
+  | 'catalog/products'
+  | 'catalog/special-bids'
   // Finances module
   | 'finances/invoices'
   | 'finances/payments'

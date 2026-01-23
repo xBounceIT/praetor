@@ -14,6 +14,7 @@ interface Module {
 const moduleDefaultRoutes: Record<string, View> = {
   'timesheets': 'timesheets/tracker',
   'crm': 'crm/clients',
+  'catalog': 'catalog/products',
   'hr': 'hr/workforce',
   'projects': 'projects/manage',
   'finances': 'finances/invoices',
@@ -25,6 +26,7 @@ const moduleDefaultRoutes: Record<string, View> = {
 const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('timesheets/')) return 'timesheets';
   if (route.startsWith('crm/')) return 'crm';
+  if (route.startsWith('catalog/')) return 'catalog';
   if (route.startsWith('hr/')) return 'hr';
   if (route.startsWith('projects/')) return 'projects';
   if (route.startsWith('finances/')) return 'finances';
@@ -55,6 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
   const modules: Module[] = useMemo(() => [
     { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
     { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
+    { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
     { id: 'hr', name: t('modules.hr'), icon: 'fa-user-group', active: false },
     { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
     { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
@@ -78,11 +81,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
     if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
 
     // Manager only access (Admin and users excluded as requested)
-    if (m.id === 'crm' || m.id === 'projects' || m.id === 'finances' || m.id === 'suppliers') {
+    if (m.id === 'crm' || m.id === 'catalog' || m.id === 'projects' || m.id === 'finances' || m.id === 'suppliers') {
       return currentUser.role === 'manager';
     }
 
-    // employees and suppliers are placeholders for future
+    // employees is a placeholder for future
     if (m.id === 'employees') return false;
 
     return true;
@@ -274,20 +277,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 onClick={() => { onViewChange('crm/clients'); setIsMobileMenuOpen(false); }}
               />
               <NavItem
-                icon="fa-box"
-                label={t('routes.products')}
-                active={activeView === 'crm/products'}
-                isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('crm/products'); setIsMobileMenuOpen(false); }}
-              />
-              <NavItem
-                icon="fa-tags"
-                label={t('routes.specialBids')}
-                active={activeView === 'crm/special-bids'}
-                isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('crm/special-bids'); setIsMobileMenuOpen(false); }}
-              />
-              <NavItem
                 icon="fa-file-invoice"
                 label={t('routes.quotes')}
                 active={activeView === 'crm/quotes'}
@@ -300,6 +289,26 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 active={activeView === 'crm/sales'}
                 isCollapsed={isCollapsed}
                 onClick={() => { onViewChange('crm/sales'); setIsMobileMenuOpen(false); }}
+              />
+            </>
+          )}
+
+          {/* Catalog Module Nav Items */}
+          {activeModule.id === 'catalog' && (
+            <>
+              <NavItem
+                icon="fa-box"
+                label={t('routes.products')}
+                active={activeView === 'catalog/products'}
+                isCollapsed={isCollapsed}
+                onClick={() => { onViewChange('catalog/products'); setIsMobileMenuOpen(false); }}
+              />
+              <NavItem
+                icon="fa-tags"
+                label={t('routes.specialBids')}
+                active={activeView === 'catalog/special-bids'}
+                isCollapsed={isCollapsed}
+                onClick={() => { onViewChange('catalog/special-bids'); setIsMobileMenuOpen(false); }}
               />
             </>
           )}
@@ -415,7 +424,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 activeView === 'configuration/general' ? t('titles.generalAdmin') :
                   activeView === 'projects/manage' ? t('titles.projects') :
                     activeView === 'projects/tasks' ? t('titles.tasks') :
-                      activeView === 'crm/special-bids' ? t('titles.specialBids') :
+                      activeView === 'catalog/special-bids' ? t('titles.specialBids') :
                         activeView === 'suppliers/manage' ? t('titles.suppliers') :
                           activeView === 'suppliers/quotes' ? t('titles.supplierQuotes') :
                             t(`routes.${activeView.split('/').pop()?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`, { defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView })}

@@ -2,16 +2,29 @@
  
 *** Generiche
     - Io imposterei il menu diversamente con i seguenti moduli:
-        - CRM
+        - CRM:
+          - Clienti: Anagrafica Clienti
+          - Preventivi: nostri da fare vs Clienti
+          - Vendite: ordini di vendita
+            - Ieri se ho sentito bene il flusso è da cambiare perchè deve essere Preventivo -> Offerta -> Vendita giusto? In caso qui ci sarà anche Offerte
         - Catalogo
-        - HR
-        - Fornitori
+          - Prodotti: catalogo dei beni (es. licenze office) e servizi (es. consulenza) che proponiamo ai clienti
+        - HR:
+          - Forza lavoro: lista dipendenti con ruolo applicativo e (solo visibile ai manager) costo orario dell'utente
+          - Unità di lavoro: pagina per creazione competence center e assegnazione manager dei center e membri
+        - Fornitori:
+          - Anagrafica
+          - Preventivi: 
         - Finanza
+          - Fatture: Gestisci e traccia le fatture vs clienti
+          - Pagamenti: Registra e traccia pagamenti clienti
+          - Spese: Traccia spese aziendali e costi
+          - Reports: Visualizza analitiche finanziarie e insight
         - Progetti
         - Presenze
     - Partendo da questi moduli, possiamo sviluppare una matrice dei sotto menu con una descrizione ad altissimo livello? Questo sarebbe molto utile a me che devo far comprendere ad EF ed EC i flussi  [😄] 
-    - Le valute sono in dollari, è possibile mettere €?
-    - Quando premi invio chiude, è possibile toglierlo?
+    - Le valute sono in dollari, è possibile mettere €? (DONE)
+    - Quando premi invio chiude, è possibile toglierlo? (DONE)
     - per tutti i menu a tendina che dipendono da EC/AF/FR è possibile creare un modulo simil "amministratore" per editarli tutti?
  
 *** CRM

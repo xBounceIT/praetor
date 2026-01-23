@@ -2,6 +2,7 @@
   "modules": {
     "timesheets": "Timesheet",
     "crm": "CRM",
+    "catalog": "Catalogo",
     "hr": "HR",
     "projects": "Progetti",
     "finances": "Finanze",

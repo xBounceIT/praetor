@@ -43,6 +43,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view === '404') return null;
   if (view.startsWith('timesheets/')) return 'timesheets';
   if (view.startsWith('crm/')) return 'crm';
+  if (view.startsWith('catalog/')) return 'catalog';
   if (view.startsWith('hr/')) return 'hr';
   if (view.startsWith('projects/')) return 'projects';
   if (view.startsWith('finances/')) return 'finances';
@@ -453,7 +454,8 @@ const App: React.FC = () => {
   const VALID_VIEWS: View[] = useMemo(() => [
     'timesheets/tracker', 'timesheets/reports', 'timesheets/recurring', 'timesheets/tasks', 'timesheets/projects',
     'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-    'crm/clients', 'crm/products', 'crm/special-bids', 'crm/quotes', 'crm/sales',
+    'crm/clients', 'crm/quotes', 'crm/sales',
+    'catalog/products', 'catalog/special-bids',
     'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
     'projects/manage', 'projects/tasks',
     'suppliers/manage', 'suppliers/quotes',
@@ -468,7 +470,8 @@ const App: React.FC = () => {
     const validViews: View[] = [
       'timesheets/tracker', 'timesheets/reports', 'timesheets/recurring', 'timesheets/tasks', 'timesheets/projects',
       'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-      'crm/clients', 'crm/products', 'crm/special-bids', 'crm/quotes', 'crm/sales',
+      'crm/clients', 'crm/quotes', 'crm/sales',
+      'catalog/products', 'catalog/special-bids',
       'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
       'projects/manage', 'projects/tasks',
       'suppliers/manage', 'suppliers/quotes',
@@ -507,10 +510,11 @@ const App: React.FC = () => {
       'configuration/general': ['admin'],
       // CRM module - manager
       'crm/clients': ['manager'],
-      'crm/products': ['manager'],
-      'crm/special-bids': ['manager'],
       'crm/quotes': ['manager'],
       'crm/sales': ['manager'],
+      // Catalog module - manager
+      'catalog/products': ['manager'],
+      'catalog/special-bids': ['manager'],
       // Finances module - manager
       'finances/invoices': ['manager'],
       'finances/payments': ['manager'],
@@ -675,18 +679,25 @@ const App: React.FC = () => {
           }
           case 'crm': {
             if (currentUser.role !== 'manager') return;
-            const [clientsData, productsData, specialBidsData, quotesData, salesData] = await Promise.all([
+            const [clientsData, quotesData, salesData] = await Promise.all([
               api.clients.list(),
-              api.products.list(),
-              api.specialBids.list(),
               api.quotes.list(),
               api.sales.list()
             ]);
             setClients(clientsData);
-            setProducts(productsData);
-            setSpecialBids(specialBidsData);
             setQuotes(quotesData);
             setSales(salesData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'catalog': {
+            if (currentUser.role !== 'manager') return;
+            const [productsData, specialBidsData] = await Promise.all([
+              api.products.list(),
+              api.specialBids.list()
+            ]);
+            setProducts(productsData);
+            setSpecialBids(specialBidsData);
             await loadGeneralSettings();
             break;
           }
@@ -1614,7 +1625,7 @@ const App: React.FC = () => {
               />
             )}
 
-            {activeView === 'crm/products' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {activeView === 'catalog/products' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
               <ProductsView
                 products={products}
                 suppliers={suppliers}
@@ -1624,7 +1635,7 @@ const App: React.FC = () => {
               />
             )}
 
-            {activeView === 'crm/special-bids' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {activeView === 'catalog/special-bids' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
               <SpecialBidsView
                 bids={specialBids}
                 clients={clients}
