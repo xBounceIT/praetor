@@ -1,27 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Quote, QuoteItem, Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput, { parseNumberInputValue } from './ValidatedNumberInput';
-
-const PAYMENT_TERMS_OPTIONS = [
-    { id: 'immediate', name: 'Immediate' },
-    { id: '15gg', name: '15 days' },
-    { id: '21gg', name: '21 days' },
-    { id: '30gg', name: '30 days' },
-    { id: '45gg', name: '45 days' },
-    { id: '60gg', name: '60 days' },
-    { id: '90gg', name: '90 days' },
-    { id: '120gg', name: '120 days' },
-    { id: '180gg', name: '180 days' },
-    { id: '240gg', name: '240 days' },
-    { id: '365gg', name: '365 days' },
-];
-
-const STATUS_OPTIONS = [
-    { id: 'quoted', name: 'Quoted' },
-    { id: 'confirmed', name: 'Confirmed' },
-];
 
 interface QuotesViewProps {
     quotes: Quote[];
@@ -43,6 +25,27 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
 };
 
 const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, specialBids, onAddQuote, onUpdateQuote, onDeleteQuote, onCreateSale, quoteFilterId, quoteIdsWithSales, currency }) => {
+    const { t } = useTranslation(['crm', 'common', 'form']);
+
+    const PAYMENT_TERMS_OPTIONS = useMemo(() => [
+        { id: 'immediate', name: t('crm:paymentTerms.immediate') },
+        { id: '15gg', name: t('crm:paymentTerms.15gg') },
+        { id: '21gg', name: t('crm:paymentTerms.21gg') },
+        { id: '30gg', name: t('crm:paymentTerms.30gg') },
+        { id: '45gg', name: t('crm:paymentTerms.45gg') },
+        { id: '60gg', name: t('crm:paymentTerms.60gg') },
+        { id: '90gg', name: t('crm:paymentTerms.90gg') },
+        { id: '120gg', name: t('crm:paymentTerms.120gg') },
+        { id: '180gg', name: t('crm:paymentTerms.180gg') },
+        { id: '240gg', name: t('crm:paymentTerms.240gg') },
+        { id: '365gg', name: t('crm:paymentTerms.365gg') },
+    ], [t]);
+
+    const STATUS_OPTIONS = useMemo(() => [
+        { id: 'quoted', name: t('crm:quotes.statusQuoted') },
+        { id: 'confirmed', name: t('crm:quotes.statusConfirmed') },
+    ], [t]);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -77,9 +80,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
     }, [quoteFilterId]);
 
     const quoteIdOptions = useMemo(() => ([
-        { id: 'all', name: 'All Quotes' },
+        { id: 'all', name: t('crm:quotes.activeQuotes') },
         ...quotes.map(quote => ({ id: quote.id, name: `${quote.id} · ${quote.clientName}` }))
-    ]), [quotes]);
+    ]), [quotes, t]);
 
     // Filter Logic
     const filteredQuotes = useMemo(() => {
@@ -189,11 +192,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
 
         if (!formData.clientId) {
-            newErrors.clientId = 'Client is required';
+            newErrors.clientId = t('crm:quotes.errors.clientRequired');
         }
 
         if (!formData.items || formData.items.length === 0) {
-            newErrors.items = 'At least one product is required';
+            newErrors.items = t('crm:quotes.errors.itemsRequired');
         } else {
             const invalidItem = formData.items.find(item => !item.productId);
             if (invalidItem) {
@@ -206,12 +209,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                 item.quantity <= 0
             );
             if (!newErrors.items && invalidQuantity) {
-                newErrors.items = 'All items must have quantity greater than 0.';
+                newErrors.items = t('crm:quotes.errors.quantityGreaterThanZero');
             }
             if (!newErrors.items) {
                 const { total } = calculateTotals(formData.items, discountValue);
                 if (!Number.isFinite(total) || total <= 0) {
-                    newErrors.total = 'Total must be greater than 0.';
+                    newErrors.total = t('crm:quotes.errors.totalGreaterThanZero');
                 }
             }
         }
@@ -432,9 +435,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         : activeSpecialBids;
 
     const getBidDisplayValue = (bidId?: string) => {
-        if (!bidId) return 'No Special Bid';
+        if (!bidId) return t('crm:quotes.noSpecialBid');
         const bid = activeSpecialBids.find(b => b.id === bidId) || specialBids.find(b => b.id === bidId);
-        return bid ? `${bid.clientName} · ${bid.productName}` : 'No Special Bid';
+        return bid ? `${bid.clientName} · ${bid.productName}` : t('crm:quotes.noSpecialBid');
     };
 
     const getExpirationTimestamp = (expirationDate: string) => {
@@ -477,11 +480,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
         const isConfirmDisabled = expired || isRevertLocked;
         const isDeleteDisabled = expired;
         const confirmTitle = expired
-            ? 'Expired quotes cannot be confirmed or reverted'
+            ? t('crm:quotes.errors.expiredCannotModify')
             : isRevertLocked
                 ? 'Cannot revert: linked sale order exists'
                 : (quote.status === 'quoted' ? 'Mark as Confirmed' : 'Mark as Quoted');
-        const deleteTitle = expired ? 'Expired quotes cannot be deleted' : 'Delete Quote';
+        const deleteTitle = expired ? t('crm:quotes.errors.expiredCannotDelete') : t('crm:quotes.deleteQuote');
         return (
             <tr
                 key={quote.id}
@@ -528,7 +531,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 openEditModal(quote);
                             }}
                             className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                            title="Edit Quote"
+                            title={t('crm:quotes.editQuote')}
                         >
                             <i className="fa-solid fa-pen-to-square"></i>
                         </button>
@@ -551,7 +554,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     onCreateSale(quote);
                                 }}
                                 className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                title="Create Sale Order"
+                                title={t('crm:quotes.convertToSale')}
                             >
                                 <i className="fa-solid fa-cart-plus"></i>
                             </button>
@@ -587,7 +590,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
                                     <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
                                 </div>
-                                {isReadOnly ? 'View Quote' : (editingQuote ? 'Edit Quote' : 'Create New Quote')}
+                                {isReadOnly ? t('crm:quotes.viewQuote') : (editingQuote ? t('crm:quotes.editQuote') : t('crm:quotes.createNewQuote'))}
                             </h3>
                             <button
                                 onClick={() => setIsModalOpen(false)}
@@ -600,7 +603,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                         <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
                             {isReadOnly && (
                                 <div className="px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">
-                                    Confirmed quotes are read-only.
+                                    {t('crm:quotes.readOnlyConfirmed')}
                                 </div>
                             )}
                             {/* Client Selection */}
@@ -747,7 +750,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                                     <div>
                                                         <input
                                                             type="text"
-                                                            placeholder="Note for this item..."
+                                                            placeholder={t('form:placeholderNotes')}
                                                             value={item.note || ''}
                                                             onChange={(e) => updateProductRow(index, 'note', e.target.value)}
                                                             disabled={isReadOnly}
@@ -760,7 +763,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     </div>
                                 ) : (
                                     <div className="text-center py-8 text-slate-400 text-sm">
-                                        No products added. Click "Add Product" to start.
+                                        {t('crm:quotes.noProductsAdded')}
                                     </div>
                                 )}
 
@@ -826,7 +829,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                             rows={3}
                                             value={formData.notes}
                                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                            placeholder="Additional notes or terms..."
+                                            placeholder={t('crm:quotes.additionalNotesPlaceholder')}
                                             disabled={isReadOnly}
                                             className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                                         />
@@ -898,14 +901,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     onClick={() => setIsModalOpen(false)}
                                     className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
                                 >
-                                    Cancel
+                                    {t('common:buttons.cancel')}
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isReadOnly}
                                     className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {isReadOnly ? 'Confirmed Quote' : (editingQuote ? 'Update Quote' : 'Create Quote')}
+                                    {isReadOnly ? t('crm:quotes.confirmedQuote') : (editingQuote ? t('crm:quotes.updateQuote') : t('crm:quotes.createQuote'))}
                                 </button>
                             </div>
                         </form>
@@ -922,9 +925,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                 <i className="fa-solid fa-triangle-exclamation text-xl"></i>
                             </div>
                             <div>
-                                <h3 className="text-lg font-black text-slate-800">Delete Quote?</h3>
+                                <h3 className="text-lg font-black text-slate-800">{t('crm:quotes.deleteQuote')}?</h3>
                                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                                    Are you sure you want to delete this quote for <span className="font-bold text-slate-800">{quoteToDelete?.clientName}</span>?
+                                    {t('crm:quotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
                                     This action cannot be undone.
                                 </p>
                             </div>
@@ -933,13 +936,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     onClick={() => setIsDeleteConfirmOpen(false)}
                                     className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
                                 >
-                                    Cancel
+                                    {t('common:buttons.cancel')}
                                 </button>
                                 <button
                                     onClick={handleDelete}
                                     className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
                                 >
-                                    Yes, Delete
+                                    {t('common:buttons.delete')}
                                 </button>
                             </div>
                         </div>
@@ -960,7 +963,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                     <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input
                         type="text"
-                        placeholder="Search quotes or products..."
+                        placeholder={t('crm:quotes.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
@@ -971,27 +974,27 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                         options={quoteIdOptions}
                         value={filterQuoteId}
                         onChange={setFilterQuoteId}
-                        placeholder="Filter by Quote ID"
+                        placeholder={t('crm:quotes.filterByQuoteId')}
                         searchable={true}
                         buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
                     />
                 </div>
                 <div>
                     <CustomSelect
-                        options={[{ id: 'all', name: 'All Clients' }, ...activeClients.map(c => ({ id: c.id, name: c.name }))]}
+                        options={[{ id: 'all', name: t('crm:filters.all') }, ...activeClients.map(c => ({ id: c.id, name: c.name }))]}
                         value={filterClientId}
                         onChange={setFilterClientId}
-                        placeholder="Filter by Client"
+                        placeholder={t('crm:quotes.filterByClient')}
                         searchable={true}
                         buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
                     />
                 </div>
                 <div>
                     <CustomSelect
-                        options={[{ id: 'all', name: 'All Statuses' }, ...STATUS_OPTIONS]}
+                        options={[{ id: 'all', name: t('crm:quotes.allStatuses') }, ...STATUS_OPTIONS]}
                         value={filterStatus}
                         onChange={setFilterStatus}
-                        placeholder="Filter by Status"
+                        placeholder={t('crm:quotes.filterByStatus')}
                         searchable={false}
                         buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
                     />
@@ -1010,14 +1013,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
             </div>
 
             <StandardTable
-                title="Active Quotes"
+                title={t('crm:quotes.activeQuotes')}
                 totalCount={filteredActiveQuotes.length}
                 headerAction={
                     <button
                         onClick={openAddModal}
                         className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
                     >
-                        <i className="fa-solid fa-plus"></i> Create New Quote
+                        <i className="fa-solid fa-plus"></i> {t('crm:quotes.createNewQuote')}
                     </button>
                 }
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
@@ -1115,9 +1118,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
             </StandardTable>
 
             <StandardTable
-                title="Expired Quotes"
+                title={t('crm:quotes.expiredQuotes')}
                 totalCount={filteredExpiredQuotes.length}
-                totalLabel="EXPIRED"
+                totalLabel={t('crm:quotes.statusExpired')}
                 containerClassName="border-dashed bg-slate-50"
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
                 footer={

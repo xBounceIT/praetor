@@ -218,7 +218,29 @@
     "linkedSales": "Vendite Collegate",
     "deleteConfirm": "Sei sicuro di voler eliminare questo preventivo?",
     "activeQuotes": "Preventivi Attivi",
-    "createNewQuote": "Crea Nuovo Preventivo"
+    "createNewQuote": "Crea Nuovo Preventivo",
+    "noSpecialBid": "Nessuna Offerta Speciale",
+    "deleteQuote": "Elimina Preventivo",
+    "viewQuote": "Visualizza Preventivo",
+    "confirmedQuote": "Preventivo Confermato",
+    "updateQuote": "Aggiorna Preventivo",
+    "createQuote": "Crea Preventivo",
+    "filterByClient": "Filtra per Cliente",
+    "filterByStatus": "Filtra per Stato",
+    "filterByQuoteId": "Filtra per ID Preventivo",
+    "expiredQuotes": "Preventivi Scaduti",
+    "noProductsAdded": "Nessun prodotto aggiunto. Clicca \"Aggiungi Prodotto\" per iniziare.",
+    "additionalNotesPlaceholder": "Note aggiuntive o termini...",
+    "searchPlaceholder": "Cerca preventivi o prodotti...",
+    "allStatuses": "Tutti gli Stati",
+    "errors": {
+      "clientRequired": "Il cliente è richiesto",
+      "itemsRequired": "Almeno un prodotto è richiesto",
+      "quantityGreaterThanZero": "Tutti gli articoli devono avere quantità maggiore di 0",
+      "totalGreaterThanZero": "Il totale deve essere maggiore di 0",
+      "expiredCannotModify": "I preventivi scaduti non possono essere confermati o ripristinati",
+      "expiredCannotDelete": "I preventivi scaduti non possono essere eliminati"
+    }
   },
   "sales": {
     "title": "Vendite",

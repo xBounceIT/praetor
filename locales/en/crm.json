@@ -224,7 +224,29 @@
     "linkedSales": "Linked Sales",
     "deleteConfirm": "Are you sure you want to delete this quote?",
     "activeQuotes": "Active Quotes",
-    "createNewQuote": "Create New Quote"
+    "createNewQuote": "Create New Quote",
+    "noSpecialBid": "No Special Bid",
+    "deleteQuote": "Delete Quote",
+    "viewQuote": "View Quote",
+    "confirmedQuote": "Confirmed Quote",
+    "updateQuote": "Update Quote",
+    "createQuote": "Create Quote",
+    "filterByClient": "Filter by Client",
+    "filterByStatus": "Filter by Status",
+    "filterByQuoteId": "Filter by Quote ID",
+    "expiredQuotes": "Expired Quotes",
+    "noProductsAdded": "No products added. Click \"Add Product\" to start.",
+    "additionalNotesPlaceholder": "Additional notes or terms...",
+    "searchPlaceholder": "Search quotes or products...",
+    "allStatuses": "All Statuses",
+    "errors": {
+      "clientRequired": "Client is required",
+      "itemsRequired": "At least one product is required",
+      "quantityGreaterThanZero": "All items must have quantity greater than 0",
+      "totalGreaterThanZero": "Total must be greater than 0",
+      "expiredCannotModify": "Expired quotes cannot be confirmed or reverted",
+      "expiredCannotDelete": "Expired quotes cannot be deleted"
+    }
   },
   "sales": {
     "title": "Sales",
