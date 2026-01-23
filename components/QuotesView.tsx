@@ -657,7 +657,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                             <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">{t('crm:quotes.qty')}</div>
                                             <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">{t('crm:products.cost')}</div>
                                             <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Mol %</div>
-                                            <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">{t('crm:common.margin')}</div>
+                                            <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">{t('crm:quotes.marginLabel')}</div>
                                             <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">{t('crm:products.salePrice')}</div>
                                         </div>
                                         <div className="w-10 flex-shrink-0"></div>
