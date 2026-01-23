@@ -679,14 +679,18 @@ const App: React.FC = () => {
           }
           case 'crm': {
             if (currentUser.role !== 'manager') return;
-            const [clientsData, quotesData, salesData] = await Promise.all([
+            const [clientsData, quotesData, salesData, productsData, specialBidsData] = await Promise.all([
               api.clients.list(),
               api.quotes.list(),
-              api.sales.list()
+              api.sales.list(),
+              api.products.list(),
+              api.specialBids.list()
             ]);
             setClients(clientsData);
             setQuotes(quotesData);
             setSales(salesData);
+            setProducts(productsData);
+            setSpecialBids(specialBidsData);
             await loadGeneralSettings();
             break;
           }
