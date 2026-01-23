@@ -125,6 +125,9 @@ try {
     try {
       const { migrate: addLanguageToSettings } = await import('./db/add_language_to_settings.ts');
       await addLanguageToSettings();
+      // Run update language constraint migration
+      const { migrate: updateLanguageConstraint } = await import('./db/update_language_constraint.ts');
+      await updateLanguageConstraint();
     } catch (err) {
       console.error('Failed to run settings language migration:', err);
     }
