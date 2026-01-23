@@ -128,6 +128,14 @@ try {
     } catch (err) {
       console.error('Failed to run settings language migration:', err);
     }
+
+    // Run migration to remove payment_terms from clients
+    try {
+      const { up: removePaymentTerms } = await import('./db/remove_payment_terms_from_clients.ts');
+      await removePaymentTerms();
+    } catch (err) {
+      console.error('Failed to run payment_terms removal migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

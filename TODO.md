@@ -24,12 +24,12 @@
         - Presenze
     - Partendo da questi moduli, possiamo sviluppare una matrice dei sotto menu con una descrizione ad altissimo livello? Questo sarebbe molto utile a me che devo far comprendere ad EF ed EC i flussi  [😄] 
     - Le valute sono in dollari, è possibile mettere €? (DONE)
-    - Quando premi invio chiude, è possibile toglierlo? (DONE)
+    - Quando premi invio chiude, è possibile toglierlo? 
     - per tutti i menu a tendina che dipendono da EC/AF/FR è possibile creare un modulo simil "amministratore" per editarli tutti?
  
 *** CRM
-    NOTA: Products e Special Bid togliamoli da sotto CRM e facciamo modulo dedicato "Catalogo" (richiesta EC)
-    - Clients: Condizioni Commerciali / Pagamento può essere rimossa da qui 
+    NOTA: Products e Special Bid togliamoli da sotto CRM e facciamo modulo dedicato "Catalogo" (richiesta EC) (DONE)
+    - Clients: Condizioni Commerciali / Pagamento può essere rimossa da qui (DONE)
     - Quotes
         - sarebbe possibile avere tutto più ordinato su unica riga i dettaglio dei prodotti e quote?
         - La conferma sta per "inviata"? Se si, è possibile cambiare label?

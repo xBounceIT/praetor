@@ -40,7 +40,6 @@ export interface Client {
   vatNumber?: string;
   taxCode?: string;
   billingCode?: string;
-  paymentTerms?: string;
 }
 
 export interface Project {

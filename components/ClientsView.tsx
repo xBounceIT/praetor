@@ -79,7 +79,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     vatNumber: '',
     taxCode: '',
     billingCode: '',
-    paymentTerms: '',
   });
 
   const openAddModal = () => {
@@ -95,7 +94,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       vatNumber: '',
       taxCode: '',
       billingCode: '',
-      paymentTerms: '',
     });
     setErrors({});
     setIsModalOpen(true);
@@ -114,7 +112,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       vatNumber: client.vatNumber || '',
       taxCode: client.taxCode || '',
       billingCode: client.billingCode || '',
-      paymentTerms: client.paymentTerms || '',
     });
     setErrors({});
     setIsModalOpen(true);
@@ -417,16 +414,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                       onChange={(e) => setFormData({ ...formData, billingCode: e.target.value })}
                       placeholder={t('form:placeholderCode')}
                       className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-mono uppercase"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.paymentTerms')}</label>
-                    <input
-                      type="text"
-                      value={formData.paymentTerms}
-                      onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-                      placeholder={t('form:placeholderNotes')}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                 </div>

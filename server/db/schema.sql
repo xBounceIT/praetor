@@ -84,7 +84,6 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_terms TEXT;
 
 -- Ensure VAT number is unique (case-insensitive, non-empty)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_vat_number_unique 

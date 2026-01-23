@@ -44,8 +44,7 @@ export default async function (fastify, opts) {
                 address: c.address,
                 vatNumber: c.vat_number,
                 taxCode: c.tax_code,
-                billingCode: c.billing_code,
-                paymentTerms: c.payment_terms
+                billingCode: c.billing_code
             };
         });
         return clients;
@@ -57,7 +56,7 @@ export default async function (fastify, opts) {
     }, async (request, reply) => {
         const {
             name, type, contactName, clientCode, email, phone,
-            address, vatNumber, taxCode, billingCode, paymentTerms
+            address, vatNumber, taxCode, billingCode
         } = request.body;
 
         const nameResult = requireNonEmptyString(name, 'name');
@@ -96,16 +95,16 @@ export default async function (fastify, opts) {
             await query(`
             INSERT INTO clients (
                 id, name, is_disabled, type, contact_name, client_code,
-                email, phone, address, vat_number, tax_code, billing_code, payment_terms
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                email, phone, address, vat_number, tax_code, billing_code
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         `, [
             id, nameResult.value, false, type || 'company', contactName, clientCodeResult.value,
-            emailResult.value, phone, address, vatNumberResult.value, taxCodeResult.value, billingCode, paymentTerms
+            emailResult.value, phone, address, vatNumberResult.value, taxCodeResult.value, billingCode
         ]);
 
             return reply.code(201).send({
             id, name: nameResult.value, isDisabled: false, type, contactName, clientCode: clientCodeResult.value,
-            email: emailResult.value, phone, address, vatNumber: vatNumberResult.value, taxCode: taxCodeResult.value, billingCode, paymentTerms
+            email: emailResult.value, phone, address, vatNumber: vatNumberResult.value, taxCode: taxCodeResult.value, billingCode
         });
         } catch (err) {
             if (err.code === '23505') { // Unique violation
@@ -122,7 +121,7 @@ export default async function (fastify, opts) {
         const { id } = request.params;
         const {
             name, isDisabled, type, contactName, clientCode, email, phone,
-            address, vatNumber, taxCode, billingCode, paymentTerms
+            address, vatNumber, taxCode, billingCode
         } = request.body;
         const body = request.body ?? {};
         const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
@@ -191,13 +190,12 @@ export default async function (fastify, opts) {
                 address = COALESCE($8, address),
                 vat_number = COALESCE($9, vat_number),
                 tax_code = COALESCE($10, tax_code),
-                billing_code = COALESCE($11, billing_code),
-                payment_terms = COALESCE($12, payment_terms)
-            WHERE id = $13 
+                billing_code = COALESCE($11, billing_code)
+            WHERE id = $12 
             RETURNING *
         `, [
             nameValue, isDisabled, type, contactName, clientCodeValue,
-            emailResult.value, phone, address, vatNumberValue, taxCodeValue, billingCode, paymentTerms, idResult.value
+            emailResult.value, phone, address, vatNumberValue, taxCodeValue, billingCode, idResult.value
         ]);
 
         if (result.rows.length === 0) {
@@ -218,8 +216,7 @@ export default async function (fastify, opts) {
             address: c.address,
             vatNumber: c.vat_number,
             taxCode: c.tax_code,
-            billingCode: c.billing_code,
-            paymentTerms: c.payment_terms
+            billingCode: c.billing_code
         };
         } catch (err) {
             if (err.code === '23505') { // Unique violation
