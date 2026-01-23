@@ -273,7 +273,8 @@
     "statusColumn": "Stato",
     "totalColumn": "Totale",
     "paymentTermsColumn": "Termini di Pagamento",
-    "expirationColumn": "Scadenza"
+    "expirationColumn": "Scadenza",
+    "actionsColumn": "Azioni"
   },
   "sales": {
     "title": "Vendite",

@@ -1097,7 +1097,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     {expirationSortIndicator && <span className="text-[10px]">{expirationSortIndicator}</span>}
                                 </button>
                             </th>
-                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('crm:quotes.actionsColumn')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1196,7 +1196,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
                                     {expirationSortIndicator && <span className="text-[10px]">{expirationSortIndicator}</span>}
                                 </button>
                             </th>
-                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('crm:quotes.actionsColumn')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">

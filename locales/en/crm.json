@@ -280,7 +280,8 @@
     "statusColumn": "Status",
     "totalColumn": "Total",
     "paymentTermsColumn": "Payment Terms",
-    "expirationColumn": "Expiration"
+    "expirationColumn": "Expiration",
+    "actionsColumn": "Actions"
   },
   "sales": {
     "title": "Sales",
