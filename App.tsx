@@ -247,7 +247,7 @@ const TrackerView: React.FC<{
                         <tr>
                           <td colSpan={selectedDate ? 5 : 6} className="px-6 py-20 text-center">
                             <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
-                            <p className="text-slate-400 font-medium text-sm">No time entries for this selection</p>
+                            <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
                           </td>
                         </tr>
                       ) : filteredEntries.map(entry => (
