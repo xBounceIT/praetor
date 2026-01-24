@@ -90,75 +90,133 @@ export default async function (fastify, opts) {
     // PUT /:id - Update product
     fastify.put('/:id', async (request, reply) => {
         const { id } = request.params;
-        const { name, description, costo, molPercentage, costUnit, category, subcategory, taxRate, type, isDisabled, supplierId } = request.body;
+        const body = request.body;
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        if (name !== undefined) {
-            const nameResult = optionalNonEmptyString(name, 'name');
+        const fields: string[] = [];
+        const values: any[] = [];
+        let paramIndex = 1;
+
+        // Name
+        if (body.name !== undefined) {
+            const nameResult = requireNonEmptyString(body.name, 'name'); // name cannot be empty for update if provided
             if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
             // check name uniqueness (exclude current product)
-            if (nameResult.value) {
-                const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND id != $2', [nameResult.value, idResult.value]);
-                if (existingName.rows.length > 0) {
-                    return badRequest(reply, 'Product name must be unique');
-                }
+            const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND id != $2', [nameResult.value, idResult.value]);
+            if (existingName.rows.length > 0) {
+                return badRequest(reply, 'Product name must be unique');
             }
+            fields.push(`name = $${paramIndex++}`);
+            values.push(nameResult.value);
         }
 
-        let costoValue = costo;
-        if (costo !== undefined) {
-            const costoResult = parseLocalizedNonNegativeNumber(costo, 'costo');
+        // Description (nullable)
+        if (body.description !== undefined) {
+            fields.push(`description = $${paramIndex++}`);
+            values.push(body.description || null);
+        }
+
+        // Costo
+        if (body.costo !== undefined) {
+            const costoResult = parseLocalizedNonNegativeNumber(body.costo, 'costo');
             if (!costoResult.ok) return badRequest(reply, costoResult.message);
-            costoValue = costoResult.value;
+            fields.push(`costo = $${paramIndex++}`);
+            values.push(costoResult.value);
         }
 
-        let molPercentageValue = molPercentage;
-        if (molPercentage !== undefined) {
-            const molPercentageResult = parseLocalizedNonNegativeNumber(molPercentage, 'molPercentage');
+        // Mol Percentage
+        if (body.molPercentage !== undefined) {
+            const molPercentageResult = parseLocalizedNonNegativeNumber(body.molPercentage, 'molPercentage');
             if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
             if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
                 return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
             }
-            molPercentageValue = molPercentageResult.value;
+            fields.push(`mol_percentage = $${paramIndex++}`);
+            values.push(molPercentageResult.value);
         }
 
-        let taxRateValue = taxRate;
-        if (taxRate !== undefined) {
-            const taxRateResult = parseLocalizedNonNegativeNumber(taxRate, 'taxRate');
+        // Cost Unit
+        if (body.costUnit !== undefined) {
+            const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
+            if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+            fields.push(`cost_unit = $${paramIndex++}`);
+            values.push(costUnitResult.value);
+        }
+
+        // Category (nullable)
+        if (body.category !== undefined) {
+            fields.push(`category = $${paramIndex++}`);
+            values.push(body.category || null);
+        }
+
+        // Subcategory (nullable)
+        if (body.subcategory !== undefined) {
+            fields.push(`subcategory = $${paramIndex++}`);
+            values.push(body.subcategory || null);
+        }
+
+        // Tax Rate
+        if (body.taxRate !== undefined) {
+            const taxRateResult = parseLocalizedNonNegativeNumber(body.taxRate, 'taxRate');
             if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
             if (taxRateResult.value < 0 || taxRateResult.value > 100) {
                 return badRequest(reply, 'taxRate must be between 0 and 100');
             }
-            taxRateValue = taxRateResult.value;
+            fields.push(`tax_rate = $${paramIndex++}`);
+            values.push(taxRateResult.value);
         }
 
-        const costUnitResult = optionalEnum(costUnit, ['unit', 'hours'], 'costUnit');
-        if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+        // Type
+        if (body.type !== undefined) {
+            const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
+            if (!typeResult.ok) return badRequest(reply, typeResult.message);
+            fields.push(`type = $${paramIndex++}`);
+            values.push(typeResult.value);
+        }
 
-        const typeResult = optionalEnum(type, ['supply', 'service', 'consulting'], 'type');
-        if (!typeResult.ok) return badRequest(reply, typeResult.message);
+        // Is Disabled
+        if (body.isDisabled !== undefined) {
+            fields.push(`is_disabled = $${paramIndex++}`);
+            values.push(parseBoolean(body.isDisabled));
+        }
 
-        const isDisabledValue = isDisabled !== undefined ? parseBoolean(isDisabled) : undefined;
+        // Supplier (nullable)
+        if (body.supplierId !== undefined) {
+            fields.push(`supplier_id = $${paramIndex++}`);
+            // Convert empty string to null to avoid FK violation and allow clearing
+            values.push(body.supplierId ? body.supplierId : null);
+        }
 
-        const result = await query(
-            `UPDATE products 
-             SET name = COALESCE($1, name), 
-                 description = COALESCE($2, description),
-                 costo = COALESCE($3, costo), 
-                 mol_percentage = COALESCE($4, mol_percentage), 
-                 cost_unit = COALESCE($5, cost_unit), 
-                 category = COALESCE($6, category), 
-                 subcategory = COALESCE($7, subcategory),
-                 tax_rate = COALESCE($8, tax_rate),
-                 type = COALESCE($9, type),
-                 is_disabled = COALESCE($10, is_disabled),
-                 supplier_id = COALESCE($11, supplier_id)
-             WHERE id = $12 
-             RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"`,
-            [name, description, costoValue, molPercentageValue, costUnitResult.value, category, subcategory, taxRateValue, typeResult.value, isDisabledValue, supplierId !== undefined ? supplierId : null, idResult.value]
-        );
+        if (fields.length === 0) {
+            // No updates
+            const result = await query(
+                `SELECT id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId" 
+                 FROM products WHERE id = $1`,
+                [idResult.value]
+            );
+            if (result.rows.length === 0) return reply.code(404).send({ error: 'Product not found' });
+
+            // Populate supplier name if needed
+            if (result.rows[0].supplierId) {
+                const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [result.rows[0].supplierId]);
+                if (supplierResult.rows.length > 0) {
+                    result.rows[0].supplierName = supplierResult.rows[0].name;
+                }
+            }
+            return result.rows[0];
+        }
+
+        values.push(idResult.value); // Add ID as last parameter
+        const queryText = `
+            UPDATE products 
+            SET ${fields.join(', ')}
+            WHERE id = $${paramIndex}
+            RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"
+        `;
+
+        const result = await query(queryText, values);
 
         if (result.rows.length === 0) {
             return reply.code(404).send({ error: 'Product not found' });
