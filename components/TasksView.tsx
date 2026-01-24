@@ -864,7 +864,6 @@ const TasksView: React.FC<TasksViewProps> = ({
         <StandardTable
           title={t('tasks.disabledTasks')}
           totalCount={disabledTasksTotal.length}
-          totalLabel="TOTAL"
           containerClassName="border-dashed bg-slate-50"
           footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
           footer={

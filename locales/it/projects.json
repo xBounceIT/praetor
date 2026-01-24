@@ -83,6 +83,7 @@
     "inheritedFromDisabledProject": "Ereditato da Progetto disabilitato: {{projectName}}",
     "createNewTask": "Crea Nuova Attività",
     "searchPlaceholder": "Cerca attività, descrizioni o progetti...",
-    "tasksDirectory": "Archivio Attività"
+    "tasksDirectory": "Archivio Attività",
+    "disabledTasks": "Attività Disabilitate"
   }
 }
