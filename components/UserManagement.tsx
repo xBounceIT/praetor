@@ -1308,10 +1308,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                 onChange={() => toggleAssignment('client', client.id)}
                                 className="sr-only peer"
                               />
-                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
-                                <i
-                                  className={`fa-solid fa-check text-white text-[11px] transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'opacity-100 scale-100' : 'opacity-0 scale-50'} font-bold`}
-                                ></i>
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <i
+                                    className={`fa-solid fa-check text-white text-[11px] transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'opacity-100 scale-100' : 'opacity-0 scale-50'} font-black`}
+                                  ></i>
+                                </div>
                               </div>
                             </div>
                             <span
@@ -1365,10 +1367,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                 onChange={() => toggleAssignment('project', project.id)}
                                 className="sr-only peer"
                               />
-                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
-                                <i
-                                  className={`fa-solid fa-check text-white text-[11px] transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'opacity-100 scale-100' : 'opacity-0 scale-50'} font-bold`}
-                                ></i>
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <i
+                                    className={`fa-solid fa-check text-white text-[11px] transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'opacity-100 scale-100' : 'opacity-0 scale-50'} font-black`}
+                                  ></i>
+                                </div>
                               </div>
                             </div>
                             <div className="flex flex-col">
@@ -1430,10 +1434,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                     onChange={() => toggleAssignment('task', task.id)}
                                     className="sr-only peer"
                                   />
-                                  <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
-                                    <i
-                                      className={`fa-solid fa-check text-white text-[11px] transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'opacity-100 scale-100' : 'opacity-0 scale-50'} font-bold`}
-                                    ></i>
+                                  <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                      <i
+                                        className={`fa-solid fa-check text-white text-[11px] transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'opacity-100 scale-100' : 'opacity-0 scale-50'} font-black`}
+                                      ></i>
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="flex flex-col">
