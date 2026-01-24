@@ -137,10 +137,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     if (!trimmedClientCode) {
       newErrors.clientCode = t('common:validation.clientCodeRequired');
     } else if (!/^[a-zA-Z0-9_-]+$/.test(trimmedClientCode)) {
-      newErrors.clientCode = t(
-        'common:validation.clientCodeInvalid',
-        'Only letters, numbers, dashes (-), and underscores (_) are allowed',
-      );
+      newErrors.clientCode = t('common:validation.clientCodeInvalid');
     }
     if (!trimmedVatNumber && !trimmedTaxCode) {
       const msg = t('common:validation.vatOrTaxRequired');

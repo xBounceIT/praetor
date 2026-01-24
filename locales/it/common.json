@@ -112,7 +112,8 @@
     "unitOfMeasureRequired": "L'unità di misura è obbligatoria",
     "taxRateRequired": "L'aliquota fiscale è obbligatoria",
     "taxRateRange": "L'aliquota fiscale deve essere tra 0 e 100",
-    "typeRequired": "Il tipo è obbligatorio"
+    "typeRequired": "Il tipo è obbligatorio",
+    "clientCodeInvalid": "Sono consentiti solo lettere, numeri, trattini (-) e underscore (_)"
   },
   "states": {
     "loading": "Caricamento...",

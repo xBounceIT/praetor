@@ -112,7 +112,8 @@
     "managersRequired": "At least one manager is required",
     "projectNameRequired": "Project name is required",
     "clientIdRequired": "Client is required",
-    "taskNameRequired": "Task name is required"
+    "taskNameRequired": "Task name is required",
+    "clientCodeInvalid": "Only letters, numbers, dashes (-), and underscores (_) are allowed"
   },
   "states": {
     "loading": "Loading...",

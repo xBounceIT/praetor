@@ -109,6 +109,14 @@ export default async function (fastify, _opts) {
           ],
         );
 
+        // Auto-assign new task to all manager users
+        await query(
+          `INSERT INTO user_tasks (user_id, task_id)
+           SELECT id, $1 FROM users WHERE role = 'manager'
+           ON CONFLICT (user_id, task_id) DO NOTHING`,
+          [id],
+        );
+
         return reply.code(201).send({
           id,
           name: nameResult.value,

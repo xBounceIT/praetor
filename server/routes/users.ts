@@ -10,6 +10,33 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
+// Helper function to auto-assign all clients, projects, and tasks to a manager user
+async function assignAllItemsToManager(userId: string): Promise<void> {
+  // Assign all clients
+  await query(
+    `INSERT INTO user_clients (user_id, client_id)
+     SELECT $1, id FROM clients
+     ON CONFLICT (user_id, client_id) DO NOTHING`,
+    [userId],
+  );
+
+  // Assign all projects
+  await query(
+    `INSERT INTO user_projects (user_id, project_id)
+     SELECT $1, id FROM projects
+     ON CONFLICT (user_id, project_id) DO NOTHING`,
+    [userId],
+  );
+
+  // Assign all tasks
+  await query(
+    `INSERT INTO user_tasks (user_id, task_id)
+     SELECT $1, id FROM tasks
+     ON CONFLICT (user_id, task_id) DO NOTHING`,
+    [userId],
+  );
+}
+
 export default async function (fastify, _opts) {
   // GET / - List users
   fastify.get(
@@ -114,6 +141,11 @@ export default async function (fastify, _opts) {
             false,
           ],
         );
+
+        // If the new user is a manager, auto-assign all items to them
+        if (roleResult.value === 'manager') {
+          await assignAllItemsToManager(id);
+        }
 
         return reply.code(201).send({
           id,
@@ -228,9 +260,23 @@ export default async function (fastify, _opts) {
         values.push(optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour').value);
       }
 
+      // Track if the user is being promoted to manager
+      let promotingToManager = false;
       if (role !== undefined) {
         updates.push(`role = $${paramIdx++}`);
         values.push(roleValue);
+
+        // Check if promoting to manager from a non-manager role
+        const currentRoleCheck = await query('SELECT role FROM users WHERE id = $1', [
+          idResult.value,
+        ]);
+        if (
+          currentRoleCheck.rows.length > 0 &&
+          currentRoleCheck.rows[0].role !== 'manager' &&
+          roleValue === 'manager'
+        ) {
+          promotingToManager = true;
+        }
       }
 
       if (updates.length === 0) {
@@ -248,6 +294,12 @@ export default async function (fastify, _opts) {
       }
 
       const u = result.rows[0];
+
+      // If the user was promoted to manager, auto-assign all items
+      if (promotingToManager) {
+        await assignAllItemsToManager(idResult.value);
+      }
+
       return {
         id: u.id,
         name: u.name,

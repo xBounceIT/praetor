@@ -71,6 +71,14 @@ export default async function (fastify, _opts) {
           [id, nameResult.value, clientIdResult.value, projectColor, description || null, false],
         );
 
+        // Auto-assign new project to all manager users
+        await query(
+          `INSERT INTO user_projects (user_id, project_id)
+           SELECT id, $1 FROM users WHERE role = 'manager'
+           ON CONFLICT (user_id, project_id) DO NOTHING`,
+          [id],
+        );
+
         return reply.code(201).send({
           id,
           name: nameResult.value,

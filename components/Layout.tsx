@@ -600,18 +600,16 @@ const Layout: React.FC<LayoutProps> = ({
                     </p>
                   </div>
 
-                  {(currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                    <button
-                      onClick={() => {
-                        setIsProfileMenuOpen(false);
-                        onViewChange('settings');
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-slate-100 text-praetor' : 'text-slate-700 hover:bg-slate-50'}`}
-                    >
-                      <i className="fa-solid fa-gear w-4 text-center"></i>
-                      {t('menu.settings')}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      onViewChange('settings');
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-slate-100 text-praetor' : 'text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    <i className="fa-solid fa-gear w-4 text-center"></i>
+                    {t('menu.settings')}
+                  </button>
 
                   <div className="border-t border-slate-100 mt-1 pt-1">
                     <button

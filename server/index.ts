@@ -157,6 +157,14 @@ try {
     } catch (err) {
       console.error('Failed to run products structure update migration:', err);
     }
+
+    // Run migration to assign all items to manager users
+    try {
+      const { migrate: assignItemsToManagers } = await import('./db/assign_items_to_managers.ts');
+      await assignItemsToManagers();
+    } catch (err) {
+      console.error('Failed to run manager assignments migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }
