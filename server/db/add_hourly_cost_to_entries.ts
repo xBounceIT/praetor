@@ -1,4 +1,3 @@
-
 import { query } from './index.ts';
 
 const migration = `
@@ -13,14 +12,14 @@ WHERE time_entries.user_id = users.id AND time_entries.hourly_cost = 0;
 `;
 
 async function runMigration() {
-    try {
-        console.log('Running migration to add hourly_cost column to time_entries...');
-        await query(migration);
-        console.log('Migration completed successfully.');
-    } catch (err) {
-        console.error('Migration failed:', err);
-        process.exit(1);
-    }
+  try {
+    console.log('Running migration to add hourly_cost column to time_entries...');
+    await query(migration);
+    console.log('Migration completed successfully.');
+  } catch (err) {
+    console.error('Migration failed:', err);
+    process.exit(1);
+  }
 }
 
 runMigration();

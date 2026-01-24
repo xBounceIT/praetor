@@ -12,7 +12,13 @@ interface ClientsViewProps {
   userRole: 'admin' | 'manager' | 'user';
 }
 
-const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdateClient, onDeleteClient, userRole }) => {
+const ClientsView: React.FC<ClientsViewProps> = ({
+  clients,
+  onAddClient,
+  onUpdateClient,
+  onDeleteClient,
+  userRole,
+}) => {
   const { t } = useTranslation(['crm', 'common', 'form']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -65,7 +71,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
     setCurrentPage(1);
     setDisabledCurrentPage(1);
   };
-
 
   // Form State
   const [formData, setFormData] = useState<Partial<Client>>({
@@ -148,7 +153,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       name: trimmedName,
       clientCode: trimmedClientCode,
       vatNumber: trimmedVatNumber,
-      taxCode: trimmedTaxCode
+      taxCode: trimmedTaxCode,
     };
 
     try {
@@ -162,7 +167,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       const message = (err as Error).message;
       if (message.toLowerCase().includes('vat number')) {
         setErrors({ ...newErrors, vatNumber: message });
-      } else if (message.toLowerCase().includes('client id') || message.toLowerCase().includes('client code')) {
+      } else if (
+        message.toLowerCase().includes('client id') ||
+        message.toLowerCase().includes('client code')
+      ) {
         setErrors({ ...newErrors, clientCode: message });
       } else {
         setErrors({ ...newErrors, general: message });
@@ -195,20 +203,21 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
       (client.taxCode ?? '').toLowerCase().includes(normalizedSearch);
 
     const clientType = client.type ?? 'company';
-    const matchesType = filterClientType === 'all' || clientType === (filterClientType as Client['type']);
+    const matchesType =
+      filterClientType === 'all' || clientType === (filterClientType as Client['type']);
 
     return matchesSearch && matchesType;
   };
 
   const filteredActiveClientsTotal = React.useMemo(() => {
-    return clients.filter(c => !c.isDisabled).filter(matchesClientFilters);
+    return clients.filter((c) => !c.isDisabled).filter(matchesClientFilters);
   }, [clients, normalizedSearch, filterClientType]);
 
   const filteredDisabledClientsTotal = React.useMemo(() => {
-    return clients.filter(c => c.isDisabled).filter(matchesClientFilters);
+    return clients.filter((c) => c.isDisabled).filter(matchesClientFilters);
   }, [clients, normalizedSearch, filterClientType]);
 
-  const hasAnyDisabledClients = clients.some(c => c.isDisabled);
+  const hasAnyDisabledClients = clients.some((c) => c.isDisabled);
 
   // Pagination Logic
   const totalPages = Math.ceil(filteredActiveClientsTotal.length / rowsPerPage);
@@ -216,14 +225,16 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
   const activeClients = filteredActiveClientsTotal.slice(startIndex, startIndex + rowsPerPage);
   const disabledTotalPages = Math.ceil(filteredDisabledClientsTotal.length / disabledRowsPerPage);
   const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-  const disabledClientsPage = filteredDisabledClientsTotal.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
+  const disabledClientsPage = filteredDisabledClientsTotal.slice(
+    disabledStartIndex,
+    disabledStartIndex + disabledRowsPerPage,
+  );
 
   const clientTypeFilterOptions = [
     { id: 'all', name: t('common:filters.allTypes') },
     { id: 'company', name: t('common:filters.companies') },
-    { id: 'individual', name: t('common:filters.individuals') }
+    { id: 'individual', name: t('common:filters.individuals') },
   ];
-
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -255,11 +266,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.subjectType')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.subjectType')}
+                    </label>
                     <div className="relative flex p-1 bg-slate-100 rounded-xl">
                       <div
-                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${formData.type === 'company' ? 'translate-x-0' : 'translate-x-full'
-                          }`}
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                          formData.type === 'company' ? 'translate-x-0' : 'translate-x-full'
+                        }`}
                       ></div>
                       <button
                         type="button"
@@ -278,7 +292,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.uniqueId')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.uniqueId')}
+                    </label>
                     <input
                       type="text"
                       value={formData.clientCode}
@@ -287,8 +303,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                         if (errors.clientCode) setErrors({ ...errors, clientCode: '' });
                       }}
                       placeholder={t('form:placeholderCode')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                        }`}
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.clientCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      }`}
                     />
                     {errors.clientCode && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientCode}</p>
@@ -296,7 +313,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                   </div>
                   <div className="col-span-full space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 ml-1">
-                      {formData.type === 'company' ? t('crm:clients.companyName') : t('crm:clients.personName')}
+                      {formData.type === 'company'
+                        ? t('crm:clients.companyName')
+                        : t('crm:clients.personName')}
                     </label>
                     <input
                       type="text"
@@ -305,9 +324,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                         setFormData({ ...formData, name: e.target.value });
                         if (errors.name) setErrors({ ...errors, name: '' });
                       }}
-                      placeholder={formData.type === 'company' ? t('form:placeholderName') : t('form:placeholderName')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                        }`}
+                      placeholder={
+                        formData.type === 'company'
+                          ? t('form:placeholderName')
+                          : t('form:placeholderName')
+                      }
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      }`}
                     />
                     {errors.name && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
@@ -324,7 +348,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.primaryEmail')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.primaryEmail')}
+                    </label>
                     <input
                       type="email"
                       value={formData.email}
@@ -334,7 +360,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.phoneLabel')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.phoneLabel')}
+                    </label>
                     <input
                       type="text"
                       value={formData.phone}
@@ -344,7 +372,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                     />
                   </div>
                   <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.contactRole')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.contactRole')}
+                    </label>
                     <input
                       type="text"
                       value={formData.contactName}
@@ -354,7 +384,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                     />
                   </div>
                   <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.streetAddress')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.streetAddress')}
+                    </label>
                     <textarea
                       rows={2}
                       value={formData.address}
@@ -374,7 +406,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.vatNumber')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.vatNumber')}
+                    </label>
                     <input
                       type="text"
                       value={formData.vatNumber}
@@ -383,15 +417,18 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                         if (errors.vatNumber) setErrors({ ...errors, vatNumber: '', taxCode: '' });
                       }}
                       placeholder={t('form:placeholderCode')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.vatNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                        }`}
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.vatNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      }`}
                     />
                     {errors.vatNumber && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.vatNumber}</p>
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.taxCode')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.taxCode')}
+                    </label>
                     <input
                       type="text"
                       value={formData.taxCode}
@@ -399,15 +436,18 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                         setFormData({ ...formData, taxCode: e.target.value });
                         if (errors.taxCode) setErrors({ ...errors, taxCode: '', vatNumber: '' });
                       }}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.taxCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                        }`}
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.taxCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      }`}
                     />
                     {errors.taxCode && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.taxCode}</p>
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:clients.billingCode')}</label>
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:clients.billingCode')}
+                    </label>
                     <input
                       type="text"
                       value={formData.billingCode}
@@ -455,7 +495,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 <i className="fa-solid fa-triangle-exclamation text-xl"></i>
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-800">{t('crm:clients.deleteClient')}</h3>
+                <h3 className="text-lg font-black text-slate-800">
+                  {t('crm:clients.deleteClient')}
+                </h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                   {t('common:messages.deleteConfirmNamed', { name: clientToDelete?.name })}
                   {t('crm:clients.deleteConfirm')}
@@ -537,13 +579,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
         footer={
           <>
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">{t('common:labels.rowsPerPage')}</span>
+              <span className="text-xs font-bold text-slate-500">
+                {t('common:labels.rowsPerPage')}
+              </span>
               <CustomSelect
                 options={[
                   { id: '5', name: '5' },
                   { id: '10', name: '10' },
                   { id: '20', name: '20' },
-                  { id: '50', name: '50' }
+                  { id: '50', name: '50' },
                 ]}
                 value={rowsPerPage.toString()}
                 onChange={(val) => handleRowsPerPageChange(val)}
@@ -552,34 +596,39 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 searchable={false}
               />
               <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('common:pagination.showing', { start: activeClients.length > 0 ? startIndex + 1 : 0, end: Math.min(startIndex + rowsPerPage, filteredActiveClientsTotal.length), total: filteredActiveClientsTotal.length })}
+                {t('common:pagination.showing', {
+                  start: activeClients.length > 0 ? startIndex + 1 : 0,
+                  end: Math.min(startIndex + rowsPerPage, filteredActiveClientsTotal.length),
+                  total: filteredActiveClientsTotal.length,
+                })}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-left text-xs"></i>
               </button>
               <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === page
-                      ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                      : 'text-slate-500 hover:bg-slate-100'
-                      }`}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                      currentPage === page
+                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
                   >
                     {page}
                   </button>
                 ))}
               </div>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
@@ -590,24 +639,35 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
         }
       >
         <div className="divide-y divide-slate-100">
-          {activeClients.map(c => (
-            <div key={c.id} onClick={() => openEditModal(c)} className="p-6 hover:bg-slate-50/50 active:bg-slate-100 active:scale-[0.98] transition-all group cursor-pointer select-none">
+          {activeClients.map((c) => (
+            <div
+              key={c.id}
+              onClick={() => openEditModal(c)}
+              className="p-6 hover:bg-slate-50/50 active:bg-slate-100 active:scale-[0.98] transition-all group cursor-pointer select-none"
+            >
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex gap-4 items-start">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg shadow-sm ${c.type === 'individual' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-praetor'}`}>
-                    <i className={`fa-solid ${c.type === 'individual' ? 'fa-user' : 'fa-building'}`}></i>
+                  <div
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg shadow-sm ${c.type === 'individual' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-praetor'}`}
+                  >
+                    <i
+                      className={`fa-solid ${c.type === 'individual' ? 'fa-user' : 'fa-building'}`}
+                    ></i>
                   </div>
                   <div>
                     <div className="flex items-center gap-3">
                       <h4 className="font-bold text-slate-800 leading-tight">{c.name}</h4>
                       {c.clientCode && (
-                        <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">{c.clientCode}</span>
+                        <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
+                          {c.clientCode}
+                        </span>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                       {c.email && (
                         <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                          <i className="fa-solid fa-envelope text-[10px] text-slate-300"></i> {c.email}
+                          <i className="fa-solid fa-envelope text-[10px] text-slate-300"></i>{' '}
+                          {c.email}
                         </span>
                       )}
                       {c.phone && (
@@ -616,7 +676,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                         </span>
                       )}
                       {c.vatNumber && (
-                        <span className="text-xs text-slate-400 font-mono tracking-tighter">VAT: {c.vatNumber}</span>
+                        <span className="text-xs text-slate-400 font-mono tracking-tighter">
+                          VAT: {c.vatNumber}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -665,7 +727,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                 <i className="fa-solid fa-users text-2xl"></i>
               </div>
               <p className="text-slate-400 text-sm font-bold">{t('crm:clients.noClients')}</p>
-              <button onClick={openAddModal} className="mt-4 text-praetor text-sm font-black hover:underline">{t('crm:clients.createFirst')}</button>
+              <button
+                onClick={openAddModal}
+                className="mt-4 text-praetor text-sm font-black hover:underline"
+              >
+                {t('crm:clients.createFirst')}
+              </button>
             </div>
           )}
         </div>
@@ -681,13 +748,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
           footer={
             <>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-500">{t('common:labels.rowsPerPage')}</span>
+                <span className="text-xs font-bold text-slate-500">
+                  {t('common:labels.rowsPerPage')}
+                </span>
                 <CustomSelect
                   options={[
                     { id: '5', name: '5' },
                     { id: '10', name: '10' },
                     { id: '20', name: '20' },
-                    { id: '50', name: '50' }
+                    { id: '50', name: '50' },
                   ]}
                   value={disabledRowsPerPage.toString()}
                   onChange={(val) => handleDisabledRowsPerPageChange(val)}
@@ -696,34 +765,44 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
                   searchable={false}
                 />
                 <span className="text-xs font-bold text-slate-400 ml-2">
-                  {t('common:pagination.showing', { start: disabledClientsPage.length > 0 ? disabledStartIndex + 1 : 0, end: Math.min(disabledStartIndex + disabledRowsPerPage, filteredDisabledClientsTotal.length), total: filteredDisabledClientsTotal.length })}
+                  {t('common:pagination.showing', {
+                    start: disabledClientsPage.length > 0 ? disabledStartIndex + 1 : 0,
+                    end: Math.min(
+                      disabledStartIndex + disabledRowsPerPage,
+                      filteredDisabledClientsTotal.length,
+                    ),
+                    total: filteredDisabledClientsTotal.length,
+                  })}
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setDisabledCurrentPage(prev => Math.max(1, prev - 1))}
+                  onClick={() => setDisabledCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={disabledCurrentPage === 1}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
                 >
                   <i className="fa-solid fa-chevron-left text-xs"></i>
                 </button>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map(page => (
+                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
                       onClick={() => setDisabledCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${disabledCurrentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                        }`}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                        disabledCurrentPage === page
+                          ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                          : 'text-slate-500 hover:bg-slate-100'
+                      }`}
                     >
                       {page}
                     </button>
                   ))}
                 </div>
                 <button
-                  onClick={() => setDisabledCurrentPage(prev => Math.min(disabledTotalPages, prev + 1))}
+                  onClick={() =>
+                    setDisabledCurrentPage((prev) => Math.min(disabledTotalPages, prev + 1))
+                  }
                   disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
                 >
@@ -734,15 +813,23 @@ const ClientsView: React.FC<ClientsViewProps> = ({ clients, onAddClient, onUpdat
           }
         >
           <div className="divide-y divide-slate-100">
-            {disabledClientsPage.map(c => (
-              <div key={c.id} onClick={() => openEditModal(c)} className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 active:bg-slate-100 active:scale-[0.98] transition-all flex items-center justify-between gap-4 cursor-pointer select-none">
+            {disabledClientsPage.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => openEditModal(c)}
+                className="p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 active:bg-slate-100 active:scale-[0.98] transition-all flex items-center justify-between gap-4 cursor-pointer select-none"
+              >
                 <div className="flex gap-4 items-center">
                   <div className="w-10 h-10 bg-slate-200 text-slate-400 rounded-xl flex items-center justify-center">
-                    <i className={`fa-solid ${c.type === 'individual' ? 'fa-user' : 'fa-building'}`}></i>
+                    <i
+                      className={`fa-solid ${c.type === 'individual' ? 'fa-user' : 'fa-building'}`}
+                    ></i>
                   </div>
                   <div>
                     <h5 className="font-bold text-slate-500 line-through">{c.name}</h5>
-                    <span className="text-[10px] font-black text-amber-500 uppercase">{t('crm:clients.isDisabled')}</span>
+                    <span className="text-[10px] font-black text-amber-500 uppercase">
+                      {t('crm:clients.isDisabled')}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-2">

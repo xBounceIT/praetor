@@ -10,12 +10,12 @@ END $$;
 `;
 
 export async function migrate() {
-    try {
-        console.log('Running migration to update language constraint in settings table...');
-        await query(migration, []);
-        console.log('Migration completed successfully.');
-    } catch (err) {
-        console.error('Migration failed:', err);
-        throw err;
-    }
+  try {
+    console.log('Running migration to update language constraint in settings table...');
+    await query(migration, []);
+    console.log('Migration completed successfully.');
+  } catch (err) {
+    console.error('Migration failed:', err);
+    throw err;
+  }
 }

@@ -14,12 +14,12 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.APP_VERSION': JSON.stringify(pkg.version),
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
-      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || '/api')
+      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || '/api'),
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-      }
-    }
+      },
+    },
   };
 });

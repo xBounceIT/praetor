@@ -1,8 +1,27 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getTheme, applyTheme } from './utils/theme';
-import { Client, Project, ProjectTask, TimeEntry, View, User, UserRole, LdapConfig, GeneralSettings as IGeneralSettings, Product, Quote, Sale, WorkUnit, Invoice, Payment, Expense, Supplier, SupplierQuote, SpecialBid } from './types';
+import {
+  Client,
+  Project,
+  ProjectTask,
+  TimeEntry,
+  View,
+  User,
+  UserRole,
+  LdapConfig,
+  GeneralSettings as IGeneralSettings,
+  Product,
+  Quote,
+  Sale,
+  WorkUnit,
+  Invoice,
+  Payment,
+  Expense,
+  Supplier,
+  SupplierQuote,
+  SpecialBid,
+} from './types';
 import { COLORS } from './constants';
 import i18n from './i18n';
 import Layout from './components/Layout';
@@ -66,7 +85,11 @@ const TrackerView: React.FC<{
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
-  onMakeRecurring: (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', endDate?: string) => void;
+  onMakeRecurring: (
+    taskId: string,
+    pattern: 'daily' | 'weekly' | 'monthly',
+    endDate?: string,
+  ) => void;
   userRole: UserRole;
   viewingUserId: string;
   onViewUserChange: (id: string) => void;
@@ -78,187 +101,258 @@ const TrackerView: React.FC<{
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   geminiApiKey?: string;
 }> = ({
-  entries, clients, projects, projectTasks, onAddEntry, onDeleteEntry, insights, isInsightLoading,
-  onRefreshInsights, onUpdateEntry, startOfWeek, treatSaturdayAsHoliday, onMakeRecurring, userRole,
-  viewingUserId, onViewUserChange, availableUsers, currentUser, dailyGoal, onAddBulkEntries,
-  enableAiInsights, onRecurringAction, geminiApiKey
+  entries,
+  clients,
+  projects,
+  projectTasks,
+  onAddEntry,
+  onDeleteEntry,
+  insights,
+  isInsightLoading,
+  onRefreshInsights,
+  onUpdateEntry,
+  startOfWeek,
+  treatSaturdayAsHoliday,
+  onMakeRecurring,
+  userRole,
+  viewingUserId,
+  onViewUserChange,
+  availableUsers,
+  currentUser,
+  dailyGoal,
+  onAddBulkEntries,
+  enableAiInsights,
+  onRecurringAction,
+  geminiApiKey,
 }) => {
-    const { t } = useTranslation('timesheets');
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
-      const saved = localStorage.getItem('trackerMode');
-      return (saved === 'daily' || saved === 'weekly') ? saved : 'daily';
-    });
+  const { t } = useTranslation('timesheets');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
+    const saved = localStorage.getItem('trackerMode');
+    return saved === 'daily' || saved === 'weekly' ? saved : 'daily';
+  });
 
-    useEffect(() => {
-      localStorage.setItem('trackerMode', trackerMode);
-    }, [trackerMode]);
+  useEffect(() => {
+    localStorage.setItem('trackerMode', trackerMode);
+  }, [trackerMode]);
 
-    const filteredEntries = useMemo(() => {
-      if (!selectedDate) return entries;
-      return entries.filter(e => e.date === selectedDate);
-    }, [entries, selectedDate]);
+  const filteredEntries = useMemo(() => {
+    if (!selectedDate) return entries;
+    return entries.filter((e) => e.date === selectedDate);
+  }, [entries, selectedDate]);
 
-    const dailyTotal = useMemo(() => {
-      return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
-    }, [filteredEntries]);
+  const dailyTotal = useMemo(() => {
+    return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
+  }, [filteredEntries]);
 
-    const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
 
-    const handleDeleteClick = (entry: TimeEntry) => {
-      if (entry.isPlaceholder) {
-        // Show modal for recurring entries
-        setPendingDeleteEntry(entry);
-      } else {
-        // Direct delete for normal entries
-        onDeleteEntry(entry.id);
-      }
-    };
+  const handleDeleteClick = (entry: TimeEntry) => {
+    if (entry.isPlaceholder) {
+      // Show modal for recurring entries
+      setPendingDeleteEntry(entry);
+    } else {
+      // Direct delete for normal entries
+      onDeleteEntry(entry.id);
+    }
+  };
 
-    const handleRecurringDelete = (action: 'stop' | 'delete_future' | 'delete_all') => {
-      if (!pendingDeleteEntry) return;
-      const task = projectTasks.find(t => t.name === pendingDeleteEntry.task && t.projectId === pendingDeleteEntry.projectId);
-      if (task) {
-        onRecurringAction(task.id, action);
-      }
-      setPendingDeleteEntry(null);
-    };
+  const handleRecurringDelete = (action: 'stop' | 'delete_future' | 'delete_all') => {
+    if (!pendingDeleteEntry) return;
+    const task = projectTasks.find(
+      (t) => t.name === pendingDeleteEntry.task && t.projectId === pendingDeleteEntry.projectId,
+    );
+    if (task) {
+      onRecurringAction(task.id, action);
+    }
+    setPendingDeleteEntry(null);
+  };
 
-    const viewingUser = availableUsers.find(u => u.id === viewingUserId);
-    const isViewingSelf = viewingUserId === currentUser.id;
+  const viewingUser = availableUsers.find((u) => u.id === viewingUserId);
+  const isViewingSelf = viewingUserId === currentUser.id;
 
-    const userOptions = useMemo(() => availableUsers.map(u => ({ id: u.id, name: u.name })), [availableUsers]);
+  const userOptions = useMemo(
+    () => availableUsers.map((u) => ({ id: u.id, name: u.name })),
+    [availableUsers],
+  );
 
-    return (
-      <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-        {/* Top Middle Toggle */}
-        <div className="flex justify-center">
-          <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-full w-full max-w-[240px]">
-            <div
-              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
-                }`}
-            ></div>
-            <button
-              onClick={() => setTrackerMode('daily')}
-              className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              {t('tracker.mode.daily')}
-            </button>
-            <button
-              onClick={() => setTrackerMode('weekly')}
-              className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              {t('tracker.mode.weekly')}
-            </button>
-          </div>
+  return (
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      {/* Top Middle Toggle */}
+      <div className="flex justify-center">
+        <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-full w-full max-w-[240px]">
+          <div
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+              trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
+            }`}
+          ></div>
+          <button
+            onClick={() => setTrackerMode('daily')}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            {t('tracker.mode.daily')}
+          </button>
+          <button
+            onClick={() => setTrackerMode('weekly')}
+            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            {t('tracker.mode.weekly')}
+          </button>
         </div>
+      </div>
 
-        {trackerMode === 'weekly' ? (
-          <WeeklyView
-            entries={entries}
-            clients={clients}
-            projects={projects}
-            projectTasks={projectTasks}
-            onAddEntry={onAddEntry}
-            onDeleteEntry={onDeleteEntry}
-            onUpdateEntry={onUpdateEntry}
-            userRole={userRole}
-            currentUser={currentUser}
-            viewingUserId={viewingUserId}
-            availableUsers={availableUsers}
-            onViewUserChange={onViewUserChange}
-            onAddBulkEntries={onAddBulkEntries}
-            startOfWeek={startOfWeek}
-            treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-          />
-        ) : (
-          <div className="flex flex-col lg:flex-row gap-8">
-            <div className="flex-1 space-y-6">
-
-              {/* Manager Selection Header */}
-              {availableUsers.length > 1 && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
-                      {viewingUser?.avatarInitials}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
-                      </p>
-                      <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
-                    </div>
+      {trackerMode === 'weekly' ? (
+        <WeeklyView
+          entries={entries}
+          clients={clients}
+          projects={projects}
+          projectTasks={projectTasks}
+          onAddEntry={onAddEntry}
+          onDeleteEntry={onDeleteEntry}
+          onUpdateEntry={onUpdateEntry}
+          userRole={userRole}
+          currentUser={currentUser}
+          viewingUserId={viewingUserId}
+          availableUsers={availableUsers}
+          onViewUserChange={onViewUserChange}
+          onAddBulkEntries={onAddBulkEntries}
+          startOfWeek={startOfWeek}
+          treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+        />
+      ) : (
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex-1 space-y-6">
+            {/* Manager Selection Header */}
+            {availableUsers.length > 1 && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
+                  >
+                    {viewingUser?.avatarInitials}
                   </div>
-                  <div className="w-64">
-                    <CustomSelect
-                      options={userOptions}
-                      value={viewingUserId}
-                      onChange={onViewUserChange}
-                      label={t('tracker.switchUserView')}
-                      searchable={true}
-                    />
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
+                    </p>
+                    <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
                   </div>
                 </div>
-              )}
+                <div className="w-64">
+                  <CustomSelect
+                    options={userOptions}
+                    value={viewingUserId}
+                    onChange={onViewUserChange}
+                    label={t('tracker.switchUserView')}
+                    searchable={true}
+                  />
+                </div>
+              </div>
+            )}
 
-              <TimeEntryForm
-                clients={clients}
-                projects={projects}
-                projectTasks={projectTasks}
-                onAdd={onAddEntry}
-                selectedDate={selectedDate}
-                onMakeRecurring={onMakeRecurring}
-                userRole={userRole}
-                dailyGoal={dailyGoal}
-                currentDayTotal={dailyTotal}
-                enableAiInsights={enableAiInsights}
-                geminiApiKey={geminiApiKey}
-              />
+            <TimeEntryForm
+              clients={clients}
+              projects={projects}
+              projectTasks={projectTasks}
+              onAdd={onAddEntry}
+              selectedDate={selectedDate}
+              onMakeRecurring={onMakeRecurring}
+              userRole={userRole}
+              dailyGoal={dailyGoal}
+              currentDayTotal={dailyTotal}
+              enableAiInsights={enableAiInsights}
+              geminiApiKey={geminiApiKey}
+            />
 
-              <div className="space-y-4">
-                <div className="flex justify-between items-end px-2">
-                  <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
-                      {selectedDate ? t('tracker.activityFor', { date: new Date(selectedDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }) }) : t('entry.recentActivity')}
-                    </h3>
-                    {selectedDate && <p className="text-xs text-slate-400 font-medium">{t('tracker.logsForDate')}</p>}
-                  </div>
+            <div className="space-y-4">
+              <div className="flex justify-between items-end px-2">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                    {selectedDate
+                      ? t('tracker.activityFor', {
+                          date: new Date(selectedDate).toLocaleDateString(undefined, {
+                            month: 'long',
+                            day: 'numeric',
+                          }),
+                        })
+                      : t('entry.recentActivity')}
+                  </h3>
                   {selectedDate && (
-                    <div className="text-right">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">{t('tracker.dayTotal')}</p>
-                      <p className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}>{dailyTotal.toFixed(2)} h</p>
-                    </div>
+                    <p className="text-xs text-slate-400 font-medium">{t('tracker.logsForDate')}</p>
                   )}
                 </div>
+                {selectedDate && (
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">
+                      {t('tracker.dayTotal')}
+                    </p>
+                    <p
+                      className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}
+                    >
+                      {dailyTotal.toFixed(2)} h
+                    </p>
+                  </div>
+                )}
+              </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-200">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      {!selectedDate && (
+                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
+                          {t('entry.date')}
+                        </th>
+                      )}
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
+                        {t('tracker.clientProject')}
+                      </th>
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
+                        {t('entry.task')}
+                      </th>
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
+                        {t('tracker.notes')}
+                      </th>
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter text-right">
+                        {t('entry.hours')}
+                      </th>
+                      <th className="px-6 py-3 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredEntries.length === 0 ? (
                       <tr>
-                        {!selectedDate && <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">{t('entry.date')}</th>}
-                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">{t('tracker.clientProject')}</th>
-                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">{t('entry.task')}</th>
-                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">{t('tracker.notes')}</th>
-                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter text-right">{t('entry.hours')}</th>
-                        <th className="px-6 py-3 w-10"></th>
+                        <td colSpan={selectedDate ? 5 : 6} className="px-6 py-20 text-center">
+                          <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
+                          <p className="text-slate-400 font-medium text-sm">
+                            {t('tracker.noEntries')}
+                          </p>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredEntries.length === 0 ? (
-                        <tr>
-                          <td colSpan={selectedDate ? 5 : 6} className="px-6 py-20 text-center">
-                            <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
-                            <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
-                          </td>
-                        </tr>
-                      ) : filteredEntries.map(entry => (
-                        <tr key={entry.id} className={`group hover:bg-slate-50/50 transition-colors ${entry.isPlaceholder ? 'bg-indigo-50/30 italic' : ''}`}>
-                          {!selectedDate && <td className="px-6 py-4 text-xs font-bold text-slate-500 align-top">{entry.date}</td>}
+                    ) : (
+                      filteredEntries.map((entry) => (
+                        <tr
+                          key={entry.id}
+                          className={`group hover:bg-slate-50/50 transition-colors ${entry.isPlaceholder ? 'bg-indigo-50/30 italic' : ''}`}
+                        >
+                          {!selectedDate && (
+                            <td className="px-6 py-4 text-xs font-bold text-slate-500 align-top">
+                              {entry.date}
+                            </td>
+                          )}
                           <td className="px-6 py-4 align-top">
                             <div className="flex flex-col">
-                              <span className="text-[10px] font-black text-indigo-500 uppercase leading-none mb-1 tracking-wider">{entry.clientName}</span>
+                              <span className="text-[10px] font-black text-indigo-500 uppercase leading-none mb-1 tracking-wider">
+                                {entry.clientName}
+                              </span>
                               <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: projects.find(p => p.id === entry.projectId)?.color }}></span>
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{
+                                    backgroundColor: projects.find((p) => p.id === entry.projectId)
+                                      ?.color,
+                                  }}
+                                ></span>
                                 {entry.projectName}
                               </span>
                             </div>
@@ -266,137 +360,157 @@ const TrackerView: React.FC<{
                           <td className="px-6 py-4 text-sm align-top">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-slate-800">{entry.task}</span>
-                              {entry.isPlaceholder && <i className="fa-solid fa-repeat text-[10px] text-indigo-400" title={t('entry.recurringTask')}></i>}
+                              {entry.isPlaceholder && (
+                                <i
+                                  className="fa-solid fa-repeat text-[10px] text-indigo-400"
+                                  title={t('entry.recurringTask')}
+                                ></i>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm align-top">
                             {entry.notes ? (
-                              <div className="text-slate-500 text-xs italic leading-relaxed">{entry.notes}</div>
+                              <div className="text-slate-500 text-xs italic leading-relaxed">
+                                {entry.notes}
+                              </div>
                             ) : (
                               <span className="text-slate-300 text-xs">-</span>
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-900 font-black text-right align-top">
-                            {entry.isPlaceholder && entry.duration === 0 ? '--' : entry.duration.toFixed(2)}
+                            {entry.isPlaceholder && entry.duration === 0
+                              ? '--'
+                              : entry.duration.toFixed(2)}
                           </td>
                           <td className="px-6 py-4 align-top">
-                            <button onClick={() => handleDeleteClick(entry)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1">
+                            <button
+                              onClick={() => handleDeleteClick(entry)}
+                              className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
+                            >
                               <i className="fa-solid fa-trash-can text-xs"></i>
                             </button>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            <div className="lg:w-80 shrink-0 space-y-6">
-              <Calendar
-                selectedDate={selectedDate}
-                onDateSelect={setSelectedDate}
-                entries={entries}
-                startOfWeek={startOfWeek}
-                treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-                dailyGoal={dailyGoal}
-              />
-
-              {enableAiInsights && (
-                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 hidden lg:block">
-                  <h3 className="text-indigo-900 font-bold mb-3 flex items-center gap-2 text-sm">
-                    <i className="fa-solid fa-lightbulb text-indigo-500"></i>
-                    AI Coach
-                  </h3>
-                  <div className="text-indigo-700 text-xs leading-relaxed whitespace-pre-line mb-4">
-                    {isInsightLoading ? (
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-circle-notch fa-spin"></i>
-                        Analyzing patterns...
-                      </div>
-                    ) : insights}
-                  </div>
-                  <button
-                    onClick={onRefreshInsights}
-                    className="w-full bg-white text-indigo-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                  >
-                    Refresh Insights
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
-        )}
 
-        {/* Recurring Delete Modal */}
-        {pendingDeleteEntry && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="p-6 border-b border-slate-100">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                  {t('entry.stopRecurringTask')}
+          <div className="lg:w-80 shrink-0 space-y-6">
+            <Calendar
+              selectedDate={selectedDate}
+              onDateSelect={setSelectedDate}
+              entries={entries}
+              startOfWeek={startOfWeek}
+              treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+              dailyGoal={dailyGoal}
+            />
+
+            {enableAiInsights && (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 hidden lg:block">
+                <h3 className="text-indigo-900 font-bold mb-3 flex items-center gap-2 text-sm">
+                  <i className="fa-solid fa-lightbulb text-indigo-500"></i>
+                  AI Coach
                 </h3>
-                <p className="text-sm text-slate-500 mt-1">
-                  {t('entry.howHandleEntries')} <strong className="text-slate-800">{pendingDeleteEntry.task}</strong>?
+                <div className="text-indigo-700 text-xs leading-relaxed whitespace-pre-line mb-4">
+                  {isInsightLoading ? (
+                    <div className="flex items-center gap-2">
+                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                      Analyzing patterns...
+                    </div>
+                  ) : (
+                    insights
+                  )}
+                </div>
+                <button
+                  onClick={onRefreshInsights}
+                  className="w-full bg-white text-indigo-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                >
+                  Refresh Insights
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Recurring Delete Modal */}
+      {pendingDeleteEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                {t('entry.stopRecurringTask')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                {t('entry.howHandleEntries')}{' '}
+                <strong className="text-slate-800">{pendingDeleteEntry.task}</strong>?
+              </p>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <button
+                onClick={() => handleRecurringDelete('stop')}
+                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-slate-800 group-hover:text-indigo-700">
+                    {t('recurring.stopOnly')}
+                  </span>
+                  <i className="fa-solid fa-pause text-slate-300 group-hover:text-indigo-500"></i>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {t('recurring.stopOnlyDesc')}
                 </p>
-              </div>
+              </button>
 
-              <div className="p-4 space-y-3">
-                <button
-                  onClick={() => handleRecurringDelete('stop')}
-                  className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800 group-hover:text-indigo-700">{t('recurring.stopOnly')}</span>
-                    <i className="fa-solid fa-pause text-slate-300 group-hover:text-indigo-500"></i>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {t('recurring.stopOnlyDesc')}
-                  </p>
-                </button>
+              <button
+                onClick={() => handleRecurringDelete('delete_future')}
+                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-slate-800 group-hover:text-red-700">
+                    {t('recurring.deleteFuture')}
+                  </span>
+                  <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {t('recurring.deleteFutureDesc')}
+                </p>
+              </button>
 
-                <button
-                  onClick={() => handleRecurringDelete('delete_future')}
-                  className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800 group-hover:text-red-700">{t('recurring.deleteFuture')}</span>
-                    <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {t('recurring.deleteFutureDesc')}
-                  </p>
-                </button>
+              <button
+                onClick={() => handleRecurringDelete('delete_all')}
+                className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
+                  <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
+                </div>
+                <p className="text-xs text-red-600/70 leading-relaxed">
+                  {t('recurring.deleteAllDesc')}
+                </p>
+              </button>
+            </div>
 
-                <button
-                  onClick={() => handleRecurringDelete('delete_all')}
-                  className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
-                    <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
-                  </div>
-                  <p className="text-xs text-red-600/70 leading-relaxed">
-                    {t('recurring.deleteAllDesc')}
-                  </p>
-                </button>
-              </div>
-
-              <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
-                <button
-                  onClick={() => setPendingDeleteEntry(null)}
-                  className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
-                >
-                  {t('entry.cancel')}
-                </button>
-              </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
+              <button
+                onClick={() => setPendingDeleteEntry(null)}
+                className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
+              >
+                {t('entry.cancel')}
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    );
-  };
+        </div>
+      )}
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   useLayoutEffect(() => {
@@ -422,7 +536,7 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [settings, setSettings] = useState({
     fullName: 'User',
-    email: ''
+    email: '',
   });
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
     enabled: false,
@@ -433,7 +547,7 @@ const App: React.FC = () => {
     userFilter: '(uid={0})',
     groupBaseDn: 'ou=groups,dc=example,dc=com',
     groupFilter: '(member={0})',
-    roleMappings: []
+    roleMappings: [],
   });
   const [generalSettings, setGeneralSettings] = useState({
     currency: '€',
@@ -441,7 +555,7 @@ const App: React.FC = () => {
     startOfWeek: 'Monday' as 'Monday' | 'Sunday',
     treatSaturdayAsHoliday: true,
     enableAiInsights: false,
-    geminiApiKey: ''
+    geminiApiKey: '',
   });
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
@@ -450,17 +564,39 @@ const App: React.FC = () => {
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
-  const [viewingUserAssignments, setViewingUserAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] } | null>(null);
-  const VALID_VIEWS: View[] = useMemo(() => [
-    'timesheets/tracker', 'timesheets/reports', 'timesheets/recurring', 'timesheets/tasks', 'timesheets/projects',
-    'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-    'crm/clients', 'crm/quotes', 'crm/sales',
-    'catalog/products', 'catalog/special-bids',
-    'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
-    'projects/manage', 'projects/tasks',
-    'suppliers/manage', 'suppliers/quotes',
-    'settings'
-  ], []);
+  const [viewingUserAssignments, setViewingUserAssignments] = useState<{
+    clientIds: string[];
+    projectIds: string[];
+    taskIds: string[];
+  } | null>(null);
+  const VALID_VIEWS: View[] = useMemo(
+    () => [
+      'timesheets/tracker',
+      'timesheets/reports',
+      'timesheets/recurring',
+      'timesheets/tasks',
+      'timesheets/projects',
+      'hr/workforce',
+      'hr/work-units',
+      'configuration/authentication',
+      'configuration/general',
+      'crm/clients',
+      'crm/quotes',
+      'crm/sales',
+      'catalog/products',
+      'catalog/special-bids',
+      'finances/invoices',
+      'finances/payments',
+      'finances/expenses',
+      'finances/reports',
+      'projects/manage',
+      'projects/tasks',
+      'suppliers/manage',
+      'suppliers/quotes',
+      'settings',
+    ],
+    [],
+  );
 
   const [activeView, setActiveView] = useState<View | '404'>(() => {
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
@@ -468,22 +604,41 @@ const App: React.FC = () => {
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
     const validViews: View[] = [
-      'timesheets/tracker', 'timesheets/reports', 'timesheets/recurring', 'timesheets/tasks', 'timesheets/projects',
-      'hr/workforce', 'hr/work-units', 'configuration/authentication', 'configuration/general',
-      'crm/clients', 'crm/quotes', 'crm/sales',
-      'catalog/products', 'catalog/special-bids',
-      'finances/invoices', 'finances/payments', 'finances/expenses', 'finances/reports',
-      'projects/manage', 'projects/tasks',
-      'suppliers/manage', 'suppliers/quotes',
-      'settings'
+      'timesheets/tracker',
+      'timesheets/reports',
+      'timesheets/recurring',
+      'timesheets/tasks',
+      'timesheets/projects',
+      'hr/workforce',
+      'hr/work-units',
+      'configuration/authentication',
+      'configuration/general',
+      'crm/clients',
+      'crm/quotes',
+      'crm/sales',
+      'catalog/products',
+      'catalog/special-bids',
+      'finances/invoices',
+      'finances/payments',
+      'finances/expenses',
+      'finances/reports',
+      'projects/manage',
+      'projects/tasks',
+      'suppliers/manage',
+      'suppliers/quotes',
+      'settings',
     ];
-    return validViews.includes(hash) ? hash : (rawHash === '' || rawHash === 'login' ? 'timesheets/tracker' : '404');
+    return validViews.includes(hash)
+      ? hash
+      : rawHash === '' || rawHash === 'login'
+        ? 'timesheets/tracker'
+        : '404';
   });
   const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
 
   const quoteIdsWithSales = useMemo(() => {
     const ids = new Set<string>();
-    sales.forEach(sale => {
+    sales.forEach((sale) => {
       if (sale.linkedQuoteId) {
         ids.add(sale.linkedQuoteId);
       }
@@ -527,7 +682,7 @@ const App: React.FC = () => {
       'suppliers/manage': ['manager'],
       'suppliers/quotes': ['manager'],
       // Standalone
-      'settings': ['admin', 'manager']
+      settings: ['admin', 'manager'],
     };
 
     const allowedRoles = permissions[activeView as View];
@@ -570,7 +725,11 @@ const App: React.FC = () => {
         return;
       }
       const hash = rawHash as View;
-      const nextView = VALID_VIEWS.includes(hash) ? hash : (rawHash === '' ? 'timesheets/tracker' : '404');
+      const nextView = VALID_VIEWS.includes(hash)
+        ? hash
+        : rawHash === ''
+          ? 'timesheets/tracker'
+          : '404';
       if (nextView !== activeView) {
         setActiveView(nextView);
       }
@@ -653,13 +812,14 @@ const App: React.FC = () => {
         switch (module) {
           case 'timesheets': {
             if (currentUser.role === 'admin') return;
-            const [entriesData, clientsData, projectsData, tasksData, usersData] = await Promise.all([
-              api.entries.list(),
-              api.clients.list(),
-              api.projects.list(),
-              api.tasks.list(),
-              api.users.list()
-            ]);
+            const [entriesData, clientsData, projectsData, tasksData, usersData] =
+              await Promise.all([
+                api.entries.list(),
+                api.clients.list(),
+                api.projects.list(),
+                api.tasks.list(),
+                api.users.list(),
+              ]);
             setEntries(entriesData);
             setClients(clientsData);
             setProjects(projectsData);
@@ -672,7 +832,7 @@ const App: React.FC = () => {
             if (currentUser.role !== 'admin' && currentUser.role !== 'manager') return;
             const [usersData, workUnitsData] = await Promise.all([
               api.users.list(),
-              api.workUnits.list()
+              api.workUnits.list(),
             ]);
             setUsers(usersData);
             setWorkUnits(workUnitsData);
@@ -687,13 +847,14 @@ const App: React.FC = () => {
           }
           case 'crm': {
             if (currentUser.role !== 'manager') return;
-            const [clientsData, quotesData, salesData, productsData, specialBidsData] = await Promise.all([
-              api.clients.list(),
-              api.quotes.list(),
-              api.sales.list(),
-              api.products.list(),
-              api.specialBids.list()
-            ]);
+            const [clientsData, quotesData, salesData, productsData, specialBidsData] =
+              await Promise.all([
+                api.clients.list(),
+                api.quotes.list(),
+                api.sales.list(),
+                api.products.list(),
+                api.specialBids.list(),
+              ]);
             setClients(clientsData);
             setQuotes(quotesData);
             setSales(salesData);
@@ -706,7 +867,7 @@ const App: React.FC = () => {
             if (currentUser.role !== 'manager') return;
             const [productsData, specialBidsData] = await Promise.all([
               api.products.list(),
-              api.specialBids.list()
+              api.specialBids.list(),
             ]);
             setProducts(productsData);
             setSpecialBids(specialBidsData);
@@ -719,7 +880,7 @@ const App: React.FC = () => {
               api.invoices.list(),
               api.payments.list(),
               api.expenses.list(),
-              api.clients.list()
+              api.clients.list(),
             ]);
             setInvoices(invoicesData);
             setPayments(paymentsData);
@@ -734,7 +895,7 @@ const App: React.FC = () => {
               api.projects.list(),
               api.tasks.list(),
               api.clients.list(),
-              api.users.list()
+              api.users.list(),
             ]);
             setProjects(projectsData);
             setProjectTasks(tasksData);
@@ -747,7 +908,7 @@ const App: React.FC = () => {
             const [suppliersData, supplierQuotesData, productsData] = await Promise.all([
               api.suppliers.list(),
               api.supplierQuotes.list(),
-              api.products.list()
+              api.products.list(),
             ]);
             setSuppliers(suppliersData);
             setSupplierQuotes(supplierQuotesData);
@@ -757,7 +918,7 @@ const App: React.FC = () => {
           }
         }
 
-        setLoadedModules(prev => {
+        setLoadedModules((prev) => {
           const next = new Set(prev);
           next.add(module);
           return next;
@@ -768,7 +929,14 @@ const App: React.FC = () => {
     };
 
     loadModuleData();
-  }, [activeView, currentUser, isRouteAccessible, loadedModules, hasLoadedGeneralSettings, hasLoadedLdapConfig]);
+  }, [
+    activeView,
+    currentUser,
+    isRouteAccessible,
+    loadedModules,
+    hasLoadedGeneralSettings,
+    hasLoadedLdapConfig,
+  ]);
 
   // Load entries and assignments when viewing user changes
   useEffect(() => {
@@ -777,7 +945,10 @@ const App: React.FC = () => {
     const loadAssignments = async () => {
       try {
         // If manager/admin is viewing another user, fetch that user's assignments to filter the dropdowns
-        if ((currentUser.role === 'admin' || currentUser.role === 'manager') && viewingUserId !== currentUser.id) {
+        if (
+          (currentUser.role === 'admin' || currentUser.role === 'manager') &&
+          viewingUserId !== currentUser.id
+        ) {
           const assignments = await api.users.getAssignments(viewingUserId);
           setViewingUserAssignments(assignments);
         } else {
@@ -802,7 +973,8 @@ const App: React.FC = () => {
   const availableUsers = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return users;
-    if (currentUser.role === 'manager') return users.filter(u => u.role === 'user' || u.id === currentUser.id);
+    if (currentUser.role === 'manager')
+      return users.filter((u) => u.role === 'user' || u.id === currentUser.id);
     return [currentUser];
   }, [users, currentUser]);
 
@@ -814,15 +986,16 @@ const App: React.FC = () => {
 
     const newEntries: TimeEntry[] = [];
 
-    for (const task of projectTasks.filter(t => t.isRecurring)) {
-      const project = projects.find(p => p.id === task.projectId);
-      const client = project ? clients.find(c => c.id === project.clientId) : null;
+    for (const task of projectTasks.filter((t) => t.isRecurring)) {
+      const project = projects.find((p) => p.id === task.projectId);
+      const client = project ? clients.find((c) => c.id === project.clientId) : null;
       if (!project || !client) continue;
 
       const startDate = task.recurrenceStart ? new Date(task.recurrenceStart) : new Date();
       // Use recurrence end date if specified, otherwise use default 14-day limit
       const taskEndDate = task.recurrenceEnd ? new Date(task.recurrenceEnd) : null;
-      const futureLimit = taskEndDate && taskEndDate > defaultFutureLimit ? taskEndDate : defaultFutureLimit;
+      const futureLimit =
+        taskEndDate && taskEndDate > defaultFutureLimit ? taskEndDate : defaultFutureLimit;
 
       for (let d = new Date(startDate); d <= futureLimit; d.setDate(d.getDate() + 1)) {
         if (taskEndDate && d > taskEndDate) break;
@@ -831,17 +1004,23 @@ const App: React.FC = () => {
         const isSunday = d.getDay() === 0;
         const isSaturday = d.getDay() === 6;
         const holidayName = isItalianHoliday(d);
-        const isDisabledDay = isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
+        const isDisabledDay =
+          isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
         if (isDisabledDay) continue;
 
         const dateStr = d.toISOString().split('T')[0];
         let matches = false;
         if (task.recurrencePattern === 'daily') matches = true;
-        if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay()) matches = true;
-        if (task.recurrencePattern === 'monthly' && d.getDate() === startDate.getDate()) matches = true;
+        if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay())
+          matches = true;
+        if (task.recurrencePattern === 'monthly' && d.getDate() === startDate.getDate())
+          matches = true;
 
         // Custom patterns: monthly:first:X or monthly:last:X
-        if (typeof task.recurrencePattern === 'string' && task.recurrencePattern.startsWith('monthly:')) {
+        if (
+          typeof task.recurrencePattern === 'string' &&
+          task.recurrencePattern.startsWith('monthly:')
+        ) {
           const parts = task.recurrencePattern.split(':');
           if (parts.length === 3) {
             const type = parts[1]; // 'first' or 'last'
@@ -873,7 +1052,9 @@ const App: React.FC = () => {
           }
         }
         if (matches) {
-          const exists = entries.some(e => e.date === dateStr && e.projectId === task.projectId && e.task === task.name);
+          const exists = entries.some(
+            (e) => e.date === dateStr && e.projectId === task.projectId && e.task === task.name,
+          );
           if (!exists) {
             try {
               const entry = await api.entries.create({
@@ -886,7 +1067,7 @@ const App: React.FC = () => {
                 task: task.name,
                 duration: task.recurrenceDuration || 0,
                 isPlaceholder: true,
-                hourlyCost: currentUser?.costPerHour || 0
+                hourlyCost: currentUser?.costPerHour || 0,
               });
               newEntries.push(entry);
             } catch (err) {
@@ -898,7 +1079,7 @@ const App: React.FC = () => {
     }
 
     if (newEntries.length > 0) {
-      setEntries(prev => [...newEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+      setEntries((prev) => [...newEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
     }
   }, [projectTasks, entries, projects, clients, currentUser]);
 
@@ -906,37 +1087,38 @@ const App: React.FC = () => {
 
   // Filtered lists for TrackerView
   const filteredClients = useMemo(() => {
-    const activeClients = clients.filter(c => !c.isDisabled);
+    const activeClients = clients.filter((c) => !c.isDisabled);
     if (!viewingUserAssignments) return activeClients;
-    return activeClients.filter(c => viewingUserAssignments.clientIds.includes(c.id));
+    return activeClients.filter((c) => viewingUserAssignments.clientIds.includes(c.id));
   }, [clients, viewingUserAssignments]);
 
   const filteredProjects = useMemo(() => {
-    const activeProjects = projects.filter(p => {
+    const activeProjects = projects.filter((p) => {
       if (p.isDisabled) return false;
-      const client = clients.find(c => c.id === p.clientId);
+      const client = clients.find((c) => c.id === p.clientId);
       return !client?.isDisabled;
     });
     if (!viewingUserAssignments) return activeProjects;
-    return activeProjects.filter(p => viewingUserAssignments.projectIds.includes(p.id));
+    return activeProjects.filter((p) => viewingUserAssignments.projectIds.includes(p.id));
   }, [projects, clients, viewingUserAssignments]);
 
   const filteredTasks = useMemo(() => {
-    const activeTasks = projectTasks.filter(t => {
+    const activeTasks = projectTasks.filter((t) => {
       if (t.isDisabled) return false;
-      const project = projects.find(p => p.id === t.projectId);
+      const project = projects.find((p) => p.id === t.projectId);
       if (!project || project.isDisabled) return false;
-      const client = clients.find(c => c.id === project.clientId);
+      const client = clients.find((c) => c.id === project.clientId);
       return !client?.isDisabled;
     });
     if (!viewingUserAssignments) return activeTasks;
-    return activeTasks.filter(t => viewingUserAssignments.taskIds.includes(t.id));
+    return activeTasks.filter((t) => viewingUserAssignments.taskIds.includes(t.id));
   }, [projectTasks, projects, clients, viewingUserAssignments]);
-
 
   useEffect(() => {
     if (!currentUser) return;
-    const timer = setTimeout(() => { generateRecurringEntries(); }, 100);
+    const timer = setTimeout(() => {
+      generateRecurringEntries();
+    }, 100);
     return () => clearTimeout(timer);
   }, [generateRecurringEntries, currentUser]);
 
@@ -949,7 +1131,7 @@ const App: React.FC = () => {
       const entry = await api.entries.create({
         ...newEntry,
         userId: targetUserId,
-        hourlyCost: currentUser?.costPerHour || 0
+        hourlyCost: currentUser?.costPerHour || 0,
       } as any);
       setEntries([entry, ...entries]);
     } catch (err) {
@@ -958,16 +1140,22 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddBulkEntries = async (newEntries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => {
+  const handleAddBulkEntries = async (
+    newEntries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[],
+  ) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
-      const createdEntries = await Promise.all(newEntries.map(entry => api.entries.create({
-        ...entry,
-        userId: targetUserId,
-        hourlyCost: currentUser?.costPerHour || 0
-      } as any)));
-      setEntries(prev => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+      const createdEntries = await Promise.all(
+        newEntries.map((entry) =>
+          api.entries.create({
+            ...entry,
+            userId: targetUserId,
+            hourlyCost: currentUser?.costPerHour || 0,
+          } as any),
+        ),
+      );
+      setEntries((prev) => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
     } catch (err) {
       console.error('Failed to add bulk entries:', err);
       alert('Failed to add some time entries');
@@ -977,7 +1165,7 @@ const App: React.FC = () => {
   const handleDeleteEntry = async (id: string) => {
     try {
       await api.entries.delete(id);
-      setEntries(entries.filter(e => e.id !== id));
+      setEntries(entries.filter((e) => e.id !== id));
     } catch (err) {
       console.error('Failed to delete entry:', err);
     }
@@ -986,7 +1174,7 @@ const App: React.FC = () => {
   const handleUpdateEntry = async (id: string, updates: Partial<TimeEntry>) => {
     try {
       const updated = await api.entries.update(id, updates);
-      setEntries(entries.map(e => e.id === id ? updated : e));
+      setEntries(entries.map((e) => (e.id === id ? updated : e)));
     } catch (err) {
       console.error('Failed to update entry:', err);
     }
@@ -995,30 +1183,39 @@ const App: React.FC = () => {
   const handleUpdateTask = async (id: string, updates: Partial<ProjectTask>) => {
     try {
       const updated = await api.tasks.update(id, updates);
-      setProjectTasks(projectTasks.map(t => t.id === id ? updated : t));
+      setProjectTasks(projectTasks.map((t) => (t.id === id ? updated : t)));
     } catch (err) {
       console.error('Failed to update task:', err);
     }
   };
 
-  const handleMakeRecurring = async (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', startDate?: string, endDate?: string, duration?: number) => {
+  const handleMakeRecurring = async (
+    taskId: string,
+    pattern: 'daily' | 'weekly' | 'monthly',
+    startDate?: string,
+    endDate?: string,
+    duration?: number,
+  ) => {
     try {
       const updated = await api.tasks.update(taskId, {
         isRecurring: true,
         recurrencePattern: pattern,
         recurrenceStart: startDate || new Date().toISOString().split('T')[0],
         recurrenceEnd: endDate,
-        recurrenceDuration: duration
+        recurrenceDuration: duration,
       });
-      setProjectTasks(projectTasks.map(t => t.id === taskId ? updated : t));
+      setProjectTasks(projectTasks.map((t) => (t.id === taskId ? updated : t)));
       setTimeout(generateRecurringEntries, 100);
     } catch (err) {
       console.error('Failed to make task recurring:', err);
     }
   };
 
-  const handleRecurringAction = async (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => {
-    const task = projectTasks.find(t => t.id === taskId);
+  const handleRecurringAction = async (
+    taskId: string,
+    action: 'stop' | 'delete_future' | 'delete_all',
+  ) => {
+    const task = projectTasks.find((t) => t.id === taskId);
     if (!task) return;
 
     try {
@@ -1026,20 +1223,42 @@ const App: React.FC = () => {
         isRecurring: false,
         recurrencePattern: undefined,
         recurrenceStart: undefined,
-        recurrenceEnd: undefined
+        recurrenceEnd: undefined,
       });
-      setProjectTasks(projectTasks.map(t => t.id === taskId ? { ...t, isRecurring: false, recurrencePattern: undefined, recurrenceStart: undefined, recurrenceEnd: undefined } : t));
+      setProjectTasks(
+        projectTasks.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                isRecurring: false,
+                recurrencePattern: undefined,
+                recurrenceStart: undefined,
+                recurrenceEnd: undefined,
+              }
+            : t,
+        ),
+      );
 
       if (action === 'stop') {
         await api.entries.bulkDelete(task.projectId, task.name, { placeholderOnly: true });
-        setEntries(prev => prev.filter(e => !(e.isPlaceholder && e.projectId === task.projectId && e.task === task.name)));
+        setEntries((prev) =>
+          prev.filter(
+            (e) => !(e.isPlaceholder && e.projectId === task.projectId && e.task === task.name),
+          ),
+        );
       } else if (action === 'delete_future') {
         await api.entries.bulkDelete(task.projectId, task.name, { futureOnly: true });
         const today = new Date().toISOString().split('T')[0];
-        setEntries(prev => prev.filter(e => !(e.projectId === task.projectId && e.task === task.name && e.date >= today)));
+        setEntries((prev) =>
+          prev.filter(
+            (e) => !(e.projectId === task.projectId && e.task === task.name && e.date >= today),
+          ),
+        );
       } else if (action === 'delete_all') {
         await api.entries.bulkDelete(task.projectId, task.name);
-        setEntries(prev => prev.filter(e => !(e.projectId === task.projectId && e.task === task.name)));
+        setEntries((prev) =>
+          prev.filter((e) => !(e.projectId === task.projectId && e.task === task.name)),
+        );
       }
     } catch (err) {
       console.error('Failed to handle recurring action:', err);
@@ -1059,7 +1278,7 @@ const App: React.FC = () => {
   const handleUpdateClient = async (id: string, updates: Partial<Client>) => {
     try {
       const updated = await api.clients.update(id, updates);
-      setClients(clients.map(c => c.id === id ? updated : c));
+      setClients(clients.map((c) => (c.id === id ? updated : c)));
     } catch (err) {
       console.error('Failed to update client:', err);
       throw err;
@@ -1069,11 +1288,11 @@ const App: React.FC = () => {
   const handleDeleteClient = async (id: string) => {
     try {
       await api.clients.delete(id);
-      setClients(clients.filter(c => c.id !== id));
-      setProjects(projects.filter(p => p.clientId !== id));
+      setClients(clients.filter((c) => c.id !== id));
+      setProjects(projects.filter((p) => p.clientId !== id));
       // Tasks are also deleted by cascade in DB, so filter them too
-      const projectIdsForClient = projects.filter(p => p.clientId === id).map(p => p.id);
-      setProjectTasks(projectTasks.filter(t => !projectIdsForClient.includes(t.projectId)));
+      const projectIdsForClient = projects.filter((p) => p.clientId === id).map((p) => p.id);
+      setProjectTasks(projectTasks.filter((t) => !projectIdsForClient.includes(t.projectId)));
     } catch (err) {
       console.error('Failed to delete client:', err);
       alert('Failed to delete client');
@@ -1102,7 +1321,7 @@ const App: React.FC = () => {
   const handleUpdateSpecialBid = async (id: string, updates: Partial<SpecialBid>) => {
     try {
       const updated = await api.specialBids.update(id, updates);
-      setSpecialBids(specialBids.map(b => b.id === id ? updated : b));
+      setSpecialBids(specialBids.map((b) => (b.id === id ? updated : b)));
     } catch (err) {
       console.error('Failed to update special bid:', err);
       alert((err as Error).message || 'Failed to update special bid');
@@ -1112,7 +1331,7 @@ const App: React.FC = () => {
   const handleDeleteSpecialBid = async (id: string) => {
     try {
       await api.specialBids.delete(id);
-      setSpecialBids(specialBids.filter(b => b.id !== id));
+      setSpecialBids(specialBids.filter((b) => b.id !== id));
     } catch (err) {
       console.error('Failed to delete special bid:', err);
       alert((err as Error).message || 'Failed to delete special bid');
@@ -1122,7 +1341,7 @@ const App: React.FC = () => {
   const handleUpdateProduct = async (id: string, updates: Partial<Product>) => {
     try {
       const updated = await api.products.update(id, updates);
-      setProducts(products.map(p => p.id === id ? updated : p));
+      setProducts(products.map((p) => (p.id === id ? updated : p)));
     } catch (err) {
       console.error('Failed to update product:', err);
     }
@@ -1131,7 +1350,7 @@ const App: React.FC = () => {
   const handleDeleteProduct = async (id: string) => {
     try {
       await api.products.delete(id);
-      setProducts(products.filter(p => p.id !== id));
+      setProducts(products.filter((p) => p.id !== id));
     } catch (err) {
       console.error('Failed to delete product:', err);
     }
@@ -1149,7 +1368,7 @@ const App: React.FC = () => {
   const handleUpdateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
       const updated = await api.quotes.update(id, updates);
-      setQuotes(quotes.map(q => q.id === id ? updated : q));
+      setQuotes(quotes.map((q) => (q.id === id ? updated : q)));
     } catch (err) {
       console.error('Failed to update quote:', err);
     }
@@ -1158,7 +1377,7 @@ const App: React.FC = () => {
   const handleDeleteQuote = async (id: string) => {
     try {
       await api.quotes.delete(id);
-      setQuotes(quotes.filter(q => q.id !== id));
+      setQuotes(quotes.filter((q) => q.id !== id));
     } catch (err) {
       console.error('Failed to delete quote:', err);
     }
@@ -1176,7 +1395,7 @@ const App: React.FC = () => {
   const handleUpdateSale = async (id: string, updates: Partial<Sale>) => {
     try {
       const updated = await api.sales.update(id, updates);
-      setSales(sales.map(s => s.id === id ? updated : s));
+      setSales(sales.map((s) => (s.id === id ? updated : s)));
     } catch (err) {
       console.error('Failed to update sale:', err);
     }
@@ -1185,7 +1404,7 @@ const App: React.FC = () => {
   const handleDeleteSale = async (id: string) => {
     try {
       await api.sales.delete(id);
-      setSales(sales.filter(s => s.id !== id));
+      setSales(sales.filter((s) => s.id !== id));
     } catch (err) {
       console.error('Failed to delete sale:', err);
     }
@@ -1198,7 +1417,7 @@ const App: React.FC = () => {
         clientName: quote.clientName,
         status: 'pending',
         linkedQuoteId: quote.id,
-        items: quote.items.map(item => ({
+        items: quote.items.map((item) => ({
           productId: item.productId,
           productName: item.productName,
           specialBidId: item.specialBidId,
@@ -1206,10 +1425,10 @@ const App: React.FC = () => {
           unitPrice: item.unitPrice,
           discount: item.discount,
           id: 'temp-' + Math.random().toString(36).substr(2, 9),
-          saleId: ''
+          saleId: '',
         })),
         discount: quote.discount,
-        notes: quote.notes
+        notes: quote.notes,
       };
 
       const sale = await api.sales.create(saleData);
@@ -1234,7 +1453,7 @@ const App: React.FC = () => {
   const handleUpdateInvoice = async (id: string, updates: Partial<Invoice>) => {
     try {
       const updated = await api.invoices.update(id, updates);
-      setInvoices(invoices.map(i => i.id === id ? updated : i));
+      setInvoices(invoices.map((i) => (i.id === id ? updated : i)));
     } catch (err) {
       console.error('Failed to update invoice:', err);
     }
@@ -1243,7 +1462,7 @@ const App: React.FC = () => {
   const handleDeleteInvoice = async (id: string) => {
     try {
       await api.invoices.delete(id);
-      setInvoices(invoices.filter(i => i.id !== id));
+      setInvoices(invoices.filter((i) => i.id !== id));
     } catch (err) {
       console.error('Failed to delete invoice:', err);
     }
@@ -1256,12 +1475,13 @@ const App: React.FC = () => {
 
       // Update linked invoice if necessary (locally) - API handles backend logic
       if (payment.invoiceId) {
-        const invoice = await api.invoices.list().then(list => list.find(i => i.id === payment.invoiceId));
+        const invoice = await api.invoices
+          .list()
+          .then((list) => list.find((i) => i.id === payment.invoiceId));
         if (invoice) {
-          setInvoices(prev => prev.map(p => p.id === invoice.id ? invoice : p));
+          setInvoices((prev) => prev.map((p) => (p.id === invoice.id ? invoice : p)));
         }
       }
-
     } catch (err) {
       console.error('Failed to add payment:', err);
     }
@@ -1270,7 +1490,7 @@ const App: React.FC = () => {
   const handleUpdatePayment = async (id: string, updates: Partial<Payment>) => {
     try {
       const updated = await api.payments.update(id, updates);
-      setPayments(payments.map(p => p.id === id ? updated : p));
+      setPayments(payments.map((p) => (p.id === id ? updated : p)));
 
       // Refresh invoices as balance might change
       const invoicesList = await api.invoices.list();
@@ -1283,7 +1503,7 @@ const App: React.FC = () => {
   const handleDeletePayment = async (id: string) => {
     try {
       await api.payments.delete(id);
-      setPayments(payments.filter(p => p.id !== id));
+      setPayments(payments.filter((p) => p.id !== id));
 
       // Refresh invoices as balance might change
       const invoicesList = await api.invoices.list();
@@ -1305,7 +1525,7 @@ const App: React.FC = () => {
   const handleUpdateExpense = async (id: string, updates: Partial<Expense>) => {
     try {
       const updated = await api.expenses.update(id, updates);
-      setExpenses(expenses.map(e => e.id === id ? updated : e));
+      setExpenses(expenses.map((e) => (e.id === id ? updated : e)));
     } catch (err) {
       console.error('Failed to update expense:', err);
     }
@@ -1314,7 +1534,7 @@ const App: React.FC = () => {
   const handleDeleteExpense = async (id: string) => {
     try {
       await api.expenses.delete(id);
-      setExpenses(expenses.filter(e => e.id !== id));
+      setExpenses(expenses.filter((e) => e.id !== id));
     } catch (err) {
       console.error('Failed to delete expense:', err);
     }
@@ -1332,7 +1552,7 @@ const App: React.FC = () => {
   const handleUpdateSupplier = async (id: string, updates: Partial<Supplier>) => {
     try {
       const updated = await api.suppliers.update(id, updates);
-      setSuppliers(suppliers.map(s => s.id === id ? updated : s));
+      setSuppliers(suppliers.map((s) => (s.id === id ? updated : s)));
     } catch (err) {
       console.error('Failed to update supplier:', err);
     }
@@ -1341,7 +1561,7 @@ const App: React.FC = () => {
   const handleDeleteSupplier = async (id: string) => {
     try {
       await api.suppliers.delete(id);
-      setSuppliers(suppliers.filter(s => s.id !== id));
+      setSuppliers(suppliers.filter((s) => s.id !== id));
     } catch (err) {
       console.error('Failed to delete supplier:', err);
     }
@@ -1359,7 +1579,7 @@ const App: React.FC = () => {
   const handleUpdateSupplierQuote = async (id: string, updates: Partial<SupplierQuote>) => {
     try {
       const updated = await api.supplierQuotes.update(id, updates);
-      setSupplierQuotes(supplierQuotes.map(q => q.id === id ? updated : q));
+      setSupplierQuotes(supplierQuotes.map((q) => (q.id === id ? updated : q)));
     } catch (err) {
       console.error('Failed to update supplier quote:', err);
     }
@@ -1368,7 +1588,7 @@ const App: React.FC = () => {
   const handleDeleteSupplierQuote = async (id: string) => {
     try {
       await api.supplierQuotes.delete(id);
-      setSupplierQuotes(supplierQuotes.filter(q => q.id !== id));
+      setSupplierQuotes(supplierQuotes.filter((q) => q.id !== id));
     } catch (err) {
       console.error('Failed to delete supplier quote:', err);
     }
@@ -1376,11 +1596,12 @@ const App: React.FC = () => {
 
   const addProject = async (name: string, clientId: string, description?: string) => {
     try {
-      const usedColors = projects.map(p => p.color);
-      const availableColors = COLORS.filter(c => !usedColors.includes(c));
-      const color = availableColors.length > 0
-        ? availableColors[Math.floor(Math.random() * availableColors.length)]
-        : COLORS[Math.floor(Math.random() * COLORS.length)];
+      const usedColors = projects.map((p) => p.color);
+      const availableColors = COLORS.filter((c) => !usedColors.includes(c));
+      const color =
+        availableColors.length > 0
+          ? availableColors[Math.floor(Math.random() * availableColors.length)]
+          : COLORS[Math.floor(Math.random() * COLORS.length)];
 
       const project = await api.projects.create(name, clientId, description, color);
       setProjects([...projects, project]);
@@ -1389,9 +1610,20 @@ const App: React.FC = () => {
     }
   };
 
-  const addProjectTask = async (name: string, projectId: string, recurringConfig?: { isRecurring: boolean, pattern: 'daily' | 'weekly' | 'monthly' }, description?: string) => {
+  const addProjectTask = async (
+    name: string,
+    projectId: string,
+    recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
+    description?: string,
+  ) => {
     try {
-      const task = await api.tasks.create(name, projectId, description, recurringConfig?.isRecurring, recurringConfig?.pattern);
+      const task = await api.tasks.create(
+        name,
+        projectId,
+        description,
+        recurringConfig?.isRecurring,
+        recurringConfig?.pattern,
+      );
       setProjectTasks([...projectTasks, task]);
     } catch (err) {
       console.error('Failed to add task:', err);
@@ -1401,7 +1633,7 @@ const App: React.FC = () => {
   const handleUpdateProject = async (id: string, updates: Partial<Project>) => {
     try {
       const updated = await api.projects.update(id, updates);
-      setProjects(projects.map(p => p.id === id ? updated : p));
+      setProjects(projects.map((p) => (p.id === id ? updated : p)));
     } catch (err) {
       console.error('Failed to update project:', err);
       alert('Failed to update project');
@@ -1411,9 +1643,9 @@ const App: React.FC = () => {
   const handleDeleteProject = async (id: string) => {
     try {
       await api.projects.delete(id);
-      setProjects(projects.filter(p => p.id !== id));
-      setProjectTasks(projectTasks.filter(t => t.projectId !== id));
-      setEntries(entries.filter(e => e.projectId !== id));
+      setProjects(projects.filter((p) => p.id !== id));
+      setProjectTasks(projectTasks.filter((t) => t.projectId !== id));
+      setEntries(entries.filter((e) => e.projectId !== id));
     } catch (err) {
       console.error('Failed to delete project:', err);
       alert('Failed to delete project');
@@ -1434,7 +1666,7 @@ const App: React.FC = () => {
   const deleteUser = async (id: string) => {
     try {
       await api.users.delete(id);
-      setUsers(users.filter(u => u.id !== id));
+      setUsers(users.filter((u) => u.id !== id));
     } catch (err) {
       console.error('Failed to delete user:', err);
     }
@@ -1443,7 +1675,7 @@ const App: React.FC = () => {
   const handleUpdateUser = async (id: string, updates: Partial<User>) => {
     try {
       const updated = await api.users.update(id, updates);
-      setUsers(users.map(u => u.id === id ? updated : u));
+      setUsers(users.map((u) => (u.id === id ? updated : u)));
     } catch (err) {
       console.error('Failed to update user:', err);
       alert('Failed to update user: ' + (err as Error).message);
@@ -1463,7 +1695,7 @@ const App: React.FC = () => {
   const generateInsights = async () => {
     if (entries.length < 3) return;
     setIsInsightLoading(true);
-    const userEntries = entries.filter(e => e.userId === viewingUserId);
+    const userEntries = entries.filter((e) => e.userId === viewingUserId);
     const result = await getInsights(userEntries.slice(0, 10), generalSettings.geminiApiKey);
     setInsights(result);
     setIsInsightLoading(false);
@@ -1484,9 +1716,11 @@ const App: React.FC = () => {
 
     if (user.role === 'admin') {
       const adminAllowed = new Set<View>([
-        'hr/workforce', 'hr/work-units',
-        'configuration/authentication', 'configuration/general',
-        'settings'
+        'hr/workforce',
+        'hr/work-units',
+        'configuration/authentication',
+        'configuration/general',
+        'settings',
       ]);
       if (activeView === '404' || !adminAllowed.has(activeView as View)) {
         setActiveView(getDefaultViewForRole(user.role));
@@ -1536,7 +1770,7 @@ const App: React.FC = () => {
   const updateWorkUnit = async (id: string, updates: Partial<WorkUnit>) => {
     try {
       const updated = await api.workUnits.update(id, updates);
-      setWorkUnits(workUnits.map(w => w.id === id ? updated : w));
+      setWorkUnits(workUnits.map((w) => (w.id === id ? updated : w)));
     } catch (err) {
       console.error('Failed to update work unit:', err);
       throw err;
@@ -1546,7 +1780,7 @@ const App: React.FC = () => {
   const deleteWorkUnit = async (id: string) => {
     try {
       await api.workUnits.delete(id);
-      setWorkUnits(workUnits.filter(w => w.id !== id));
+      setWorkUnits(workUnits.filter((w) => w.id !== id));
     } catch (err) {
       console.error('Failed to delete work unit:', err);
       throw err;
@@ -1573,7 +1807,15 @@ const App: React.FC = () => {
     );
   }
 
-  if (!currentUser) return <Login users={users} onLogin={handleLogin} logoutReason={logoutReason} onClearLogoutReason={() => setLogoutReason(null)} />;
+  if (!currentUser)
+    return (
+      <Login
+        users={users}
+        onLogin={handleLogin}
+        logoutReason={logoutReason}
+        onClearLogoutReason={() => setLogoutReason(null)}
+      />
+    );
 
   return (
     <>
@@ -1591,13 +1833,20 @@ const App: React.FC = () => {
           <>
             {activeView === 'timesheets/tracker' && (
               <TrackerView
-                entries={entries.filter(e => e.userId === viewingUserId)}
-                clients={filteredClients} projects={filteredProjects} projectTasks={filteredTasks}
-                onAddEntry={handleAddEntry} onDeleteEntry={handleDeleteEntry} onUpdateEntry={handleUpdateEntry}
-                insights={insights} isInsightLoading={isInsightLoading} onRefreshInsights={generateInsights}
+                entries={entries.filter((e) => e.userId === viewingUserId)}
+                clients={filteredClients}
+                projects={filteredProjects}
+                projectTasks={filteredTasks}
+                onAddEntry={handleAddEntry}
+                onDeleteEntry={handleDeleteEntry}
+                onUpdateEntry={handleUpdateEntry}
+                insights={insights}
+                isInsightLoading={isInsightLoading}
+                onRefreshInsights={generateInsights}
                 startOfWeek={generalSettings.startOfWeek}
                 treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-                onMakeRecurring={handleMakeRecurring} userRole={currentUser.role}
+                onMakeRecurring={handleMakeRecurring}
+                userRole={currentUser.role}
                 viewingUserId={viewingUserId}
                 onViewUserChange={setViewingUserId}
                 availableUsers={availableUsers}
@@ -1614,7 +1863,7 @@ const App: React.FC = () => {
                 entries={
                   currentUser.role === 'manager'
                     ? entries
-                    : entries.filter(e => e.userId === currentUser.id)
+                    : entries.filter((e) => e.userId === currentUser.id)
                 }
                 projects={projects}
                 clients={clients}
@@ -1627,150 +1876,154 @@ const App: React.FC = () => {
               />
             )}
 
-            {activeView === 'crm/clients' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <ClientsView
-                clients={clients}
-                onAddClient={addClient}
-                onUpdateClient={handleUpdateClient}
-                onDeleteClient={handleDeleteClient}
-                userRole={currentUser.role}
-              />
-            )}
+            {activeView === 'crm/clients' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <ClientsView
+                  clients={clients}
+                  onAddClient={addClient}
+                  onUpdateClient={handleUpdateClient}
+                  onDeleteClient={handleDeleteClient}
+                  userRole={currentUser.role}
+                />
+              )}
 
-            {activeView === 'catalog/products' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <ProductsView
-                products={products}
-                suppliers={suppliers}
-                onAddProduct={addProduct}
-                onUpdateProduct={handleUpdateProduct}
-                onDeleteProduct={handleDeleteProduct}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'catalog/products' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <ProductsView
+                  products={products}
+                  suppliers={suppliers}
+                  onAddProduct={addProduct}
+                  onUpdateProduct={handleUpdateProduct}
+                  onDeleteProduct={handleDeleteProduct}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'catalog/special-bids' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <SpecialBidsView
-                bids={specialBids}
-                clients={clients}
-                products={products}
-                onAddBid={addSpecialBid}
-                onUpdateBid={handleUpdateSpecialBid}
-                onDeleteBid={handleDeleteSpecialBid}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'catalog/special-bids' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <SpecialBidsView
+                  bids={specialBids}
+                  clients={clients}
+                  products={products}
+                  onAddBid={addSpecialBid}
+                  onUpdateBid={handleUpdateSpecialBid}
+                  onDeleteBid={handleDeleteSpecialBid}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'crm/quotes' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <QuotesView
-                quotes={quotes}
-                clients={clients}
-                products={products}
-                specialBids={specialBids}
-                onAddQuote={addQuote}
-                onUpdateQuote={handleUpdateQuote}
-                onDeleteQuote={handleDeleteQuote}
-                onCreateSale={handleCreateSaleFromQuote}
-                quoteFilterId={quoteFilterId}
-                quoteIdsWithSales={quoteIdsWithSales}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'crm/quotes' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <QuotesView
+                  quotes={quotes}
+                  clients={clients}
+                  products={products}
+                  specialBids={specialBids}
+                  onAddQuote={addQuote}
+                  onUpdateQuote={handleUpdateQuote}
+                  onDeleteQuote={handleDeleteQuote}
+                  onCreateSale={handleCreateSaleFromQuote}
+                  quoteFilterId={quoteFilterId}
+                  quoteIdsWithSales={quoteIdsWithSales}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'crm/sales' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <SalesView
-                sales={sales}
-                clients={clients}
-                products={products}
-                specialBids={specialBids}
-                onAddSale={addSale}
-                onUpdateSale={handleUpdateSale}
-                onDeleteSale={handleDeleteSale}
-                currency={generalSettings.currency}
-                onViewQuote={(quoteId) => {
-                  setQuoteFilterId(quoteId);
-                  setActiveView('crm/quotes');
-                }}
-              />
-            )}
+            {activeView === 'crm/sales' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <SalesView
+                  sales={sales}
+                  clients={clients}
+                  products={products}
+                  specialBids={specialBids}
+                  onAddSale={addSale}
+                  onUpdateSale={handleUpdateSale}
+                  onDeleteSale={handleDeleteSale}
+                  currency={generalSettings.currency}
+                  onViewQuote={(quoteId) => {
+                    setQuoteFilterId(quoteId);
+                    setActiveView('crm/quotes');
+                  }}
+                />
+              )}
 
-            {activeView === 'finances/invoices' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <InvoicesView
-                invoices={invoices}
-                clients={clients}
-                products={products}
-                sales={sales}
-                onAddInvoice={addInvoice}
-                onUpdateInvoice={handleUpdateInvoice}
-                onDeleteInvoice={handleDeleteInvoice}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'finances/invoices' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <InvoicesView
+                  invoices={invoices}
+                  clients={clients}
+                  products={products}
+                  sales={sales}
+                  onAddInvoice={addInvoice}
+                  onUpdateInvoice={handleUpdateInvoice}
+                  onDeleteInvoice={handleDeleteInvoice}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'finances/payments' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <PaymentsView
-                payments={payments}
-                clients={clients}
-                invoices={invoices}
-                onAddPayment={addPayment}
-                onUpdatePayment={handleUpdatePayment}
-                onDeletePayment={handleDeletePayment}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'finances/payments' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <PaymentsView
+                  payments={payments}
+                  clients={clients}
+                  invoices={invoices}
+                  onAddPayment={addPayment}
+                  onUpdatePayment={handleUpdatePayment}
+                  onDeletePayment={handleDeletePayment}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'finances/expenses' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <ExpensesView
-                expenses={expenses}
-                onAddExpense={addExpense}
-                onUpdateExpense={handleUpdateExpense}
-                onDeleteExpense={handleDeleteExpense}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'finances/expenses' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <ExpensesView
+                  expenses={expenses}
+                  onAddExpense={addExpense}
+                  onUpdateExpense={handleUpdateExpense}
+                  onDeleteExpense={handleDeleteExpense}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'finances/reports' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <FinancialReportsView
-                invoices={invoices}
-                expenses={expenses}
-                payments={payments}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'finances/reports' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <FinancialReportsView
+                  invoices={invoices}
+                  expenses={expenses}
+                  payments={payments}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'suppliers/manage' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <SuppliersView
-                suppliers={suppliers}
-                onAddSupplier={addSupplier}
-                onUpdateSupplier={handleUpdateSupplier}
-                onDeleteSupplier={handleDeleteSupplier}
-              />
-            )}
+            {activeView === 'suppliers/manage' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <SuppliersView
+                  suppliers={suppliers}
+                  onAddSupplier={addSupplier}
+                  onUpdateSupplier={handleUpdateSupplier}
+                  onDeleteSupplier={handleDeleteSupplier}
+                />
+              )}
 
-            {activeView === 'suppliers/quotes' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-              <SupplierQuotesView
-                quotes={supplierQuotes}
-                suppliers={suppliers}
-                products={products}
-                onAddQuote={addSupplierQuote}
-                onUpdateQuote={handleUpdateSupplierQuote}
-                onDeleteQuote={handleDeleteSupplierQuote}
-                currency={generalSettings.currency}
-              />
-            )}
+            {activeView === 'suppliers/quotes' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <SupplierQuotesView
+                  quotes={supplierQuotes}
+                  suppliers={suppliers}
+                  products={products}
+                  onAddQuote={addSupplierQuote}
+                  onUpdateQuote={handleUpdateSupplierQuote}
+                  onDeleteQuote={handleDeleteSupplierQuote}
+                  currency={generalSettings.currency}
+                />
+              )}
 
             {activeView === 'timesheets/projects' && (
-              <ProjectsReadOnly
-                projects={projects}
-                clients={clients}
-              />
+              <ProjectsReadOnly projects={projects} clients={clients} />
             )}
 
             {activeView === 'timesheets/tasks' && (
-              <TasksReadOnly
-                tasks={projectTasks}
-                projects={projects}
-                clients={clients}
-              />
+              <TasksReadOnly tasks={projectTasks} projects={projects} clients={clients} />
             )}
 
             {activeView === 'projects/manage' && (
@@ -1796,7 +2049,7 @@ const App: React.FC = () => {
                 onDeleteTask={async (id) => {
                   try {
                     await api.tasks.delete(id);
-                    setProjectTasks(projectTasks.filter(t => t.id !== id));
+                    setProjectTasks(projectTasks.filter((t) => t.id !== id));
                   } catch (err) {
                     console.error('Failed to delete task:', err);
                     alert('Failed to delete task');
@@ -1805,45 +2058,51 @@ const App: React.FC = () => {
               />
             )}
 
-            {(currentUser.role === 'admin' || currentUser.role === 'manager') && activeView === 'hr/workforce' && (
-              <UserManagement
-                users={users}
-                clients={clients}
-                projects={projects}
-                tasks={projectTasks}
-                onAddUser={addUser}
-                onDeleteUser={deleteUser}
-                onUpdateUser={handleUpdateUser}
-                currentUserId={currentUser.id}
-                currentUserRole={currentUser.role}
-                currency={generalSettings.currency}
-              />
-            )}
+            {(currentUser.role === 'admin' || currentUser.role === 'manager') &&
+              activeView === 'hr/workforce' && (
+                <UserManagement
+                  users={users}
+                  clients={clients}
+                  projects={projects}
+                  tasks={projectTasks}
+                  onAddUser={addUser}
+                  onDeleteUser={deleteUser}
+                  onUpdateUser={handleUpdateUser}
+                  currentUserId={currentUser.id}
+                  currentUserRole={currentUser.role}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {(currentUser.role === 'admin' || currentUser.role === 'manager') && activeView === 'hr/work-units' && (
-              <WorkUnitsView
-                workUnits={workUnits}
-                users={users}
-                userRole={currentUser.role}
-                onAddWorkUnit={addWorkUnit}
-                onUpdateWorkUnit={updateWorkUnit}
-                onDeleteWorkUnit={deleteWorkUnit}
-                refreshWorkUnits={refreshWorkUnits}
-              />
-            )}
+            {(currentUser.role === 'admin' || currentUser.role === 'manager') &&
+              activeView === 'hr/work-units' && (
+                <WorkUnitsView
+                  workUnits={workUnits}
+                  users={users}
+                  userRole={currentUser.role}
+                  onAddWorkUnit={addWorkUnit}
+                  onUpdateWorkUnit={updateWorkUnit}
+                  onDeleteWorkUnit={deleteWorkUnit}
+                  refreshWorkUnits={refreshWorkUnits}
+                />
+              )}
 
             {currentUser.role === 'admin' && activeView === 'configuration/general' && (
-              <GeneralSettings
-                settings={generalSettings}
-                onUpdate={handleUpdateGeneralSettings}
-              />
+              <GeneralSettings settings={generalSettings} onUpdate={handleUpdateGeneralSettings} />
             )}
 
             {currentUser.role === 'admin' && activeView === 'configuration/authentication' && (
               <AdminAuthentication config={ldapConfig} onSave={handleSaveLdapConfig} />
             )}
 
-            {activeView === 'timesheets/recurring' && <RecurringManager tasks={projectTasks} projects={projects} clients={clients} onAction={handleRecurringAction} />}
+            {activeView === 'timesheets/recurring' && (
+              <RecurringManager
+                tasks={projectTasks}
+                projects={projects}
+                clients={clients}
+                onAction={handleRecurringAction}
+              />
+            )}
             {activeView === 'settings' && <Settings />}
           </>
         )}

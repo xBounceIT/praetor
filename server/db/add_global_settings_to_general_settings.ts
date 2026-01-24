@@ -1,4 +1,3 @@
-
 import { query } from './index.ts';
 
 const migration = `
@@ -9,14 +8,14 @@ ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS enable_ai_insights BOOLEAN
 `;
 
 async function runMigration() {
-    try {
-        console.log('Running migration to add global settings to general_settings...');
-        await query(migration);
-        console.log('Migration completed successfully.');
-    } catch (err) {
-        console.error('Migration failed:', err);
-        process.exit(1);
-    }
+  try {
+    console.log('Running migration to add global settings to general_settings...');
+    await query(migration);
+    console.log('Migration completed successfully.');
+  } catch (err) {
+    console.error('Migration failed:', err);
+    process.exit(1);
+  }
 }
 
 runMigration();

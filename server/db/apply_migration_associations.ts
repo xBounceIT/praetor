@@ -1,4 +1,3 @@
-
 import { query } from './index.ts';
 
 const migration = `
@@ -28,13 +27,13 @@ CREATE TABLE IF NOT EXISTS user_tasks (
 `;
 
 async function runMigration() {
-    try {
-        console.log('Running migration...');
-        await query(migration);
-        console.log('Migration completed successfully.');
-    } catch (err) {
-        console.error('Migration failed:', err);
-    }
+  try {
+    console.log('Running migration...');
+    await query(migration);
+    console.log('Migration completed successfully.');
+  } catch (err) {
+    console.error('Migration failed:', err);
+  }
 }
 
 runMigration();

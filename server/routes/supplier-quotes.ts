@@ -1,6 +1,15 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseDateString, optionalDateString, parseLocalizedPositiveNumber, parseLocalizedNonNegativeNumber, optionalLocalizedNonNegativeNumber, badRequest } from '../utils/validation.ts';
+import {
+  requireNonEmptyString,
+  optionalNonEmptyString,
+  parseDateString,
+  optionalDateString,
+  parseLocalizedPositiveNumber,
+  parseLocalizedNonNegativeNumber,
+  optionalLocalizedNonNegativeNumber,
+  badRequest,
+} from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
   fastify.addHook('onRequest', authenticateToken);
@@ -21,7 +30,7 @@ export default async function (fastify, opts) {
         EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
         EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
        FROM supplier_quotes
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC`,
     );
 
     const itemsResult = await query(
@@ -35,20 +44,20 @@ export default async function (fastify, opts) {
         discount,
         note
        FROM supplier_quote_items
-       ORDER BY created_at ASC`
+       ORDER BY created_at ASC`,
     );
 
     const itemsByQuote = {};
-    itemsResult.rows.forEach(item => {
+    itemsResult.rows.forEach((item) => {
       if (!itemsByQuote[item.quoteId]) {
         itemsByQuote[item.quoteId] = [];
       }
       itemsByQuote[item.quoteId].push(item);
     });
 
-    return quotesResult.rows.map(quote => ({
+    return quotesResult.rows.map((quote) => ({
       ...quote,
-      items: itemsByQuote[quote.id] || []
+      items: itemsByQuote[quote.id] || [],
     }));
   });
 
@@ -62,7 +71,7 @@ export default async function (fastify, opts) {
       discount,
       status,
       expirationDate,
-      notes
+      notes,
     } = request.body;
 
     const supplierIdResult = requireNonEmptyString(supplierId, 'supplierId');
@@ -71,7 +80,10 @@ export default async function (fastify, opts) {
     const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
     if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
 
-    const purchaseOrderNumberResult = requireNonEmptyString(purchaseOrderNumber, 'purchaseOrderNumber');
+    const purchaseOrderNumberResult = requireNonEmptyString(
+      purchaseOrderNumber,
+      'purchaseOrderNumber',
+    );
     if (!purchaseOrderNumberResult.ok) return badRequest(reply, purchaseOrderNumberResult.message);
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -85,16 +97,22 @@ export default async function (fastify, opts) {
       if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
       const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
       if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-      const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+      const unitPriceResult = parseLocalizedNonNegativeNumber(
+        item.unitPrice,
+        `items[${i}].unitPrice`,
+      );
       if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-      const itemDiscountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
+      const itemDiscountResult = optionalLocalizedNonNegativeNumber(
+        item.discount,
+        `items[${i}].discount`,
+      );
       if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
       normalizedItems.push({
         ...item,
         productName: productNameResult.value,
         quantity: quantityResult.value,
         unitPrice: unitPriceResult.value,
-        discount: itemDiscountResult.value || 0
+        discount: itemDiscountResult.value || 0,
       });
     }
 
@@ -130,8 +148,8 @@ export default async function (fastify, opts) {
         discountResult.value || 0,
         status || 'received',
         expirationDateResult.value,
-        notes
-      ]
+        notes,
+      ],
     );
 
     const createdItems = [];
@@ -158,15 +176,15 @@ export default async function (fastify, opts) {
           item.quantity,
           item.unitPrice,
           item.discount || 0,
-          item.note || null
-        ]
+          item.note || null,
+        ],
       );
       createdItems.push(itemResult.rows[0]);
     }
 
     return reply.code(201).send({
       ...quoteResult.rows[0],
-      items: createdItems
+      items: createdItems,
     });
   });
 
@@ -181,7 +199,7 @@ export default async function (fastify, opts) {
       discount,
       status,
       expirationDate,
-      notes
+      notes,
     } = request.body;
 
     const idResult = requireNonEmptyString(id, 'id');
@@ -203,8 +221,12 @@ export default async function (fastify, opts) {
 
     let purchaseOrderNumberValue = purchaseOrderNumber;
     if (purchaseOrderNumber !== undefined) {
-      const purchaseOrderNumberResult = optionalNonEmptyString(purchaseOrderNumber, 'purchaseOrderNumber');
-      if (!purchaseOrderNumberResult.ok) return badRequest(reply, purchaseOrderNumberResult.message);
+      const purchaseOrderNumberResult = optionalNonEmptyString(
+        purchaseOrderNumber,
+        'purchaseOrderNumber',
+      );
+      if (!purchaseOrderNumberResult.ok)
+        return badRequest(reply, purchaseOrderNumberResult.message);
       purchaseOrderNumberValue = purchaseOrderNumberResult.value;
     }
 
@@ -255,8 +277,8 @@ export default async function (fastify, opts) {
         status,
         expirationDateValue,
         notes,
-        idResult.value
-      ]
+        idResult.value,
+      ],
     );
 
     if (quoteResult.rows.length === 0) {
@@ -271,20 +293,29 @@ export default async function (fastify, opts) {
       const normalizedItems = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
+        const productNameResult = requireNonEmptyString(
+          item.productName,
+          `items[${i}].productName`,
+        );
         if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
         const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
         if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-        const unitPriceResult = parseLocalizedNonNegativeNumber(item.unitPrice, `items[${i}].unitPrice`);
+        const unitPriceResult = parseLocalizedNonNegativeNumber(
+          item.unitPrice,
+          `items[${i}].unitPrice`,
+        );
         if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-        const itemDiscountResult = optionalLocalizedNonNegativeNumber(item.discount, `items[${i}].discount`);
+        const itemDiscountResult = optionalLocalizedNonNegativeNumber(
+          item.discount,
+          `items[${i}].discount`,
+        );
         if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
         normalizedItems.push({
           ...item,
           productName: productNameResult.value,
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
-          discount: itemDiscountResult.value || 0
+          discount: itemDiscountResult.value || 0,
         });
       }
 
@@ -313,8 +344,8 @@ export default async function (fastify, opts) {
             item.quantity,
             item.unitPrice,
             item.discount || 0,
-            item.note || null
-          ]
+            item.note || null,
+          ],
         );
         updatedItems.push(itemResult.rows[0]);
       }
@@ -331,14 +362,14 @@ export default async function (fastify, opts) {
           note
          FROM supplier_quote_items
          WHERE quote_id = $1`,
-        [idResult.value]
+        [idResult.value],
       );
       updatedItems = itemsResult.rows;
     }
 
     return {
       ...quoteResult.rows[0],
-      items: updatedItems
+      items: updatedItems,
     };
   });
 
@@ -346,7 +377,9 @@ export default async function (fastify, opts) {
     const { id } = request.params;
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
-    const result = await query('DELETE FROM supplier_quotes WHERE id = $1 RETURNING id', [idResult.value]);
+    const result = await query('DELETE FROM supplier_quotes WHERE id = $1 RETURNING id', [
+      idResult.value,
+    ]);
 
     if (result.rows.length === 0) {
       return reply.code(404).send({ error: 'Supplier quote not found' });

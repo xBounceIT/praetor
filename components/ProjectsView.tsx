@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Project, Client, UserRole } from '../types';
@@ -15,8 +14,15 @@ interface ProjectsViewProps {
   onDeleteProject: (id: string) => void;
 }
 
-const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, onAddProject, onUpdateProject, onDeleteProject }) => {
-    const { t } = useTranslation(['projects', 'common']);
+const ProjectsView: React.FC<ProjectsViewProps> = ({
+  projects,
+  clients,
+  role,
+  onAddProject,
+  onUpdateProject,
+  onDeleteProject,
+}) => {
+  const { t } = useTranslation(['projects', 'common']);
   const [name, setName] = useState('');
   const [clientId, setClientId] = useState('');
   const [description, setDescription] = useState('');
@@ -43,7 +49,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     }
 
     if (editingProject) {
-      onUpdateProject(editingProject.id, { name, clientId, description, color, isDisabled: tempIsDisabled });
+      onUpdateProject(editingProject.id, {
+        name,
+        clientId,
+        description,
+        color,
+        isDisabled: tempIsDisabled,
+      });
     } else {
       onAddProject(name, clientId, description);
     }
@@ -96,11 +108,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
     }
   };
 
-  const clientOptions = clients.map(c => ({ id: c.id, name: c.name }));
+  const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-
       {/* Delete Confirmation Modal */}
       {isDeleteConfirmOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -110,7 +121,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-800">{t('common:messages.deleteConfirmNamed', { name: editingProject?.name })}</h3>
+                <h3 className="text-lg font-black text-slate-800">
+                  {t('common:messages.deleteConfirmNamed', { name: editingProject?.name })}
+                </h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                   {t('common:messages.deleteConfirmNamed', { name: editingProject?.name })}
                   {t('projects:projects.deleteConfirm')}
@@ -144,7 +157,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                 <i className="fa-solid fa-pen-to-square text-praetor"></i>
                 {t('projects:projects.editProject')}
               </h3>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <button
+                onClick={closeModal}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
@@ -163,15 +179,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                   searchable={true}
                   className={errors.clientId ? 'border-red-300' : ''}
                 />
-                {errors.clientId && <p className="text-red-500 text-[10px] font-bold">{errors.clientId}</p>}
+                {errors.clientId && (
+                  <p className="text-red-500 text-[10px] font-bold">{errors.clientId}</p>
+                )}
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">{t('projects:projects.name')}</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">
+                  {t('projects:projects.name')}
+                </label>
                 <input
                   type="text"
                   value={name}
-                  onChange={e => {
+                  onChange={(e) => {
                     setName(e.target.value);
                     if (errors.name) setErrors({ ...errors, name: '' });
                   }}
@@ -183,10 +203,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">{t('projects:projects.description')}</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">
+                  {t('projects:projects.description')}
+                </label>
                 <textarea
                   value={description}
-                  onChange={e => setDescription(e.target.value)}
+                  onChange={(e) => setDescription(e.target.value)}
                   placeholder={t('projects:projects.descriptionPlaceholder')}
                   rows={3}
                   className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-praetor bg-slate-50 focus:bg-white transition-all resize-none"
@@ -194,9 +216,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">{t('projects:projects.color')}</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">
+                  {t('projects:projects.color')}
+                </label>
                 <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  {COLORS.map(c => (
+                  {COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
@@ -210,7 +234,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               </div>
 
               {(() => {
-                const client = clients.find(c => c.id === clientId);
+                const client = clients.find((c) => c.id === clientId);
                 const isClientDisabled = client?.isDisabled || false;
                 const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
 
@@ -218,7 +242,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <div>
-                        <p className={`text-sm font-bold ${isClientDisabled ? 'text-slate-400' : 'text-slate-700'}`}>{t('projects:projects.projectDisabled')}</p>
+                        <p
+                          className={`text-sm font-bold ${isClientDisabled ? 'text-slate-400' : 'text-slate-700'}`}
+                        >
+                          {t('projects:projects.projectDisabled')}
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -230,20 +258,22 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'} ${isClientDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'}`}
+                        />
                       </button>
                     </div>
                     {isClientDisabled && (
                       <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1 px-1">
                         <i className="fa-solid fa-circle-info"></i>
-                        {t('projects:projects.inheritedFromDisabledClient', { clientName: client?.name })}
+                        {t('projects:projects.inheritedFromDisabledClient', {
+                          clientName: client?.name,
+                        })}
                       </p>
                     )}
                   </div>
                 );
               })()}
-
-
 
               <div className="pt-4 flex items-center justify-between gap-4">
                 <button
@@ -282,7 +312,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
             <i className="fa-solid fa-briefcase text-praetor"></i>
             {t('projects:projects.createNewProject')}
           </h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <form
+            onSubmit={handleSubmit}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end"
+          >
             <div className="lg:col-span-1">
               <CustomSelect
                 label={t('projects:projects.client')}
@@ -294,21 +327,25 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
               />
             </div>
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('projects:projects.name')}</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                {t('projects:projects.name')}
+              </label>
               <input
                 type="text"
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 placeholder={t('projects:projects.projectNamePlaceholder')}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
               />
             </div>
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('projects:projects.description')}</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                {t('projects:projects.description')}
+              </label>
               <input
                 type="text"
                 value={description}
-                onChange={e => setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value)}
                 placeholder={t('projects:projects.projectDetailsPlaceholder')}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
               />
@@ -333,67 +370,105 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, clients, role, on
         <table className="w-full text-left">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('projects:projects.tableHeaders.client')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('projects:projects.tableHeaders.projectName')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('projects:projects.tableHeaders.description')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('projects:projects.tableHeaders.status')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">{t('projects:projects.tableHeaders.actions')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('projects:projects.tableHeaders.client')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('projects:projects.tableHeaders.projectName')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('projects:projects.tableHeaders.description')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('projects:projects.tableHeaders.status')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
+                {t('projects:projects.tableHeaders.actions')}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">{t('projects:projects.noProjects')}</td>
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">
+                  {t('projects:projects.noProjects')}
+                </td>
               </tr>
-            ) : projects.map(project => {
-              const client = clients.find(c => c.id === project.clientId);
-              const isClientDisabled = client?.isDisabled || false;
-              const isEffectivelyDisabled = project.isDisabled || isClientDisabled;
+            ) : (
+              projects.map((project) => {
+                const client = clients.find((c) => c.id === project.clientId);
+                const isClientDisabled = client?.isDisabled || false;
+                const isEffectivelyDisabled = project.isDisabled || isClientDisabled;
 
-              return (
-                <tr
-                  key={project.id}
-                  onClick={() => startEditing(project)}
-                  className={`group hover:bg-slate-50 transition-colors cursor-pointer ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
-                >
-                  <td className="px-6 py-4">
-                    <span className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${isClientDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-praetor'}`}>
-                      {client?.name || t('projects:projects.unknown')}
-                      {isClientDisabled && <span className="ml-1 text-[8px]">{t('projects:projects.disabledLabel')}</span>}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }}></div>
-                      <span className={`text-sm font-bold ${isEffectivelyDisabled ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-800'}`}>{project.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs text-slate-500 max-w-md italic">{project.description || t('projects:projects.noDescriptionProvided')}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    {project.isDisabled ? (
-                      <span className="text-[10px] font-black text-amber-500 uppercase">{t('projects:projects.statusDisabled')}</span>
-                    ) : isClientDisabled ? (
-                      <span className="text-[10px] font-black text-amber-400 uppercase">{t('projects:projects.statusInheritedDisable')}</span>
-                    ) : (
-                      <span className="text-[10px] font-black text-emerald-500 uppercase">{t('projects:projects.statusActive')}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {isManagement && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); startEditing(project); }}
-                        className="text-slate-400 hover:text-praetor transition-colors p-2"
-                        title={t('projects:projects.editProject')}
+                return (
+                  <tr
+                    key={project.id}
+                    onClick={() => startEditing(project)}
+                    className={`group hover:bg-slate-50 transition-colors cursor-pointer ${isEffectivelyDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
+                  >
+                    <td className="px-6 py-4">
+                      <span
+                        className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${isClientDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-praetor'}`}
                       >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+                        {client?.name || t('projects:projects.unknown')}
+                        {isClientDisabled && (
+                          <span className="ml-1 text-[8px]">
+                            {t('projects:projects.disabledLabel')}
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: project.color }}
+                        ></div>
+                        <span
+                          className={`text-sm font-bold ${isEffectivelyDisabled ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-800'}`}
+                        >
+                          {project.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs text-slate-500 max-w-md italic">
+                        {project.description || t('projects:projects.noDescriptionProvided')}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      {project.isDisabled ? (
+                        <span className="text-[10px] font-black text-amber-500 uppercase">
+                          {t('projects:projects.statusDisabled')}
+                        </span>
+                      ) : isClientDisabled ? (
+                        <span className="text-[10px] font-black text-amber-400 uppercase">
+                          {t('projects:projects.statusInheritedDisable')}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black text-emerald-500 uppercase">
+                          {t('projects:projects.statusActive')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {isManagement && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditing(project);
+                          }}
+                          className="text-slate-400 hover:text-praetor transition-colors p-2"
+                          title={t('projects:projects.editProject')}
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </StandardTable>

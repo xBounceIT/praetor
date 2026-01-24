@@ -29,13 +29,13 @@ const PORT = Number(process.env.PORT ?? 3001);
 // Create Fastify instance with HTTP/2 support
 const fastify = Fastify({
   logger: false,
-  http2: true
+  http2: true,
 });
 
 // Register CORS
 await fastify.register(cors, {
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
 });
 
 // Register routes
@@ -68,7 +68,7 @@ fastify.get('/api/health', async (request, reply) => {
 fastify.setErrorHandler((error, request, reply) => {
   console.error('Error:', error);
   reply.code(error.statusCode || 500).send({
-    error: error.message || 'Internal server error'
+    error: error.message || 'Internal server error',
   });
 });
 
@@ -98,7 +98,7 @@ try {
         AND table_name IN ('user_clients', 'user_projects', 'user_tasks')
     `);
 
-    const foundTables = tableCheck.rows.map(r => r.table_name);
+    const foundTables = tableCheck.rows.map((r) => r.table_name);
     console.log(`Database schema verified. Found tables: ${foundTables.join(', ')}`);
 
     if (!foundTables.includes('user_clients')) {
@@ -126,7 +126,8 @@ try {
       const { migrate: addLanguageToSettings } = await import('./db/add_language_to_settings.ts');
       await addLanguageToSettings();
       // Run update language constraint migration
-      const { migrate: updateLanguageConstraint } = await import('./db/update_language_constraint.ts');
+      const { migrate: updateLanguageConstraint } =
+        await import('./db/update_language_constraint.ts');
       await updateLanguageConstraint();
     } catch (err) {
       console.error('Failed to run settings language migration:', err);
@@ -150,7 +151,8 @@ try {
 
     // Run products structure update migration
     try {
-      const { migrate: updateProductsStructure } = await import('./db/update_products_structure.ts');
+      const { migrate: updateProductsStructure } =
+        await import('./db/update_products_structure.ts');
       await updateProductsStructure();
     } catch (err) {
       console.error('Failed to run products structure update migration:', err);

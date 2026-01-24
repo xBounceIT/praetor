@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type } from '@google/genai';
 
 const getClient = (apiKey?: string) => {
   if (!apiKey) return null;
@@ -13,29 +12,32 @@ export interface ParsedTimeEntry {
   notes?: string;
 }
 
-export const parseSmartEntry = async (input: string, apiKey?: string): Promise<ParsedTimeEntry | null> => {
+export const parseSmartEntry = async (
+  input: string,
+  apiKey?: string,
+): Promise<ParsedTimeEntry | null> => {
   try {
     const ai = getClient(apiKey);
     if (!ai) {
       return null;
     }
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: 'gemini-3-flash-preview',
       contents: `Parse this time tracking input: "${input}". 
       Extract the project name (if any, default to "General"), the specific task description, and the duration in hours. 
       If duration is mentioned in minutes (e.g. 30m), convert it to decimal hours (0.5).
       Also extract any extra context or details as 'notes'.`,
       config: {
-        responseMimeType: "application/json",
+        responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            project: { type: Type.STRING, description: "Name of the project" },
-            task: { type: Type.STRING, description: "Description of the task" },
-            duration: { type: Type.NUMBER, description: "Duration in decimal hours" },
-            notes: { type: Type.STRING, description: "Additional details or comments" },
+            project: { type: Type.STRING, description: 'Name of the project' },
+            task: { type: Type.STRING, description: 'Description of the task' },
+            duration: { type: Type.NUMBER, description: 'Duration in decimal hours' },
+            notes: { type: Type.STRING, description: 'Additional details or comments' },
           },
-          required: ["project", "task", "duration"],
+          required: ['project', 'task', 'duration'],
         },
       },
     });
@@ -44,7 +46,7 @@ export const parseSmartEntry = async (input: string, apiKey?: string): Promise<P
     const text = response.text.trim();
     return JSON.parse(text) as ParsedTimeEntry;
   } catch (error) {
-    console.error("Gemini Parsing Error:", error);
+    console.error('Gemini Parsing Error:', error);
     return null;
   }
 };
@@ -53,19 +55,20 @@ export const getInsights = async (entries: any[], apiKey?: string): Promise<stri
   try {
     const ai = getClient(apiKey);
     if (!ai) {
-      return "Keep up the great work! Consistent tracking is the first step to optimization.";
+      return 'Keep up the great work! Consistent tracking is the first step to optimization.';
     }
     const context = JSON.stringify(entries);
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: 'gemini-3-flash-preview',
       contents: `Analyze these time logs and provide 2-3 concise bullet points of productivity insights or patterns: ${context}`,
       config: {
-          systemInstruction: "You are a productivity coach. Be concise, encouraging, and data-driven.",
-      }
+        systemInstruction:
+          'You are a productivity coach. Be concise, encouraging, and data-driven.',
+      },
     });
     // Directly access .text property from GenerateContentResponse
     return response.text;
   } catch (error) {
-    return "Keep up the great work! Consistent tracking is the first step to optimization.";
+    return 'Keep up the great work! Consistent tracking is the first step to optimization.';
   }
 };

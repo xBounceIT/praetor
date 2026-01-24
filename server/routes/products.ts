@@ -1,250 +1,293 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import { requireNonEmptyString, optionalNonEmptyString, parseLocalizedNonNegativeNumber, parseBoolean, validateEnum, optionalEnum, badRequest } from '../utils/validation.ts';
+import {
+  requireNonEmptyString,
+  optionalNonEmptyString,
+  parseLocalizedNonNegativeNumber,
+  parseBoolean,
+  validateEnum,
+  optionalEnum,
+  badRequest,
+} from '../utils/validation.ts';
 
 export default async function (fastify, opts) {
-    // All product routes require manager role
-    fastify.addHook('onRequest', authenticateToken);
-    fastify.addHook('onRequest', requireRole('manager'));
+  // All product routes require manager role
+  fastify.addHook('onRequest', authenticateToken);
+  fastify.addHook('onRequest', requireRole('manager'));
 
-    // GET / - List all products
-    fastify.get('/', async (request, reply) => {
-        const result = await query(
-            `SELECT p.id, p.name, p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
+  // GET / - List all products
+  fastify.get('/', async (request, reply) => {
+    const result = await query(
+      `SELECT p.id, p.name, p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
              FROM products p 
              LEFT JOIN suppliers s ON p.supplier_id = s.id 
-             ORDER BY p.name ASC`
-        );
-        return result.rows;
-    });
+             ORDER BY p.name ASC`,
+    );
+    return result.rows;
+  });
 
-    // POST / - Create product
-    fastify.post('/', async (request, reply) => {
-        const { name, description, costo, molPercentage, costUnit, category, subcategory, taxRate, type, supplierId } = request.body;
+  // POST / - Create product
+  fastify.post('/', async (request, reply) => {
+    const {
+      name,
+      description,
+      costo,
+      molPercentage,
+      costUnit,
+      category,
+      subcategory,
+      taxRate,
+      type,
+      supplierId,
+    } = request.body;
 
-        const nameResult = requireNonEmptyString(name, 'name');
-        if (!nameResult.ok) return badRequest(reply, nameResult.message);
+    const nameResult = requireNonEmptyString(name, 'name');
+    if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-        // check name uniqueness
-        const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1)', [nameResult.value]);
-        if (existingName.rows.length > 0) {
-            return badRequest(reply, 'Product name must be unique');
-        }
+    // check name uniqueness
+    const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1)', [
+      nameResult.value,
+    ]);
+    if (existingName.rows.length > 0) {
+      return badRequest(reply, 'Product name must be unique');
+    }
 
-        if (costo === undefined || costo === null || costo === '') {
-            return badRequest(reply, 'costo is required');
-        }
-        const costoResult = parseLocalizedNonNegativeNumber(costo, 'costo');
-        if (!costoResult.ok) return badRequest(reply, costoResult.message);
+    if (costo === undefined || costo === null || costo === '') {
+      return badRequest(reply, 'costo is required');
+    }
+    const costoResult = parseLocalizedNonNegativeNumber(costo, 'costo');
+    if (!costoResult.ok) return badRequest(reply, costoResult.message);
 
-        if (molPercentage === undefined || molPercentage === null || molPercentage === '') {
-            return badRequest(reply, 'molPercentage is required');
-        }
-        const molPercentageResult = parseLocalizedNonNegativeNumber(molPercentage, 'molPercentage');
-        if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
-        if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
-            return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
-        }
+    if (molPercentage === undefined || molPercentage === null || molPercentage === '') {
+      return badRequest(reply, 'molPercentage is required');
+    }
+    const molPercentageResult = parseLocalizedNonNegativeNumber(molPercentage, 'molPercentage');
+    if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+    if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
+      return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
+    }
 
-        if (taxRate === undefined || taxRate === null || taxRate === '') {
-            return badRequest(reply, 'taxRate is required');
-        }
-        const taxRateResult = parseLocalizedNonNegativeNumber(taxRate, 'taxRate');
-        if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-        if (taxRateResult.value < 0 || taxRateResult.value > 100) {
-            return badRequest(reply, 'taxRate must be between 0 and 100');
-        }
+    if (taxRate === undefined || taxRate === null || taxRate === '') {
+      return badRequest(reply, 'taxRate is required');
+    }
+    const taxRateResult = parseLocalizedNonNegativeNumber(taxRate, 'taxRate');
+    if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+    if (taxRateResult.value < 0 || taxRateResult.value > 100) {
+      return badRequest(reply, 'taxRate must be between 0 and 100');
+    }
 
-        if (costUnit === undefined || costUnit === null || costUnit === '') {
-            return badRequest(reply, 'costUnit is required');
-        }
-        const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
-        if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+    if (costUnit === undefined || costUnit === null || costUnit === '') {
+      return badRequest(reply, 'costUnit is required');
+    }
+    const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
+    if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
 
-        if (type === undefined || type === null || type === '') {
-            return badRequest(reply, 'type is required');
-        }
-        // Updated types: supply, service, consulting. (item is legacy, strictly we expect new types)
-        const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
-        if (!typeResult.ok) return badRequest(reply, typeResult.message);
+    if (type === undefined || type === null || type === '') {
+      return badRequest(reply, 'type is required');
+    }
+    // Updated types: supply, service, consulting. (item is legacy, strictly we expect new types)
+    const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+    if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
-        const id = 'p-' + Date.now();
-        const result = await query(
-            `INSERT INTO products (id, name, description, costo, mol_percentage, cost_unit, category, subcategory, tax_rate, type, supplier_id) 
+    const id = 'p-' + Date.now();
+    const result = await query(
+      `INSERT INTO products (id, name, description, costo, mol_percentage, cost_unit, category, subcategory, tax_rate, type, supplier_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
              RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
-            [id, nameResult.value, description || null, costoResult.value, molPercentageResult.value, costUnitResult.value, category, subcategory, taxRateResult.value, typeResult.value, supplierId || null]
-        );
+      [
+        id,
+        nameResult.value,
+        description || null,
+        costoResult.value,
+        molPercentageResult.value,
+        costUnitResult.value,
+        category,
+        subcategory,
+        taxRateResult.value,
+        typeResult.value,
+        supplierId || null,
+      ],
+    );
 
-        // If supplier was assigned, fetch supplier name
-        if (supplierId) {
-            const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [supplierId]);
-            if (supplierResult.rows.length > 0) {
-                result.rows[0].supplierName = supplierResult.rows[0].name;
-            }
-        }
+    // If supplier was assigned, fetch supplier name
+    if (supplierId) {
+      const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [supplierId]);
+      if (supplierResult.rows.length > 0) {
+        result.rows[0].supplierName = supplierResult.rows[0].name;
+      }
+    }
 
-        return reply.code(201).send(result.rows[0]);
-    });
+    return reply.code(201).send(result.rows[0]);
+  });
 
-    // PUT /:id - Update product
-    fastify.put('/:id', async (request, reply) => {
-        const { id } = request.params;
-        const body = request.body;
-        const idResult = requireNonEmptyString(id, 'id');
-        if (!idResult.ok) return badRequest(reply, idResult.message);
+  // PUT /:id - Update product
+  fastify.put('/:id', async (request, reply) => {
+    const { id } = request.params;
+    const body = request.body;
+    const idResult = requireNonEmptyString(id, 'id');
+    if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        const fields: string[] = [];
-        const values: any[] = [];
-        let paramIndex = 1;
+    const fields: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
 
-        // Name
-        if (body.name !== undefined) {
-            const nameResult = requireNonEmptyString(body.name, 'name'); // name cannot be empty for update if provided
-            if (!nameResult.ok) return badRequest(reply, nameResult.message);
+    // Name
+    if (body.name !== undefined) {
+      const nameResult = requireNonEmptyString(body.name, 'name'); // name cannot be empty for update if provided
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-            // check name uniqueness (exclude current product)
-            const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND id != $2', [nameResult.value, idResult.value]);
-            if (existingName.rows.length > 0) {
-                return badRequest(reply, 'Product name must be unique');
-            }
-            fields.push(`name = $${paramIndex++}`);
-            values.push(nameResult.value);
-        }
+      // check name uniqueness (exclude current product)
+      const existingName = await query(
+        'SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND id != $2',
+        [nameResult.value, idResult.value],
+      );
+      if (existingName.rows.length > 0) {
+        return badRequest(reply, 'Product name must be unique');
+      }
+      fields.push(`name = $${paramIndex++}`);
+      values.push(nameResult.value);
+    }
 
-        // Description (nullable)
-        if (body.description !== undefined) {
-            fields.push(`description = $${paramIndex++}`);
-            values.push(body.description || null);
-        }
+    // Description (nullable)
+    if (body.description !== undefined) {
+      fields.push(`description = $${paramIndex++}`);
+      values.push(body.description || null);
+    }
 
-        // Costo
-        if (body.costo !== undefined) {
-            const costoResult = parseLocalizedNonNegativeNumber(body.costo, 'costo');
-            if (!costoResult.ok) return badRequest(reply, costoResult.message);
-            fields.push(`costo = $${paramIndex++}`);
-            values.push(costoResult.value);
-        }
+    // Costo
+    if (body.costo !== undefined) {
+      const costoResult = parseLocalizedNonNegativeNumber(body.costo, 'costo');
+      if (!costoResult.ok) return badRequest(reply, costoResult.message);
+      fields.push(`costo = $${paramIndex++}`);
+      values.push(costoResult.value);
+    }
 
-        // Mol Percentage
-        if (body.molPercentage !== undefined) {
-            const molPercentageResult = parseLocalizedNonNegativeNumber(body.molPercentage, 'molPercentage');
-            if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
-            if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
-                return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
-            }
-            fields.push(`mol_percentage = $${paramIndex++}`);
-            values.push(molPercentageResult.value);
-        }
+    // Mol Percentage
+    if (body.molPercentage !== undefined) {
+      const molPercentageResult = parseLocalizedNonNegativeNumber(
+        body.molPercentage,
+        'molPercentage',
+      );
+      if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+      if (molPercentageResult.value <= 0 || molPercentageResult.value >= 100) {
+        return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
+      }
+      fields.push(`mol_percentage = $${paramIndex++}`);
+      values.push(molPercentageResult.value);
+    }
 
-        // Cost Unit
-        if (body.costUnit !== undefined) {
-            const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
-            if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-            fields.push(`cost_unit = $${paramIndex++}`);
-            values.push(costUnitResult.value);
-        }
+    // Cost Unit
+    if (body.costUnit !== undefined) {
+      const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
+      if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+      fields.push(`cost_unit = $${paramIndex++}`);
+      values.push(costUnitResult.value);
+    }
 
-        // Category (nullable)
-        if (body.category !== undefined) {
-            fields.push(`category = $${paramIndex++}`);
-            values.push(body.category || null);
-        }
+    // Category (nullable)
+    if (body.category !== undefined) {
+      fields.push(`category = $${paramIndex++}`);
+      values.push(body.category || null);
+    }
 
-        // Subcategory (nullable)
-        if (body.subcategory !== undefined) {
-            fields.push(`subcategory = $${paramIndex++}`);
-            values.push(body.subcategory || null);
-        }
+    // Subcategory (nullable)
+    if (body.subcategory !== undefined) {
+      fields.push(`subcategory = $${paramIndex++}`);
+      values.push(body.subcategory || null);
+    }
 
-        // Tax Rate
-        if (body.taxRate !== undefined) {
-            const taxRateResult = parseLocalizedNonNegativeNumber(body.taxRate, 'taxRate');
-            if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-            if (taxRateResult.value < 0 || taxRateResult.value > 100) {
-                return badRequest(reply, 'taxRate must be between 0 and 100');
-            }
-            fields.push(`tax_rate = $${paramIndex++}`);
-            values.push(taxRateResult.value);
-        }
+    // Tax Rate
+    if (body.taxRate !== undefined) {
+      const taxRateResult = parseLocalizedNonNegativeNumber(body.taxRate, 'taxRate');
+      if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+      if (taxRateResult.value < 0 || taxRateResult.value > 100) {
+        return badRequest(reply, 'taxRate must be between 0 and 100');
+      }
+      fields.push(`tax_rate = $${paramIndex++}`);
+      values.push(taxRateResult.value);
+    }
 
-        // Type
-        if (body.type !== undefined) {
-            const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
-            if (!typeResult.ok) return badRequest(reply, typeResult.message);
-            fields.push(`type = $${paramIndex++}`);
-            values.push(typeResult.value);
-        }
+    // Type
+    if (body.type !== undefined) {
+      const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
+      if (!typeResult.ok) return badRequest(reply, typeResult.message);
+      fields.push(`type = $${paramIndex++}`);
+      values.push(typeResult.value);
+    }
 
-        // Is Disabled
-        if (body.isDisabled !== undefined) {
-            fields.push(`is_disabled = $${paramIndex++}`);
-            values.push(parseBoolean(body.isDisabled));
-        }
+    // Is Disabled
+    if (body.isDisabled !== undefined) {
+      fields.push(`is_disabled = $${paramIndex++}`);
+      values.push(parseBoolean(body.isDisabled));
+    }
 
-        // Supplier (nullable)
-        if (body.supplierId !== undefined) {
-            fields.push(`supplier_id = $${paramIndex++}`);
-            // Convert empty string to null to avoid FK violation and allow clearing
-            values.push(body.supplierId ? body.supplierId : null);
-        }
+    // Supplier (nullable)
+    if (body.supplierId !== undefined) {
+      fields.push(`supplier_id = $${paramIndex++}`);
+      // Convert empty string to null to avoid FK violation and allow clearing
+      values.push(body.supplierId ? body.supplierId : null);
+    }
 
-        if (fields.length === 0) {
-            // No updates
-            const result = await query(
-                `SELECT id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId" 
+    if (fields.length === 0) {
+      // No updates
+      const result = await query(
+        `SELECT id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId" 
                  FROM products WHERE id = $1`,
-                [idResult.value]
-            );
-            if (result.rows.length === 0) return reply.code(404).send({ error: 'Product not found' });
+        [idResult.value],
+      );
+      if (result.rows.length === 0) return reply.code(404).send({ error: 'Product not found' });
 
-            // Populate supplier name if needed
-            if (result.rows[0].supplierId) {
-                const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [result.rows[0].supplierId]);
-                if (supplierResult.rows.length > 0) {
-                    result.rows[0].supplierName = supplierResult.rows[0].name;
-                }
-            }
-            return result.rows[0];
+      // Populate supplier name if needed
+      if (result.rows[0].supplierId) {
+        const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [
+          result.rows[0].supplierId,
+        ]);
+        if (supplierResult.rows.length > 0) {
+          result.rows[0].supplierName = supplierResult.rows[0].name;
         }
+      }
+      return result.rows[0];
+    }
 
-        values.push(idResult.value); // Add ID as last parameter
-        const queryText = `
+    values.push(idResult.value); // Add ID as last parameter
+    const queryText = `
             UPDATE products 
             SET ${fields.join(', ')}
             WHERE id = $${paramIndex}
             RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"
         `;
 
-        const result = await query(queryText, values);
+    const result = await query(queryText, values);
 
-        if (result.rows.length === 0) {
-            return reply.code(404).send({ error: 'Product not found' });
-        }
+    if (result.rows.length === 0) {
+      return reply.code(404).send({ error: 'Product not found' });
+    }
 
-        // If supplier was assigned, fetch supplier name
-        if (result.rows[0].supplierId) {
-            const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [result.rows[0].supplierId]);
-            if (supplierResult.rows.length > 0) {
-                result.rows[0].supplierName = supplierResult.rows[0].name;
-            }
-        }
+    // If supplier was assigned, fetch supplier name
+    if (result.rows[0].supplierId) {
+      const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [
+        result.rows[0].supplierId,
+      ]);
+      if (supplierResult.rows.length > 0) {
+        result.rows[0].supplierName = supplierResult.rows[0].name;
+      }
+    }
 
-        return result.rows[0];
-    });
+    return result.rows[0];
+  });
 
-    // DELETE /:id - Delete product
-    fastify.delete('/:id', async (request, reply) => {
-        const { id } = request.params;
-        const idResult = requireNonEmptyString(id, 'id');
-        if (!idResult.ok) return badRequest(reply, idResult.message);
+  // DELETE /:id - Delete product
+  fastify.delete('/:id', async (request, reply) => {
+    const { id } = request.params;
+    const idResult = requireNonEmptyString(id, 'id');
+    if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [idResult.value]);
+    const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [idResult.value]);
 
-        if (result.rows.length === 0) {
-            return reply.code(404).send({ error: 'Product not found' });
-        }
+    if (result.rows.length === 0) {
+      return reply.code(404).send({ error: 'Product not found' });
+    }
 
-        return reply.code(204).send();
-    });
+    return reply.code(204).send();
+  });
 }

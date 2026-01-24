@@ -1,9 +1,9 @@
 import { query } from './index.ts';
 
 async function migrate() {
-    console.log('Starting migration: Add client details...');
-    try {
-        await query(`
+  console.log('Starting migration: Add client details...');
+  try {
+    await query(`
             ALTER TABLE clients 
             ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'company',
             ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255),
@@ -16,10 +16,10 @@ async function migrate() {
             ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50),
             ADD COLUMN IF NOT EXISTS payment_terms TEXT;
         `);
-        console.log('Migration completed successfully.');
-    } catch (err) {
-        console.error('Migration failed:', err);
-    }
+    console.log('Migration completed successfully.');
+  } catch (err) {
+    console.error('Migration failed:', err);
+  }
 }
 
 migrate();

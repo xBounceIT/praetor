@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask, TimeEntry, UserRole } from '../types';
@@ -13,7 +12,13 @@ interface TimeEntryFormProps {
   projectTasks: ProjectTask[];
   onAdd: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>) => void;
   selectedDate: string;
-  onMakeRecurring?: (taskId: string, pattern: 'daily' | 'weekly' | 'monthly', startDate?: string, endDate?: string, duration?: number) => void;
+  onMakeRecurring?: (
+    taskId: string,
+    pattern: 'daily' | 'weekly' | 'monthly',
+    startDate?: string,
+    endDate?: string,
+    duration?: number,
+  ) => void;
   userRole: UserRole;
   dailyGoal: number;
   currentDayTotal: number;
@@ -34,10 +39,10 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   dailyGoal,
   currentDayTotal,
   enableAiInsights,
-  geminiApiKey
+  geminiApiKey,
 }) => {
   const { t } = useTranslation('timesheets');
-  
+
   // Helper to format custom pattern
   const getRecurrenceLabel = (pattern: string) => {
     if (pattern === 'daily') return t('entry.recurrencePatterns.daily');
@@ -51,7 +56,8 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         const day = parseInt(parts[2]);
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const dayName = days[day];
-        const typeKey = `entry.recurrencePatterns.every${type.charAt(0).toUpperCase() + type.slice(1)}` as keyof typeof t;
+        const typeKey =
+          `entry.recurrencePatterns.every${type.charAt(0).toUpperCase() + type.slice(1)}` as keyof typeof t;
         return t(typeKey, { day: dayName });
       }
     }
@@ -77,12 +83,21 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
-  const [errors, setErrors] = useState<{ hours?: string; clientId?: string; projectId?: string; task?: string; smartInput?: string; recurrenceEndDate?: string }>({});
+  const [errors, setErrors] = useState<{
+    hours?: string;
+    clientId?: string;
+    projectId?: string;
+    task?: string;
+    smartInput?: string;
+    recurrenceEndDate?: string;
+  }>({});
   const [smartError, setSmartError] = useState('');
 
   // New user controls
   const [makeRecurring, setMakeRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<'daily' | 'weekly' | 'monthly' | string>('weekly');
+  const [recurrencePattern, setRecurrencePattern] = useState<
+    'daily' | 'weekly' | 'monthly' | string
+  >('weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [isCustomRepeatModalOpen, setIsCustomRepeatModalOpen] = useState(false);
 
@@ -106,10 +121,10 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   }, [clients, selectedClientId]);
 
   // Filter projects when client changes
-  const filteredProjects = projects.filter(p => p.clientId === selectedClientId);
+  const filteredProjects = projects.filter((p) => p.clientId === selectedClientId);
 
   // Filter tasks when project changes
-  const filteredTasks = projectTasks.filter(t => t.projectId === selectedProjectId);
+  const filteredTasks = projectTasks.filter((t) => t.projectId === selectedProjectId);
 
   // Auto-select first project/task when lists change
   useEffect(() => {
@@ -159,8 +174,8 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
       return;
     }
 
-    const project = projects.find(p => p.id === selectedProjectId);
-    const client = clients.find(c => c.id === selectedClientId);
+    const project = projects.find((p) => p.id === selectedProjectId);
+    const client = clients.find((c) => c.id === selectedClientId);
 
     onAdd({
       date,
@@ -175,7 +190,13 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
     // Handle recursion if checked
     if (makeRecurring && onMakeRecurring && selectedTaskId) {
-      onMakeRecurring(selectedTaskId, recurrencePattern, date, recurrenceEndDate || undefined, durationVal);
+      onMakeRecurring(
+        selectedTaskId,
+        recurrencePattern,
+        date,
+        recurrenceEndDate || undefined,
+        durationVal,
+      );
     }
 
     // Reset form
@@ -211,8 +232,12 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     setIsLoading(false);
 
     if (parsed && parsed.duration > 0) {
-      const projectMatch = projects.find(p => p.name.toLowerCase().includes(parsed.project.toLowerCase()));
-      const clientMatch = projectMatch ? clients.find(c => c.id === projectMatch.clientId) : clients[0];
+      const projectMatch = projects.find((p) =>
+        p.name.toLowerCase().includes(parsed.project.toLowerCase()),
+      );
+      const clientMatch = projectMatch
+        ? clients.find((c) => c.id === projectMatch.clientId)
+        : clients[0];
 
       onAdd({
         date: date,
@@ -237,7 +262,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
       setSelectedTaskId('');
       setMakeRecurring(false);
     } else {
-      const task = filteredTasks.find(t => t.id === taskId);
+      const task = filteredTasks.find((t) => t.id === taskId);
       if (task) {
         setSelectedTaskName(task.name);
         setSelectedTaskId(task.id);
@@ -249,15 +274,15 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   const isExceedingGoal = useMemo(() => {
     const val = parseFloat(duration);
     if (isNaN(val) || val <= 0) return false;
-    return (currentDayTotal + val) > dailyGoal;
+    return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
 
   const canCreateCustomTask = userRole === 'admin' || userRole === 'manager';
 
-  const clientOptions = clients.map(c => ({ id: c.id, name: c.name }));
-  const projectOptions = filteredProjects.map(p => ({ id: p.id, name: p.name }));
+  const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
+  const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));
   const taskOptions = useMemo(() => {
-    const opts = filteredTasks.map(t => ({ id: t.id, name: t.name }));
+    const opts = filteredTasks.map((t) => ({ id: t.id, name: t.name }));
     if (canCreateCustomTask) {
       opts.push({ id: 'custom', name: t('entry.customTask') });
     }
@@ -269,13 +294,19 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <span className="text-sm font-bold uppercase tracking-wider text-slate-400 leading-none mb-0.5">{t('entry.loggingFor')}</span>
+            <span className="text-sm font-bold uppercase tracking-wider text-slate-400 leading-none mb-0.5">
+              {t('entry.loggingFor')}
+            </span>
             <div className="flex items-baseline gap-1.5 leading-none">
               <span className="text-lg font-black text-praetor uppercase">
                 {new Date(date).toLocaleDateString(undefined, { weekday: 'long' })}
               </span>
               <span className="text-lg font-medium text-slate-400">
-                {new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {new Date(date).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
               </span>
             </div>
           </div>
@@ -311,7 +342,11 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 <i className="fa-solid fa-wand-magic-sparkles text-slate-300"></i>
               )}
             </div>
-            {smartError && <p className="text-red-500 text-[10px] font-bold mt-1 animate-in fade-in">{smartError}</p>}
+            {smartError && (
+              <p className="text-red-500 text-[10px] font-bold mt-1 animate-in fade-in">
+                {smartError}
+              </p>
+            )}
           </div>
           <button
             type="submit"
@@ -336,7 +371,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 searchable={true}
                 className={errors.clientId ? 'border-red-300' : ''}
               />
-              {errors.clientId && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>}
+              {errors.clientId && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
+              )}
             </div>
             <div className="md:col-span-1">
               <CustomSelect
@@ -347,11 +384,15 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                   setSelectedProjectId(val);
                   if (errors.projectId) setErrors({ ...errors, projectId: '' });
                 }}
-                placeholder={filteredProjects.length === 0 ? t('entry.noProjects') : t('entry.selectProject')}
+                placeholder={
+                  filteredProjects.length === 0 ? t('entry.noProjects') : t('entry.selectProject')
+                }
                 searchable={true}
                 className={errors.projectId ? 'border-red-300' : ''}
               />
-              {errors.projectId && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>}
+              {errors.projectId && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
+              )}
             </div>
             <div className="md:col-span-2">
               <CustomSelect
@@ -359,11 +400,17 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 options={taskOptions}
                 value={selectedTaskId || (selectedTaskName === 'custom' ? 'custom' : '')}
                 onChange={handleTaskChange}
-                placeholder={filteredTasks.length === 0 && !canCreateCustomTask ? t('entry.noTasks') : t('entry.selectTask')}
+                placeholder={
+                  filteredTasks.length === 0 && !canCreateCustomTask
+                    ? t('entry.noTasks')
+                    : t('entry.selectTask')
+                }
                 searchable={true}
                 className={errors.task ? 'border-red-300' : ''}
               />
-              {errors.task && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.task}</p>}
+              {errors.task && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.task}</p>
+              )}
               {selectedTaskName === 'custom' && canCreateCustomTask && (
                 <input
                   type="text"
@@ -380,20 +427,28 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
               )}
             </div>
             <div className="md:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">{t('entry.hours')} <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                {t('entry.hours')} <span className="text-red-500">*</span>
+              </label>
               <ValidatedNumberInput
                 value={duration}
                 onValueChange={handleDurationChange}
                 placeholder="0.0"
                 className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-bold transition-colors ${errors.hours ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {errors.hours && <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">{errors.hours}</p>}
+              {errors.hours && (
+                <p className="text-[10px] text-red-500 mt-1 font-bold animate-in fade-in">
+                  {errors.hours}
+                </p>
+              )}
             </div>
           </form>
 
           <div className="flex flex-col gap-4">
             <div className="w-full">
-              <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">{t('entry.notesDescription')}</label>
+              <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                {t('entry.notesDescription')}
+              </label>
               <input
                 type="text"
                 value={notes}
@@ -414,7 +469,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                   </div>
                 )}
                 {selectedTaskId && (
-                  <div className={`transition-all duration-300 border rounded-xl py-1 ${makeRecurring ? 'bg-slate-50 border-slate-200' : 'bg-transparent border-transparent'}`}>
+                  <div
+                    className={`transition-all duration-300 border rounded-xl py-1 ${makeRecurring ? 'bg-slate-50 border-slate-200' : 'bg-transparent border-transparent'}`}
+                  >
                     <div className="flex items-center">
                       <button
                         type="button"
@@ -434,26 +491,42 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                                 { id: 'daily', name: t('entry.recurrencePatterns.daily') },
                                 { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
                                 { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
-                                { id: 'custom', name: recurrencePattern.startsWith('monthly:') ? getRecurrenceLabel(recurrencePattern) : t('entry.recurrencePatterns.custom') }
+                                {
+                                  id: 'custom',
+                                  name: recurrencePattern.startsWith('monthly:')
+                                    ? getRecurrenceLabel(recurrencePattern)
+                                    : t('entry.recurrencePatterns.custom'),
+                                },
                               ]}
-                              value={recurrencePattern.startsWith('monthly:') ? 'custom' : recurrencePattern}
+                              value={
+                                recurrencePattern.startsWith('monthly:')
+                                  ? 'custom'
+                                  : recurrencePattern
+                              }
                               onChange={handleRecurrenceChange}
                               className="text-xs"
                               placeholder="Pattern..."
                               buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs"
                             />
                           </div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-6">{t('entry.until')}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-6">
+                            {t('entry.until')}
+                          </span>
                           <input
                             type="date"
                             value={recurrenceEndDate}
                             onChange={(e) => {
                               setRecurrenceEndDate(e.target.value);
-                              if (errors.recurrenceEndDate) setErrors({ ...errors, recurrenceEndDate: '' });
+                              if (errors.recurrenceEndDate)
+                                setErrors({ ...errors, recurrenceEndDate: '' });
                             }}
                             className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
                           />
-                          {errors.recurrenceEndDate && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.recurrenceEndDate}</p>}
+                          {errors.recurrenceEndDate && (
+                            <p className="text-red-500 text-[10px] font-bold mt-1">
+                              {errors.recurrenceEndDate}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>

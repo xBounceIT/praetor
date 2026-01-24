@@ -28,10 +28,14 @@ const StandardTable = ({
 }: StandardTableProps) => {
   const { t } = useTranslation('common');
   return (
-    <div className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}>
+    <div
+      className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
+    >
       <div className="px-8 py-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center rounded-t-3xl">
         <div className="flex items-center gap-3">
-          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">{title}</h4>
+          <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">
+            {title}
+          </h4>
           {typeof totalCount === 'number' && (
             <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
               {totalCount} {totalLabel || t('table.total')}

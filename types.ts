@@ -1,4 +1,3 @@
-
 export type UserRole = 'admin' | 'manager' | 'user';
 
 export interface User {
@@ -109,12 +108,12 @@ export interface Product {
   category?: string;
   subcategory?: string;
   taxRate: number;
-  type: 'item' | 'service' | 'supply' | 'consulting'; // 'item' kept for backward compatibility if needed, but we migrated it. 
+  type: 'item' | 'service' | 'supply' | 'consulting'; // 'item' kept for backward compatibility if needed, but we migrated it.
   // Actually we migrated item->supply, so strict type should be:
   // type: 'supply' | 'service' | 'consulting';
-  // However, frontend might still send 'item' temporarily if I don't update it fully at once. 
+  // However, frontend might still send 'item' temporarily if I don't update it fully at once.
   // But I will update frontend. So let's force the new types.
-  // Wait, I should probably keep 'item' loosely in type definition or mapped? 
+  // Wait, I should probably keep 'item' loosely in type definition or mapped?
   // No, let's go with the new types.
   supplierId?: string;
   supplierName?: string;
@@ -151,7 +150,18 @@ export interface Quote {
   clientId: string;
   clientName: string;
   items: QuoteItem[];
-  paymentTerms: 'immediate' | '15gg' | '21gg' | '30gg' | '45gg' | '60gg' | '90gg' | '120gg' | '180gg' | '240gg' | '365gg';
+  paymentTerms:
+    | 'immediate'
+    | '15gg'
+    | '21gg'
+    | '30gg'
+    | '45gg'
+    | '60gg'
+    | '90gg'
+    | '120gg'
+    | '180gg'
+    | '240gg'
+    | '365gg';
   discount: number; // global discount percentage
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string; // ISO date string
@@ -178,7 +188,18 @@ export interface Sale {
   clientId: string;
   clientName: string;
   items: SaleItem[];
-  paymentTerms: 'immediate' | '15gg' | '21gg' | '30gg' | '45gg' | '60gg' | '90gg' | '120gg' | '180gg' | '240gg' | '365gg';
+  paymentTerms:
+    | 'immediate'
+    | '15gg'
+    | '21gg'
+    | '30gg'
+    | '45gg'
+    | '60gg'
+    | '90gg'
+    | '120gg'
+    | '180gg'
+    | '240gg'
+    | '365gg';
   discount: number;
   status: 'draft' | 'sent' | 'confirmed' | 'denied';
   notes?: string;
@@ -223,7 +244,7 @@ export type View =
 export interface WorkUnit {
   id: string;
   name: string;
-  managers: { id: string, name: string }[];
+  managers: { id: string; name: string }[];
   description?: string;
   isDisabled?: boolean;
   userCount?: number;
@@ -316,7 +337,18 @@ export interface SupplierQuote {
   supplierName: string;
   purchaseOrderNumber: string;
   items: SupplierQuoteItem[];
-  paymentTerms: 'immediate' | '15gg' | '21gg' | '30gg' | '45gg' | '60gg' | '90gg' | '120gg' | '180gg' | '240gg' | '365gg';
+  paymentTerms:
+    | 'immediate'
+    | '15gg'
+    | '21gg'
+    | '30gg'
+    | '45gg'
+    | '60gg'
+    | '90gg'
+    | '120gg'
+    | '180gg'
+    | '240gg'
+    | '365gg';
   discount: number;
   status: 'received' | 'approved' | 'rejected';
   expirationDate: string;

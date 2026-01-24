@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,7 +11,7 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
 } from 'recharts';
 import { TimeEntry, Project, Client, User } from '../types';
 import { COLORS } from '../constants';
@@ -40,7 +39,17 @@ const toLocalISOString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, currentUser, startOfWeek, treatSaturdayAsHoliday, dailyGoal, currency }) => {
+const Reports: React.FC<ReportsProps> = ({
+  entries,
+  projects,
+  clients,
+  users,
+  currentUser,
+  startOfWeek,
+  treatSaturdayAsHoliday,
+  dailyGoal,
+  currency,
+}) => {
   const { t } = useTranslation('timesheets');
 
   // --- Dashboard State ---
@@ -67,7 +76,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return {
       start: toLocalISOString(start),
-      end: toLocalISOString(end)
+      end: toLocalISOString(end),
     };
   };
 
@@ -101,7 +110,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     task: true,
     duration: true,
     notes: true,
-    cost: canSeeCost
+    cost: canSeeCost,
   });
 
   const [grouping, setGrouping] = useState<GroupingType[]>(['none', 'none', 'none']);
@@ -161,7 +170,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
       const isHoliday = false; // Remaining days are work days
 
       const hours = entries
-        .filter(e => e.date === dateStr)
+        .filter((e) => e.date === dateStr)
         .reduce((sum, e) => sum + e.duration, 0);
 
       data.push({
@@ -169,63 +178,77 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
         fullDate: dateStr,
         hours: hours,
         isFuture: d > today,
-        isHoliday
+        isHoliday,
       });
     }
     return data;
   }, [entries, startOfWeek, treatSaturdayAsHoliday]);
 
   const projectData = useMemo(() => {
-    return projects.map(p => {
-      const hours = entries
-        .filter(e => e.projectId === p.id)
-        .reduce((sum, e) => sum + e.duration, 0);
-      return { name: p.name, value: hours, color: p.color };
-    }).filter(p => p.value > 0);
+    return projects
+      .map((p) => {
+        const hours = entries
+          .filter((e) => e.projectId === p.id)
+          .reduce((sum, e) => sum + e.duration, 0);
+        return { name: p.name, value: hours, color: p.color };
+      })
+      .filter((p) => p.value > 0);
   }, [entries, projects]);
 
   const totalHours = entries.reduce((sum, e) => sum + e.duration, 0);
 
   // --- Helpers ---
-  const userOptions = useMemo(() => [
-    { id: 'all', name: t('reports.allUsers') },
-    ...users.map(u => ({ id: u.id, name: u.name }))
-  ], [users, t]);
+  const userOptions = useMemo(
+    () => [
+      { id: 'all', name: t('reports.allUsers') },
+      ...users.map((u) => ({ id: u.id, name: u.name })),
+    ],
+    [users, t],
+  );
 
-  const clientOptions = useMemo(() => [
-    { id: 'all', name: t('reports.allClients') },
-    ...clients.map(c => ({ id: c.id, name: c.name }))
-  ], [clients, t]);
+  const clientOptions = useMemo(
+    () => [
+      { id: 'all', name: t('reports.allClients') },
+      ...clients.map((c) => ({ id: c.id, name: c.name })),
+    ],
+    [clients, t],
+  );
 
   // Synchronized Filter Logic
   const filteredProjects = useMemo(() => {
     if (filterClient === 'all') return projects;
-    return projects.filter(p => p.clientId === filterClient);
+    return projects.filter((p) => p.clientId === filterClient);
   }, [projects, filterClient]);
 
-  const projectOptions = useMemo(() => [
-    { id: 'all', name: t('reports.allProjects') },
-    ...filteredProjects.map(p => ({ id: p.id, name: p.name }))
-  ], [filteredProjects, t]);
+  const projectOptions = useMemo(
+    () => [
+      { id: 'all', name: t('reports.allProjects') },
+      ...filteredProjects.map((p) => ({ id: p.id, name: p.name })),
+    ],
+    [filteredProjects, t],
+  );
 
   const filteredTasks = useMemo(() => {
     let relevantEntries = entries;
     if (filterUser !== 'all') {
-      relevantEntries = relevantEntries.filter(e => e.userId === filterUser);
+      relevantEntries = relevantEntries.filter((e) => e.userId === filterUser);
     }
     if (filterClient !== 'all') {
-      relevantEntries = relevantEntries.filter(e => e.clientId === filterClient);
+      relevantEntries = relevantEntries.filter((e) => e.clientId === filterClient);
     }
     if (filterProject !== 'all') {
-      relevantEntries = relevantEntries.filter(e => e.projectId === filterProject);
+      relevantEntries = relevantEntries.filter((e) => e.projectId === filterProject);
     }
-    return Array.from(new Set(relevantEntries.map(e => e.task))).sort();
+    return Array.from(new Set(relevantEntries.map((e) => e.task))).sort();
   }, [entries, filterUser, filterClient, filterProject]);
 
-  const taskOptions = useMemo(() => [
-    { id: 'all', name: t('reports.allTasks') },
-    ...filteredTasks.map(t => ({ id: t, name: t }))
-  ], [filteredTasks, t]);
+  const taskOptions = useMemo(
+    () => [
+      { id: 'all', name: t('reports.allTasks') },
+      ...filteredTasks.map((t) => ({ id: t, name: t })),
+    ],
+    [filteredTasks, t],
+  );
 
   const handleClientChange = (val: string) => {
     setFilterClient(val);
@@ -237,7 +260,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
     setFilterProject(val);
     setFilterTask('all');
     if (val !== 'all') {
-      const proj = projects.find(p => p.id === val);
+      const proj = projects.find((p) => p.id === val);
       if (proj) setFilterClient(proj.clientId);
     }
   };
@@ -307,20 +330,20 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
   };
 
   const generateReport = () => {
-    const filtered = entries.filter(e => {
+    const filtered = entries.filter((e) => {
       const dateMatch = e.date >= startDate && e.date <= endDate;
       const userMatch = filterUser === 'all' || e.userId === filterUser;
       const clientMatch = filterClient === 'all' || e.clientId === filterClient;
       const projectMatch = filterProject === 'all' || e.projectId === filterProject;
       const taskMatch = filterTask === 'all' || e.task === filterTask;
-      const noteMatch = !noteSearch || (e.notes?.toLowerCase().includes(noteSearch.toLowerCase()));
+      const noteMatch = !noteSearch || e.notes?.toLowerCase().includes(noteSearch.toLowerCase());
       return dateMatch && userMatch && clientMatch && projectMatch && taskMatch && noteMatch;
     });
     setGeneratedEntries(filtered.sort((a, b) => b.date.localeCompare(a.date)));
   };
 
   const getUserName = (userId: string) => {
-    return users.find(u => u.id === userId)?.name || t('reports.unknownUser');
+    return users.find((u) => u.id === userId)?.name || t('reports.unknownUser');
   };
 
   return (
@@ -328,8 +351,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
       {/* Tab Switcher */}
       <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-xl w-full max-w-[340px]">
         <div
-          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'dashboard' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
-            }`}
+          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            activeTab === 'dashboard' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
+          }`}
         ></div>
         <button
           onClick={() => setActiveTab('dashboard')}
@@ -350,23 +374,34 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-sm font-medium text-slate-500 mb-1">{t('reports.totalTracked')}</p>
-              <p className="text-3xl font-bold text-slate-900">{totalHours.toFixed(1)} <span className="text-lg font-normal text-slate-400">{t('reports.hours')}</span></p>
+              <p className="text-3xl font-bold text-slate-900">
+                {totalHours.toFixed(1)}{' '}
+                <span className="text-lg font-normal text-slate-400">{t('reports.hours')}</span>
+              </p>
             </div>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-sm font-medium text-slate-500 mb-1">{t('reports.tasksCompleted')}</p>
+              <p className="text-sm font-medium text-slate-500 mb-1">
+                {t('reports.tasksCompleted')}
+              </p>
               <p className="text-3xl font-bold text-slate-900">{entries.length}</p>
             </div>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-sm font-medium text-slate-500 mb-1">{t('reports.mostActiveProject')}</p>
+              <p className="text-sm font-medium text-slate-500 mb-1">
+                {t('reports.mostActiveProject')}
+              </p>
               <p className="text-3xl font-bold text-slate-900">
-                {projectData.length > 0 ? [...projectData].sort((a, b) => b.value - a.value)[0].name : 'N/A'}
+                {projectData.length > 0
+                  ? [...projectData].sort((a, b) => b.value - a.value)[0].name
+                  : 'N/A'}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
-              <h3 className="text-lg font-bold text-slate-800 mb-6">{t('reports.weeklyActivity', { start: startOfWeek })}</h3>
+              <h3 className="text-lg font-bold text-slate-800 mb-6">
+                {t('reports.weeklyActivity', { start: startOfWeek })}
+              </h3>
               <div className="h-[300px] w-full" style={{ minWidth: '0px' }}>
                 {chartsVisible && (
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -380,7 +415,11 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                       />
                       <RechartsTooltip
                         cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        contentStyle={{
+                          borderRadius: '8px',
+                          border: 'none',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                        }}
                         formatter={(value: any, name: string, item: any) => {
                           if (item && item.payload && item.payload.isHoliday) {
                             return ['N/A', 'Hours'];
@@ -388,12 +427,7 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                           return [`${value} hrs`, 'Hours'];
                         }}
                       />
-                      <Bar
-                        dataKey="hours"
-                        fill="#272b3e"
-                        radius={[4, 4, 0, 0]}
-                        barSize={40}
-                      >
+                      <Bar dataKey="hours" fill="#272b3e" radius={[4, 4, 0, 0]} barSize={40}>
                         {weeklyActivityData.map((entry, index) => {
                           let color = '#272b3e'; // Default Praetor (Below Goal)
 
@@ -415,7 +449,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
-              <h3 className="text-lg font-bold text-slate-800 mb-6">{t('reports.hoursByProject')}</h3>
+              <h3 className="text-lg font-bold text-slate-800 mb-6">
+                {t('reports.hoursByProject')}
+              </h3>
               <div className="h-[300px] w-full" style={{ minWidth: '0px' }}>
                 {chartsVisible && (
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -447,7 +483,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">1. {t('reports.timePeriod')}</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">
+                  1. {t('reports.timePeriod')}
+                </h4>
                 <div className="space-y-4">
                   <CustomSelect
                     label={t('reports.selection')}
@@ -458,11 +496,13 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                   />
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">{t('reports.from')}</label>
+                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">
+                        {t('reports.from')}
+                      </label>
                       <input
                         type="date"
                         value={startDate}
-                        onChange={e => {
+                        onChange={(e) => {
                           setStartDate(e.target.value);
                           setPeriod('custom');
                         }}
@@ -470,11 +510,13 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">{t('reports.to')}</label>
+                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">
+                        {t('reports.to')}
+                      </label>
                       <input
                         type="date"
                         value={endDate}
-                        onChange={e => {
+                        onChange={(e) => {
                           setEndDate(e.target.value);
                           setPeriod('custom');
                         }}
@@ -486,7 +528,9 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
               </div>
 
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">2. {t('reports.detailedFilters')}</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">
+                  2. {t('reports.detailedFilters')}
+                </h4>
                 <div className="flex flex-col lg:flex-row lg:items-end gap-6">
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-4">
@@ -523,11 +567,13 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                         searchable={true}
                       />
                       <div>
-                        <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">{t('reports.notesContaining')}</label>
+                        <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">
+                          {t('reports.notesContaining')}
+                        </label>
                         <input
                           type="text"
                           value={noteSearch}
-                          onChange={e => setNoteSearch(e.target.value)}
+                          onChange={(e) => setNoteSearch(e.target.value)}
                           placeholder={t('reports.searchNotes')}
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm"
                         />
@@ -551,14 +597,18 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
 
             <div className="border-t border-slate-100 pt-8 grid grid-cols-1 lg:grid-cols-2 gap-12">
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">3. {t('reports.visibleFields')}</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">
+                  3. {t('reports.visibleFields')}
+                </h4>
                 <div className="flex flex-wrap gap-6">
                   {Object.entries(visibleFields).map(([key, value]) => (
                     <label key={key} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={value}
-                        onChange={e => setVisibleFields({ ...visibleFields, [key]: e.target.checked })}
+                        onChange={(e) =>
+                          setVisibleFields({ ...visibleFields, [key]: e.target.checked })
+                        }
                         className="rounded border-slate-300 text-praetor focus:ring-praetor"
                       />
                       <span className="text-xs font-bold text-slate-600 capitalize">{key}</span>
@@ -568,14 +618,16 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
               </div>
 
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">4. {t('reports.grouping')}</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest text-praetor mb-4">
+                  4. {t('reports.grouping')}
+                </h4>
                 <div className="flex gap-4">
-                  {[0, 1, 2].map(i => (
+                  {[0, 1, 2].map((i) => (
                     <CustomSelect
                       key={i}
                       options={GROUP_OPTIONS}
                       value={grouping[i]}
-                      onChange={val => {
+                      onChange={(val) => {
                         const newG = [...grouping];
                         newG[i] = val as GroupingType;
                         setGrouping(newG as GroupingType[]);
@@ -603,19 +655,38 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
               <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
                 <div>
-                  <h3 className="text-xl font-black italic tracking-tighter">PRAETOR <span className="text-slate-400 font-normal not-italic tracking-normal text-sm ml-2">{t('reports.detailedReportTitle')}</span></h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{t('reports.generated')} {new Date().toLocaleString()}</p>
+                  <h3 className="text-xl font-black italic tracking-tighter">
+                    PRAETOR{' '}
+                    <span className="text-slate-400 font-normal not-italic tracking-normal text-sm ml-2">
+                      {t('reports.detailedReportTitle')}
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                    {t('reports.generated')} {new Date().toLocaleString()}
+                  </p>
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right flex items-center gap-6">
                     <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('reports.grandTotal')}</p>
-                      <p className="text-2xl font-black text-white">{generatedEntries.reduce((s, e) => s + e.duration, 0).toFixed(2)} {t('reports.hours')}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                        {t('reports.grandTotal')}
+                      </p>
+                      <p className="text-2xl font-black text-white">
+                        {generatedEntries.reduce((s, e) => s + e.duration, 0).toFixed(2)}{' '}
+                        {t('reports.hours')}
+                      </p>
                     </div>
                     {visibleFields.cost && (
                       <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('reports.totalCost')}</p>
-                        <p className="text-2xl font-black text-emerald-400">{currency} {generatedEntries.reduce((s, e) => s + (e.hourlyCost || 0) * e.duration, 0).toFixed(2)}</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          {t('reports.totalCost')}
+                        </p>
+                        <p className="text-2xl font-black text-emerald-400">
+                          {currency}{' '}
+                          {generatedEntries
+                            .reduce((s, e) => s + (e.hourlyCost || 0) * e.duration, 0)
+                            .toFixed(2)}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -636,11 +707,13 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                       // 2. Map Data
                       const csvRows = [headers.join(',')];
 
-                      generatedEntries.forEach(e => {
+                      generatedEntries.forEach((e) => {
                         const row = [new Date(e.date).toLocaleDateString()];
-                        if (visibleFields.user) row.push(`"${getUserName(e.userId).replace(/"/g, '""')}"`);
+                        if (visibleFields.user)
+                          row.push(`"${getUserName(e.userId).replace(/"/g, '""')}"`);
                         if (visibleFields.client) row.push(`"${e.clientName.replace(/"/g, '""')}"`);
-                        if (visibleFields.project) row.push(`"${e.projectName.replace(/"/g, '""')}"`);
+                        if (visibleFields.project)
+                          row.push(`"${e.projectName.replace(/"/g, '""')}"`);
                         if (visibleFields.task) row.push(`"${e.task.replace(/"/g, '""')}"`);
                         if (visibleFields.notes) {
                           const safeNote = (e.notes || '').replace(/"/g, '""').replace(/\n/g, ' ');
@@ -661,7 +734,10 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                       const url = URL.createObjectURL(blob);
                       const link = document.createElement('a');
                       link.href = url;
-                      link.setAttribute('download', `praetor_report_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+                      link.setAttribute(
+                        'download',
+                        `praetor_report_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`,
+                      );
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
@@ -678,37 +754,95 @@ const Reports: React.FC<ReportsProps> = ({ entries, projects, clients, users, cu
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reports.date')}</th>
-                      {visibleFields.user && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reports.user')}</th>}
-                      {visibleFields.client && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reports.client')}</th>}
-                      {visibleFields.project && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reports.project')}</th>}
-                      {visibleFields.task && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reports.task')}</th>}
-                      {visibleFields.notes && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('reports.note')}</th>}
-                      {visibleFields.duration && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">{t('reports.duration')}</th>}
-                      {visibleFields.cost && <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">{t('reports.cost')}</th>}
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                        {t('reports.date')}
+                      </th>
+                      {visibleFields.user && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          {t('reports.user')}
+                        </th>
+                      )}
+                      {visibleFields.client && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          {t('reports.client')}
+                        </th>
+                      )}
+                      {visibleFields.project && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          {t('reports.project')}
+                        </th>
+                      )}
+                      {visibleFields.task && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          {t('reports.task')}
+                        </th>
+                      )}
+                      {visibleFields.notes && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          {t('reports.note')}
+                        </th>
+                      )}
+                      {visibleFields.duration && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
+                          {t('reports.duration')}
+                        </th>
+                      )}
+                      {visibleFields.cost && (
+                        <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
+                          {t('reports.cost')}
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {generatedEntries.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">{t('reports.noEntriesMatch')}</td>
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
+                          {t('reports.noEntriesMatch')}
+                        </td>
                       </tr>
-                    ) : generatedEntries.map(e => (
-                      <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">{new Date(e.date).toLocaleDateString()}</td>
-                        {visibleFields.user && <td className="px-6 py-4 text-xs font-bold text-praetor">{getUserName(e.userId)}</td>}
-                        {visibleFields.client && <td className="px-6 py-4 text-xs font-medium text-slate-800">{e.clientName}</td>}
-                        {visibleFields.project && <td className="px-6 py-4 text-xs font-medium text-slate-800">{e.projectName}</td>}
-                        {visibleFields.task && <td className="px-6 py-4 text-xs font-bold text-slate-800">{e.task}</td>}
-                        {visibleFields.notes && <td className="px-6 py-4 text-xs text-slate-500 italic max-w-xs truncate">{e.notes || '-'}</td>}
-                        {visibleFields.duration && <td className="px-6 py-4 text-sm font-black text-slate-900 text-right">{e.duration.toFixed(2)}</td>}
-                        {visibleFields.cost && (
-                          <td className="px-6 py-4 text-sm font-black text-slate-900 text-right">
-                            {currency} {((e.hourlyCost || 0) * e.duration).toFixed(2)}
+                    ) : (
+                      generatedEntries.map((e) => (
+                        <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">
+                            {new Date(e.date).toLocaleDateString()}
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          {visibleFields.user && (
+                            <td className="px-6 py-4 text-xs font-bold text-praetor">
+                              {getUserName(e.userId)}
+                            </td>
+                          )}
+                          {visibleFields.client && (
+                            <td className="px-6 py-4 text-xs font-medium text-slate-800">
+                              {e.clientName}
+                            </td>
+                          )}
+                          {visibleFields.project && (
+                            <td className="px-6 py-4 text-xs font-medium text-slate-800">
+                              {e.projectName}
+                            </td>
+                          )}
+                          {visibleFields.task && (
+                            <td className="px-6 py-4 text-xs font-bold text-slate-800">{e.task}</td>
+                          )}
+                          {visibleFields.notes && (
+                            <td className="px-6 py-4 text-xs text-slate-500 italic max-w-xs truncate">
+                              {e.notes || '-'}
+                            </td>
+                          )}
+                          {visibleFields.duration && (
+                            <td className="px-6 py-4 text-sm font-black text-slate-900 text-right">
+                              {e.duration.toFixed(2)}
+                            </td>
+                          )}
+                          {visibleFields.cost && (
+                            <td className="px-6 py-4 text-sm font-black text-slate-900 text-right">
+                              {currency} {((e.hourlyCost || 0) * e.duration).toFixed(2)}
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import api from '../services/api';
@@ -62,7 +61,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
               <p className="text-xs text-amber-600">{t('auth:session.expiredMessage')}</p>
             </div>
             {onClearLogoutReason && (
-              <button type="button" onClick={onClearLogoutReason} className="text-amber-400 hover:text-amber-600 transition-colors">
+              <button
+                type="button"
+                onClick={onClearLogoutReason}
+                className="text-amber-400 hover:text-amber-600 transition-colors"
+              >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             )}
@@ -71,7 +74,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('common:labels.username')}</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              {t('common:labels.username')}
+            </label>
             <input
               type="text"
               value={username}
@@ -83,14 +88,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
               placeholder={t('auth:login.username')}
               disabled={isLoading}
             />
-            {fieldErrors.username && <p className="text-red-500 text-[10px] font-bold mt-1">{fieldErrors.username}</p>}
+            {fieldErrors.username && (
+              <p className="text-red-500 text-[10px] font-bold mt-1">{fieldErrors.username}</p>
+            )}
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('common:labels.password')}</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              {t('common:labels.password')}
+            </label>
             <div className="relative">
               <input
-                type={showPassword ? "text" : "password"}
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
@@ -108,7 +117,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
                 <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
               </button>
             </div>
-            {fieldErrors.password && <p className="text-red-500 text-[10px] font-bold mt-1">{fieldErrors.password}</p>}
+            {fieldErrors.password && (
+              <p className="text-red-500 text-[10px] font-bold mt-1">{fieldErrors.password}</p>
+            )}
           </div>
 
           {error && (

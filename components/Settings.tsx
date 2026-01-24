@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import CustomSelect from './CustomSelect';
 import api from '../services/api';
@@ -49,7 +48,7 @@ const Settings: React.FC = () => {
         const profile = {
           fullName: data.fullName,
           email: data.email,
-          language: data.language || 'auto'
+          language: data.language || 'auto',
         };
         setSettings(profile);
         setInitialSettings(profile);
@@ -66,7 +65,11 @@ const Settings: React.FC = () => {
     if (e) e.preventDefault();
     setIsSaving(true);
     try {
-      const payload = { fullName: settings.fullName, email: settings.email, language: settings.language };
+      const payload = {
+        fullName: settings.fullName,
+        email: settings.email,
+        language: settings.language,
+      };
       await api.settings.update(payload);
       setInitialSettings(payload);
       setIsSaved(true);
@@ -161,20 +164,24 @@ const Settings: React.FC = () => {
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('userProfile.fullName')}</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  {t('userProfile.fullName')}
+                </label>
                 <input
                   type="text"
                   value={settings.fullName}
-                  onChange={e => setSettings({ ...settings, fullName: e.target.value })}
+                  onChange={(e) => setSettings({ ...settings, fullName: e.target.value })}
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('userProfile.email')}</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  {t('userProfile.email')}
+                </label>
                 <input
                   type="email"
                   value={settings.email}
-                  onChange={e => setSettings({ ...settings, email: e.target.value })}
+                  onChange={(e) => setSettings({ ...settings, email: e.target.value })}
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                 />
               </div>
@@ -182,8 +189,8 @@ const Settings: React.FC = () => {
             <div className="flex justify-end pt-4">
               <button
                 onClick={handleSave}
-                disabled={isSaving || (JSON.stringify(settings) === JSON.stringify(initialSettings))}
-                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${isSaved ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : (JSON.stringify(settings) === JSON.stringify(initialSettings)) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                disabled={isSaving || JSON.stringify(settings) === JSON.stringify(initialSettings)}
+                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${isSaved ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : JSON.stringify(settings) === JSON.stringify(initialSettings) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
               >
                 {isSaving ? (
                   <>
@@ -256,7 +263,9 @@ const Settings: React.FC = () => {
                 className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'auto' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <i className={`fa-solid fa-globe text-xl ${settings.language === 'auto' ? 'text-praetor' : 'text-slate-400'}`}></i>
+                  <i
+                    className={`fa-solid fa-globe text-xl ${settings.language === 'auto' ? 'text-praetor' : 'text-slate-400'}`}
+                  ></i>
                   {settings.language === 'auto' && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
@@ -265,9 +274,7 @@ const Settings: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-800 mb-1">{t('language.auto')}</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {t('language.autoDesc')}
-                  </p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{t('language.autoDesc')}</p>
                 </div>
               </button>
 
@@ -276,7 +283,9 @@ const Settings: React.FC = () => {
                 className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'en' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <span className={`fi fi-gb text-xl ${settings.language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}></span>
+                  <span
+                    className={`fi fi-gb text-xl ${settings.language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}
+                  ></span>
                   {settings.language === 'en' && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
@@ -296,7 +305,9 @@ const Settings: React.FC = () => {
                 className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'it' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
-                  <span className={`fi fi-it text-xl ${settings.language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}></span>
+                  <span
+                    className={`fi fi-it text-xl ${settings.language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}
+                  ></span>
                   {settings.language === 'it' && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
@@ -329,11 +340,13 @@ const Settings: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('password.currentPassword')}</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  {t('password.currentPassword')}
+                </label>
                 <input
                   type="password"
                   value={currentPassword}
-                  onChange={e => setCurrentPassword(e.target.value)}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   placeholder="••••••••"
                   required
@@ -341,22 +354,26 @@ const Settings: React.FC = () => {
               </div>
               <div className="hidden md:block"></div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('password.newPassword')}</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  {t('password.newPassword')}
+                </label>
                 <input
                   type="password"
                   value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
+                  onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   placeholder="••••••••"
                   required
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('password.confirmNewPassword')}</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  {t('password.confirmNewPassword')}
+                </label>
                 <input
                   type="password"
                   value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
                   placeholder="••••••••"
                   required
@@ -368,7 +385,7 @@ const Settings: React.FC = () => {
               <button
                 onClick={handlePasswordUpdate}
                 disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
-                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${passwordSuccess ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : (!currentPassword || !newPassword || !confirmPassword) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${passwordSuccess ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : !currentPassword || !newPassword || !confirmPassword ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
               >
                 {isSavingPassword ? (
                   <>
@@ -388,7 +405,6 @@ const Settings: React.FC = () => {
             </div>
           </div>
         </section>
-
       </div>
     </div>
   );

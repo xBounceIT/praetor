@@ -4,7 +4,6 @@ const migration = `
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'auto' CHECK (language IN ('en', 'it', 'auto'));
 `;
 
-
 export async function migrate() {
   try {
     console.log('Running migration to add language column to settings table...');

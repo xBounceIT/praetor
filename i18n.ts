@@ -37,7 +37,7 @@ const resources = {
     finances: enFinances,
     suppliers: enSuppliers,
     settings: enSettings,
-    notifications: enNotifications
+    notifications: enNotifications,
   },
   it: {
     common: itCommon,
@@ -51,8 +51,8 @@ const resources = {
     finances: itFinances,
     suppliers: itSuppliers,
     settings: itSettings,
-    notifications: itNotifications
-  }
+    notifications: itNotifications,
+  },
 };
 
 i18n
@@ -61,16 +61,29 @@ i18n
   .init({
     fallbackLng: 'en',
     defaultNS: 'common',
-    ns: ['common', 'form', 'layout', 'auth', 'timesheets', 'crm', 'hr', 'projects', 'finances', 'suppliers', 'settings', 'notifications'],
+    ns: [
+      'common',
+      'form',
+      'layout',
+      'auth',
+      'timesheets',
+      'crm',
+      'hr',
+      'projects',
+      'finances',
+      'suppliers',
+      'settings',
+      'notifications',
+    ],
     resources,
     detection: {
       order: ['querystring', 'navigator'],
       caches: [],
-      lookupQuerystring: 'lng'
+      lookupQuerystring: 'lng',
     },
     interpolation: {
-      escapeValue: false
-    }
+      escapeValue: false,
+    },
   });
 
 export default i18n;

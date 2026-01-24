@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LdapConfig, UserRole } from '../types';
 import CustomSelect from './CustomSelect';
@@ -17,14 +16,18 @@ const DEFAULT_CONFIG: LdapConfig = {
   userFilter: '(uid={0})',
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
-  roleMappings: []
+  roleMappings: [],
 };
 
 const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSave }) => {
   const [formData, setFormData] = useState<LdapConfig>(config || DEFAULT_CONFIG);
   const [testUser, setTestUser] = useState('');
   const [testPass, setTestPass] = useState('');
-  const [testResult, setTestResult] = useState<{ success: boolean, message: string, details?: any } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    details?: any;
+  } | null>(null);
   const [isTestLoading, setIsTestLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -49,7 +52,10 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
     if (!formData.groupBaseDn?.trim()) newErrors.groupBaseDn = 'Group Base DN is required';
     if (!formData.groupFilter?.trim()) newErrors.groupFilter = 'Group filter is required';
 
-    if ((formData.bindDn && !formData.bindPassword) || (!formData.bindDn && formData.bindPassword)) {
+    if (
+      (formData.bindDn && !formData.bindPassword) ||
+      (!formData.bindDn && formData.bindPassword)
+    ) {
       newErrors.bindCredentials = 'Both Bind DN and Bind Password are required together';
     }
 
@@ -89,18 +95,25 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
     setIsTestLoading(true);
 
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Mock Validation Logic
-    if (formData.serverUrl.includes('example.com') && testUser === 'admin' && testPass === 'password') {
+    if (
+      formData.serverUrl.includes('example.com') &&
+      testUser === 'admin' &&
+      testPass === 'password'
+    ) {
       setTestResult({
         success: true,
         message: 'Successfully authenticated and authorized.',
         details: {
           dn: `uid=${testUser},ou=people,${formData.baseDn}`,
-          groups: ['cn=admins,ou=groups,' + formData.baseDn, 'cn=devs,ou=groups,' + formData.baseDn],
-          mappedRole: 'admin'
-        }
+          groups: [
+            'cn=admins,ou=groups,' + formData.baseDn,
+            'cn=devs,ou=groups,' + formData.baseDn,
+          ],
+          mappedRole: 'admin',
+        },
       });
     } else if (testUser === 'jdoe' && testPass === 'password') {
       setTestResult({
@@ -109,13 +122,13 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
         details: {
           dn: `uid=${testUser},ou=people,${formData.baseDn}`,
           groups: ['cn=users,ou=groups,' + formData.baseDn],
-          mappedRole: 'user'
-        }
+          mappedRole: 'user',
+        },
       });
     } else {
       setTestResult({
         success: false,
-        message: 'Authentication failed. Invalid credentials or connection error.'
+        message: 'Authentication failed. Invalid credentials or connection error.',
       });
     }
     setIsTestLoading(false);
@@ -124,7 +137,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
   const addRoleMapping = () => {
     setFormData({
       ...formData,
-      roleMappings: [...formData.roleMappings, { ldapGroup: '', praetorRole: 'user' }]
+      roleMappings: [...formData.roleMappings, { ldapGroup: '', praetorRole: 'user' }],
     });
   };
 
@@ -143,7 +156,6 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Authentication Settings</h2>
@@ -168,7 +180,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <input
                 type="checkbox"
                 checked={formData.enabled}
-                onChange={e => setFormData({ ...formData, enabled: e.target.checked })}
+                onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
@@ -176,58 +188,74 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
             </label>
           </div>
 
-          <div className={`p-6 grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div
+            className={`p-6 grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
+          >
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Server URL</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Server URL
+              </label>
               <input
                 type="text"
                 value={formData.serverUrl}
-                onChange={e => {
+                onChange={(e) => {
                   setFormData({ ...formData, serverUrl: e.target.value });
                   if (errors.serverUrl) setErrors({ ...errors, serverUrl: '' });
                 }}
                 placeholder="ldap://ldap.example.com:389"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.serverUrl ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {errors.serverUrl && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.serverUrl}</p>}
+              {errors.serverUrl && (
+                <p className="text-red-500 text-[10px] font-bold mt-1">{errors.serverUrl}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Base DN</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Base DN
+              </label>
               <input
                 type="text"
                 value={formData.baseDn}
-                onChange={e => {
+                onChange={(e) => {
                   setFormData({ ...formData, baseDn: e.target.value });
                   if (errors.baseDn) setErrors({ ...errors, baseDn: '' });
                 }}
                 placeholder="dc=example,dc=com"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.baseDn ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {errors.baseDn && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.baseDn}</p>}
+              {errors.baseDn && (
+                <p className="text-red-500 text-[10px] font-bold mt-1">{errors.baseDn}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">User Search Filter</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                User Search Filter
+              </label>
               <input
                 type="text"
                 value={formData.userFilter}
-                onChange={e => {
+                onChange={(e) => {
                   setFormData({ ...formData, userFilter: e.target.value });
                   if (errors.userFilter) setErrors({ ...errors, userFilter: '' });
                 }}
                 placeholder="(uid={0}) or (sAMAccountName={0})"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.userFilter ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {errors.userFilter && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.userFilter}</p>}
+              {errors.userFilter && (
+                <p className="text-red-500 text-[10px] font-bold mt-1">{errors.userFilter}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bind DN (Optional)</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Bind DN (Optional)
+              </label>
               <input
                 type="text"
                 value={formData.bindDn}
-                onChange={e => {
+                onChange={(e) => {
                   setFormData({ ...formData, bindDn: e.target.value });
                   if (errors.bindCredentials) setErrors({ ...errors, bindCredentials: '' });
                 }}
@@ -237,23 +265,29 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bind Password</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Bind Password
+              </label>
               <input
                 type="password"
                 value={formData.bindPassword}
-                onChange={e => {
+                onChange={(e) => {
                   setFormData({ ...formData, bindPassword: e.target.value });
                   if (errors.bindCredentials) setErrors({ ...errors, bindCredentials: '' });
                 }}
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.bindCredentials ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              {errors.bindCredentials && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.bindCredentials}</p>}
+              {errors.bindCredentials && (
+                <p className="text-red-500 text-[10px] font-bold mt-1">{errors.bindCredentials}</p>
+              )}
             </div>
           </div>
         </section>
 
         {/* Authorization & Provisioning */}
-        <section className={`bg-white rounded-2xl border border-slate-200 shadow-sm transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        <section
+          className={`bg-white rounded-2xl border border-slate-200 shadow-sm transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
+        >
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-users-gear text-praetor"></i>
             <h3 className="font-bold text-slate-800">Authorization & Provisioning</h3>
@@ -262,32 +296,40 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Group Search Base</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Group Search Base
+                </label>
                 <input
                   type="text"
                   value={formData.groupBaseDn}
-                  onChange={e => {
+                  onChange={(e) => {
                     setFormData({ ...formData, groupBaseDn: e.target.value });
                     if (errors.groupBaseDn) setErrors({ ...errors, groupBaseDn: '' });
                   }}
                   placeholder="ou=groups,dc=example,dc=com"
                   className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.groupBaseDn ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
-                {errors.groupBaseDn && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.groupBaseDn}</p>}
+                {errors.groupBaseDn && (
+                  <p className="text-red-500 text-[10px] font-bold mt-1">{errors.groupBaseDn}</p>
+                )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Group Member Filter</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Group Member Filter
+                </label>
                 <input
                   type="text"
                   value={formData.groupFilter}
-                  onChange={e => {
+                  onChange={(e) => {
                     setFormData({ ...formData, groupFilter: e.target.value });
                     if (errors.groupFilter) setErrors({ ...errors, groupFilter: '' });
                   }}
                   placeholder="(member={0}) or (memberUid={0})"
                   className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.groupFilter ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
-                {errors.groupFilter && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.groupFilter}</p>}
+                {errors.groupFilter && (
+                  <p className="text-red-500 text-[10px] font-bold mt-1">{errors.groupFilter}</p>
+                )}
               </div>
             </div>
 
@@ -305,7 +347,10 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
 
               <div className="space-y-3">
                 {formData.roleMappings.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No mappings configured. Users will be assigned 'User' role by default if not specified.</p>
+                  <p className="text-xs text-slate-400 italic">
+                    No mappings configured. Users will be assigned 'User' role by default if not
+                    specified.
+                  </p>
                 ) : (
                   formData.roleMappings.map((mapping, idx) => (
                     <div key={idx} className="flex gap-4 items-center">
@@ -313,11 +358,15 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                         <input
                           type="text"
                           value={mapping.ldapGroup}
-                          onChange={e => updateRoleMapping(idx, 'ldapGroup', e.target.value)}
+                          onChange={(e) => updateRoleMapping(idx, 'ldapGroup', e.target.value)}
                           placeholder="LDAP Group CN (e.g. cn=admins)"
                           className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-sm font-mono focus:ring-2 outline-none ${errors[`roleMapping_${idx}`] ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'focus:ring-praetor border-slate-200'}`}
                         />
-                        {errors[`roleMapping_${idx}`] && <p className="text-red-500 text-[10px] font-bold mt-1">{errors[`roleMapping_${idx}`]}</p>}
+                        {errors[`roleMapping_${idx}`] && (
+                          <p className="text-red-500 text-[10px] font-bold mt-1">
+                            {errors[`roleMapping_${idx}`]}
+                          </p>
+                        )}
                       </div>
                       <i className="fa-solid fa-arrow-right text-slate-300 text-xs"></i>
                       <div className="w-40">
@@ -325,13 +374,17 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                           options={[
                             { id: 'admin', name: 'Admin' },
                             { id: 'manager', name: 'Manager' },
-                            { id: 'user', name: 'User' }
+                            { id: 'user', name: 'User' },
                           ]}
                           value={mapping.praetorRole}
-                          onChange={val => updateRoleMapping(idx, 'praetorRole', val as UserRole)}
+                          onChange={(val) => updateRoleMapping(idx, 'praetorRole', val as UserRole)}
                         />
                       </div>
-                      <button type="button" onClick={() => removeRoleMapping(idx)} className="text-slate-400 hover:text-red-500 p-2">
+                      <button
+                        type="button"
+                        onClick={() => removeRoleMapping(idx)}
+                        className="text-slate-400 hover:text-red-500 p-2"
+                      >
                         <i className="fa-solid fa-trash-can"></i>
                       </button>
                     </div>
@@ -353,48 +406,67 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
       </form>
 
       {/* Tester */}
-      <section className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-12 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <section
+        className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-12 transition-opacity ${!formData.enabled ? 'opacity-50 pointer-events-none' : ''}`}
+      >
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
           <i className="fa-solid fa-vial text-praetor"></i>
           <h3 className="font-bold text-slate-800">Connection Tester</h3>
         </div>
         <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-4">
-            <p className="text-xs text-slate-400 mb-4">Enter credentials to test authentication and group retrieval against the current configuration.</p>
+            <p className="text-xs text-slate-400 mb-4">
+              Enter credentials to test authentication and group retrieval against the current
+              configuration.
+            </p>
             <form onSubmit={handleTest} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Test Username</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Test Username
+                </label>
                 <input
                   type="text"
                   value={testUser}
-                  onChange={e => {
+                  onChange={(e) => {
                     setTestUser(e.target.value);
                     if (testErrors.testUser) setTestErrors({ ...testErrors, testUser: '' });
                   }}
                   className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold text-slate-700 ${testErrors.testUser ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
-                {testErrors.testUser && <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testUser}</p>}
+                {testErrors.testUser && (
+                  <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testUser}</p>
+                )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Test Password</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Test Password
+                </label>
                 <input
                   type="password"
                   value={testPass}
-                  onChange={e => {
+                  onChange={(e) => {
                     setTestPass(e.target.value);
                     if (testErrors.testPass) setTestErrors({ ...testErrors, testPass: '' });
                   }}
                   className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold text-slate-700 ${testErrors.testPass ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                 />
-                {testErrors.testPass && <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testPass}</p>}
-                {testErrors.enabled && <p className="text-amber-600 text-[10px] font-bold mt-1">{testErrors.enabled}</p>}
+                {testErrors.testPass && (
+                  <p className="text-red-500 text-[10px] font-bold mt-1">{testErrors.testPass}</p>
+                )}
+                {testErrors.enabled && (
+                  <p className="text-amber-600 text-[10px] font-bold mt-1">{testErrors.enabled}</p>
+                )}
               </div>
               <button
                 type="submit"
                 disabled={isTestLoading || !formData.enabled}
                 className="w-full bg-praetor text-white py-2 rounded-lg font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 shadow-md shadow-slate-100"
               >
-                {isTestLoading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : 'Test Authentication'}
+                {isTestLoading ? (
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                ) : (
+                  'Test Authentication'
+                )}
               </button>
             </form>
           </div>
@@ -404,14 +476,25 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <div className="text-slate-400 animate-pulse">Connecting to LDAP server...</div>
             ) : testResult ? (
               <div className="space-y-2">
-                <div className={`font-bold ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div
+                  className={`font-bold ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}
+                >
                   [{testResult.success ? 'SUCCESS' : 'FAILURE'}] {testResult.message}
                 </div>
                 {testResult.details && (
                   <>
-                    <div className="text-slate-500 mt-2 border-b border-slate-800 pb-1 mb-2">-- Provisioning Details --</div>
-                    <div className="text-slate-400">DN: <span className="text-slate-200">{testResult.details.dn}</span></div>
-                    <div className="text-slate-400">Role: <span className="text-slate-400 uppercase font-bold">{testResult.details.mappedRole}</span></div>
+                    <div className="text-slate-500 mt-2 border-b border-slate-800 pb-1 mb-2">
+                      -- Provisioning Details --
+                    </div>
+                    <div className="text-slate-400">
+                      DN: <span className="text-slate-200">{testResult.details.dn}</span>
+                    </div>
+                    <div className="text-slate-400">
+                      Role:{' '}
+                      <span className="text-slate-400 uppercase font-bold">
+                        {testResult.details.mappedRole}
+                      </span>
+                    </div>
                     <div className="text-slate-400 mt-2">Groups Found:</div>
                     <ul className="list-disc pl-4 text-slate-500">
                       {testResult.details.groups.map((g: string, i: number) => (
@@ -424,7 +507,8 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
             ) : (
               <div className="text-slate-600 italic">
                 Waiting for test execution...
-                <br /><br />
+                <br />
+                <br />
                 <span className="opacity-50">Log output will appear here after testing.</span>
               </div>
             )}

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, User } from '../types';
@@ -12,14 +11,14 @@ interface Module {
 
 // Default route for each module
 const moduleDefaultRoutes: Record<string, View> = {
-  'timesheets': 'timesheets/tracker',
-  'crm': 'crm/clients',
-  'catalog': 'catalog/products',
-  'hr': 'hr/workforce',
-  'projects': 'projects/manage',
-  'finances': 'finances/invoices',
-  'suppliers': 'suppliers/manage',
-  'configuration': 'configuration/authentication',
+  timesheets: 'timesheets/tracker',
+  crm: 'crm/clients',
+  catalog: 'catalog/products',
+  hr: 'hr/workforce',
+  projects: 'projects/manage',
+  finances: 'finances/invoices',
+  suppliers: 'suppliers/manage',
+  configuration: 'configuration/authentication',
 };
 
 // Get module from route
@@ -44,7 +43,14 @@ interface LayoutProps {
   isNotFound?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, currentUser, onLogout, isNotFound }) => {
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  activeView,
+  onViewChange,
+  currentUser,
+  onLogout,
+  isNotFound,
+}) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -54,22 +60,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
   const moduleSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Create modules array with localized names
-  const modules: Module[] = useMemo(() => [
-    { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
-    { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
-    { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
-    { id: 'hr', name: t('modules.hr'), icon: 'fa-user-group', active: false },
-    { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
-    { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
-    { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
-    { id: 'configuration', name: t('modules.configuration'), icon: 'fa-gears', active: false },
-  ], [t]).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
+  const modules: Module[] = useMemo(
+    () => [
+      { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
+      { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
+      { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
+      { id: 'hr', name: t('modules.hr'), icon: 'fa-user-group', active: false },
+      { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
+      { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
+      { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
+      { id: 'configuration', name: t('modules.configuration'), icon: 'fa-gears', active: false },
+    ],
+    [t],
+  ).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
 
   // Compute active module from current route
-  const activeModule = modules.find(m => m.id === getModuleFromRoute(activeView)) || modules[0];
+  const activeModule = modules.find((m) => m.id === getModuleFromRoute(activeView)) || modules[0];
 
   // Filter modules based on user role
-  const accessibleModules = modules.filter(m => {
+  const accessibleModules = modules.filter((m) => {
     // Admin only access to configuration
     if (m.id === 'configuration') return currentUser.role === 'admin';
 
@@ -80,7 +89,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
     if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
 
     // Manager only access (Admin and users excluded as requested)
-    if (m.id === 'crm' || m.id === 'catalog' || m.id === 'projects' || m.id === 'finances' || m.id === 'suppliers') {
+    if (
+      m.id === 'crm' ||
+      m.id === 'catalog' ||
+      m.id === 'projects' ||
+      m.id === 'finances' ||
+      m.id === 'suppliers'
+    ) {
       return currentUser.role === 'manager';
     }
 
@@ -122,7 +137,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
           ${isCollapsed ? 'md:w-20' : 'md:w-64'} 
           w-full`}
       >
-        <div className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}>
+        <div
+          className={`p-6 flex items-center justify-between ${isCollapsed ? 'md:justify-center' : ''}`}
+        >
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/20">
               <i className="fa-solid fa-clock text-praetor text-lg"></i>
@@ -134,7 +151,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             )}
           </div>
 
-          <button onClick={toggleMobileMenu} className="md:hidden p-2 text-white/70 hover:text-white">
+          <button
+            onClick={toggleMobileMenu}
+            className="md:hidden p-2 text-white/70 hover:text-white"
+          >
             <i className={`fa-solid ${isMobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-xl`}></i>
           </button>
 
@@ -155,7 +175,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
           </div>
         )}
 
-        <div className={`flex-1 px-4 space-y-2 overflow-y-auto ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}>
+        <div
+          className={`flex-1 px-4 space-y-2 overflow-y-auto ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}
+        >
           {/* Module Switcher */}
           <div className="relative mb-4" ref={moduleSwitcherRef}>
             <button
@@ -170,16 +192,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
               {!isCollapsed && (
                 <>
                   <div className="flex-1 text-left">
-                    <div className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{t('module')}</div>
+                    <div className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
+                      {t('module')}
+                    </div>
                     <div className="text-sm font-semibold text-white">{activeModule.name}</div>
                   </div>
-                  <i className={`fa-solid fa-chevron-down text-[10px] text-white/50 transition-transform duration-200 ${isModuleSwitcherOpen ? 'rotate-180' : ''}`}></i>
+                  <i
+                    className={`fa-solid fa-chevron-down text-[10px] text-white/50 transition-transform duration-200 ${isModuleSwitcherOpen ? 'rotate-180' : ''}`}
+                  ></i>
                 </>
               )}
             </button>
 
             {isModuleSwitcherOpen && (
-              <div className={`absolute z-50 mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top
+              <div
+                className={`absolute z-50 mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top
                 ${isCollapsed ? 'left-full ml-2 top-0 w-56' : 'left-0 right-0'}`}
               >
                 <div className="p-2 space-y-1">
@@ -188,14 +215,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                       key={module.id}
                       onClick={() => handleModuleSwitch(module)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                        ${activeModule.id === module.id
-                          ? 'bg-praetor text-white shadow-lg shadow-slate-900/30'
-                          : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                        ${
+                          activeModule.id === module.id
+                            ? 'bg-praetor text-white shadow-lg shadow-slate-900/30'
+                            : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                        }`}
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-                        ${activeModule.id === module.id
-                          ? 'bg-white/20'
-                          : 'bg-slate-700'}`}
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
+                        ${activeModule.id === module.id ? 'bg-white/20' : 'bg-slate-700'}`}
                       >
                         <i className={`fa-solid ${module.icon} text-sm`}></i>
                       </div>
@@ -225,7 +253,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.timeTracker')}
                 active={activeView === 'timesheets/tracker'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('timesheets/tracker'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('timesheets/tracker');
+                  setIsMobileMenuOpen(false);
+                }}
               />
 
               <NavItem
@@ -233,7 +264,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.reports')}
                 active={activeView === 'timesheets/reports'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('timesheets/reports'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('timesheets/reports');
+                  setIsMobileMenuOpen(false);
+                }}
               />
 
               <NavItem
@@ -241,7 +275,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.recurringTasks')}
                 active={activeView === 'timesheets/recurring'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('timesheets/recurring'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('timesheets/recurring');
+                  setIsMobileMenuOpen(false);
+                }}
               />
 
               <NavItem
@@ -249,7 +286,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.projects')}
                 active={activeView === 'timesheets/projects'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('timesheets/projects'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('timesheets/projects');
+                  setIsMobileMenuOpen(false);
+                }}
               />
 
               <NavItem
@@ -257,7 +297,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.tasks')}
                 active={activeView === 'timesheets/tasks'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('timesheets/tasks'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('timesheets/tasks');
+                  setIsMobileMenuOpen(false);
+                }}
               />
             </>
           )}
@@ -270,21 +313,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.clients')}
                 active={activeView === 'crm/clients'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('crm/clients'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('crm/clients');
+                  setIsMobileMenuOpen(false);
+                }}
               />
               <NavItem
                 icon="fa-file-invoice"
                 label={t('routes.quotes')}
                 active={activeView === 'crm/quotes'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('crm/quotes'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('crm/quotes');
+                  setIsMobileMenuOpen(false);
+                }}
               />
               <NavItem
                 icon="fa-cart-shopping"
                 label={t('routes.sales')}
                 active={activeView === 'crm/sales'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('crm/sales'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('crm/sales');
+                  setIsMobileMenuOpen(false);
+                }}
               />
             </>
           )}
@@ -297,14 +349,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.products')}
                 active={activeView === 'catalog/products'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('catalog/products'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('catalog/products');
+                  setIsMobileMenuOpen(false);
+                }}
               />
               <NavItem
                 icon="fa-tags"
                 label={t('routes.specialBids')}
                 active={activeView === 'catalog/special-bids'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('catalog/special-bids'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('catalog/special-bids');
+                  setIsMobileMenuOpen(false);
+                }}
               />
             </>
           )}
@@ -317,7 +375,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.workforce')}
                 active={activeView === 'hr/workforce'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('hr/workforce'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('hr/workforce');
+                  setIsMobileMenuOpen(false);
+                }}
               />
               {isManagement && (
                 <NavItem
@@ -325,7 +386,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                   label={t('routes.workUnits')}
                   active={activeView === 'hr/work-units'}
                   isCollapsed={isCollapsed}
-                  onClick={() => { onViewChange('hr/work-units'); setIsMobileMenuOpen(false); }}
+                  onClick={() => {
+                    onViewChange('hr/work-units');
+                    setIsMobileMenuOpen(false);
+                  }}
                 />
               )}
             </>
@@ -339,7 +403,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.projects')}
                 active={activeView === 'projects/manage'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('projects/manage'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('projects/manage');
+                  setIsMobileMenuOpen(false);
+                }}
               />
 
               <NavItem
@@ -347,7 +414,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.tasks')}
                 active={activeView === 'projects/tasks'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('projects/tasks'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('projects/tasks');
+                  setIsMobileMenuOpen(false);
+                }}
               />
             </>
           )}
@@ -355,10 +425,46 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
           {/* Finances Module */}
           {activeModule.id === 'finances' && (
             <>
-              <NavItem icon="fa-file-invoice-dollar" label={t('routes.invoices')} active={activeView === 'finances/invoices'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/invoices'); setIsMobileMenuOpen(false); }} />
-              <NavItem icon="fa-money-bill-wave" label={t('routes.payments')} active={activeView === 'finances/payments'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/payments'); setIsMobileMenuOpen(false); }} />
-              <NavItem icon="fa-receipt" label={t('routes.expenses')} active={activeView === 'finances/expenses'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/expenses'); setIsMobileMenuOpen(false); }} />
-              <NavItem icon="fa-chart-line" label={t('routes.reports')} active={activeView === 'finances/reports'} isCollapsed={isCollapsed} onClick={() => { onViewChange('finances/reports'); setIsMobileMenuOpen(false); }} />
+              <NavItem
+                icon="fa-file-invoice-dollar"
+                label={t('routes.invoices')}
+                active={activeView === 'finances/invoices'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('finances/invoices');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+              <NavItem
+                icon="fa-money-bill-wave"
+                label={t('routes.payments')}
+                active={activeView === 'finances/payments'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('finances/payments');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+              <NavItem
+                icon="fa-receipt"
+                label={t('routes.expenses')}
+                active={activeView === 'finances/expenses'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('finances/expenses');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+              <NavItem
+                icon="fa-chart-line"
+                label={t('routes.reports')}
+                active={activeView === 'finances/reports'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('finances/reports');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
             </>
           )}
 
@@ -370,14 +476,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.suppliers')}
                 active={activeView === 'suppliers/manage'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('suppliers/manage'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('suppliers/manage');
+                  setIsMobileMenuOpen(false);
+                }}
               />
               <NavItem
                 icon="fa-file-invoice"
                 label={t('routes.supplierQuotes')}
                 active={activeView === 'suppliers/quotes'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('suppliers/quotes'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('suppliers/quotes');
+                  setIsMobileMenuOpen(false);
+                }}
               />
             </>
           )}
@@ -390,7 +502,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.authentication')}
                 active={activeView === 'configuration/authentication'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('configuration/authentication'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('configuration/authentication');
+                  setIsMobileMenuOpen(false);
+                }}
               />
 
               <NavItem
@@ -398,13 +513,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                 label={t('routes.general')}
                 active={activeView === 'configuration/general'}
                 isCollapsed={isCollapsed}
-                onClick={() => { onViewChange('configuration/general'); setIsMobileMenuOpen(false); }}
+                onClick={() => {
+                  onViewChange('configuration/general');
+                  setIsMobileMenuOpen(false);
+                }}
               />
             </>
           )}
         </div>
 
-        <div className={`p-6 border-t border-white/10 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}>
+        <div
+          className={`p-6 border-t border-white/10 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}
+        >
           <div className="text-[10px] text-white/40 font-medium whitespace-nowrap">
             Praetor v{import.meta.env.VITE_APP_VERSION}
           </div>
@@ -415,19 +535,40 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-slate-800 capitalize flex items-center gap-3">
             <span className="md:hidden w-2 h-6 bg-praetor rounded-full"></span>
-            {isNotFound ? t('notFound') :
-              activeView === 'configuration/authentication' ? t('titles.authSettings') :
-                activeView === 'configuration/general' ? t('titles.generalAdmin') :
-                  activeView === 'projects/manage' ? t('titles.projects') :
-                    activeView === 'projects/tasks' ? t('titles.tasks') :
-                      activeView === 'catalog/special-bids' ? t('titles.specialBids') :
-                        activeView === 'suppliers/manage' ? t('titles.suppliers') :
-                          activeView === 'suppliers/quotes' ? t('titles.supplierQuotes') :
-                            t(`routes.${activeView.split('/').pop()?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`, { defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView })}
+            {isNotFound
+              ? t('notFound')
+              : activeView === 'configuration/authentication'
+                ? t('titles.authSettings')
+                : activeView === 'configuration/general'
+                  ? t('titles.generalAdmin')
+                  : activeView === 'projects/manage'
+                    ? t('titles.projects')
+                    : activeView === 'projects/tasks'
+                      ? t('titles.tasks')
+                      : activeView === 'catalog/special-bids'
+                        ? t('titles.specialBids')
+                        : activeView === 'suppliers/manage'
+                          ? t('titles.suppliers')
+                          : activeView === 'suppliers/quotes'
+                            ? t('titles.supplierQuotes')
+                            : t(
+                                `routes.${activeView
+                                  .split('/')
+                                  .pop()
+                                  ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
+                                {
+                                  defaultValue:
+                                    activeView.split('/').pop()?.replace('-', ' ') || activeView,
+                                },
+                              )}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">
-              {new Date().toLocaleDateString(i18n.language, { weekday: 'long', month: 'long', day: 'numeric' })}
+              {new Date().toLocaleDateString(i18n.language, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })}
             </span>
 
             <div className="relative" ref={menuRef}>
@@ -439,22 +580,33 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
                   {currentUser.avatarInitials}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-0.5">{t(`roles.${currentUser.role}`, { ns: 'hr' })}</p>
-                  <p className="text-xs font-bold text-slate-700 leading-none">{currentUser.name}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-0.5">
+                    {t(`roles.${currentUser.role}`, { ns: 'hr' })}
+                  </p>
+                  <p className="text-xs font-bold text-slate-700 leading-none">
+                    {currentUser.name}
+                  </p>
                 </div>
-                <i className={`fa-solid fa-chevron-down text-[10px] text-slate-300 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}></i>
+                <i
+                  className={`fa-solid fa-chevron-down text-[10px] text-slate-300 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}
+                ></i>
               </button>
 
               {isProfileMenuOpen && (
                 <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-30 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                   <div className="px-4 py-3 border-b border-slate-100 mb-1 sm:hidden">
                     <p className="text-sm font-bold text-slate-800">{currentUser.name}</p>
-                    <p className="text-xs text-slate-500 capitalize">{t(`roles.${currentUser.role}`, { ns: 'hr' })}</p>
+                    <p className="text-xs text-slate-500 capitalize">
+                      {t(`roles.${currentUser.role}`, { ns: 'hr' })}
+                    </p>
                   </div>
 
                   {(currentUser.role === 'admin' || currentUser.role === 'manager') && (
                     <button
-                      onClick={() => { setIsProfileMenuOpen(false); onViewChange('settings'); }}
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        onViewChange('settings');
+                      }}
                       className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${activeView === 'settings' ? 'bg-slate-100 text-praetor' : 'text-slate-700 hover:bg-slate-50'}`}
                     >
                       <i className="fa-solid fa-gear w-4 text-center"></i>
@@ -476,9 +628,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, cur
             </div>
           </div>
         </header>
-        <div className="p-4 md:p-8 max-w-7xl mx-auto">
-          {children}
-        </div>
+        <div className="p-4 md:p-8 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
   );
@@ -495,13 +645,18 @@ interface NavItemProps {
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onClick }) => (
   <button
     onClick={onClick}
-    className={`group relative w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${active
-      ? 'bg-white/20 text-white shadow-lg shadow-black/10'
-      : 'text-white/60 hover:bg-white/10 hover:text-white'
-      } ${isCollapsed ? 'justify-center' : ''}`}
+    className={`group relative w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+      active
+        ? 'bg-white/20 text-white shadow-lg shadow-black/10'
+        : 'text-white/60 hover:bg-white/10 hover:text-white'
+    } ${isCollapsed ? 'justify-center' : ''}`}
   >
-    <i className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}></i>
-    {!isCollapsed && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>}
+    <i
+      className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
+    ></i>
+    {!isCollapsed && (
+      <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
+    )}
 
     {isCollapsed && (
       <div className="absolute left-full ml-4 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700">

@@ -11,7 +11,12 @@ interface UserManagementProps {
   clients: Client[];
   projects: Project[];
   tasks: ProjectTask[];
-  onAddUser: (name: string, username: string, password: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
+  onAddUser: (
+    name: string,
+    username: string,
+    password: string,
+    role: UserRole,
+  ) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
   currentUserId: string;
@@ -19,9 +24,20 @@ interface UserManagementProps {
   currency: string;
 }
 
-const UserManagement: React.FC<UserManagementProps> = ({ users, clients, projects, tasks, onAddUser, onDeleteUser, onUpdateUser, currentUserId, currentUserRole, currency }) => {
-    const { t } = useTranslation(['hr', 'common']);
-  
+const UserManagement: React.FC<UserManagementProps> = ({
+  users,
+  clients,
+  projects,
+  tasks,
+  onAddUser,
+  onDeleteUser,
+  onUpdateUser,
+  currentUserId,
+  currentUserRole,
+  currency,
+}) => {
+  const { t } = useTranslation(['hr', 'common']);
+
   const ROLE_OPTIONS = [
     { id: 'user', name: t('hr:roles.user') },
     { id: 'manager', name: t('hr:roles.manager') },
@@ -35,11 +51,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] }>({
-    clientIds: [], projectIds: [], taskIds: []
+  const [assignments, setAssignments] = useState<{
+    clientIds: string[];
+    projectIds: string[];
+    taskIds: string[];
+  }>({
+    clientIds: [],
+    projectIds: [],
+    taskIds: [],
   });
-  const [initialAssignments, setInitialAssignments] = useState<{ clientIds: string[], projectIds: string[], taskIds: string[] }>({
-    clientIds: [], projectIds: [], taskIds: []
+  const [initialAssignments, setInitialAssignments] = useState<{
+    clientIds: string[];
+    projectIds: string[];
+    taskIds: string[];
+  }>({
+    clientIds: [],
+    projectIds: [],
+    taskIds: [],
   });
   const [clientSearch, setClientSearch] = useState('');
   const [projectSearch, setProjectSearch] = useState('');
@@ -125,7 +153,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
   React.useEffect(() => {
     if (filterClientId === 'all' || filterProjectId === 'all') return;
-    const selectedProject = projects.find(project => project.id === filterProjectId);
+    const selectedProject = projects.find((project) => project.id === filterProjectId);
     if (!selectedProject || selectedProject.clientId !== filterClientId) {
       setFilterProjectId('all');
     }
@@ -140,7 +168,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
       setAssignments(data);
       setInitialAssignments(JSON.parse(JSON.stringify(data))); // Deep clone for comparison
     } catch (err) {
-      console.error("Failed to load assignments", err);
+      console.error('Failed to load assignments', err);
     } finally {
       setIsLoadingAssignments(false);
     }
@@ -163,21 +191,22 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
         managingUserId,
         assignments.clientIds,
         assignments.projectIds,
-        assignments.taskIds
+        assignments.taskIds,
       );
       closeAssignments();
     } catch (err) {
-      console.error("Failed to save assignments", err);
+      console.error('Failed to save assignments', err);
       alert(t('hr:workUnits.failedToSaveAssignments'));
     }
   };
 
   const toggleAssignment = (type: 'client' | 'project' | 'task', id: string) => {
     if (!canManageAssignments) return;
-    setAssignments(prev => {
-      const list = type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
+    setAssignments((prev) => {
+      const list =
+        type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
       const isAdding = !list.includes(id);
-      const newList = isAdding ? [...list, id] : list.filter(item => item !== id);
+      const newList = isAdding ? [...list, id] : list.filter((item) => item !== id);
 
       let newClientIds = prev.clientIds;
       let newProjectIds = prev.projectIds;
@@ -186,45 +215,45 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
       if (type === 'task') {
         newTaskIds = newList;
         if (isAdding) {
-          const task = tasks.find(t => t.id === id);
+          const task = tasks.find((t) => t.id === id);
           if (task) {
-            const project = projects.find(p => p.id === task.projectId);
+            const project = projects.find((p) => p.id === task.projectId);
             if (project && !newProjectIds.includes(project.id)) {
               newProjectIds = [...newProjectIds, project.id];
             }
             if (project) {
-              const client = clients.find(c => c.id === project.clientId);
+              const client = clients.find((c) => c.id === project.clientId);
               if (client && !newClientIds.includes(client.id)) {
                 newClientIds = [...newClientIds, client.id];
               }
             }
           }
         } else {
-          const task = tasks.find(t => t.id === id);
+          const task = tasks.find((t) => t.id === id);
           if (newTaskIds.length === 0) {
             newProjectIds = [];
             newClientIds = [];
           } else if (task) {
-            const project = projects.find(p => p.id === task.projectId);
+            const project = projects.find((p) => p.id === task.projectId);
             if (project) {
-              const hasTaskForProject = newTaskIds.some(taskId => {
-                const remainingTask = tasks.find(t => t.id === taskId);
+              const hasTaskForProject = newTaskIds.some((taskId) => {
+                const remainingTask = tasks.find((t) => t.id === taskId);
                 return remainingTask?.projectId === project.id;
               });
 
               if (!hasTaskForProject) {
-                newProjectIds = newProjectIds.filter(projectId => projectId !== project.id);
+                newProjectIds = newProjectIds.filter((projectId) => projectId !== project.id);
               }
 
-              const client = clients.find(c => c.id === project.clientId);
+              const client = clients.find((c) => c.id === project.clientId);
               if (client) {
-                const hasProjectForClient = newProjectIds.some(projectId => {
-                  const remainingProject = projects.find(p => p.id === projectId);
+                const hasProjectForClient = newProjectIds.some((projectId) => {
+                  const remainingProject = projects.find((p) => p.id === projectId);
                   return remainingProject?.clientId === client.id;
                 });
 
                 if (!hasProjectForClient) {
-                  newClientIds = newClientIds.filter(clientId => clientId !== client.id);
+                  newClientIds = newClientIds.filter((clientId) => clientId !== client.id);
                 }
               }
             }
@@ -232,26 +261,28 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
         }
       } else if (type === 'project') {
         newProjectIds = newList;
-        const project = projects.find(p => p.id === id);
+        const project = projects.find((p) => p.id === id);
         if (project) {
           if (isAdding) {
             if (!newClientIds.includes(project.clientId)) {
               newClientIds = [...newClientIds, project.clientId];
             }
           } else {
-            const hasProjectForClient = newProjectIds.some(projectId => {
-              const remainingProject = projects.find(p => p.id === projectId);
+            const hasProjectForClient = newProjectIds.some((projectId) => {
+              const remainingProject = projects.find((p) => p.id === projectId);
               return remainingProject?.clientId === project.clientId;
             });
 
-            const hasTaskForClient = newTaskIds.some(taskId => {
-              const remainingTask = tasks.find(t => t.id === taskId);
-              const remainingProject = remainingTask ? projects.find(p => p.id === remainingTask.projectId) : null;
+            const hasTaskForClient = newTaskIds.some((taskId) => {
+              const remainingTask = tasks.find((t) => t.id === taskId);
+              const remainingProject = remainingTask
+                ? projects.find((p) => p.id === remainingTask.projectId)
+                : null;
               return remainingProject?.clientId === project.clientId;
             });
 
             if (!hasProjectForClient && !hasTaskForClient) {
-              newClientIds = newClientIds.filter(clientId => clientId !== project.clientId);
+              newClientIds = newClientIds.filter((clientId) => clientId !== project.clientId);
             }
           }
         }
@@ -262,7 +293,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
       return {
         clientIds: newClientIds,
         projectIds: newProjectIds,
-        taskIds: newTaskIds
+        taskIds: newTaskIds,
       };
     });
   };
@@ -297,10 +328,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     if (editingUser) {
       const updates: Partial<User> = {
         name: editName,
-        isDisabled: editIsDisabled
+        isDisabled: editIsDisabled,
       };
 
-      if (currentUserRole === 'admin' && editingUser.id !== currentUserId && editRole !== editingUser.role) {
+      if (
+        currentUserRole === 'admin' &&
+        editingUser.id !== currentUserId &&
+        editRole !== editingUser.role
+      ) {
         updates.role = editRole;
       }
 
@@ -313,28 +348,30 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     }
   };
 
-  const managingUser = users.find(u => u.id === managingUserId);
+  const managingUser = users.find((u) => u.id === managingUserId);
   const isEditingSelf = editingUser?.id === currentUserId;
   const canEditRole = currentUserRole === 'admin' && !isEditingSelf;
-  const hasEditChanges = !!editingUser && (
-    editName !== editingUser.name ||
-    editIsDisabled !== !!editingUser.isDisabled ||
-    (currentUserRole !== 'admin' && parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
-    (canEditRole && editRole !== editingUser.role)
-  );
+  const hasEditChanges =
+    !!editingUser &&
+    (editName !== editingUser.name ||
+      editIsDisabled !== !!editingUser.isDisabled ||
+      (currentUserRole !== 'admin' &&
+        parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
+      (canEditRole && editRole !== editingUser.role));
 
-  const filteredProjectsForFilter = filterClientId === 'all'
-    ? projects
-    : projects.filter(project => project.clientId === filterClientId);
+  const filteredProjectsForFilter =
+    filterClientId === 'all'
+      ? projects
+      : projects.filter((project) => project.clientId === filterClientId);
 
   const clientFilterOptions = [
     { id: 'all', name: t('hr:workforce.allClients') },
-    ...clients.map(client => ({ id: client.id, name: client.name }))
+    ...clients.map((client) => ({ id: client.id, name: client.name })),
   ];
 
   const projectFilterOptions = [
     { id: 'all', name: t('hr:workforce.allProjects') },
-    ...filteredProjectsForFilter.map(project => ({ id: project.id, name: project.name }))
+    ...filteredProjectsForFilter.map((project) => ({ id: project.id, name: project.name })),
   ];
 
   // Synchronized Filtering Logic
@@ -346,12 +383,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     const selectedProjectFilter = filterProjectId !== 'all' ? filterProjectId : null;
 
     // 1. Visible Tasks
-    const visibleTasks = tasks.filter(t => {
+    const visibleTasks = tasks.filter((t) => {
       if (selectedProjectFilter && t.projectId !== selectedProjectFilter) return false;
       // Must match task search
       if (searchTask && !t.name.toLowerCase().includes(searchTask)) return false;
 
-      const project = projects.find(p => p.id === t.projectId);
+      const project = projects.find((p) => p.id === t.projectId);
       if (!project) return false;
 
       if (selectedClientFilter && project.clientId !== selectedClientFilter) return false;
@@ -359,7 +396,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
       // Must match project search (via parent project)
       if (searchProject && !project.name.toLowerCase().includes(searchProject)) return false;
 
-      const client = clients.find(c => c.id === project.clientId);
+      const client = clients.find((c) => c.id === project.clientId);
       if (!client) return false;
 
       // Must match client search (via grandparent client)
@@ -369,13 +406,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     });
 
     // 2. Visible Projects
-    const visibleProjects = projects.filter(p => {
+    const visibleProjects = projects.filter((p) => {
       if (selectedProjectFilter && p.id !== selectedProjectFilter) return false;
       if (selectedClientFilter && p.clientId !== selectedClientFilter) return false;
       // Must match project search
       if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
 
-      const client = clients.find(c => c.id === p.clientId);
+      const client = clients.find((c) => c.id === p.clientId);
       if (!client) return false;
 
       // Must match client search (via parent client)
@@ -383,8 +420,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
       // If task search is active, project must contain at least one matching task
       if (searchTask) {
-        const hasMatchingTask = tasks.some(t =>
-          t.projectId === p.id && t.name.toLowerCase().includes(searchTask)
+        const hasMatchingTask = tasks.some(
+          (t) => t.projectId === p.id && t.name.toLowerCase().includes(searchTask),
         );
         if (!hasMatchingTask) return false;
       }
@@ -393,11 +430,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
     });
 
     // 3. Visible Clients
-    const visibleClients = clients.filter(c => {
+    const visibleClients = clients.filter((c) => {
       if (selectedClientFilter && c.id !== selectedClientFilter) return false;
 
       if (selectedProjectFilter) {
-        const selectedProject = projects.find(project => project.id === selectedProjectFilter);
+        const selectedProject = projects.find((project) => project.id === selectedProjectFilter);
         if (!selectedProject || selectedProject.clientId !== c.id) return false;
       }
       // Must match client search
@@ -405,7 +442,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
       // If project or task search is active, client must have at least one valid descendant path
       if (searchProject || searchTask) {
-        const hasMatchingPath = projects.some(p => {
+        const hasMatchingPath = projects.some((p) => {
           if (p.clientId !== c.id) return false;
 
           if (selectedProjectFilter && p.id !== selectedProjectFilter) return false;
@@ -413,7 +450,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
           if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
 
           if (searchTask) {
-            return tasks.some(t => t.projectId === p.id && t.name.toLowerCase().includes(searchTask));
+            return tasks.some(
+              (t) => t.projectId === p.id && t.name.toLowerCase().includes(searchTask),
+            );
           }
 
           return true;
@@ -430,24 +469,34 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
   const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
 
-  const activeUsersTotal = users.filter(user => !user.isDisabled);
-  const disabledUsersTotal = users.filter(user => user.isDisabled);
+  const activeUsersTotal = users.filter((user) => !user.isDisabled);
+  const disabledUsersTotal = users.filter((user) => user.isDisabled);
   const activeSearchValue = activeSearch.trim().toLowerCase();
   const disabledSearchValue = disabledSearch.trim().toLowerCase();
   const matchesUserSearch = (user: User, term: string) => {
     if (!term) return true;
     return user.name.toLowerCase().includes(term) || user.username.toLowerCase().includes(term);
   };
-  const activeUsersFiltered = activeUsersTotal.filter(user => matchesUserSearch(user, activeSearchValue));
-  const disabledUsersFiltered = disabledUsersTotal.filter(user => matchesUserSearch(user, disabledSearchValue));
+  const activeUsersFiltered = activeUsersTotal.filter((user) =>
+    matchesUserSearch(user, activeSearchValue),
+  );
+  const disabledUsersFiltered = disabledUsersTotal.filter((user) =>
+    matchesUserSearch(user, disabledSearchValue),
+  );
 
   const activeTotalPages = Math.ceil(activeUsersFiltered.length / activeRowsPerPage);
   const activeStartIndex = (activeCurrentPage - 1) * activeRowsPerPage;
-  const activeUsers = activeUsersFiltered.slice(activeStartIndex, activeStartIndex + activeRowsPerPage);
+  const activeUsers = activeUsersFiltered.slice(
+    activeStartIndex,
+    activeStartIndex + activeRowsPerPage,
+  );
 
   const disabledTotalPages = Math.ceil(disabledUsersFiltered.length / disabledRowsPerPage);
   const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-  const disabledUsers = disabledUsersFiltered.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
+  const disabledUsers = disabledUsersFiltered.slice(
+    disabledStartIndex,
+    disabledStartIndex + disabledRowsPerPage,
+  );
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -460,7 +509,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.deleteUser')}</h3>
+                <h3 className="text-lg font-black text-slate-800">
+                  {t('hr:workforce.deleteUser')}
+                </h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                   {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
                 </p>
@@ -498,7 +549,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('hr:workforce.fullName')}</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    {t('hr:workforce.fullName')}
+                  </label>
                   <input
                     type="text"
                     value={editName}
@@ -513,19 +566,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       label={t('hr:workforce.role')}
                       options={ROLE_OPTIONS}
                       value={editRole}
-                      onChange={val => setEditRole(val as UserRole)}
+                      onChange={(val) => setEditRole(val as UserRole)}
                       buttonClassName="py-2 text-sm"
                       disabled={isEditingSelf}
                     />
                     {isEditingSelf && (
-                      <p className="text-[10px] text-slate-400 mt-1">{t('hr:workforce.cannotChangeOwnRole')}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {t('hr:workforce.cannotChangeOwnRole')}
+                      </p>
                     )}
                   </div>
                 )}
 
                 {currentUserRole !== 'admin' && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('hr:workforce.costPerHour')}</label>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      {t('hr:workforce.costPerHour')}
+                    </label>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
                       <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
                         {currency}
@@ -543,13 +600,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 {editingUser.id !== currentUserId && (
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <div>
-                      <p className="text-sm font-bold text-slate-700">{t('hr:workforce.disabled')}</p>
+                      <p className="text-sm font-bold text-slate-700">
+                        {t('hr:workforce.disabled')}
+                      </p>
                     </div>
                     <button
                       onClick={() => setEditIsDisabled(!editIsDisabled)}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editIsDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsDisabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsDisabled ? 'translate-x-6' : 'translate-x-1'}`}
+                      />
                     </button>
                   </div>
                 )}
@@ -565,7 +626,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 <button
                   onClick={saveEdit}
                   disabled={!editName || !hasEditChanges}
-                  className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${(!editName || !hasEditChanges) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!editName || !hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
                 >
                   {t('hr:workforce.saveChanges')}
                 </button>
@@ -580,9 +641,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
             <i className="fa-solid fa-user-plus text-praetor"></i>
             {t('hr:workforce.createNewUser')}
           </h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          <form
+            onSubmit={handleSubmit}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"
+          >
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('hr:workforce.name')}</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                {t('hr:workforce.name')}
+              </label>
               <input
                 type="text"
                 value={newName}
@@ -596,10 +662,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 placeholder="e.g. Alice Smith"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">{formErrors.name || ''}</p>
+              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
+                {formErrors.name || ''}
+              </p>
             </div>
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('hr:workforce.username')}</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                {t('hr:workforce.username')}
+              </label>
               <input
                 type="text"
                 value={newUsername}
@@ -612,10 +682,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 placeholder="e.g. alice"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">{formErrors.username || ''}</p>
+              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
+                {formErrors.username || ''}
+              </p>
             </div>
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('hr:workforce.password')}</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                {t('hr:workforce.password')}
+              </label>
               <input
                 type="text"
                 value={newPassword}
@@ -628,14 +702,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 placeholder="Password"
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">{formErrors.password || ''}</p>
+              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
+                {formErrors.password || ''}
+              </p>
             </div>
             <div className="lg:col-span-1">
               <CustomSelect
                 label={t('hr:workforce.role')}
                 options={ROLE_OPTIONS}
                 value={newRole}
-                onChange={val => setNewRole(val as UserRole)}
+                onChange={(val) => setNewRole(val as UserRole)}
                 buttonClassName="py-2 text-sm"
               />
               <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4"></p>
@@ -675,13 +751,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
         footer={
           <>
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">{t('common:labels.rowsPerPage')}:</span>
+              <span className="text-xs font-bold text-slate-500">
+                {t('common:labels.rowsPerPage')}:
+              </span>
               <CustomSelect
                 options={[
                   { id: '5', name: '5' },
                   { id: '10', name: '10' },
                   { id: '20', name: '20' },
-                  { id: '50', name: '50' }
+                  { id: '50', name: '50' },
                 ]}
                 value={activeRowsPerPage.toString()}
                 onChange={(val) => handleActiveRowsPerPageChange(val)}
@@ -690,38 +768,39 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                 searchable={false}
               />
               <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('common:pagination.showing', { 
-                  start: activeUsers.length > 0 ? activeStartIndex + 1 : 0, 
-                  end: Math.min(activeStartIndex + activeRowsPerPage, activeUsersFiltered.length), 
-                  total: activeUsersFiltered.length 
+                {t('common:pagination.showing', {
+                  start: activeUsers.length > 0 ? activeStartIndex + 1 : 0,
+                  end: Math.min(activeStartIndex + activeRowsPerPage, activeUsersFiltered.length),
+                  total: activeUsersFiltered.length,
                 })}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setActiveCurrentPage(prev => Math.max(1, prev - 1))}
+                onClick={() => setActiveCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={activeCurrentPage === 1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-left text-xs"></i>
               </button>
               <div className="flex items-center gap-1">
-                {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map(page => (
+                {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
                     onClick={() => setActiveCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${activeCurrentPage === page
-                      ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                      : 'text-slate-500 hover:bg-slate-100'
-                      }`}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                      activeCurrentPage === page
+                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
                   >
                     {page}
                   </button>
                 ))}
               </div>
               <button
-                onClick={() => setActiveCurrentPage(prev => Math.min(activeTotalPages, prev + 1))}
+                onClick={() => setActiveCurrentPage((prev) => Math.min(activeTotalPages, prev + 1))}
                 disabled={activeCurrentPage === activeTotalPages || activeTotalPages === 0}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
@@ -734,15 +813,26 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
         <table className="w-full text-left">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('hr:workforce.user')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('hr:workforce.username')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('hr:workforce.role')}</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">{t('hr:workforce.actions')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('hr:workforce.user')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('hr:workforce.username')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('hr:workforce.role')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
+                {t('hr:workforce.actions')}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {activeUsers.map(user => {
-              const canEdit = currentUserRole === 'admin' || (currentUserRole === 'manager' && (user.role === 'user' || user.id === currentUserId));
+            {activeUsers.map((user) => {
+              const canEdit =
+                currentUserRole === 'admin' ||
+                (currentUserRole === 'manager' &&
+                  (user.role === 'user' || user.id === currentUserId));
               return (
                 <tr
                   key={user.id}
@@ -760,17 +850,26 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                           {t('hr:workforce.disabled')}
                         </span>
                       )}
-                      {user.id === currentUserId && <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">{t('hr:workforce.you')}</span>}
+                      {user.id === currentUserId && (
+                        <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
+                          {t('hr:workforce.you')}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-slate-600 font-mono">{user.username}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${user.role === 'admin' ? 'bg-slate-800 text-white border-slate-700' :
-                      user.role === 'manager' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                        user.role === 'admin'
+                          ? 'bg-slate-800 text-white border-slate-700'
+                          : user.role === 'manager'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
                       {user.role === 'admin' && <i className="fa-solid fa-shield-halved"></i>}
                       {user.role === 'manager' && <i className="fa-solid fa-briefcase"></i>}
                       {user.role}
@@ -826,18 +925,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                           </button>
                         </>
                       )}
-                      {currentUserRole === 'manager' && (user.role === 'user' || user.id === currentUserId) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(user);
-                          }}
-                          className="text-slate-400 hover:text-praetor transition-colors p-2"
-                          title={t('hr:workforce.editUser')}
-                        >
-                          <i className="fa-solid fa-user-pen"></i>
-                        </button>
-                      )}
+                      {currentUserRole === 'manager' &&
+                        (user.role === 'user' || user.id === currentUserId) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(user);
+                            }}
+                            className="text-slate-400 hover:text-praetor transition-colors p-2"
+                            title={t('hr:workforce.editUser')}
+                          >
+                            <i className="fa-solid fa-user-pen"></i>
+                          </button>
+                        )}
                       {currentUserRole === 'manager' && user.role === 'user' && (
                         <button
                           onClick={(e) => {
@@ -889,13 +989,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
           footer={
             <>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-500">{t('common:labels.rowsPerPage')}:</span>
+                <span className="text-xs font-bold text-slate-500">
+                  {t('common:labels.rowsPerPage')}:
+                </span>
                 <CustomSelect
                   options={[
                     { id: '5', name: '5' },
                     { id: '10', name: '10' },
                     { id: '20', name: '20' },
-                    { id: '50', name: '50' }
+                    { id: '50', name: '50' },
                   ]}
                   value={disabledRowsPerPage.toString()}
                   onChange={(val) => handleDisabledRowsPerPageChange(val)}
@@ -904,38 +1006,44 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                   searchable={false}
                 />
                 <span className="text-xs font-bold text-slate-400 ml-2">
-                  {t('common:pagination.showing', { 
-                    start: disabledUsers.length > 0 ? disabledStartIndex + 1 : 0, 
-                    end: Math.min(disabledStartIndex + disabledRowsPerPage, disabledUsersFiltered.length), 
-                    total: disabledUsersFiltered.length 
+                  {t('common:pagination.showing', {
+                    start: disabledUsers.length > 0 ? disabledStartIndex + 1 : 0,
+                    end: Math.min(
+                      disabledStartIndex + disabledRowsPerPage,
+                      disabledUsersFiltered.length,
+                    ),
+                    total: disabledUsersFiltered.length,
                   })}
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setDisabledCurrentPage(prev => Math.max(1, prev - 1))}
+                  onClick={() => setDisabledCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={disabledCurrentPage === 1}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
                 >
                   <i className="fa-solid fa-chevron-left text-xs"></i>
                 </button>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map(page => (
+                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
                       onClick={() => setDisabledCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${disabledCurrentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                        }`}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                        disabledCurrentPage === page
+                          ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                          : 'text-slate-500 hover:bg-slate-100'
+                      }`}
                     >
                       {page}
                     </button>
                   ))}
                 </div>
                 <button
-                  onClick={() => setDisabledCurrentPage(prev => Math.min(disabledTotalPages, prev + 1))}
+                  onClick={() =>
+                    setDisabledCurrentPage((prev) => Math.min(disabledTotalPages, prev + 1))
+                  }
                   disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
                 >
@@ -948,15 +1056,26 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">User</th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Username</th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">Role</th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  User
+                </th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  Username
+                </th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  Role
+                </th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {disabledUsers.map(user => {
-                const canEdit = currentUserRole === 'admin' || (currentUserRole === 'manager' && (user.role === 'user' || user.id === currentUserId));
+              {disabledUsers.map((user) => {
+                const canEdit =
+                  currentUserRole === 'admin' ||
+                  (currentUserRole === 'manager' &&
+                    (user.role === 'user' || user.id === currentUserId));
                 return (
                   <tr
                     key={user.id}
@@ -974,17 +1093,26 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                             {t('hr:workforce.disabled')}
                           </span>
                         )}
-                        {user.id === currentUserId && <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">{t('hr:workforce.you')}</span>}
+                        {user.id === currentUserId && (
+                          <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
+                            {t('hr:workforce.you')}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-slate-600 font-mono">{user.username}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${user.role === 'admin' ? 'bg-slate-800 text-white border-slate-700' :
-                        user.role === 'manager' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                          'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                          user.role === 'admin'
+                            ? 'bg-slate-800 text-white border-slate-700'
+                            : user.role === 'manager'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}
+                      >
                         {user.role === 'admin' && <i className="fa-solid fa-shield-halved"></i>}
                         {user.role === 'manager' && <i className="fa-solid fa-briefcase"></i>}
                         {user.role}
@@ -1039,30 +1167,31 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                             </button>
                           </>
                         )}
-                        {currentUserRole === 'manager' && (user.role === 'user' || user.id === currentUserId) && (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(user);
-                              }}
-                              className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              title={t('hr:workforce.editUser')}
-                            >
-                              <i className="fa-solid fa-user-pen"></i>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdateUser(user.id, { isDisabled: false });
-                              }}
-                              className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              title={t('hr:workforce.reEnableUser')}
-                            >
-                              <i className="fa-solid fa-rotate-left"></i>
-                            </button>
-                          </>
-                        )}
+                        {currentUserRole === 'manager' &&
+                          (user.role === 'user' || user.id === currentUserId) && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(user);
+                                }}
+                                className="text-slate-400 hover:text-praetor transition-colors p-2"
+                                title={t('hr:workforce.editUser')}
+                              >
+                                <i className="fa-solid fa-user-pen"></i>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateUser(user.id, { isDisabled: false });
+                                }}
+                                className="text-slate-400 hover:text-praetor transition-colors p-2"
+                                title={t('hr:workforce.reEnableUser')}
+                              >
+                                <i className="fa-solid fa-rotate-left"></i>
+                              </button>
+                            </>
+                          )}
                       </div>
                     </td>
                   </tr>
@@ -1070,7 +1199,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
               })}
               {disabledUsers.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-sm font-bold text-slate-400">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-10 text-center text-sm font-bold text-slate-400"
+                  >
                     {t('hr:workforce.noDisabledUsers')}
                   </td>
                 </tr>
@@ -1088,7 +1220,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
               <h3 className="font-bold text-lg text-slate-800">
                 {t('hr:workforce.manageAccess', { name: managingUser?.name })}
               </h3>
-              <button onClick={closeAssignments} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <button
+                onClick={closeAssignments}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
@@ -1120,13 +1255,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                     />
                   </div>
 
-                  <div className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
+                  <div
+                    className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
+                  >
                     {/* Clients Column */}
                     <div className="space-y-3">
                       <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
                         <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">{t('hr:workforce.clients')}</h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.clientIds.length}</span>
+                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                            {t('hr:workforce.clients')}
+                          </h4>
+                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                            {assignments.clientIds.length}
+                          </span>
                         </div>
                         <input
                           type="text"
@@ -1137,23 +1278,33 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                         />
                       </div>
                       <div className="space-y-2">
-                        {visibleClients.map(client => (
-                          <label key={client.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.clientIds.includes(client.id)
-                            ? 'bg-slate-50 border-slate-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                            }`}>
+                        {visibleClients.map((client) => (
+                          <label
+                            key={client.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                              assignments.clientIds.includes(client.id)
+                                ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
                             <input
                               type="checkbox"
                               checked={assignments.clientIds.includes(client.id)}
                               onChange={() => toggleAssignment('client', client.id)}
                               className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
                             />
-                            <span className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                            <span
+                              className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                            >
                               {client.name}
                             </span>
                           </label>
                         ))}
-                        {clients.length === 0 && <p className="text-xs text-slate-400 italic">{t('hr:workforce.noClientsFound')}</p>}
+                        {clients.length === 0 && (
+                          <p className="text-xs text-slate-400 italic">
+                            {t('hr:workforce.noClientsFound')}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -1161,8 +1312,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                     <div className="space-y-3">
                       <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
                         <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Projects</h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.projectIds.length}</span>
+                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                            Projects
+                          </h4>
+                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                            {assignments.projectIds.length}
+                          </span>
                         </div>
                         <input
                           type="text"
@@ -1173,11 +1328,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                         />
                       </div>
                       <div className="space-y-2">
-                        {visibleProjects.map(project => (
-                          <label key={project.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.projectIds.includes(project.id)
-                            ? 'bg-slate-50 border-slate-300 shadow-sm'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                            }`}>
+                        {visibleProjects.map((project) => (
+                          <label
+                            key={project.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                              assignments.projectIds.includes(project.id)
+                                ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
                             <input
                               type="checkbox"
                               checked={assignments.projectIds.includes(project.id)}
@@ -1185,16 +1344,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                               className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
                             />
                             <div className="flex flex-col">
-                              <span className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                              <span
+                                className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                              >
                                 {project.name}
                               </span>
                               <span className="text-[10px] text-slate-400">
-                                {clients.find(c => c.id === project.clientId)?.name || t('hr:workforce.unknownClient')}
+                                {clients.find((c) => c.id === project.clientId)?.name ||
+                                  t('hr:workforce.unknownClient')}
                               </span>
                             </div>
                           </label>
                         ))}
-                        {projects.length === 0 && <p className="text-xs text-slate-400 italic">{t('hr:workforce.noProjectsFound')}</p>}
+                        {projects.length === 0 && (
+                          <p className="text-xs text-slate-400 italic">
+                            {t('hr:workforce.noProjectsFound')}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -1202,8 +1368,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                       <div className="space-y-3">
                         <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
                           <div className="flex items-center justify-between py-2">
-                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Tasks</h4>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{assignments.taskIds.length}</span>
+                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                              Tasks
+                            </h4>
+                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                              {assignments.taskIds.length}
+                            </span>
                           </div>
                           <input
                             type="text"
@@ -1214,13 +1384,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                           />
                         </div>
                         <div className="space-y-2">
-                          {visibleTasks.map(task => {
-                            const project = projects.find(p => p.id === task.projectId);
+                          {visibleTasks.map((task) => {
+                            const project = projects.find((p) => p.id === task.projectId);
                             return (
-                              <label key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${assignments.taskIds.includes(task.id)
-                                ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
-                                }`}>
+                              <label
+                                key={task.id}
+                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                  assignments.taskIds.includes(task.id)
+                                    ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                    : 'bg-white border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={assignments.taskIds.includes(task.id)}
@@ -1228,7 +1402,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                                   className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
                                 />
                                 <div className="flex flex-col">
-                                  <span className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}>
+                                  <span
+                                    className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                                  >
                                     {task.name}
                                   </span>
                                   <span className="text-[10px] text-slate-400">
@@ -1238,7 +1414,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, clients, project
                               </label>
                             );
                           })}
-                          {tasks.length === 0 && <p className="text-xs text-slate-400 italic">{t('hr:workforce.noTasksFound')}</p>}
+                          {tasks.length === 0 && (
+                            <p className="text-xs text-slate-400 italic">
+                              {t('hr:workforce.noTasksFound')}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}

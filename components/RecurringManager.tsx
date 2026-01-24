@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask } from '../types';
@@ -10,16 +9,21 @@ interface RecurringManagerProps {
   onAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
 }
 
-const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, clients, onAction }) => {
+const RecurringManager: React.FC<RecurringManagerProps> = ({
+  tasks,
+  projects,
+  clients,
+  onAction,
+}) => {
   const { t } = useTranslation('timesheets');
   const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
 
   // Only show active recurring tasks
-  const recurringTasks = tasks.filter(t => t.isRecurring);
+  const recurringTasks = tasks.filter((t) => t.isRecurring);
 
   const getContext = (projectId: string) => {
-    const proj = projects.find(p => p.id === projectId);
-    const client = proj ? clients.find(c => c.id === proj.clientId) : null;
+    const proj = projects.find((p) => p.id === projectId);
+    const client = proj ? clients.find((c) => c.id === proj.clientId) : null;
     return { project: proj, client };
   };
 
@@ -30,7 +34,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">{t('recurring.recurringTaskSchedule')}</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              {t('recurring.recurringTaskSchedule')}
+            </h3>
             <p className="text-xs text-slate-500">{t('recurring.manageAutomatedTasks')}</p>
           </div>
           <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-xs font-bold">
@@ -43,21 +49,31 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <i className="fa-solid fa-repeat text-slate-300 text-2xl"></i>
             </div>
-            <p className="text-slate-500 font-medium">{t('recurring.noRecurringTasksConfigured')}</p>
+            <p className="text-slate-500 font-medium">
+              {t('recurring.noRecurringTasksConfigured')}
+            </p>
             <p className="text-xs text-slate-400 mt-1">{t('recurring.setFromTracker')}</p>
           </div>
         ) : (
           <table className="w-full text-left">
             <thead className="bg-white border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('recurring.taskDetails')}</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('recurring.pattern')}</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('recurring.endDate')}</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">{t('recurring.actions')}</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {t('recurring.taskDetails')}
+                </th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {t('recurring.pattern')}
+                </th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {t('recurring.endDate')}
+                </th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
+                  {t('recurring.actions')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {recurringTasks.map(task => {
+              {recurringTasks.map((task) => {
                 const { project, client } = getContext(task.projectId);
                 return (
                   <tr key={task.id} className="group hover:bg-slate-50 transition-colors">
@@ -65,10 +81,15 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-800 text-sm">{task.name}</span>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] font-black uppercase text-praetor tracking-wide">{client?.name || t('recurring.unknown')}</span>
+                          <span className="text-[10px] font-black uppercase text-praetor tracking-wide">
+                            {client?.name || t('recurring.unknown')}
+                          </span>
                           <span className="text-slate-300">•</span>
                           <span className="text-xs text-slate-500 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: project?.color || '#ccc' }}></span>
+                            <span
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{ backgroundColor: project?.color || '#ccc' }}
+                            ></span>
                             {project?.name || t('recurring.unknown')}
                           </span>
                         </div>
@@ -86,7 +107,9 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                           {new Date(task.recurrenceEnd).toLocaleDateString()}
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-400 italic">{t('recurring.noExpiration')}</span>
+                        <span className="text-xs text-slate-400 italic">
+                          {t('recurring.noExpiration')}
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -116,17 +139,23 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
                 {t('entry.stopRecurringTask')}
               </h3>
               <p className="text-sm text-slate-500 mt-1">
-                {t('entry.howHandleEntries')} <strong className="text-slate-800">{selectedTask.name}</strong>?
+                {t('entry.howHandleEntries')}{' '}
+                <strong className="text-slate-800">{selectedTask.name}</strong>?
               </p>
             </div>
 
             <div className="p-4 space-y-3">
               <button
-                onClick={() => { onAction(selectedTask.id, 'stop'); closeModal(); }}
+                onClick={() => {
+                  onAction(selectedTask.id, 'stop');
+                  closeModal();
+                }}
                 className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-praetor">{t('recurring.stopOnly')}</span>
+                  <span className="font-bold text-slate-800 group-hover:text-praetor">
+                    {t('recurring.stopOnly')}
+                  </span>
                   <i className="fa-solid fa-pause text-slate-300 group-hover:text-praetor"></i>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
@@ -135,11 +164,16 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
               </button>
 
               <button
-                onClick={() => { onAction(selectedTask.id, 'delete_future'); closeModal(); }}
+                onClick={() => {
+                  onAction(selectedTask.id, 'delete_future');
+                  closeModal();
+                }}
                 className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-red-700">{t('recurring.deleteFuture')}</span>
+                  <span className="font-bold text-slate-800 group-hover:text-red-700">
+                    {t('recurring.deleteFuture')}
+                  </span>
                   <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
@@ -148,7 +182,10 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({ tasks, projects, cl
               </button>
 
               <button
-                onClick={() => { onAction(selectedTask.id, 'delete_all'); closeModal(); }}
+                onClick={() => {
+                  onAction(selectedTask.id, 'delete_all');
+                  closeModal();
+                }}
                 className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
               >
                 <div className="flex items-center justify-between mb-1">

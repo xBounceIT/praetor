@@ -6,7 +6,9 @@
 /**
  * Check if value is a non-empty string after trimming
  */
-export function isNonEmptyString(value: unknown): { ok: true; value: string } | { ok: false; message: string } {
+export function isNonEmptyString(
+  value: unknown,
+): { ok: true; value: string } | { ok: false; message: string } {
   if (typeof value === 'string' && value.trim().length > 0) {
     return { ok: true, value: value.trim() };
   }
@@ -16,7 +18,10 @@ export function isNonEmptyString(value: unknown): { ok: true; value: string } | 
 /**
  * Validate required non-empty string
  */
-export function requireNonEmptyString(value: unknown, fieldName: string): { ok: true; value: string } | { ok: false; message: string } {
+export function requireNonEmptyString(
+  value: unknown,
+  fieldName: string,
+): { ok: true; value: string } | { ok: false; message: string } {
   const result = isNonEmptyString(value);
   if (!result.ok) {
     return { ok: false, message: `${fieldName} is required` };
@@ -27,7 +32,10 @@ export function requireNonEmptyString(value: unknown, fieldName: string): { ok: 
 /**
  * Validate optional non-empty string (if provided, must be valid)
  */
-export function optionalNonEmptyString(value: unknown, fieldName: string): { ok: true; value: string | null } | { ok: false; message: string } {
+export function optionalNonEmptyString(
+  value: unknown,
+  fieldName: string,
+): { ok: true; value: string | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
   }
@@ -41,7 +49,10 @@ export function optionalNonEmptyString(value: unknown, fieldName: string): { ok:
 /**
  * Parse a number (accept number or numeric string)
  */
-export function parseNumber(value: unknown, fieldName: string = 'value'): { ok: true; value: number } | { ok: false; message: string } {
+export function parseNumber(
+  value: unknown,
+  fieldName: string = 'value',
+): { ok: true; value: number } | { ok: false; message: string } {
   if (typeof value === 'number' && !isNaN(value)) {
     return { ok: true, value };
   }
@@ -62,7 +73,10 @@ const localizedNumberPattern = /^[0-9]*([.][0-9]*)?$/;
 
 const normalizeLocalizedNumber = (value: string) => value.replace(/,/g, '.');
 
-export function parseLocalizedNumber(value: unknown, fieldName: string = 'value'): { ok: true; value: number } | { ok: false; message: string } {
+export function parseLocalizedNumber(
+  value: unknown,
+  fieldName: string = 'value',
+): { ok: true; value: number } | { ok: false; message: string } {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return { ok: true, value };
   }
@@ -86,7 +100,7 @@ export function parseLocalizedNumber(value: unknown, fieldName: string = 'value'
 
 export function optionalLocalizedNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -103,7 +117,7 @@ export function optionalLocalizedNumber(
  */
 export function optionalNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -120,7 +134,7 @@ export function optionalNumber(
  */
 export function parseNonNegativeNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number } | { ok: false; message: string } {
   const result = parseNumber(value, fieldName);
   if (!result.ok) {
@@ -134,7 +148,7 @@ export function parseNonNegativeNumber(
 
 export function parseLocalizedNonNegativeNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number } | { ok: false; message: string } {
   const result = parseLocalizedNumber(value, fieldName);
   if (!result.ok) {
@@ -151,7 +165,7 @@ export function parseLocalizedNonNegativeNumber(
  */
 export function optionalNonNegativeNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -165,7 +179,7 @@ export function optionalNonNegativeNumber(
 
 export function optionalLocalizedNonNegativeNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -182,7 +196,7 @@ export function optionalLocalizedNonNegativeNumber(
  */
 export function parsePositiveNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number } | { ok: false; message: string } {
   const result = parseNumber(value, fieldName);
   if (!result.ok) {
@@ -196,7 +210,7 @@ export function parsePositiveNumber(
 
 export function parseLocalizedPositiveNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number } | { ok: false; message: string } {
   const result = parseLocalizedNumber(value, fieldName);
   if (!result.ok) {
@@ -213,7 +227,7 @@ export function parseLocalizedPositiveNumber(
  */
 export function optionalPositiveNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -227,7 +241,7 @@ export function optionalPositiveNumber(
 
 export function optionalLocalizedPositiveNumber(
   value: unknown,
-  fieldName: string = 'value'
+  fieldName: string = 'value',
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -266,7 +280,10 @@ export function optionalBoolean(value: unknown): boolean | null {
 /**
  * Validate a date string in YYYY-MM-DD format
  */
-export function parseDateString(value: unknown, fieldName: string = 'value'): { ok: true; value: string } | { ok: false; message: string } {
+export function parseDateString(
+  value: unknown,
+  fieldName: string = 'value',
+): { ok: true; value: string } | { ok: false; message: string } {
   const result = isNonEmptyString(value);
   if (!result.ok) {
     return { ok: false, message: `${fieldName} must be a date string` };
@@ -285,7 +302,10 @@ export function parseDateString(value: unknown, fieldName: string = 'value'): { 
 /**
  * Validate optional date string
  */
-export function optionalDateString(value: unknown, fieldName: string): { ok: true; value: string | null } | { ok: false; message: string } {
+export function optionalDateString(
+  value: unknown,
+  fieldName: string,
+): { ok: true; value: string | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
   }
@@ -299,7 +319,11 @@ export function optionalDateString(value: unknown, fieldName: string): { ok: tru
 /**
  * Validate enum values
  */
-export function validateEnum(value: unknown, allowedValues: string[], fieldName: string = 'value'): { ok: true; value: string } | { ok: false; message: string } {
+export function validateEnum(
+  value: unknown,
+  allowedValues: string[],
+  fieldName: string = 'value',
+): { ok: true; value: string } | { ok: false; message: string } {
   if (typeof value !== 'string') {
     return { ok: false, message: `${fieldName} must be a string` };
   }
@@ -319,7 +343,7 @@ export function validateEnum(value: unknown, allowedValues: string[], fieldName:
 export function optionalEnum(
   value: unknown,
   allowedValues: string[],
-  fieldName: string
+  fieldName: string,
 ): { ok: true; value: string | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
@@ -334,7 +358,10 @@ export function optionalEnum(
 /**
  * Ensure value is an array of strings
  */
-export function ensureArrayOfStrings(value: unknown, fieldName: string): { ok: true; value: string[] } | { ok: false; message: string } {
+export function ensureArrayOfStrings(
+  value: unknown,
+  fieldName: string,
+): { ok: true; value: string[] } | { ok: false; message: string } {
   if (!Array.isArray(value)) {
     return { ok: false, message: `${fieldName} must be an array` };
   }
@@ -352,7 +379,7 @@ export function ensureArrayOfStrings(value: unknown, fieldName: string): { ok: t
  */
 export function optionalArrayOfStrings(
   value: unknown,
-  fieldName: string
+  fieldName: string,
 ): { ok: true; value: string[] | null } | { ok: false; message: string } {
   if (value === undefined || value === null) {
     return { ok: true, value: null };
@@ -369,7 +396,7 @@ export function optionalArrayOfStrings(
  */
 export function requireNonEmptyArrayOfStrings(
   value: unknown,
-  fieldName: string
+  fieldName: string,
 ): { ok: true; value: string[] } | { ok: false; message: string } {
   if (!Array.isArray(value)) {
     return { ok: false, message: `${fieldName} must be an array` };
@@ -408,7 +435,10 @@ export function isValidEmail(value: string): boolean {
   return emailRegex.test(value);
 }
 
-export function validateEmail(value: unknown, fieldName: string = 'email'): { ok: true; value: string } | { ok: false; message: string } {
+export function validateEmail(
+  value: unknown,
+  fieldName: string = 'email',
+): { ok: true; value: string } | { ok: false; message: string } {
   const result = isNonEmptyString(value);
   if (!result.ok) {
     return { ok: false, message: `${fieldName} must be a non-empty string` };
@@ -419,7 +449,10 @@ export function validateEmail(value: unknown, fieldName: string = 'email'): { ok
   return result;
 }
 
-export function optionalEmail(value: unknown, fieldName: string = 'email'): { ok: true; value: string | null } | { ok: false; message: string } {
+export function optionalEmail(
+  value: unknown,
+  fieldName: string = 'email',
+): { ok: true; value: string | null } | { ok: false; message: string } {
   if (value === undefined || value === null || value === '') {
     return { ok: true, value: null };
   }
@@ -437,7 +470,10 @@ export function isHexColor(value: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(value) || /^#[0-9A-Fa-f]{3}$/.test(value);
 }
 
-export function validateHexColor(value: unknown, fieldName: string = 'color'): { ok: true; value: string } | { ok: false; message: string } {
+export function validateHexColor(
+  value: unknown,
+  fieldName: string = 'color',
+): { ok: true; value: string } | { ok: false; message: string } {
   const result = isNonEmptyString(value);
   if (!result.ok) {
     return { ok: false, message: `${fieldName} must be a non-empty string` };

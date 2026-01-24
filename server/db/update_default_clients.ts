@@ -1,9 +1,10 @@
 import { query } from './index.ts';
 
 export async function migrate() {
-    console.log('Starting migration: Update default clients with fake info...');
-    try {
-        await query(`
+  console.log('Starting migration: Update default clients with fake info...');
+  try {
+    await query(
+      `
             UPDATE clients SET
                 name = 'Acme Corp S.r.l.',
                 type = 'company',
@@ -29,9 +30,11 @@ export async function migrate() {
                 tax_code = 'RSSMRA80A01H501U',
                 billing_code = '0000000'
             WHERE id = 'c2';
-        `, []);
-        console.log('Migration completed successfully.');
-    } catch (err) {
-        console.error('Migration failed:', err);
-    }
+        `,
+      [],
+    );
+    console.log('Migration completed successfully.');
+  } catch (err) {
+    console.error('Migration failed:', err);
+  }
 }

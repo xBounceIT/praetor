@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TimeEntry } from '../types';
@@ -30,7 +29,7 @@ const Calendar: React.FC<CalendarProps> = ({
   selectionMode = 'single',
   startDate,
   endDate,
-  onRangeSelect
+  onRangeSelect,
 }) => {
   const { t } = useTranslation('timesheets');
   const [viewDate, setViewDate] = useState(new Date(selectedDate || startDate || new Date()));
@@ -59,7 +58,6 @@ const Calendar: React.FC<CalendarProps> = ({
   const currentMonth = currentDate.getMonth();
   const today = currentDate.toISOString().split('T')[0];
 
-
   const days = [];
   const totalDays = daysInMonth(year, month);
   let offset = firstDayOfMonth(year, month);
@@ -69,21 +67,34 @@ const Calendar: React.FC<CalendarProps> = ({
     offset = (offset + 6) % 7;
   }
 
-  const entryDates = useMemo(() => new Set(entries.map(e => e.date)), [entries]);
+  const entryDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries]);
   const dailyTotals = useMemo(() => {
     const totals: Record<string, number> = {};
-    entries.forEach(e => {
+    entries.forEach((e) => {
       totals[e.date] = (totals[e.date] || 0) + e.duration;
     });
     return totals;
   }, [entries]);
 
-  const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
-    "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+  const monthNames = [
+    'Gennaio',
+    'Febbraio',
+    'Marzo',
+    'Aprile',
+    'Maggio',
+    'Giugno',
+    'Luglio',
+    'Agosto',
+    'Settembre',
+    'Ottobre',
+    'Novembre',
+    'Dicembre',
+  ];
 
-  const dayHeaders = startOfWeek === 'Monday'
-    ? ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
-    : ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const dayHeaders =
+    startOfWeek === 'Monday'
+      ? ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
+      : ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
   const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
@@ -139,43 +150,60 @@ const Calendar: React.FC<CalendarProps> = ({
     const holidayName = isItalianHoliday(dateObj);
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
-    const isForbidden = selectionMode === 'single' && (isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName); // Typically specific to work-logging, maybe relax for reporting
+    const isForbidden =
+      selectionMode === 'single' &&
+      (isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName); // Typically specific to work-logging, maybe relax for reporting
 
     days.push(
       <button
         key={d}
         type="button"
         disabled={isForbidden}
-        title={holidayName || (isSunday ? "Domenica" : (isSaturday && treatSaturdayAsHoliday ? "Sabato" : ""))}
+        title={
+          holidayName ||
+          (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '')
+        }
         onClick={() => {
           if (!isForbidden) handleDateClick(dateStr);
         }}
         className={`relative h-9 w-full flex flex-col items-center justify-center rounded-lg transition-all border 
-          ${isSelected
-            ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
-            : isInRange
-              ? 'bg-stone-200 text-slate-800 border-stone-200' // Changed to a more neutral/stone color
-              : isForbidden
-                ? 'bg-red-50 text-red-500 border-red-100 cursor-not-allowed'
-                : (dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0)
-                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                  : isToday
-                    ? 'bg-slate-100 text-praetor border-slate-200'
-                    : 'hover:bg-slate-50 border-transparent text-slate-700'
+          ${
+            isSelected
+              ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
+              : isInRange
+                ? 'bg-stone-200 text-slate-800 border-stone-200' // Changed to a more neutral/stone color
+                : isForbidden
+                  ? 'bg-red-50 text-red-500 border-red-100 cursor-not-allowed'
+                  : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                    : isToday
+                      ? 'bg-slate-100 text-praetor border-slate-200'
+                      : 'hover:bg-slate-50 border-transparent text-slate-700'
           }`}
       >
-        <span className={`text-sm font-bold ${isSelected || isInRange ? '' :
-          isForbidden ? 'text-red-600' :
-            (dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0) ? 'text-emerald-700' : ''
-          }`}>{d}</span>
+        <span
+          className={`text-sm font-bold ${
+            isSelected || isInRange
+              ? ''
+              : isForbidden
+                ? 'text-red-600'
+                : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
+                  ? 'text-emerald-700'
+                  : ''
+          }`}
+        >
+          {d}
+        </span>
 
         {hasActivity && selectionMode === 'single' && (
-          <span className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : isForbidden ? 'bg-red-300' : (dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0) ? 'bg-emerald-400' : 'bg-praetor'}`}></span>
+          <span
+            className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : isForbidden ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
+          ></span>
         )}
         {holidayName && selectionMode === 'single' && (
           <span className="absolute top-0.5 right-0.5 w-1 h-1 bg-red-400 rounded-full animate-pulse"></span>
         )}
-      </button>
+      </button>,
     );
   }
 
@@ -189,7 +217,10 @@ const Calendar: React.FC<CalendarProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 w-full relative" ref={containerRef}>
+    <div
+      className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 w-full relative"
+      ref={containerRef}
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="relative flex items-center gap-1">
           <button
@@ -201,7 +232,9 @@ const Calendar: React.FC<CalendarProps> = ({
             className="font-bold text-slate-800 text-sm hover:bg-slate-50 px-2 py-1 rounded-md transition-colors flex items-center gap-1"
           >
             {monthNames[month]}
-            <i className={`fa-solid fa-chevron-down text-[8px] text-slate-400 transition-transform ${isMonthPickerOpen ? 'rotate-180' : ''}`}></i>
+            <i
+              className={`fa-solid fa-chevron-down text-[8px] text-slate-400 transition-transform ${isMonthPickerOpen ? 'rotate-180' : ''}`}
+            ></i>
           </button>
 
           <button
@@ -213,7 +246,9 @@ const Calendar: React.FC<CalendarProps> = ({
             className="text-slate-400 font-medium text-sm hover:bg-slate-50 px-2 py-1 rounded-md transition-colors flex items-center gap-1"
           >
             {year}
-            <i className={`fa-solid fa-chevron-down text-[8px] text-slate-300 transition-transform ${isYearPickerOpen ? 'rotate-180' : ''}`}></i>
+            <i
+              className={`fa-solid fa-chevron-down text-[8px] text-slate-300 transition-transform ${isYearPickerOpen ? 'rotate-180' : ''}`}
+            ></i>
           </button>
 
           {/* Month Picker Overlay */}
@@ -227,12 +262,13 @@ const Calendar: React.FC<CalendarProps> = ({
                     setViewDate(new Date(year, idx, 1));
                     setIsMonthPickerOpen(false);
                   }}
-                  className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${idx === month
-                    ? 'bg-praetor text-white'
-                    : idx === currentMonth
-                      ? 'bg-slate-100 text-praetor ring-1 ring-inset ring-slate-200'
-                      : 'text-slate-600 hover:bg-slate-50'
-                    }`}
+                  className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
+                    idx === month
+                      ? 'bg-praetor text-white'
+                      : idx === currentMonth
+                        ? 'bg-slate-100 text-praetor ring-1 ring-inset ring-slate-200'
+                        : 'text-slate-600 hover:bg-slate-50'
+                  }`}
                 >
                   {mName.slice(0, 3)}
                 </button>
@@ -251,12 +287,13 @@ const Calendar: React.FC<CalendarProps> = ({
                     setViewDate(new Date(y, month, 1));
                     setIsYearPickerOpen(false);
                   }}
-                  className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${y === year
-                    ? 'bg-praetor text-white'
-                    : y === currentYear
-                      ? 'bg-slate-100 text-praetor ring-1 ring-inset ring-slate-200'
-                      : 'text-slate-600 hover:bg-slate-50'
-                    }`}
+                  className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
+                    y === year
+                      ? 'bg-praetor text-white'
+                      : y === currentYear
+                        ? 'bg-slate-100 text-praetor ring-1 ring-inset ring-slate-200'
+                        : 'text-slate-600 hover:bg-slate-50'
+                  }`}
                 >
                   {y}
                 </button>
@@ -265,13 +302,25 @@ const Calendar: React.FC<CalendarProps> = ({
           )}
         </div>
         <div className="flex gap-1">
-          <button type="button" onClick={prevMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
+          >
             <i className="fa-solid fa-chevron-left text-xs"></i>
           </button>
-          <button type="button" onClick={handleTodayClick} className="px-2 text-[10px] font-bold uppercase tracking-wider text-praetor hover:bg-slate-100 rounded-lg transition-colors">
+          <button
+            type="button"
+            onClick={handleTodayClick}
+            className="px-2 text-[10px] font-bold uppercase tracking-wider text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+          >
             Oggi
           </button>
-          <button type="button" onClick={nextMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
+          >
             <i className="fa-solid fa-chevron-right text-xs"></i>
           </button>
         </div>
@@ -279,20 +328,23 @@ const Calendar: React.FC<CalendarProps> = ({
 
       <div className="grid grid-cols-7 gap-0.5 mb-1">
         {dayHeaders.map((day, idx) => {
-          const isSundayHeader = (startOfWeek === 'Monday' && idx === 6) || (startOfWeek === 'Sunday' && idx === 0);
-          const isSaturdayHeader = (startOfWeek === 'Monday' && idx === 5) || (startOfWeek === 'Sunday' && idx === 6);
+          const isSundayHeader =
+            (startOfWeek === 'Monday' && idx === 6) || (startOfWeek === 'Sunday' && idx === 0);
+          const isSaturdayHeader =
+            (startOfWeek === 'Monday' && idx === 5) || (startOfWeek === 'Sunday' && idx === 6);
           const isHolidayHeader = isSundayHeader || (treatSaturdayAsHoliday && isSaturdayHeader);
           return (
-            <div key={day} className={`text-center text-[10px] font-bold uppercase tracking-widest py-1 ${isHolidayHeader ? 'text-red-400' : 'text-slate-400'}`}>
+            <div
+              key={day}
+              className={`text-center text-[10px] font-bold uppercase tracking-widest py-1 ${isHolidayHeader ? 'text-red-400' : 'text-slate-400'}`}
+            >
               {day}
             </div>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5">
-        {days}
-      </div>
+      <div className="grid grid-cols-7 gap-0.5">{days}</div>
 
       {selectionMode === 'single' && (
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
@@ -302,7 +354,9 @@ const Calendar: React.FC<CalendarProps> = ({
           </span>
           <div className="flex items-center gap-2 ml-auto">
             <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">{t('calendar.goalReached')}</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">
+              {t('calendar.goalReached')}
+            </span>
           </div>
         </div>
       )}

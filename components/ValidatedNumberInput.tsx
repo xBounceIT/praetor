@@ -10,14 +10,19 @@ export const parseNumberInputValue = (value: string, fallback: number | undefine
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
-type ValidatedNumberInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange' | 'value'> & {
+type ValidatedNumberInputProps = Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'onChange' | 'value'
+> & {
   value?: string | number;
   onValueChange: (value: string) => void;
 };
 
 const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberInputProps>(
   ({ value, onValueChange, onKeyDown, onFocus, onBlur, ...rest }, ref) => {
-    const [displayValue, setDisplayValue] = useState<string>(value === undefined || value === null ? '' : String(value));
+    const [displayValue, setDisplayValue] = useState<string>(
+      value === undefined || value === null ? '' : String(value),
+    );
     const isFocusedRef = useRef(false);
 
     useEffect(() => {
@@ -32,7 +37,19 @@ const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberI
         return;
       }
 
-      const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+      const allowedKeys = [
+        'Backspace',
+        'Delete',
+        'Tab',
+        'Escape',
+        'Enter',
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowUp',
+        'ArrowDown',
+        'Home',
+        'End',
+      ];
       if (allowedKeys.includes(event.key)) {
         onKeyDown?.(event);
         return;
@@ -86,7 +103,7 @@ const ValidatedNumberInput = React.forwardRef<HTMLInputElement, ValidatedNumberI
         onBlur={handleBlur}
       />
     );
-  }
+  },
 );
 
 ValidatedNumberInput.displayName = 'ValidatedNumberInput';
