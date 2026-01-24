@@ -1,11 +1,6 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import {
-  requireNonEmptyString,
-  requireNonEmptyString,
-  validateHexColor,
-  badRequest,
-} from '../utils/validation.ts';
+import { requireNonEmptyString, validateHexColor, badRequest } from '../utils/validation.ts';
 
 export default async function (fastify, _opts) {
   // GET / - List all projects
