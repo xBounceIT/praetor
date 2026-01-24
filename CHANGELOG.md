@@ -1,5 +1,4 @@
-## 24/01/2026
-- Risolto il problema che consentiva ai manager di leggere, aggiornare ed eliminare le voci dei fogli presenze degli utenti che non gestivano.
+## 24/01/2026 - Operativo
 - Aggiornato lo stato dei preventivi e delle vendite a: bozza, inviato, accettato, rifiutato
 - Aggiunta l'opzione di localizzazione automatica in base alla lingua del browser
 - Rifattorizzato SpecialBidsView per sostituire la visualizzazione delle righe delle offerte scadute con un formato tabellare per una maggiore chiarezza e organizzazione.
@@ -13,3 +12,6 @@
 - Aggiornato il componente ProductsView per gestire i nuovi campi e modificata la gestione dei tipi per includere “fornitura” e “consulenza”.
 - Implementata la gestione degli errori per le operazioni asincrone sui prodotti e aggiunta la gestione dello stato degli errori del server.
 - Introdotto un modale per l'aggiunta di sottocategorie, migliorando la gestione delle categorie.
+
+## 24/01/2026 - Sicurezza
+- Risolto il problema che consentiva ai manager di leggere, aggiornare ed eliminare le voci dei fogli presenze degli utenti che non gestivano.
