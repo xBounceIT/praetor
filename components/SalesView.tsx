@@ -20,9 +20,10 @@ const getPaymentTermsOptions = (t: any) => [
 ];
 
 const getStatusOptions = (t: any) => [
-    { id: 'pending', name: t('crm:sales.statusPending') },
-    { id: 'completed', name: t('crm:sales.statusCompleted') },
-    { id: 'cancelled', name: t('crm:sales.statusCancelled') },
+    { id: 'draft', name: t('crm:sales.statusDraft') },
+    { id: 'sent', name: t('crm:sales.statusSent') },
+    { id: 'confirmed', name: t('crm:sales.statusConfirmed') },
+    { id: 'denied', name: t('crm:sales.statusDenied') },
 ];
 
 interface SalesViewProps {
@@ -43,14 +44,16 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
 };
 
 const getSaleStatusLabel = (status: Sale['status'], t: any) => {
-    if (status === 'completed') return t('crm:sales.statusCompleted');
-    if (status === 'cancelled') return t('crm:sales.statusCancelled');
-    return t('crm:sales.statusPending');
+    if (status === 'sent') return t('crm:sales.statusSent');
+    if (status === 'confirmed') return t('crm:sales.statusConfirmed');
+    if (status === 'denied') return t('crm:sales.statusDenied');
+    return t('crm:sales.statusDraft');
 };
 
 const getSaleStatusBadgeClass = (status: Sale['status']) => {
-    if (status === 'completed') return 'bg-emerald-100 text-emerald-700';
-    if (status === 'cancelled') return 'bg-red-100 text-red-700';
+    if (status === 'sent') return 'bg-blue-100 text-blue-700';
+    if (status === 'confirmed') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'denied') return 'bg-red-100 text-red-700';
     return 'bg-amber-100 text-amber-700';
 };
 
@@ -107,8 +110,8 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
         });
     }, [sales, searchTerm, filterClientId, filterStatus]);
 
-    const activeSales = useMemo(() => filteredSales.filter(sale => sale.status === 'pending'), [filteredSales]);
-    const historySales = useMemo(() => filteredSales.filter(sale => sale.status !== 'pending'), [filteredSales]);
+    const activeSales = useMemo(() => filteredSales.filter(sale => sale.status === 'draft' || sale.status === 'sent'), [filteredSales]);
+    const historySales = useMemo(() => filteredSales.filter(sale => sale.status === 'confirmed' || sale.status === 'denied'), [filteredSales]);
 
     // Reset page on filter change
     React.useEffect(() => {
@@ -133,7 +136,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
         items: [],
         paymentTerms: 'immediate',
         discount: 0,
-        status: 'pending',
+        status: 'draft',
         notes: '',
     });
 
@@ -145,7 +148,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
             items: [],
             paymentTerms: 'immediate',
             discount: 0,
-            status: 'pending',
+            status: 'draft',
             notes: '',
         });
         setErrors({});
@@ -391,6 +394,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
     };
 
     const isLinkedQuote = Boolean(formData.linkedQuoteId);
+    const isReadOnly = isLinkedQuote || (editingSale && editingSale.status !== 'draft');
 
     // Pagination Logic
     const totalPages = Math.ceil(activeSales.length / rowsPerPage);
@@ -461,7 +465,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                         onChange={handleClientChange}
                                         placeholder={t('crm:quotes.selectAClient')}
                                         searchable={true}
-                                        disabled={isLinkedQuote}
+                                        disabled={isReadOnly}
                                         className={errors.clientId ? 'border-red-300' : ''}
                                     />
                                     {errors.clientId && (
@@ -480,7 +484,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                     <button
                                         type="button"
                                         onClick={addProductRow}
-                                        disabled={isLinkedQuote}
+                                        disabled={isReadOnly}
                                         className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
@@ -530,7 +534,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                     placeholder={t('crm:quotes.selectBid')}
                                                                     displayValue={getBidDisplayValue(item.specialBidId)}
                                                                     searchable={true}
-                                                                    disabled={isLinkedQuote}
+                                                                    disabled={isReadOnly}
                                                                     buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                                                                 />
                                                             </div>
@@ -541,7 +545,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                     onChange={(val) => updateProductRow(index, 'productId', val)}
                                                                     placeholder={t('crm:quotes.selectProduct')}
                                                                     searchable={true}
-                                                                    disabled={isLinkedQuote}
+                                                                    disabled={isReadOnly}
                                                                     buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                                                                 />
                                                             </div>
@@ -556,7 +560,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                                         const parsed = parseFloat(value);
                                                                         updateProductRow(index, 'quantity', value === '' || Number.isNaN(parsed) ? 0 : parsed);
                                                                     }}
-                                                                    disabled={isLinkedQuote}
+                                                                    disabled={isReadOnly}
                                                                     className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
                                                                 />
                                                             </div>
@@ -581,7 +585,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                         <button
                                                             type="button"
                                                             onClick={() => removeProductRow(index)}
-                                                            disabled={isLinkedQuote}
+                                                            disabled={isReadOnly}
                                                             className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
                                                             <i className="fa-solid fa-trash-can"></i>
@@ -612,7 +616,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                             value={formData.paymentTerms || 'immediate'}
                                             onChange={(val) => setFormData({ ...formData, paymentTerms: val as any })}
                                             searchable={false}
-                                            disabled={isLinkedQuote}
+                                            disabled={isReadOnly}
                                         />
                                     </div>
 
@@ -631,7 +635,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                     const parsed = parseNumberInputValue(value);
                                                     setFormData({ ...formData, discount: parsed });
                                                 }}
-                                                disabled={isLinkedQuote}
+                                                disabled={isReadOnly}
                                                 className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold disabled:bg-transparent"
                                             />
                                         </div>
@@ -654,7 +658,7 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                             value={formData.notes}
                                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                             placeholder={t('crm:quotes.additionalNotesPlaceholder')}
-                                            disabled={isLinkedQuote}
+                                            disabled={isReadOnly}
                                             className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:bg-slate-50 disabled:text-slate-400"
                                         />
                                     </div>
@@ -940,40 +944,68 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                     openEditModal(sale);
                                                 }}
                                                 className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                                title={t('crm:sales.editSale')}
+                                                title={sale.status === 'draft' ? t('crm:sales.editSale') : t('crm:quotes.viewQuote')}
                                             >
-                                                <i className="fa-solid fa-pen-to-square"></i>
+                                                <i className={`fa-solid ${sale.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
                                             </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onUpdateSale(sale.id, { status: 'completed' });
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                                                title={t('crm:sales.completeSale')}
-                                            >
-                                                <i className="fa-solid fa-check"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onUpdateSale(sale.id, { status: 'cancelled' });
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                title={t('crm:sales.denySale')}
-                                            >
-                                                <i className="fa-solid fa-xmark"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    confirmDelete(sale);
-                                                }}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                title={t('crm:sales.deleteSale')}
-                                            >
-                                                <i className="fa-solid fa-trash-can"></i>
-                                            </button>
+                                            {sale.status === 'draft' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onUpdateSale(sale.id, { status: 'sent' });
+                                                    }}
+                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                    title={t('crm:sales.markAsSent')}
+                                                >
+                                                    <i className="fa-solid fa-paper-plane"></i>
+                                                </button>
+                                            )}
+                                            {sale.status === 'sent' && (
+                                                <>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onUpdateSale(sale.id, { status: 'confirmed' });
+                                                        }}
+                                                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                                        title={t('crm:sales.markAsConfirmed')}
+                                                    >
+                                                        <i className="fa-solid fa-check"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onUpdateSale(sale.id, { status: 'denied' });
+                                                        }}
+                                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                        title={t('crm:sales.markAsDenied')}
+                                                    >
+                                                        <i className="fa-solid fa-xmark"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onUpdateSale(sale.id, { status: 'draft' });
+                                                        }}
+                                                        className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                                        title={t('crm:sales.revertToDraft')}
+                                                    >
+                                                        <i className="fa-solid fa-rotate-left"></i>
+                                                    </button>
+                                                </>
+                                            )}
+                                            {sale.status === 'draft' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        confirmDelete(sale);
+                                                    }}
+                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                    title={t('crm:sales.deleteSale')}
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -1117,29 +1149,9 @@ const SalesView: React.FC<SalesViewProps> = ({ sales, clients, products, special
                                                         openEditModal(sale);
                                                     }}
                                                     className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                                                    title={t('crm:sales.editSale')}
+                                                    title={t('crm:quotes.viewQuote')}
                                                 >
-                                                    <i className="fa-solid fa-pen-to-square"></i>
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onUpdateSale(sale.id, { status: 'pending' });
-                                                    }}
-                                                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                                                    title={t('crm:sales.restoreSale')}
-                                                >
-                                                    <i className="fa-solid fa-rotate-left"></i>
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        confirmDelete(sale);
-                                                    }}
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                    title={t('crm:sales.deleteSale')}
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i>
+                                                    <i className="fa-solid fa-eye"></i>
                                                 </button>
                                             </div>
                                         </td>

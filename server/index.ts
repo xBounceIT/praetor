@@ -139,6 +139,14 @@ try {
     } catch (err) {
       console.error('Failed to run payment_terms removal migration:', err);
     }
+
+    // Run sale status migration
+    try {
+      const { migrate: migrateSaleStatus } = await import('./db/migrate_sale_status.ts');
+      await migrateSaleStatus();
+    } catch (err) {
+      console.error('Failed to run sale status migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

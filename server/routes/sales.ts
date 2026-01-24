@@ -114,7 +114,7 @@ export default async function (fastify, opts) {
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-                [saleId, linkedQuoteId || null, clientIdResult.value, clientNameResult.value, paymentTerms || 'immediate', discountResult.value || 0, status || 'pending', notes]
+                [saleId, linkedQuoteId || null, clientIdResult.value, clientNameResult.value, paymentTerms || 'immediate', discountResult.value || 0, status || 'draft', notes]
             );
 
             // Insert sale items
@@ -273,6 +273,7 @@ export default async function (fastify, opts) {
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
                     discount,
+                    status,
                     notes
                 FROM sales
                 WHERE id = $1`,
@@ -285,6 +286,23 @@ export default async function (fastify, opts) {
 
             const existingSale = existingSaleResult.rows[0];
             let existingItems: any[] | null = null;
+
+            // Check if sale is read-only (non-draft status)
+            // Status changes are always allowed, but other field changes are blocked for non-draft sales
+            const isStatusChangeOnly = status !== undefined &&
+                clientIdValue === undefined &&
+                clientNameValue === undefined &&
+                paymentTerms === undefined &&
+                discountValue === undefined &&
+                notes === undefined &&
+                items === undefined;
+
+            if (existingSale.status !== 'draft' && !isStatusChangeOnly) {
+                return reply.code(409).send({
+                    error: 'Non-draft sales are read-only',
+                    currentStatus: existingSale.status
+                });
+            }
 
             if (existingSale.linkedQuoteId) {
                 const lockedFields: string[] = [];
@@ -444,18 +462,32 @@ export default async function (fastify, opts) {
         }
     });
 
-    // DELETE /:id - Delete sale
+    // DELETE /:id - Delete sale (only allowed for draft status)
     fastify.delete('/:id', async (request, reply) => {
         const { id } = request.params;
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
-        // Items will be deleted automatically via CASCADE
-        const result = await query('DELETE FROM sales WHERE id = $1 RETURNING id', [idResult.value]);
+        // Check if sale exists and is in draft status
+        const saleResult = await query(
+            'SELECT id, status FROM sales WHERE id = $1',
+            [idResult.value]
+        );
 
-        if (result.rows.length === 0) {
+        if (saleResult.rows.length === 0) {
             return reply.code(404).send({ error: 'Sale not found' });
         }
+
+        const sale = saleResult.rows[0];
+        if (sale.status !== 'draft') {
+            return reply.code(409).send({
+                error: 'Only draft sales can be deleted',
+                currentStatus: sale.status
+            });
+        }
+
+        // Items will be deleted automatically via CASCADE
+        await query('DELETE FROM sales WHERE id = $1', [idResult.value]);
 
         return reply.code(204).send();
     });

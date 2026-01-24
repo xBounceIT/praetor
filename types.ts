@@ -172,7 +172,7 @@ export interface Sale {
   items: SaleItem[];
   paymentTerms: 'immediate' | '15gg' | '21gg' | '30gg' | '45gg' | '60gg' | '90gg' | '120gg' | '180gg' | '240gg' | '365gg';
   discount: number;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: 'draft' | 'sent' | 'confirmed' | 'denied';
   notes?: string;
   createdAt: number;
   updatedAt: number;

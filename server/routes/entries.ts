@@ -10,9 +10,25 @@ export default async function (fastify, opts) {
         let result;
 
         if (request.user.role === 'manager') {
-            // Managers can see all entries, optionally filtered by user
+            // Managers can see their own entries and those of users in their work units
             const { userId } = request.query;
+
             if (userId) {
+                // If requesting specific user, verify permission
+                if (userId !== request.user.id) {
+                    const managedCheck = await query(
+                        `SELECT 1 
+                         FROM user_work_units uwu
+                         JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                         WHERE wum.user_id = $1 AND uwu.user_id = $2`,
+                        [request.user.id, userId]
+                    );
+
+                    if (managedCheck.rows.length === 0) {
+                        return reply.code(403).send({ error: 'Not authorized to view entries for this user' });
+                    }
+                }
+
                 result = await query(
                     `SELECT id, user_id, date, client_id, client_name, project_id, 
                   project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
@@ -20,10 +36,20 @@ export default async function (fastify, opts) {
                     [userId]
                 );
             } else {
+                // No specific user requested, return all accessible (own + managed)
                 result = await query(
                     `SELECT id, user_id, date, client_id, client_name, project_id, 
                   project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
-           FROM time_entries ORDER BY created_at DESC`
+           FROM time_entries 
+           WHERE user_id = $1 
+              OR user_id IN (
+                  SELECT uwu.user_id 
+                  FROM user_work_units uwu
+                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                  WHERE wum.user_id = $1
+              )
+           ORDER BY created_at DESC`,
+                    [request.user.id]
                 );
             }
         } else {
@@ -91,6 +117,20 @@ export default async function (fastify, opts) {
             const targetUserIdResult = requireNonEmptyString(targetUserId, 'userId');
             if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
             targetUserId = targetUserIdResult.value;
+
+            // Verify manager has access to this user
+            if (targetUserId !== request.user.id) {
+                const managedCheck = await query(
+                    `SELECT 1 
+                     FROM user_work_units uwu
+                     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                     WHERE wum.user_id = $1 AND uwu.user_id = $2`,
+                    [request.user.id, targetUserId]
+                );
+                if (managedCheck.rows.length === 0) {
+                    return reply.code(403).send({ error: 'Not authorized to create entries for this user' });
+                }
+            }
         }
 
         // Fetch user's current cost
@@ -147,8 +187,23 @@ export default async function (fastify, opts) {
             return reply.code(404).send({ error: 'Entry not found' });
         }
 
-        if (existing.rows[0].user_id !== request.user.id && request.user.role === 'user') {
-            return reply.code(403).send({ error: 'Not authorized to update this entry' });
+        if (existing.rows[0].user_id !== request.user.id) {
+            if (request.user.role === 'user') {
+                return reply.code(403).send({ error: 'Not authorized to update this entry' });
+            }
+
+            if (request.user.role === 'manager') {
+                const managedCheck = await query(
+                    `SELECT 1 
+                     FROM user_work_units uwu
+                     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                     WHERE wum.user_id = $1 AND uwu.user_id = $2`,
+                    [request.user.id, existing.rows[0].user_id]
+                );
+                if (managedCheck.rows.length === 0) {
+                    return reply.code(403).send({ error: 'Not authorized to update this entry' });
+                }
+            }
         }
 
         const result = await query(
@@ -193,8 +248,23 @@ export default async function (fastify, opts) {
             return reply.code(404).send({ error: 'Entry not found' });
         }
 
-        if (existing.rows[0].user_id !== request.user.id && request.user.role === 'user') {
-            return reply.code(403).send({ error: 'Not authorized to delete this entry' });
+        if (existing.rows[0].user_id !== request.user.id) {
+            if (request.user.role === 'user') {
+                return reply.code(403).send({ error: 'Not authorized to delete this entry' });
+            }
+
+            if (request.user.role === 'manager') {
+                const managedCheck = await query(
+                    `SELECT 1 
+                     FROM user_work_units uwu
+                     JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                     WHERE wum.user_id = $1 AND uwu.user_id = $2`,
+                    [request.user.id, existing.rows[0].user_id]
+                );
+                if (managedCheck.rows.length === 0) {
+                    return reply.code(403).send({ error: 'Not authorized to delete this entry' });
+                }
+            }
         }
 
         await query('DELETE FROM time_entries WHERE id = $1', [idResult.value]);
@@ -220,10 +290,19 @@ export default async function (fastify, opts) {
         const params = [projectIdResult.value, taskResult.value];
         let paramIndex = 3;
 
-        // Only delete user's own entries unless manager
+        // Only delete user's own entries unless manager (who can delete managed users' entries)
         if (request.user.role === 'user') {
             sql += ` AND user_id = $${paramIndex++}`;
             params.push(request.user.id);
+        } else if (request.user.role === 'manager') {
+            sql += ` AND (user_id = $${paramIndex} OR user_id IN (
+                  SELECT uwu.user_id 
+                  FROM user_work_units uwu
+                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                  WHERE wum.user_id = $${paramIndex}
+              ))`;
+            params.push(request.user.id);
+            paramIndex++;
         }
 
         if (futureOnlyValue === true) {
