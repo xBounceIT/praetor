@@ -361,7 +361,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
 
     // Filter options
     const allCategories = Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c))).sort();
-    const filterCategoryOptions: Option[] = [{ id: 'all', name: t('crm:products.allCategories') }, ...allCategories.map(c => ({ id: c, name: c }))];
+    const filterCategoryOptions: Option[] = [{ id: 'all', name: t('crm:products.allCategories') }, ...allCategories.map((c: string) => ({ id: c, name: c }))];
 
     // Include all actually used types in filter
     const allUsedTypes = Array.from(new Set(products.map(p => p.type))).sort();
@@ -480,10 +480,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-                                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                                    <i className="fa-solid fa-plus"></i>
-                                </div>
-                                Add Subcategory
+                                {t('crm:products.addSubcategoryModalTitle')}
                             </h3>
                             <button
                                 onClick={() => setIsAddSubcategoryModalOpen(false)}
@@ -494,14 +491,14 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                         </div>
                         <div className="p-6 space-y-4">
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 ml-1">Subcategory Name</label>
+                                <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:products.subcategoryName')}</label>
                                 <input
                                     type="text"
                                     autoFocus
                                     value={newSubcategoryName}
                                     onChange={(e) => setNewSubcategoryName(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddSubcategory()}
-                                    placeholder="Enter subcategory name"
+                                    placeholder={t('crm:products.subcategoryNamePlaceholder')}
                                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                                 />
                             </div>
@@ -516,7 +513,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                     onClick={handleAddSubcategory}
                                     className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                                 >
-                                    Add
+                                    {t('crm:products.add')}
                                 </button>
                             </div>
                         </div>
@@ -574,18 +571,18 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                     </div>
 
                                     <div className="col-span-full space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 ml-1">Description</label>
+                                        <label className="text-xs font-bold text-slate-500 ml-1">{t('crm:products.description')}</label>
                                         <textarea
                                             value={formData.description || ''}
                                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                            placeholder="Product description"
+                                            placeholder={t('crm:products.productDescriptionPlaceholder')}
                                             rows={2}
                                             className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                                         />
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                        <div className="relative ml-1 min-h-[20px] pr-16">
                                             <label className="text-xs font-bold text-slate-500">{t('crm:products.type')}</label>
                                         </div>
                                         <CustomSelect
@@ -620,21 +617,21 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
 
                                     <div className="space-y-1.5">
                                         <div className="relative ml-1 min-h-[20px] pr-16">
-                                            <label className="text-xs font-bold text-slate-500">Subcategory</label>
+                                            <label className="text-xs font-bold text-slate-500">{t('crm:products.subcategory')}</label>
                                             <button
                                                 type="button"
                                                 onClick={() => setIsAddSubcategoryModalOpen(true)}
                                                 disabled={!formData.category} // Disable if no category selected
                                                 className={`absolute top-0 right-0 text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-slate-300 cursor-not-allowed' : 'text-praetor hover:text-slate-700'}`}
                                             >
-                                                <i className="fa-solid fa-plus"></i> Add Subcategory
+                                                <i className="fa-solid fa-plus"></i> {t('crm:products.addSubcategory')}
                                             </button>
                                         </div>
                                         <CustomSelect
                                             options={subcategoryOptions}
                                             value={formData.subcategory || ''}
                                             onChange={(val) => setFormData({ ...formData, subcategory: val })}
-                                            placeholder={!formData.category ? "Select category first" : t('crm:products.selectOption')}
+                                            placeholder={!formData.category ? t('crm:products.selectCategoryFirst') : t('crm:products.selectOption')}
                                             searchable={true}
                                             disabled={!formData.category}
                                         />
@@ -658,7 +655,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                        <div className="relative ml-1 min-h-[20px] pr-16">
                                             <label className="text-xs font-bold text-slate-500 font-black">{t('crm:products.unitOfMeasure')}</label>
                                         </div>
                                         <div className={`w-full text-sm px-4 py-2.5 border rounded-xl font-bold flex items-center gap-2 ${errors.costUnit ? 'border-red-500 bg-red-50 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
@@ -670,7 +667,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                        <div className="relative ml-1 min-h-[20px] pr-16">
                                             <label className="text-xs font-bold text-slate-500">{t('crm:products.supplier')}</label>
                                         </div>
                                         <CustomSelect

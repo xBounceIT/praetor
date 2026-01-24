@@ -138,7 +138,14 @@
     "typeSupply": "Supply",
     "typeConsulting": "Consulting",
     "description": "Description",
-    "subcategory": "Subcategory"
+    "subcategory": "Subcategory",
+    "productDescriptionPlaceholder": "Product description",
+    "addSubcategoryModalTitle": "Add Subcategory",
+    "subcategoryName": "Subcategory Name",
+    "subcategoryNamePlaceholder": "e.g. SaaS Software",
+    "addSubcategory": "Add Subcategory",
+    "selectCategoryFirst": "Select category first",
+    "add": "Add"
   },
   "specialBids": {
     "title": "Special Bids",

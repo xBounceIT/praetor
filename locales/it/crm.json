@@ -132,7 +132,14 @@
     "typeSupply": "Fornitura",
     "typeConsulting": "Consulenza",
     "description": "Descrizione",
-    "subcategory": "Sottocategoria"
+    "subcategory": "Sottocategoria",
+    "productDescriptionPlaceholder": "Descrizione prodotto",
+    "addSubcategoryModalTitle": "Aggiungi Sottocategoria",
+    "subcategoryName": "Nome Sottocategoria",
+    "subcategoryNamePlaceholder": "es. Software SaaS",
+    "addSubcategory": "Aggiungi Sottocategoria",
+    "selectCategoryFirst": "Seleziona prima una categoria",
+    "add": "Aggiungi"
   },
   "specialBids": {
     "title": "Offerte Speciali",
