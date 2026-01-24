@@ -17,6 +17,7 @@
 - Aggiunto ESLint
 - Aggiunta generazione progetto per ciascuna voce quando una vendita viene accettata. La nomenclatura del progetto è $ID_CLIENTE_$PRODOTTO\_$ANNO
 - Aggiunta auto assegnazione dei manager a tutti i clienti, progetti e task
+- Aggiornata vista assegnazione clienti, progetti e task
 
 ## 24/01/2026 - Sicurezza
 

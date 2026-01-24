@@ -1301,12 +1301,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                 : 'bg-white border-slate-200 hover:border-slate-300'
                             }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={assignments.clientIds.includes(client.id)}
-                              onChange={() => toggleAssignment('client', client.id)}
-                              className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                            />
+                            <div className="relative flex items-center justify-center shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={assignments.clientIds.includes(client.id)}
+                                onChange={() => toggleAssignment('client', client.id)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
+                                <i className="fa-solid fa-check text-white text-[10px] transform scale-0 peer-checked:scale-100 transition-transform font-black"></i>
+                              </div>
+                            </div>
                             <span
                               className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
                             >
@@ -1351,12 +1356,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                 : 'bg-white border-slate-200 hover:border-slate-300'
                             }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={assignments.projectIds.includes(project.id)}
-                              onChange={() => toggleAssignment('project', project.id)}
-                              className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                            />
+                            <div className="relative flex items-center justify-center shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={assignments.projectIds.includes(project.id)}
+                                onChange={() => toggleAssignment('project', project.id)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
+                                <i className="fa-solid fa-check text-white text-[10px] transform scale-0 peer-checked:scale-100 transition-transform font-black"></i>
+                              </div>
+                            </div>
                             <div className="flex flex-col">
                               <span
                                 className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
@@ -1409,12 +1419,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                     : 'bg-white border-slate-200 hover:border-slate-300'
                                 }`}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={assignments.taskIds.includes(task.id)}
-                                  onChange={() => toggleAssignment('task', task.id)}
-                                  className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                                />
+                                <div className="relative flex items-center justify-center shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={assignments.taskIds.includes(task.id)}
+                                    onChange={() => toggleAssignment('task', task.id)}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-5 h-5 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm">
+                                    <i className="fa-solid fa-check text-white text-[10px] transform scale-0 peer-checked:scale-100 transition-transform font-black"></i>
+                                  </div>
+                                </div>
                                 <div className="flex flex-col">
                                   <span
                                     className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}

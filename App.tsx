@@ -678,7 +678,7 @@ const App: React.FC = () => {
       'suppliers/manage': ['manager'],
       'suppliers/quotes': ['manager'],
       // Standalone
-      settings: ['admin', 'manager'],
+      settings: ['admin', 'manager', 'user'],
     };
 
     const allowedRoles = permissions[activeView as View];
