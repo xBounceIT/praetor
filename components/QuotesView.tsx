@@ -1151,13 +1151,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({ quotes, clients, products, spec
             <StandardTable
                 title={t('crm:quotes.expiredQuotes')}
                 totalCount={filteredExpiredQuotes.length}
-                totalLabel={t('crm:quotes.statusExpired')}
+                totalLabel={t('crm:quotes.totalLabel')}
                 containerClassName="border-dashed bg-slate-50"
                 footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
                 footer={
                     <>
                         <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold text-slate-500">Rows per page:</span>
+                            <span className="text-xs font-bold text-slate-500">{t('crm:quotes.rowsPerPage')}</span>
                             <CustomSelect
                                 options={[
                                     { id: '5', name: '5' },
