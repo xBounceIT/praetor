@@ -8,14 +8,14 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - Get current user's settings
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const result = await query(
         `SELECT full_name, email, language
        FROM settings WHERE user_id = $1`,

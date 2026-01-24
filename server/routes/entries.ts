@@ -11,7 +11,7 @@ import {
   parseQueryBoolean,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - List time entries
   fastify.get(
     '/',

@@ -10,13 +10,13 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // All expenses routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all expenses
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (_request, _reply) => {
     const result = await query(
       `SELECT 
                 id, 

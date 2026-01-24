@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import type { TimeEntry } from '../types';
 
 const getClient = (apiKey?: string) => {
   if (!apiKey) return null;
@@ -51,7 +52,7 @@ export const parseSmartEntry = async (
   }
 };
 
-export const getInsights = async (entries: any[], apiKey?: string): Promise<string> => {
+export const getInsights = async (entries: TimeEntry[], apiKey?: string): Promise<string> => {
   try {
     const ai = getClient(apiKey);
     if (!ai) {
@@ -68,7 +69,7 @@ export const getInsights = async (entries: any[], apiKey?: string): Promise<stri
     });
     // Directly access .text property from GenerateContentResponse
     return response.text;
-  } catch (error) {
+  } catch {
     return 'Keep up the great work! Consistent tracking is the first step to optimization.';
   }
 };

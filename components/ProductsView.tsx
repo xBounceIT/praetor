@@ -236,11 +236,11 @@ const ProductsView: React.FC<ProductsViewProps> = ({
         await onAddProduct(formData);
       }
       setIsModalOpen(false);
-    } catch (err: any) {
-      if (err.message && err.message.includes('unique')) {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('unique')) {
         setErrors({ ...newErrors, name: t('common:validation.productNameUnique') });
       } else {
-        setServerError(err.message || 'An error occurred');
+        setServerError(err instanceof Error ? err.message : 'An error occurred');
       }
     }
   };
@@ -310,11 +310,11 @@ const ProductsView: React.FC<ProductsViewProps> = ({
 
   const filteredActiveProductsTotal = React.useMemo(() => {
     return products.filter((p) => !p.isDisabled).filter(matchesProductFilters);
-  }, [products, normalizedSearch, filterCategory, filterType, filterSupplierId]);
+  }, [products, matchesProductFilters]);
 
   const filteredDisabledProductsTotal = React.useMemo(() => {
     return products.filter((p) => p.isDisabled).filter(matchesProductFilters);
-  }, [products, normalizedSearch, filterCategory, filterType, filterSupplierId]);
+  }, [products, matchesProductFilters]);
 
   const hasAnyDisabledProducts = products.some((p) => p.isDisabled);
 

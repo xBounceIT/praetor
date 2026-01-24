@@ -7,8 +7,6 @@
     "rootDir": ".",
     "outDir": "dist",
     "strict": true,
-    "noImplicitAny": false,
-    "useUnknownInCatchVariables": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,

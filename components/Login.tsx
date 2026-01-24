@@ -149,7 +149,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
 
         <div className="mt-8 pt-6 border-t border-slate-100 text-center">
           <p className="text-xs text-slate-400">
-            <strong>{t('auth:login.defaultCredentials')}:</strong> "admin" / "password"
+            <strong>{t('auth:login.defaultCredentials')}:</strong> &quot;admin&quot; /
+            &quot;password&quot;
           </p>
         </div>
       </div>

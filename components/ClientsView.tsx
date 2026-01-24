@@ -192,30 +192,33 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
   };
 
-  const matchesClientFilters = (client: Client) => {
-    const matchesSearch =
-      normalizedSearch === '' ||
-      client.name.toLowerCase().includes(normalizedSearch) ||
-      (client.clientCode ?? '').toLowerCase().includes(normalizedSearch) ||
-      (client.email ?? '').toLowerCase().includes(normalizedSearch) ||
-      (client.phone ?? '').toLowerCase().includes(normalizedSearch) ||
-      (client.vatNumber ?? '').toLowerCase().includes(normalizedSearch) ||
-      (client.taxCode ?? '').toLowerCase().includes(normalizedSearch);
+  const matchesClientFilters = React.useCallback(
+    (client: Client) => {
+      const matchesSearch =
+        normalizedSearch === '' ||
+        client.name.toLowerCase().includes(normalizedSearch) ||
+        (client.clientCode ?? '').toLowerCase().includes(normalizedSearch) ||
+        (client.email ?? '').toLowerCase().includes(normalizedSearch) ||
+        (client.phone ?? '').toLowerCase().includes(normalizedSearch) ||
+        (client.vatNumber ?? '').toLowerCase().includes(normalizedSearch) ||
+        (client.taxCode ?? '').toLowerCase().includes(normalizedSearch);
 
-    const clientType = client.type ?? 'company';
-    const matchesType =
-      filterClientType === 'all' || clientType === (filterClientType as Client['type']);
+      const clientType = client.type ?? 'company';
+      const matchesType =
+        filterClientType === 'all' || clientType === (filterClientType as Client['type']);
 
-    return matchesSearch && matchesType;
-  };
+      return matchesSearch && matchesType;
+    },
+    [normalizedSearch, filterClientType],
+  );
 
   const filteredActiveClientsTotal = React.useMemo(() => {
     return clients.filter((c) => !c.isDisabled).filter(matchesClientFilters);
-  }, [clients, normalizedSearch, filterClientType]);
+  }, [clients, matchesClientFilters]);
 
   const filteredDisabledClientsTotal = React.useMemo(() => {
     return clients.filter((c) => c.isDisabled).filter(matchesClientFilters);
-  }, [clients, normalizedSearch, filterClientType]);
+  }, [clients, matchesClientFilters]);
 
   const hasAnyDisabledClients = clients.some((c) => c.isDisabled);
 

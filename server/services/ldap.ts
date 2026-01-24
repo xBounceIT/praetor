@@ -1,3 +1,4 @@
+// @ts-expect-error: ldapjs does not have type definitions
 import ldap from 'ldapjs';
 import fs from 'fs';
 import { query } from '../db/index.ts';
@@ -11,6 +12,15 @@ type LdapConfig = {
   base_dn: string;
   user_filter: string;
 };
+
+interface LdapEntry {
+  objectName: string;
+  uid?: string | string[];
+  sAMAccountName?: string | string[];
+  cn?: string | string[];
+  displayName?: string | string[];
+  [key: string]: unknown;
+}
 
 class LDAPService {
   config: LdapConfig | null;
@@ -71,8 +81,8 @@ class LDAPService {
       }
 
       // Bind with service account first to find the user's DN
-      await new Promise((resolve, reject) => {
-        client.bind(this.config.bind_dn, this.config.bind_password, (err) => {
+      await new Promise<void>((resolve, reject) => {
+        client.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -87,7 +97,8 @@ class LDAPService {
       // Try to bind as the user
       // We need a new client for this to verify credentials safely without messing up the service connection state
       // or we can just re-bind. Re-binding on the same client is standard.
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
+        if (!client) return reject(new Error('Client not available'));
         client.bind(userDn, password, (err) => {
           if (err) reject(err);
           else resolve();
@@ -150,8 +161,8 @@ class LDAPService {
         return { skipped: true, reason: 'LDAP is disabled' };
       }
 
-      await new Promise((resolve, reject) => {
-        client.bind(this.config.bind_dn, this.config.bind_password, (err) => {
+      await new Promise<void>((resolve, reject) => {
+        client.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -167,14 +178,15 @@ class LDAPService {
         attributes: ['uid', 'cn', 'sn', 'givenName', 'mail'], // Request common attributes
       };
 
-      const entries = [];
+      const entries: LdapEntry[] = [];
 
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
+        if (!client || !this.config) return reject(new Error('Client or config missing'));
         client.search(this.config.base_dn, searchOptions, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry) => {
-            entries.push(entry.object);
+            entries.push(entry.object as unknown as LdapEntry);
           });
 
           res.on('error', (err) => {
@@ -263,7 +275,7 @@ class LDAPService {
       throw err;
     } finally {
       if (client) {
-        client.unbind((err) => {});
+        client.unbind(() => {});
       }
     }
   }

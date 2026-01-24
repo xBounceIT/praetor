@@ -534,10 +534,6 @@ const App: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuote[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [settings, setSettings] = useState({
-    fullName: 'User',
-    email: '',
-  });
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
     enabled: false,
     serverUrl: 'ldap://ldap.example.com:389',
@@ -694,7 +690,7 @@ const App: React.FC = () => {
   // Redirect to 404 if route is not accessible
   useEffect(() => {
     if (currentUser && !isRouteAccessible && activeView !== '404') {
-      setActiveView('404');
+      React.startTransition(() => setActiveView('404'));
     }
   }, [currentUser, isRouteAccessible, activeView]);
 
@@ -710,7 +706,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (activeView !== 'crm/quotes' && quoteFilterId) {
-      setQuoteFilterId(null);
+      React.startTransition(() => setQuoteFilterId(null));
     }
   }, [activeView, quoteFilterId]);
 
@@ -741,7 +737,7 @@ const App: React.FC = () => {
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
     if (activeView !== 'timesheets/tracker' && currentUser && viewingUserId !== currentUser.id) {
-      setViewingUserId(currentUser.id);
+      React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, [activeView, currentUser, viewingUserId]);
 
@@ -770,10 +766,10 @@ const App: React.FC = () => {
                 i18n.changeLanguage(settings.language);
               }
             }
-          } catch (err) {
+          } catch {
             // Settings might not exist yet, that's okay
           }
-        } catch (err) {
+        } catch {
           // Token invalid, clear it
           setAuthToken(null);
         }
@@ -965,9 +961,9 @@ const App: React.FC = () => {
   // Update viewingUserId when currentUser changes
   useEffect(() => {
     if (currentUser) {
-      setViewingUserId(currentUser.id);
+      React.startTransition(() => setViewingUserId(currentUser.id));
     }
-  }, [currentUser?.id]);
+  }, [currentUser]);
 
   // Determine available users for the dropdown based on role
   const availableUsers = useMemo(() => {
@@ -1081,7 +1077,7 @@ const App: React.FC = () => {
     if (newEntries.length > 0) {
       setEntries((prev) => [...newEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
     }
-  }, [projectTasks, entries, projects, clients, currentUser]);
+  }, [projectTasks, entries, projects, clients, currentUser, generalSettings]);
 
   // ... (rest of the logic remains validation which we don't need to change but need for context)
 
@@ -1132,7 +1128,7 @@ const App: React.FC = () => {
         ...newEntry,
         userId: targetUserId,
         hourlyCost: currentUser?.costPerHour || 0,
-      } as any);
+      } as TimeEntry);
       setEntries([entry, ...entries]);
     } catch (err) {
       console.error('Failed to add entry:', err);
@@ -1152,7 +1148,7 @@ const App: React.FC = () => {
             ...entry,
             userId: targetUserId,
             hourlyCost: currentUser?.costPerHour || 0,
-          } as any),
+          } as TimeEntry),
         ),
       );
       setEntries((prev) => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));

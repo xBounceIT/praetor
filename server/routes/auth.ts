@@ -3,7 +3,7 @@ import { query } from '../db/index.ts';
 import { generateToken, authenticateToken } from '../middleware/auth.ts';
 import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // POST /login
   fastify.post('/login', async (request, reply) => {
     const { username, password } = request.body;
@@ -73,7 +73,7 @@ export default async function (fastify, opts) {
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       return {
         id: request.user.id,
         name: request.user.name,

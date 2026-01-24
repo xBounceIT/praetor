@@ -128,7 +128,6 @@ const Layout: React.FC<LayoutProps> = ({
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const isManagement = currentUser.role === 'admin' || currentUser.role === 'manager';
-  const isAdmin = currentUser.role === 'admin';
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-slate-50 overflow-hidden">

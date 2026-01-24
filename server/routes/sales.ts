@@ -9,13 +9,13 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // All sales routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all sales with their items
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (_request, _reply) => {
     // Get all sales
     const salesResult = await query(
       `SELECT 
@@ -206,7 +206,7 @@ export default async function (fastify, opts) {
     const normalizeNotesValue = (value: string | null | undefined) => (value ?? '').toString();
     const normalizeSpecialBidId = (value: string | null | undefined) =>
       value ? value.toString() : '';
-    const normalizeItemsForUpdate = (itemsToNormalize: any[]) => {
+    const normalizeItemsForUpdate = (itemsToNormalize: unknown[]) => {
       if (!Array.isArray(itemsToNormalize) || itemsToNormalize.length === 0) {
         badRequest(reply, 'Items must be a non-empty array');
         return null;
@@ -256,7 +256,7 @@ export default async function (fastify, opts) {
       return normalizedItems;
     };
 
-    const normalizeItemsForComparison = (itemsToNormalize: any[]) => {
+    const normalizeItemsForComparison = (itemsToNormalize: (typeof items)[number][]) => {
       return itemsToNormalize
         .map((item) => {
           const normalized = {
@@ -277,7 +277,10 @@ export default async function (fastify, opts) {
         .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
     };
 
-    const itemsMatch = (leftItems: any[], rightItems: any[]) => {
+    const itemsMatch = (
+      leftItems: (typeof items)[number][],
+      rightItems: (typeof items)[number][],
+    ) => {
       if (leftItems.length !== rightItems.length) {
         return false;
       }
@@ -299,7 +302,7 @@ export default async function (fastify, opts) {
       return true;
     };
 
-    let normalizedItems: any[] | null = null;
+    let normalizedItems: (typeof items)[number][] | null = null;
     if (items !== undefined) {
       normalizedItems = normalizeItemsForUpdate(items);
       if (!normalizedItems) return;
@@ -325,7 +328,7 @@ export default async function (fastify, opts) {
     }
 
     const existingSale = existingSaleResult.rows[0];
-    let existingItems: any[] | null = null;
+    let existingItems: (typeof items)[number][] | null = null;
 
     // Check if sale is read-only (non-draft status)
     // Status changes are always allowed, but other field changes are blocked for non-draft sales

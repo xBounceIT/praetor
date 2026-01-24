@@ -29,7 +29,7 @@ const fetchUnitDetails = async (unitId) => {
   return result.rows[0];
 };
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - List work units
   fastify.get(
     '/',

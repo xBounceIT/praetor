@@ -58,7 +58,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
               <CustomSelect
                 options={occurrenceOptions}
                 value={type}
-                onChange={(val) => setType(val as any)}
+                onChange={(val) => setType(val as typeof type)}
                 className="w-full"
               />
             </div>

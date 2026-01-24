@@ -2,21 +2,20 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
-  optionalNonEmptyString,
+  requireNonEmptyString,
   parseLocalizedNonNegativeNumber,
   parseBoolean,
   validateEnum,
-  optionalEnum,
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // All product routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all products
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (_request, _reply) => {
     const result = await query(
       `SELECT p.id, p.name, p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
              FROM products p 
@@ -128,7 +127,7 @@ export default async function (fastify, opts) {
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     // Name

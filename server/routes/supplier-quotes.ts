@@ -11,7 +11,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 

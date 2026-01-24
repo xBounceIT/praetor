@@ -67,7 +67,7 @@ const calculateQuoteTotals = async (
   return { total, subtotal, taxableAmount, totalTax };
 };
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // All quote routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
@@ -92,7 +92,7 @@ export default async function (fastify, opts) {
   };
 
   // GET / - List all quotes with their items
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (_request, _reply) => {
     // Get all quotes
     const quotesResult = await query(
       `SELECT 
@@ -162,7 +162,15 @@ export default async function (fastify, opts) {
       return badRequest(reply, 'Items must be a non-empty array');
     }
 
-    const normalizedItems: any[] = [];
+    const normalizedItems: {
+      productId: string;
+      productName: string;
+      quantity: number;
+      unitPrice: number;
+      discount: number;
+      specialBidId?: string | null;
+      note?: string | null;
+    }[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
@@ -234,7 +242,7 @@ export default async function (fastify, opts) {
       );
 
       // Insert quote items
-      const createdItems: any[] = [];
+      const createdItems: unknown[] = [];
       for (const item of normalizedItems) {
         const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
@@ -457,7 +465,7 @@ export default async function (fastify, opts) {
     }
 
     // If items are provided, update them
-    let updatedItems: any[] = [];
+    let updatedItems: unknown[] = [];
     if (normalizedItems) {
       // Delete existing items
       await query('DELETE FROM quote_items WHERE quote_id = $1', [idResult.value]);

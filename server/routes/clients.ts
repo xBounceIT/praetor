@@ -1,20 +1,15 @@
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import {
-  requireNonEmptyString,
-  optionalNonEmptyString,
-  optionalEmail,
-  badRequest,
-} from '../utils/validation.ts';
+import { requireNonEmptyString, optionalEmail, badRequest } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - List all clients
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const isStandardUser = request.user.role === 'user';
       let queryText = 'SELECT * FROM clients ORDER BY name';
       let queryParams = [];

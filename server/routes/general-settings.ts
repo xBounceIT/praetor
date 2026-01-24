@@ -7,14 +7,14 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - Get global settings (available to all authenticated users)
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const result = await query(
         'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key FROM general_settings WHERE id = 1',
       );

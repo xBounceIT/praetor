@@ -26,7 +26,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
-    details?: any;
+    details?: Record<string, unknown>;
   } | null>(null);
   const [isTestLoading, setIsTestLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -348,8 +348,8 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
               <div className="space-y-3">
                 {formData.roleMappings.length === 0 ? (
                   <p className="text-xs text-slate-400 italic">
-                    No mappings configured. Users will be assigned 'User' role by default if not
-                    specified.
+                    No mappings configured. Users will be assigned &apos;User&apos; role by default
+                    if not specified.
                   </p>
                 ) : (
                   formData.roleMappings.map((mapping, idx) => (

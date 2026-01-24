@@ -43,7 +43,7 @@ export const authenticateToken = async (request, reply) => {
     // This resets the 30m idle timer but keeps the 8h max session limit
     const newToken = generateToken(decoded.userId, decoded.sessionStart ?? Date.now());
     reply.header('x-auth-token', newToken);
-  } catch (err) {
+  } catch {
     return reply.code(403).send({ error: 'Invalid or expired token' });
   }
 };

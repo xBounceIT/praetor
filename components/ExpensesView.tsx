@@ -182,7 +182,9 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <CustomSelect
                     options={categoryOptions}
                     value={formData.category || 'other'}
-                    onChange={(val) => setFormData({ ...formData, category: val as any })}
+                    onChange={(val) =>
+                      setFormData({ ...formData, category: val as Expense['category'] })
+                    }
                     searchable={false}
                   />
                 </div>

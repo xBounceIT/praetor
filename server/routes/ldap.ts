@@ -2,21 +2,19 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
   parseBoolean,
-  optionalNonEmptyString,
-  ensureArrayOfStrings,
   requireNonEmptyString,
   validateEnum,
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET /config - Get LDAP configuration (admin only)
   fastify.get(
     '/config',
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       const result = await query(
         `SELECT enabled, server_url, base_dn, bind_dn, bind_password, 
               user_filter, group_base_dn, group_filter, role_mappings
@@ -169,7 +167,7 @@ export default async function (fastify, opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       const ldapService = (await import('../services/ldap.ts')).default;
       const stats = await ldapService.syncUsers();
       return { success: true, ...stats };

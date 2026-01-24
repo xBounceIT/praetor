@@ -275,7 +275,9 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                   <CustomSelect
                     options={paymentMethodOptions}
                     value={formData.paymentMethod || 'bank_transfer'}
-                    onChange={(val) => setFormData({ ...formData, paymentMethod: val as any })}
+                    onChange={(val) =>
+                      setFormData({ ...formData, paymentMethod: val as Payment['paymentMethod'] })
+                    }
                     searchable={false}
                   />
                 </div>

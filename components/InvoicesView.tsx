@@ -25,7 +25,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   invoices,
   clients,
   products,
-  sales,
+  sales: _sales,
   onAddInvoice,
   onUpdateInvoice,
   onDeleteInvoice,
@@ -101,20 +101,26 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   };
 
   // Form State
-  const [formData, setFormData] = useState<Partial<Invoice>>({
-    clientId: '',
-    clientName: '',
-    invoiceNumber: '',
-    items: [],
-    issueDate: new Date().toISOString().split('T')[0],
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    status: 'draft',
-    notes: '',
-    amountPaid: 0,
-    subtotal: 0,
-    taxAmount: 0,
-    total: 0,
-  });
+  const defaultInvoice = useMemo(() => {
+    const now = new Date();
+    const dueDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return {
+      clientId: '',
+      clientName: '',
+      invoiceNumber: '',
+      items: [],
+      issueDate: now.toISOString().split('T')[0],
+      dueDate: dueDate.toISOString().split('T')[0],
+      status: 'draft' as const,
+      notes: '',
+      amountPaid: 0,
+      subtotal: 0,
+      taxAmount: 0,
+      total: 0,
+    };
+  }, []);
+
+  const [formData, setFormData] = useState<Partial<Invoice>>(defaultInvoice);
 
   const generateInvoiceNumber = () => {
     const year = new Date().getFullYear();
@@ -244,7 +250,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     setFormData({ ...formData, items: newItems });
   };
 
-  const updateItemRow = (index: number, field: keyof InvoiceItem, value: any) => {
+  const updateItemRow = (index: number, field: keyof InvoiceItem, value: string | number) => {
     const newItems = [...(formData.items || [])];
     newItems[index] = { ...newItems[index], [field]: value };
 
@@ -287,7 +293,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   const activeProducts = products.filter((p) => !p.isDisabled);
 
   // Form Calculation for display
-  const { subtotal, totalTax, total, taxGroups } = calculateTotals(formData.items || []);
+  const { subtotal, total, taxGroups } = calculateTotals(formData.items || []);
 
   // Pagination
   const totalPages = Math.ceil(filteredInvoices.length / rowsPerPage);
@@ -386,7 +392,9 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                   <CustomSelect
                     options={statusOptions}
                     value={formData.status || 'draft'}
-                    onChange={(val) => setFormData({ ...formData, status: val as any })}
+                    onChange={(val) =>
+                      setFormData({ ...formData, status: val as Invoice['status'] })
+                    }
                     searchable={false}
                   />
                 </div>

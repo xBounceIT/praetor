@@ -9,7 +9,7 @@ export interface Option {
 interface CustomSelectProps {
   options: Option[];
   value: string | string[];
-  onChange: (value: any) => void;
+  onChange: (value: string | string[]) => void;
   label?: string;
   placeholder?: string;
   className?: string;

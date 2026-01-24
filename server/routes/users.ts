@@ -10,14 +10,14 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - List users
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       let result;
 
       if (request.user.role === 'admin') {

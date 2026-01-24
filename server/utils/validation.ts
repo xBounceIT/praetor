@@ -3,6 +3,8 @@
  * Returns { ok, value, message } objects for type-safe validation
  */
 
+import { FastifyReply } from 'fastify';
+
 /**
  * Check if value is a non-empty string after trimming
  */
@@ -423,7 +425,7 @@ export function parseQueryBoolean(value: unknown): boolean | null {
 /**
  * Send a 400 Bad Request response with error message
  */
-export function badRequest(reply: any, message: string): any {
+export function badRequest(reply: FastifyReply, message: string): FastifyReply {
   return reply.code(400).send({ error: message });
 }
 

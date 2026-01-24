@@ -144,11 +144,13 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     );
   };
 
+  /* 
   const toggleManagerSelection = (userId: string) => {
     setSelectedManagerIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
   };
+  */
 
   const filteredUsersForAssignment = useMemo(() => {
     if (!assignmentSearch) return users;
@@ -283,7 +285,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <>
                 <h3 className="text-lg font-bold text-slate-800">No work units created yet</h3>
                 <p className="text-slate-500 max-w-sm mt-1">
-                  Use the "New Work Unit" button above to start organizing your teams.
+                  {t('common:messages.useNewWorkUnitButton', {
+                    defaultValue:
+                      'Use the &quot;New Work Unit&quot; button above to start organizing your teams.',
+                  })}
                 </p>
               </>
             ) : (

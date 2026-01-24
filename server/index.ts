@@ -60,7 +60,7 @@ await fastify.register(supplierQuotesRoutes, { prefix: '/api/supplier-quotes' })
 await fastify.register(specialBidsRoutes, { prefix: '/api/special-bids' });
 
 // Health check
-fastify.get('/api/health', async (request, reply) => {
+fastify.get('/api/health', async (_request, _reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
 });
 

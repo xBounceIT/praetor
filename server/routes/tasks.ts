@@ -2,7 +2,6 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
-  optionalNonEmptyString,
   parseDateString,
   optionalLocalizedNonNegativeNumber,
   requireNonEmptyArrayOfStrings,
@@ -11,14 +10,14 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, opts) {
+export default async function (fastify, _opts) {
   // GET / - List all tasks
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
