@@ -96,16 +96,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     setCurrentPage(1);
   }, [searchTerm, filterSupplierId, filterStatus, expirationSort]);
 
-  const hasActiveFilters =
-    searchTerm.trim() !== '' || filterSupplierId !== 'all' || filterStatus !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterSupplierId('all');
-    setFilterStatus('all');
-    setCurrentPage(1);
-  };
-
   const toggleExpirationSort = () => {
     setExpirationSort((prev) => (prev === 'none' ? 'asc' : prev === 'asc' ? 'desc' : 'none'));
   };
@@ -114,10 +104,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     expirationSort === 'none' ? 'asc' : expirationSort === 'asc' ? 'desc' : 'none';
   const expirationSortTitle =
     nextExpirationSort === 'asc'
-      ? 'Order by expiration date (ascending)'
+      ? t('quotes.sortExpirationAsc', { defaultValue: 'Order by expiration date (ascending)' })
       : nextExpirationSort === 'desc'
-        ? 'Order by expiration date (descending)'
-        : 'Clear expiration date ordering';
+        ? t('quotes.sortExpirationDesc', { defaultValue: 'Order by expiration date (descending)' })
+        : t('quotes.clearExpirationSort', { defaultValue: 'Clear expiration date ordering' });
   const expirationSortIndicator =
     expirationSort === 'asc' ? '↑' : expirationSort === 'desc' ? '↓' : '';
 
@@ -175,17 +165,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const newErrors: Record<string, string> = {};
     if (!formData.supplierId) {
-      newErrors.supplierId = t('quotes.supplierRequired', { defaultValue: 'Supplier is required' });
+      newErrors.supplierId = t('quotes.supplierRequired');
     }
     if (!formData.purchaseOrderNumber?.trim()) {
-      newErrors.purchaseOrderNumber = t('quotes.poRequired', {
-        defaultValue: 'PO number is required',
-      });
+      newErrors.purchaseOrderNumber = t('quotes.poRequired');
     }
     if (!formData.items || formData.items.length === 0) {
-      newErrors.items = t('quotes.itemsRequired', {
-        defaultValue: 'At least one product is required',
-      });
+      newErrors.items = t('quotes.itemsRequired');
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -364,7 +350,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               <div className="space-y-4">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('quotes.supplierInformation', { defaultValue: 'Supplier Information' })}
+                  {t('quotes.supplierInformation')}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -374,8 +360,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <CustomSelect
                       options={activeSuppliers.map((s) => ({ id: s.id, name: s.name }))}
                       value={formData.supplierId || ''}
-                      onChange={handleSupplierChange}
-                      placeholder="Select a supplier..."
+                      onChange={(val) => handleSupplierChange(val as string)}
+                      placeholder={t('quotes.selectSupplier', {
+                        defaultValue: 'Select a supplier...',
+                      })}
                       searchable={true}
                       className={errors.supplierId ? 'border-red-300' : ''}
                     />
@@ -395,7 +383,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         if (errors.purchaseOrderNumber)
                           setErrors({ ...errors, purchaseOrderNumber: '' });
                       }}
-                      placeholder="PO-2026-001"
+                      placeholder={t('quotes.poPlaceholder', { defaultValue: 'PO-2026-001' })}
                       className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.purchaseOrderNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
                     />
                     {errors.purchaseOrderNumber && (
@@ -429,13 +417,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <div className="flex gap-2 px-3 mb-1 items-center">
                     <div className="flex-1 grid grid-cols-12 gap-2">
                       <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                        {t('crm.productName', { defaultValue: 'Product / Service' })}
+                        {t('quotes.productName', { defaultValue: 'Product / Service' })}
                       </div>
                       <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('finances.quantity', { defaultValue: 'Qty' })}
+                        {t('quotes.quantity', { defaultValue: 'Qty' })}
                       </div>
                       <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('finances.unit', { defaultValue: 'Unit' })} ({currency})
+                        {t('quotes.unit', { defaultValue: 'Unit' })} ({currency})
                       </div>
                       <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                         {t('quotes.discount')}
@@ -463,7 +451,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               onChange={(val) =>
                                 updateProductRow(index, 'productId', val as string)
                               }
-                              placeholder="Select product..."
+                              placeholder={t('quotes.selectProduct', {
+                                defaultValue: 'Select product...',
+                              })}
                               searchable={true}
                               buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                             />
@@ -473,7 +463,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               step="0.01"
                               min="0"
                               required
-                              placeholder="Qty"
+                              placeholder={t('quotes.qtyPlaceholder', { defaultValue: 'Qty' })}
                               value={item.quantity}
                               onValueChange={(value) => {
                                 const parsed = parseFloat(value);
@@ -491,7 +481,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               step="0.01"
                               min="0"
                               required
-                              placeholder="Unit"
+                              placeholder={t('quotes.unitPlaceholder', { defaultValue: 'Unit' })}
                               value={item.unitPrice}
                               onValueChange={(value) => {
                                 const parsed = parseFloat(value);
@@ -509,7 +499,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               step="0.01"
                               min="0"
                               max="100"
-                              placeholder="%"
+                              placeholder={t('quotes.percentPlaceholder', { defaultValue: '%' })}
                               value={item.discount}
                               onValueChange={(value) => {
                                 const parsed = parseFloat(value);
@@ -525,7 +515,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           <div className="col-span-12 md:col-span-2">
                             <input
                               type="text"
-                              placeholder="Note"
+                              placeholder={t('quotes.notePlaceholder', { defaultValue: 'Note' })}
                               value={item.note || ''}
                               onChange={(e) => updateProductRow(index, 'note', e.target.value)}
                               className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -544,9 +534,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </div>
                 ) : (
                   <div className="text-center py-8 text-slate-400 text-sm">
-                    {t('quotes.noItemsAdded', {
-                      defaultValue: 'No products added. Click "Add Product" to start.',
-                    })}
+                    {t('quotes.noItemsAdded')}
                   </div>
                 )}
               </div>
@@ -625,7 +613,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       rows={3}
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="Additional notes or terms..."
+                      placeholder={t('quotes.notesPlaceholder', {
+                        defaultValue: 'Additional notes or terms...',
+                      })}
                       className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                     />
                   </div>
@@ -644,7 +634,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         <div className="flex flex-col justify-center space-y-3 h-full">
                           <div className="flex justify-between items-center px-2">
                             <span className="text-sm font-bold text-slate-500">
-                              {t('finances.subtotal', { defaultValue: 'Subtotal' })}:
+                              {t('quotes.subtotal', { defaultValue: 'Subtotal' })}:
                             </span>
                             <span className="text-sm font-black text-slate-800">
                               {subtotal.toFixed(2)} {currency}
@@ -663,7 +653,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           {Object.entries(taxGroups).map(([rate, amount]) => (
                             <div key={rate} className="flex justify-between items-center px-2">
                               <span className="text-sm font-bold text-slate-500">
-                                {t('finances.tax', { defaultValue: 'Tax' })} ({rate}%):
+                                {t('quotes.tax', { defaultValue: 'Tax' })} ({rate}%):
                               </span>
                               <span className="text-sm font-black text-slate-800">
                                 {amount.toFixed(2)} {currency}
@@ -673,7 +663,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         </div>
                         <div className="flex flex-col items-center justify-center py-4 bg-slate-50/50 rounded-2xl border border-slate-100/50">
                           <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                            {t('finances.total', { defaultValue: 'Total' })}:
+                            {t('quotes.total', { defaultValue: 'Total' })}:
                           </span>
                           <span className="text-4xl font-black text-praetor leading-none">
                             {total.toFixed(2)}
@@ -684,7 +674,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         </div>
                         <div className="bg-slate-50/40 rounded-2xl p-6 flex flex-col items-center justify-center border border-slate-100/50">
                           <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                            Purchase Order
+                            {t('quotes.purchaseOrder', { defaultValue: 'Purchase Order' })}
                           </span>
                           <div className="text-center">
                             <div className="text-2xl font-black text-slate-700 leading-none mb-1">
@@ -733,7 +723,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-800">
-                  {t('quotes.deleteConfirmTitle', { defaultValue: 'Delete Supplier Quote?' })}
+                  {t('quotes.deleteConfirmTitle')}
                 </h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                   {t('quotes.deleteConfirm', { po: quoteToDelete?.purchaseOrderNumber })}
@@ -764,44 +754,27 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           <h2 className="text-2xl font-black text-slate-800">{t('quotes.title')}</h2>
           <p className="text-slate-500 text-sm">{t('quotes.subtitle')}</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-        >
-          <i className="fa-solid fa-plus"></i> {t('quotes.addQuote')}
-        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="md:col-span-2 flex items-center gap-2">
-          <div className="flex-1 relative group">
-            <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-praetor transition-colors"></i>
-            <input
-              type="text"
-              placeholder={t('common.search')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-praetor focus:border-praetor outline-none transition-all shadow-sm"
-            />
-          </div>
-          {(searchTerm || filterSupplierId || filterStatus) && (
-            <button
-              onClick={handleClearFilters}
-              className="p-3 text-praetor hover:bg-praetor/10 rounded-2xl transition-all"
-              title={t('common.clearFilters')}
-            >
-              <i className="fa-solid fa-filter-circle-xmark"></i>
-            </button>
-          )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="relative group">
+          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-praetor transition-colors"></i>
+          <input
+            type="text"
+            placeholder={t('common.search')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-praetor focus:border-praetor outline-none transition-all shadow-sm"
+          />
         </div>
         <div>
           <CustomSelect
             options={[
-              { id: 'all', name: t('common.allModules', { defaultValue: 'All Suppliers' }) },
+              { id: 'all', name: t('quotes.allSuppliers', { defaultValue: 'All Suppliers' }) },
               ...activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
             ]}
             value={filterSupplierId}
-            onChange={setFilterSupplierId}
+            onChange={(val) => setFilterSupplierId(val as string)}
             placeholder={t('quotes.supplier')}
             searchable={true}
             buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
@@ -810,31 +783,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         <div>
           <CustomSelect
             options={[
-              { id: 'all', name: t('common.allStatuses', { defaultValue: 'All Statuses' }) },
+              { id: 'all', name: t('quotes.allStatuses', { defaultValue: 'All Statuses' }) },
               ...STATUS_OPTIONS,
             ]}
             value={filterStatus}
-            onChange={setFilterStatus}
+            onChange={(val) => setFilterStatus(val as string)}
             placeholder={t('quotes.status')}
             searchable={false}
             buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
           />
         </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            Clear filters
-          </button>
-        </div>
       </div>
 
       <StandardTable
-        title={t('quotes.allQuotes', { defaultValue: 'All Supplier Quotes' })}
+        title={t('quotes.allQuotes')}
         totalCount={filteredQuotes.length}
         totalLabel={t('common.total')}
         headerAction={
@@ -858,7 +820,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   { id: '50', name: '50' },
                 ]}
                 value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val)}
+                onChange={(val) => handleRowsPerPageChange(val as string)}
                 className="w-20"
                 buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
                 searchable={false}
@@ -917,7 +879,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 {t('quotes.status')}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('finances.total', { defaultValue: 'Total' })}
+                {t('quotes.total', { defaultValue: 'Total' })}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <button
@@ -943,12 +905,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               const expired = isExpired(quote.expirationDate);
               const isConfirmDisabled = expired;
               const confirmTitle = expired
-                ? t('quotes.expiredCannotApprove', {
-                    defaultValue: 'Expired quotes cannot be approved',
-                  })
+                ? t('quotes.expiredCannotApprove')
                 : quote.status === 'received'
-                  ? t('quotes.markApproved', { defaultValue: 'Mark as Approved' })
-                  : t('quotes.markReceived', { defaultValue: 'Mark as Received' });
+                  ? t('quotes.markApproved')
+                  : t('quotes.markReceived');
 
               return (
                 <tr
@@ -964,7 +924,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <div>
                         <div className="font-bold text-slate-800">{quote.supplierName}</div>
                         <div className="text-[10px] font-black text-slate-400 uppercase">
-                          {quote.items.length} item{quote.items.length !== 1 ? 's' : ''}
+                          {t('quotes.itemCount', {
+                            count: quote.items.length,
+                            defaultValue: '{{count}} item',
+                          })}
                         </div>
                       </div>
                     </div>
@@ -998,9 +961,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       </span>
                       <span className="text-[10px] font-medium text-slate-400">
                         {expired
-                          ? t('quotes.expiredOn', {
-                              date: new Date(quote.expirationDate).toLocaleDateString(),
-                            })
+                          ? t('quotes.expired', { defaultValue: 'Expired' })
                           : t('quotes.expiresIn', {
                               days: Math.ceil(
                                 (new Date(quote.expirationDate).getTime() - new Date().getTime()) /
