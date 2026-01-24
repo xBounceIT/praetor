@@ -19,7 +19,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
       icon: 'fa-ban',
     },
     inherited: {
-      container: 'bg-amber-50 text-amber-500 border-amber-100',
+      container: 'bg-slate-50 text-slate-500 border-slate-100',
       icon: 'fa-triangle-exclamation',
     },
   };

@@ -766,9 +766,6 @@ const TasksView: React.FC<TasksViewProps> = ({
                             }`}
                           >
                             {project?.name || t('projects.unknown')}
-                            {isProjectDisabled && (
-                              <span className="ml-1 text-[8px]">{t('projects.disabledLabel')}</span>
-                            )}
                           </span>
                         </div>
                         {client && (
@@ -777,8 +774,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                               isClientDisabled ? 'text-amber-500' : 'text-slate-400'
                             }`}
                           >
-                            {t('projects.client')}: {client.name}{' '}
-                            {isClientDisabled && t('projects.disabledLabel')}
+                            {client.name} {isClientDisabled && t('projects.disabledLabel')}
                           </span>
                         )}
                       </div>
@@ -985,14 +981,11 @@ const TasksView: React.FC<TasksViewProps> = ({
                             }`}
                           >
                             {project?.name || t('projects.unknown')}
-                            {isProjectDisabled && (
-                              <span className="ml-1 text-[8px]">{t('projects.disabledLabel')}</span>
-                            )}
                           </span>
                         </div>
                         {client && (
                           <span className={`text-[9px] font-bold ml-4 text-slate-400`}>
-                            {t('projects.client')}: {client.name}
+                            {client.name}
                           </span>
                         )}
                       </div>
