@@ -459,6 +459,9 @@ CREATE TABLE IF NOT EXISTS sale_items (
 
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
 
+-- Ensure note column exists for sale items (mirrors quote_items structure)
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS note TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 
 -- Supplier Quotes table

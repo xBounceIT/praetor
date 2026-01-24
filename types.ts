@@ -180,6 +180,7 @@ export interface SaleItem {
   quantity: number;
   unitPrice: number;
   discount?: number;
+  note?: string;
 }
 
 export interface Sale {

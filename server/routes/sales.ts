@@ -9,6 +9,22 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
+// Project color palette for auto-created projects
+const PROJECT_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#8b5cf6', // violet
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#06b6d4', // cyan
+  '#ec4899', // pink
+  '#84cc16', // lime
+  '#6366f1', // indigo
+  '#f97316', // orange
+];
+
+const getRandomColor = () => PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
+
 export default async function (fastify, _opts) {
   // All sales routes require manager role
   fastify.addHook('onRequest', authenticateToken);
@@ -43,6 +59,7 @@ export default async function (fastify, _opts) {
                 special_bid_id as "specialBidId",
                 quantity,
                 unit_price as "unitPrice",
+                note,
                 discount
             FROM sale_items
             ORDER BY created_at ASC`,
@@ -144,8 +161,8 @@ export default async function (fastify, _opts) {
     for (const item of normalizedItems) {
       const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
       const itemResult = await query(
-        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
                  RETURNING 
                     id,
                     sale_id as "saleId",
@@ -154,7 +171,8 @@ export default async function (fastify, _opts) {
                     special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
-                    discount`,
+                    discount,
+                    note`,
         [
           itemId,
           saleId,
@@ -164,6 +182,7 @@ export default async function (fastify, _opts) {
           item.quantity,
           item.unitPrice,
           item.discount || 0,
+          item.note || null,
         ],
       );
       createdItems.push(itemResult.rows[0]);
@@ -466,7 +485,8 @@ export default async function (fastify, _opts) {
                         special_bid_id as "specialBidId",
                         quantity,
                         unit_price as "unitPrice",
-                        discount
+                        discount,
+                        note
                     FROM sale_items
                     WHERE sale_id = $1`,
           [idResult.value],
@@ -482,8 +502,8 @@ export default async function (fastify, _opts) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
                      RETURNING 
                         id,
                         sale_id as "saleId",
@@ -492,7 +512,8 @@ export default async function (fastify, _opts) {
                         special_bid_id as "specialBidId",
                         quantity,
                         unit_price as "unitPrice",
-                        discount`,
+                        discount,
+                        note`,
           [
             itemId,
             idResult.value,
@@ -502,6 +523,7 @@ export default async function (fastify, _opts) {
             item.quantity,
             item.unitPrice,
             item.discount || 0,
+            item.note || null,
           ],
         );
         updatedItems.push(itemResult.rows[0]);
@@ -517,12 +539,52 @@ export default async function (fastify, _opts) {
                     special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
-                    discount
+                    discount,
+                    note
                 FROM sale_items
                 WHERE sale_id = $1`,
         [idResult.value],
       );
       updatedItems = itemsResult.rows;
+    }
+
+    // Auto-create projects when sale is confirmed for the first time
+    if (status === 'confirmed' && existingSale.status !== 'confirmed') {
+      // Fetch sale items with notes for project creation
+      const saleItemsResult = await query(
+        `SELECT product_id, product_name, note FROM sale_items WHERE sale_id = $1`,
+        [idResult.value],
+      );
+
+      // Get the sale year from created_at
+      const saleYear = new Date(saleResult.rows[0].createdAt).getFullYear();
+
+      // Create a project for each sale item
+      for (const saleItem of saleItemsResult.rows) {
+        const projectName = `${saleResult.rows[0].clientName}_${saleItem.product_name}_${saleYear}`;
+
+        // Check if project with this exact name already exists for this client
+        const existingProject = await query(
+          `SELECT id FROM projects WHERE name = $1 AND client_id = $2`,
+          [projectName, saleResult.rows[0].clientId],
+        );
+
+        if (existingProject.rows.length === 0) {
+          const projectId = 'p-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+          await query(
+            `INSERT INTO projects (id, name, client_id, color, description, is_disabled) 
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              projectId,
+              projectName,
+              saleResult.rows[0].clientId,
+              getRandomColor(),
+              saleItem.note || null,
+              false,
+            ],
+          );
+        }
+      }
     }
 
     return {
