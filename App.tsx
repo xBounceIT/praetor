@@ -1411,8 +1411,9 @@ const App: React.FC = () => {
       const saleData: Partial<Sale> = {
         clientId: quote.clientId,
         clientName: quote.clientName,
-        status: 'pending',
+        status: 'draft',
         linkedQuoteId: quote.id,
+        paymentTerms: quote.paymentTerms,
         items: quote.items.map((item) => ({
           productId: item.productId,
           productName: item.productName,
@@ -1420,6 +1421,7 @@ const App: React.FC = () => {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           discount: item.discount,
+          note: item.note,
           id: 'temp-' + Math.random().toString(36).substr(2, 9),
           saleId: '',
         })),
