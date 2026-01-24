@@ -250,6 +250,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   const renderBidRow = (bid: SpecialBid) => {
     const expired = isExpired(bid.endDate);
     const notStarted = isNotStarted(bid.startDate);
+    const isActive = !expired && !notStarted;
+
     return (
       <tr
         key={bid.id}
@@ -268,12 +270,19 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
           </div>
         </td>
         <td className="px-8 py-5 text-sm font-bold text-slate-700">{bid.productName}</td>
+        <td className="px-8 py-5">
+          {expired ? (
+            <span className="text-[10px] font-black text-amber-500 uppercase">{t('specialBids.expired')}</span>
+          ) : notStarted ? (
+            <span className="text-[10px] font-black text-amber-500 uppercase">{t('specialBids.notStarted')}</span>
+          ) : (
+            <span className="text-[10px] font-black text-praetor uppercase">{t('specialBids.active')}</span>
+          )}
+        </td>
         <td className="px-8 py-5 text-sm font-bold text-slate-700">{Number(bid.unitPrice).toFixed(2)} {currency}</td>
         <td className="px-8 py-5">
           <div className={`text-sm ${expired ? 'text-red-600 font-bold' : notStarted ? 'text-amber-600 font-bold' : 'text-slate-600'}`}>
             {new Date(bid.startDate).toLocaleDateString()} - {new Date(bid.endDate).toLocaleDateString()}
-            {expired && <span className="ml-2 text-[10px] font-black">({t('specialBids.expired')})</span>}
-            {notStarted && !expired && <span className="ml-2 text-[10px] font-black">({t('specialBids.notStarted')})</span>}
           </div>
         </td>
         <td className="px-8 py-5">
@@ -597,6 +606,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <tr>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('specialBids.client')}</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('specialBids.product')}</th>
+              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('common:labels.status')}</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('specialBids.unitPrice')}</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('specialBids.validityPeriod')}</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('common:labels.actions')}</th>
@@ -606,7 +616,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             {paginatedActiveBids.map(renderBidRow)}
             {filteredActiveBids.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-12 text-center">
+                <td colSpan={6} className="p-12 text-center">
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                     <i className="fa-solid fa-tags text-2xl"></i>
                   </div>

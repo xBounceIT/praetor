@@ -1,6 +1,10 @@
 ## 24/01/2026
-- Fixed managers being able to read, update and delete entries from users they don't manage.
-- Updated quote and sale status to: draft, sent, accepted, rejected
-- Added auto localization option based on browser language
-- Refactored SpecialBidsView to replace the expired bid row rendering with a table format for improved clarity and organization.
-- Adjusted localization for the total label in the SpecialBidsView component.
+- Risolto il problema che consentiva ai manager di leggere, aggiornare ed eliminare le voci dei fogli presenze degli utenti che non gestivano.
+- Aggiornato lo stato dei preventivi e delle vendite a: bozza, inviato, accettato, rifiutato
+- Aggiunta l'opzione di localizzazione automatica in base alla lingua del browser
+- Rifattorizzato SpecialBidsView per sostituire la visualizzazione delle righe delle offerte scadute con un formato tabellare per una maggiore chiarezza e organizzazione.
+- Adeguata la localizzazione dell'etichetta totale nel componente SpecialBidsView.
+- Aggiunto un nuovo modulo Catalogo e spostate lì le pagine Prodotti e Offerte speciali.
+- Rimossi i termini di pagamento dalla creazione del cliente.
+- Impostato l'euro come valuta predefinita.
+- Rimossa la possibilità di cancellare o modificare Special Bid scaduti
