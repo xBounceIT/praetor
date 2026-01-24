@@ -558,6 +558,7 @@ const App: React.FC = () => {
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
 
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
+  const [managedUserIds, setManagedUserIds] = useState<string[]>([]);
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
   const [viewingUserAssignments, setViewingUserAssignments] = useState<{
@@ -894,16 +895,19 @@ const App: React.FC = () => {
           }
           case 'projects': {
             if (currentUser.role !== 'manager') return;
-            const [projectsData, tasksData, clientsData, usersData] = await Promise.all([
-              api.projects.list(),
-              api.tasks.list(),
-              api.clients.list(),
-              api.users.list(),
-            ]);
+            const [projectsData, tasksData, clientsData, usersData, workUnitsData] =
+              await Promise.all([
+                api.projects.list(),
+                api.tasks.list(),
+                api.clients.list(),
+                api.users.list(),
+                api.workUnits.list(),
+              ]);
             setProjects(projectsData);
             setProjectTasks(tasksData);
             setClients(clientsData);
             setUsers(usersData);
+            setWorkUnits(workUnitsData);
             break;
           }
           case 'suppliers': {
@@ -972,14 +976,55 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
+  // Calculate managed user IDs
+  useEffect(() => {
+    const loadManagedUsers = async () => {
+      // Ensure async execution to avoid synchronous setState warning
+      await Promise.resolve();
+
+      // Check conditions inside the async function to avoid synchronous setState warning
+      if (!currentUser || currentUser.role !== 'manager') {
+        setManagedUserIds((prev) => (prev.length > 0 ? [] : prev));
+        return;
+      }
+
+      // Find work units where current user is a manager
+      const managedUnits = workUnits.filter((unit) =>
+        unit.managers.some((m) => m.id === currentUser.id),
+      );
+
+      if (managedUnits.length === 0) {
+        setManagedUserIds((prev) => (prev.length > 0 ? [] : prev));
+        return;
+      }
+
+      try {
+        // Fetch users for each managed unit
+        const userIdsLists = await Promise.all(
+          managedUnits.map((unit) => api.workUnits.getUsers(unit.id)),
+        );
+
+        // Flatten and unique
+        const allUserIds = Array.from(new Set(userIdsLists.flat()));
+        setManagedUserIds(allUserIds);
+      } catch (err) {
+        console.error('Failed to load managed users:', err);
+      }
+    };
+
+    loadManagedUsers();
+  }, [currentUser, workUnits]);
+
   // Determine available users for the dropdown based on role
   const availableUsers = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return users;
     if (currentUser.role === 'manager')
-      return users.filter((u) => u.role === 'user' || u.id === currentUser.id);
+      return users.filter(
+        (u) => u.role === 'user' || u.id === currentUser.id || managedUserIds.includes(u.id),
+      );
     return [currentUser];
-  }, [users, currentUser]);
+  }, [users, currentUser, managedUserIds]);
 
   const generateRecurringEntries = useCallback(async () => {
     const today = new Date();

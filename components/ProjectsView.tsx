@@ -808,6 +808,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              onUpdateProject(project.id, { isDisabled: false });
+                            }}
+                            className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                          >
+                            <i className="fa-solid fa-rotate-left"></i>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               promptDelete(project);
                             }}
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
