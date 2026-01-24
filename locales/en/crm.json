@@ -126,9 +126,19 @@
       "consulting": "Consulting",
       "maintenance": "Maintenance",
       "supplies": "Supplies",
+      "license": "License",
+      "specialistic": "Specialistic",
+      "technical": "Technical",
+      "governance": "Governance",
+      "reports": "Reports",
+      "monitoring": "Monitoring",
       "other": "Other"
     },
-    "selectOption": "Select an option..."
+    "selectOption": "Select an option...",
+    "typeSupply": "Supply",
+    "typeConsulting": "Consulting",
+    "description": "Description",
+    "subcategory": "Subcategory"
   },
   "specialBids": {
     "title": "Special Bids",

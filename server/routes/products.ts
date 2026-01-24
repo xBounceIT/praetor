@@ -10,7 +10,7 @@ export default async function (fastify, opts) {
     // GET / - List all products
     fastify.get('/', async (request, reply) => {
         const result = await query(
-            `SELECT p.id, p.name, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
+            `SELECT p.id, p.name, p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
              FROM products p 
              LEFT JOIN suppliers s ON p.supplier_id = s.id 
              ORDER BY p.name ASC`
@@ -20,10 +20,16 @@ export default async function (fastify, opts) {
 
     // POST / - Create product
     fastify.post('/', async (request, reply) => {
-        const { name, costo, molPercentage, costUnit, category, taxRate, type, supplierId } = request.body;
+        const { name, description, costo, molPercentage, costUnit, category, subcategory, taxRate, type, supplierId } = request.body;
 
         const nameResult = requireNonEmptyString(name, 'name');
         if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+        // check name uniqueness
+        const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1)', [nameResult.value]);
+        if (existingName.rows.length > 0) {
+            return badRequest(reply, 'Product name must be unique');
+        }
 
         if (costo === undefined || costo === null || costo === '') {
             return badRequest(reply, 'costo is required');
@@ -58,17 +64,18 @@ export default async function (fastify, opts) {
         if (type === undefined || type === null || type === '') {
             return badRequest(reply, 'type is required');
         }
-        const typeResult = validateEnum(type, ['item', 'service'], 'type');
+        // Updated types: supply, service, consulting. (item is legacy, strictly we expect new types)
+        const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
         if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
         const id = 'p-' + Date.now();
         const result = await query(
-            `INSERT INTO products (id, name, costo, mol_percentage, cost_unit, category, tax_rate, type, supplier_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-             RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
-            [id, nameResult.value, costoResult.value, molPercentageResult.value, costUnitResult.value, category, taxRateResult.value, typeResult.value, supplierId || null]
+            `INSERT INTO products (id, name, description, costo, mol_percentage, cost_unit, category, subcategory, tax_rate, type, supplier_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+             RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
+            [id, nameResult.value, description || null, costoResult.value, molPercentageResult.value, costUnitResult.value, category, subcategory, taxRateResult.value, typeResult.value, supplierId || null]
         );
-        
+
         // If supplier was assigned, fetch supplier name
         if (supplierId) {
             const supplierResult = await query('SELECT name FROM suppliers WHERE id = $1', [supplierId]);
@@ -76,20 +83,28 @@ export default async function (fastify, opts) {
                 result.rows[0].supplierName = supplierResult.rows[0].name;
             }
         }
-        
+
         return reply.code(201).send(result.rows[0]);
     });
 
     // PUT /:id - Update product
     fastify.put('/:id', async (request, reply) => {
         const { id } = request.params;
-        const { name, costo, molPercentage, costUnit, category, taxRate, type, isDisabled, supplierId } = request.body;
+        const { name, description, costo, molPercentage, costUnit, category, subcategory, taxRate, type, isDisabled, supplierId } = request.body;
         const idResult = requireNonEmptyString(id, 'id');
         if (!idResult.ok) return badRequest(reply, idResult.message);
 
         if (name !== undefined) {
             const nameResult = optionalNonEmptyString(name, 'name');
             if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+            // check name uniqueness (exclude current product)
+            if (nameResult.value) {
+                const existingName = await query('SELECT id FROM products WHERE LOWER(name) = LOWER($1) AND id != $2', [nameResult.value, idResult.value]);
+                if (existingName.rows.length > 0) {
+                    return badRequest(reply, 'Product name must be unique');
+                }
+            }
         }
 
         let costoValue = costo;
@@ -122,7 +137,7 @@ export default async function (fastify, opts) {
         const costUnitResult = optionalEnum(costUnit, ['unit', 'hours'], 'costUnit');
         if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
 
-        const typeResult = optionalEnum(type, ['item', 'service'], 'type');
+        const typeResult = optionalEnum(type, ['supply', 'service', 'consulting'], 'type');
         if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
         const isDisabledValue = isDisabled !== undefined ? parseBoolean(isDisabled) : undefined;
@@ -130,17 +145,19 @@ export default async function (fastify, opts) {
         const result = await query(
             `UPDATE products 
              SET name = COALESCE($1, name), 
-                 costo = COALESCE($2, costo), 
-                 mol_percentage = COALESCE($3, mol_percentage), 
-                 cost_unit = COALESCE($4, cost_unit), 
-                 category = COALESCE($5, category), 
-                 tax_rate = COALESCE($6, tax_rate),
-                 type = COALESCE($7, type),
-                 is_disabled = COALESCE($8, is_disabled),
-                 supplier_id = COALESCE($9, supplier_id)
-             WHERE id = $10 
-             RETURNING id, name, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"`,
-            [name, costoValue, molPercentageValue, costUnitResult.value, category, taxRateValue, typeResult.value, isDisabledValue, supplierId !== undefined ? supplierId : null, idResult.value]
+                 description = COALESCE($2, description),
+                 costo = COALESCE($3, costo), 
+                 mol_percentage = COALESCE($4, mol_percentage), 
+                 cost_unit = COALESCE($5, cost_unit), 
+                 category = COALESCE($6, category), 
+                 subcategory = COALESCE($7, subcategory),
+                 tax_rate = COALESCE($8, tax_rate),
+                 type = COALESCE($9, type),
+                 is_disabled = COALESCE($10, is_disabled),
+                 supplier_id = COALESCE($11, supplier_id)
+             WHERE id = $12 
+             RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"`,
+            [name, description, costoValue, molPercentageValue, costUnitResult.value, category, subcategory, taxRateValue, typeResult.value, isDisabledValue, supplierId !== undefined ? supplierId : null, idResult.value]
         );
 
         if (result.rows.length === 0) {

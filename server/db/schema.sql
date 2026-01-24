@@ -284,12 +284,18 @@ CREATE TABLE IF NOT EXISTS products (
     category VARCHAR(100),
     tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     type VARCHAR(20) NOT NULL DEFAULT 'item',
+    description TEXT,
+    subcategory VARCHAR(100),
     is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Ensure type column exists for existing installations
 ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'item';
+-- Update default to supply for new products if we changed the code, but schema standard stays generic string often. 
+-- But let's reflect the description/subcategory existence:
+ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
 
 -- Ensure supplier_id column exists for existing installations
 ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id VARCHAR(50) REFERENCES suppliers(id) ON DELETE SET NULL;
@@ -332,6 +338,7 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name_unique ON products(name);
 
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (

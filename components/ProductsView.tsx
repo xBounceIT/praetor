@@ -8,8 +8,8 @@ import ValidatedNumberInput, { parseNumberInputValue } from './ValidatedNumberIn
 interface ProductsViewProps {
     products: Product[];
     suppliers: Supplier[];
-    onAddProduct: (productData: Partial<Product>) => void;
-    onUpdateProduct: (id: string, updates: Partial<Product>) => void;
+    onAddProduct: (productData: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
+    onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
     onDeleteProduct: (id: string) => void;
     currency: string;
 }
@@ -21,6 +21,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [productToDelete, setProductToDelete] = useState<Product | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [serverError, setServerError] = useState<string | null>(null);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -62,30 +63,40 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
 
     // Category Management State
     const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+    const [isAddSubcategoryModalOpen, setIsAddSubcategoryModalOpen] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
-    const defaultCategories = [
-        t('crm:products.defaultCategories.electronics'),
-        t('crm:products.defaultCategories.software'),
-        t('crm:products.defaultCategories.services'),
-        t('crm:products.defaultCategories.hardware'),
-        t('crm:products.defaultCategories.accessories'),
-        t('crm:products.defaultCategories.subscription'),
-        t('crm:products.defaultCategories.consulting'),
-        t('crm:products.defaultCategories.maintenance'),
-        t('crm:products.defaultCategories.supplies'),
-        t('crm:products.defaultCategories.other')
-    ];
-    const [customCategories, setCustomCategories] = useState<string[]>([]);
+    const [newSubcategoryName, setNewSubcategoryName] = useState('');
+
+    // Default categories per type
+    const defaultCategoriesMap: Record<string, string[]> = {
+        supply: [
+            t('crm:products.defaultCategories.hardware'),
+            t('crm:products.defaultCategories.license'),
+            t('crm:products.defaultCategories.subscription')
+        ],
+        consulting: [
+            t('crm:products.defaultCategories.specialistic'),
+            t('crm:products.defaultCategories.technical'),
+            t('crm:products.defaultCategories.governance')
+        ],
+        service: [
+            t('crm:products.defaultCategories.reports'),
+            t('crm:products.defaultCategories.monitoring'),
+            t('crm:products.defaultCategories.maintenance')
+        ]
+    };
 
     // Form State
     const [formData, setFormData] = useState<Partial<Product>>({
         name: '',
+        description: '',
         costo: undefined,
         molPercentage: undefined,
         costUnit: 'unit',
         category: '',
+        subcategory: '',
         taxRate: 22,
-        type: 'item',
+        type: 'supply',
         supplierId: ''
     });
 
@@ -113,15 +124,18 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         setEditingProduct(null);
         setFormData({
             name: '',
+            description: '',
             costo: undefined,
             molPercentage: undefined,
             costUnit: 'unit',
             category: '',
+            subcategory: '',
             taxRate: 22,
-            type: 'item',
+            type: 'supply',
             supplierId: ''
         });
         setErrors({});
+        setServerError(null);
         setIsModalOpen(true);
     };
 
@@ -129,24 +143,33 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         setEditingProduct(product);
         setFormData({
             name: product.name || '',
+            description: product.description || '',
             costo: product.costo || 0,
             molPercentage: product.molPercentage || 0,
             costUnit: product.costUnit || 'unit',
             category: product.category || '',
+            subcategory: product.subcategory || '',
             taxRate: product.taxRate || 0,
-            type: product.type || 'item',
+            type: product.type || 'supply',
             supplierId: product.supplierId || ''
         });
         setErrors({});
+        setServerError(null);
         setIsModalOpen(true);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrors({});
+        setServerError(null);
 
         const newErrors: Record<string, string> = {};
         if (!formData.name?.trim()) newErrors.name = t('common:validation.productNameRequired');
+
+        // Frontend uniqueness check (optional, but good UX)
+        // const isDuplicate = products.some(p => p.name.toLowerCase() === formData.name?.trim().toLowerCase() && p.id !== editingProduct?.id);
+        // if (isDuplicate) newErrors.name = t('common:validation.productNameUnique');
+
         if (formData.costo === undefined || formData.costo === null || Number.isNaN(formData.costo)) {
             newErrors.costo = t('common:validation.costRequired');
         }
@@ -177,7 +200,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             }
         }
         const typeValue = formData.type;
-        if (!typeValue || !['item', 'service'].includes(typeValue)) {
+        if (!typeValue || !['supply', 'service', 'consulting', 'item'].includes(typeValue)) {
             newErrors.type = t('common:validation.typeRequired');
         }
         const costUnitValue = formData.costUnit;
@@ -190,23 +213,37 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
             return;
         }
 
-        if (editingProduct) {
-            onUpdateProduct(editingProduct.id, formData);
-        } else {
-            onAddProduct(formData);
+        try {
+            if (editingProduct) {
+                await onUpdateProduct(editingProduct.id, formData);
+            } else {
+                await onAddProduct(formData);
+            }
+            setIsModalOpen(false);
+        } catch (err: any) {
+            if (err.message && err.message.includes('unique')) {
+                setErrors({ ...newErrors, name: t('common:validation.productNameUnique') });
+            } else {
+                setServerError(err.message || 'An error occurred');
+            }
         }
-        setIsModalOpen(false);
     };
 
     const handleAddCategory = () => {
         if (newCategoryName.trim()) {
             const name = newCategoryName.trim();
-            if (!customCategories.includes(name)) {
-                setCustomCategories([...customCategories, name]);
-            }
-            setFormData({ ...formData, category: name });
+            setFormData({ ...formData, category: name, subcategory: '' });
             setNewCategoryName('');
             setIsAddCategoryModalOpen(false);
+        }
+    };
+
+    const handleAddSubcategory = () => {
+        if (newSubcategoryName.trim()) {
+            const name = newSubcategoryName.trim();
+            setFormData({ ...formData, subcategory: name });
+            setNewSubcategoryName('');
+            setIsAddSubcategoryModalOpen(false);
         }
     };
 
@@ -273,11 +310,37 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
     const disabledProductsPage = filteredDisabledProductsTotal.slice(disabledStartIndex, disabledStartIndex + disabledRowsPerPage);
 
-    // Get unique categories from existing products + custom ones
-    const existingCategories = Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)));
-    const allCategories = Array.from(new Set([...defaultCategories, ...existingCategories, ...customCategories])).sort();
+    // Get unique categories from existing products + defaults
+    const availableCategories = React.useMemo(() => {
+        const type = formData.type || 'supply';
+        // If type is item, treat as supply for categories
+        const normalizedType = type === 'item' ? 'supply' : type;
+        const defaults = defaultCategoriesMap[normalizedType] || [];
 
-    const categoryOptions: Option[] = allCategories.map(c => ({ id: c, name: c }));
+        // Also include categories currently used by products of this type
+        const used = products
+            .filter(p => (p.type === 'item' ? 'supply' : p.type) === normalizedType && p.category)
+            .map(p => p.category!);
+
+        return Array.from(new Set([...defaults, ...used])).sort();
+    }, [formData.type, products]);
+
+    const categoryOptions: Option[] = availableCategories.map(c => ({ id: c, name: c }));
+
+    // Get available subcategories based on category
+    const availableSubcategories = React.useMemo(() => {
+        const category = formData.category;
+        if (!category) return [];
+
+        // Include subcategories currently used by products with this category
+        const used = products
+            .filter(p => p.category === category && p.subcategory)
+            .map(p => p.subcategory!);
+
+        return Array.from(new Set(used)).sort();
+    }, [formData.category, products]);
+
+    const subcategoryOptions: Option[] = availableSubcategories.map(s => ({ id: s, name: s }));
 
     const unitOptions: Option[] = [
         { id: 'unit', name: t('crm:products.unit') },
@@ -285,8 +348,9 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     ];
 
     const typeOptions: Option[] = [
-        { id: 'item', name: t('crm:products.typeItem') },
-        { id: 'service', name: t('crm:products.typeService') }
+        { id: 'supply', name: t('crm:products.typeSupply') },
+        { id: 'service', name: t('crm:products.typeService') },
+        { id: 'consulting', name: t('crm:products.typeConsulting') }
     ];
 
     const activeSuppliers = suppliers.filter(s => !s.isDisabled);
@@ -295,8 +359,26 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
         ...activeSuppliers.map(s => ({ id: s.id, name: s.name }))
     ];
 
-    const filterCategoryOptions: Option[] = [{ id: 'all', name: t('crm:products.allCategories') }, ...categoryOptions];
-    const filterTypeOptions: Option[] = [{ id: 'all', name: t('common:filters.allTypes') }, ...typeOptions];
+    // Filter options
+    const allCategories = Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c))).sort();
+    const filterCategoryOptions: Option[] = [{ id: 'all', name: t('crm:products.allCategories') }, ...allCategories.map(c => ({ id: c, name: c }))];
+
+    // Include all actually used types in filter
+    const allUsedTypes = Array.from(new Set(products.map(p => p.type))).sort();
+    const filterTypeOptions: Option[] = [{ id: 'all', name: t('common:filters.allTypes') }];
+    // Add standard types
+    (['supply', 'service', 'consulting'] as const).forEach(t => {
+        if (!filterTypeOptions.find(o => o.id === t)) {
+            filterTypeOptions.push({ id: t, name: t.charAt(0).toUpperCase() + t.slice(1) });
+        }
+    });
+    // Add any legacy types if they exist in data
+    allUsedTypes.forEach((t: string) => {
+        if (!filterTypeOptions.find(o => o.id === t)) {
+            filterTypeOptions.push({ id: t, name: t });
+        }
+    });
+
     const filterSupplierOptions: Option[] = [
         { id: 'all', name: t('common:filters.allSuppliers') },
         { id: 'none', name: t('crm:products.noSupplier') },
@@ -304,12 +386,21 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
     ];
 
     const handleTypeChange = (val: string) => {
-        const type = val as 'item' | 'service';
-        const unit = type === 'item' ? 'unit' : 'hours';
+        const type = val as any;
+        let unit = 'unit';
+        if (type === 'service' || type === 'consulting') {
+            // Default to hours or unit? "Service" logic usually hours, Consulting usually days/hours, Supply units.
+            // Original logic: type === 'item' ? 'unit' : 'hours';
+            // Let's infer: Supply -> unit, Service/Consulting -> hours
+            unit = (type === 'service' || type === 'consulting') ? 'hours' : 'unit';
+        }
+
         setFormData({
             ...formData,
             type,
-            costUnit: unit
+            costUnit: unit as any,
+            category: '', // Reset category as it depends on type
+            subcategory: '' // Reset subcategory as it depends on category
         });
         if (errors.type || errors.costUnit) {
             setErrors({ ...errors, type: '', costUnit: '' });
@@ -383,6 +474,56 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                 </div>
             )}
 
+            {/* Add Subcategory Modal */}
+            {isAddSubcategoryModalOpen && (
+                <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                                    <i className="fa-solid fa-plus"></i>
+                                </div>
+                                Add Subcategory
+                            </h3>
+                            <button
+                                onClick={() => setIsAddSubcategoryModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 ml-1">Subcategory Name</label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={newSubcategoryName}
+                                    onChange={(e) => setNewSubcategoryName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddSubcategory()}
+                                    placeholder="Enter subcategory name"
+                                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex justify-between gap-3">
+                                <button
+                                    onClick={() => setIsAddSubcategoryModalOpen(false)}
+                                    className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                                >
+                                    {t('crm:products.cancel')}
+                                </button>
+                                <button
+                                    onClick={handleAddSubcategory}
+                                    className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Add/Edit Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -403,6 +544,13 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                         </div>
 
                         <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+                            {serverError && (
+                                <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-3">
+                                    <i className="fa-solid fa-triangle-exclamation"></i>
+                                    {serverError}
+                                </div>
+                            )}
+
                             <div className="space-y-4">
                                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
@@ -425,6 +573,31 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                         {errors.name && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>}
                                     </div>
 
+                                    <div className="col-span-full space-y-1.5">
+                                        <label className="text-xs font-bold text-slate-500 ml-1">Description</label>
+                                        <textarea
+                                            value={formData.description || ''}
+                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                            placeholder="Product description"
+                                            rows={2}
+                                            className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center ml-1 min-h-[16px]">
+                                            <label className="text-xs font-bold text-slate-500">{t('crm:products.type')}</label>
+                                        </div>
+                                        <CustomSelect
+                                            options={typeOptions}
+                                            value={formData.type || 'supply'}
+                                            onChange={handleTypeChange}
+                                            searchable={false}
+                                            buttonClassName={errors.type ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200' : 'py-2.5 text-sm'}
+                                        />
+                                        {errors.type && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>}
+                                    </div>
+
                                     <div className="space-y-1.5">
                                         <div className="relative ml-1 min-h-[20px] pr-16">
                                             <label className="text-xs font-bold text-slate-500">{t('crm:products.category')}</label>
@@ -439,9 +612,31 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
                                         <CustomSelect
                                             options={categoryOptions}
                                             value={formData.category || ''}
-                                            onChange={(val) => setFormData({ ...formData, category: val })}
+                                            onChange={(val) => setFormData({ ...formData, category: val, subcategory: '' })}
                                             placeholder={t('crm:products.selectOption')}
                                             searchable={true}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="relative ml-1 min-h-[20px] pr-16">
+                                            <label className="text-xs font-bold text-slate-500">Subcategory</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsAddSubcategoryModalOpen(true)}
+                                                disabled={!formData.category} // Disable if no category selected
+                                                className={`absolute top-0 right-0 text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-slate-300 cursor-not-allowed' : 'text-praetor hover:text-slate-700'}`}
+                                            >
+                                                <i className="fa-solid fa-plus"></i> Add Subcategory
+                                            </button>
+                                        </div>
+                                        <CustomSelect
+                                            options={subcategoryOptions}
+                                            value={formData.subcategory || ''}
+                                            onChange={(val) => setFormData({ ...formData, subcategory: val })}
+                                            placeholder={!formData.category ? "Select category first" : t('crm:products.selectOption')}
+                                            searchable={true}
+                                            disabled={!formData.category}
                                         />
                                     </div>
 
@@ -464,25 +659,11 @@ const ProductsView: React.FC<ProductsViewProps> = ({ products, suppliers, onAddP
 
                                     <div className="space-y-1.5">
                                         <div className="flex items-center ml-1 min-h-[16px]">
-                                            <label className="text-xs font-bold text-slate-500">{t('crm:products.type')}</label>
-                                        </div>
-                                        <CustomSelect
-                                            options={typeOptions}
-                                            value={formData.type || 'item'}
-                                            onChange={handleTypeChange}
-                                            searchable={false}
-                                            buttonClassName={errors.type ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200' : 'py-2.5 text-sm'}
-                                        />
-                                        {errors.type && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>}
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-center ml-1 min-h-[16px]">
                                             <label className="text-xs font-bold text-slate-500 font-black">{t('crm:products.unitOfMeasure')}</label>
                                         </div>
                                         <div className={`w-full text-sm px-4 py-2.5 border rounded-xl font-bold flex items-center gap-2 ${errors.costUnit ? 'border-red-500 bg-red-50 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
-                                            <i className={`fa-solid ${formData.type === 'service' ? 'fa-clock' : 'fa-box-open'}`}></i>
-                                            {formData.type === 'service' ? t('crm:products.hours') : t('crm:products.unit')}
+                                            <i className={`fa-solid ${formData.type === 'supply' || formData.type === 'item' ? 'fa-box-open' : 'fa-clock'}`}></i>
+                                            {formData.costUnit === 'hours' ? t('crm:products.hours') : t('crm:products.unit')}
                                         </div>
                                         {errors.costUnit && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costUnit}</p>}
                                         <p className="text-[10px] text-slate-400 ml-1">{t('crm:products.autoSetBasedOnType')}</p>

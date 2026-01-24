@@ -147,6 +147,14 @@ try {
     } catch (err) {
       console.error('Failed to run sale status migration:', err);
     }
+
+    // Run products structure update migration
+    try {
+      const { migrate: updateProductsStructure } = await import('./db/update_products_structure.ts');
+      await updateProductsStructure();
+    } catch (err) {
+      console.error('Failed to run products structure update migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

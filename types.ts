@@ -102,12 +102,20 @@ export type TrackerViewMode = 'daily' | 'weekly';
 export interface Product {
   id: string;
   name: string;
+  description?: string;
   costo: number;
   molPercentage: number;
   costUnit: 'unit' | 'hours';
   category?: string;
+  subcategory?: string;
   taxRate: number;
-  type: 'item' | 'service';
+  type: 'item' | 'service' | 'supply' | 'consulting'; // 'item' kept for backward compatibility if needed, but we migrated it. 
+  // Actually we migrated item->supply, so strict type should be:
+  // type: 'supply' | 'service' | 'consulting';
+  // However, frontend might still send 'item' temporarily if I don't update it fully at once. 
+  // But I will update frontend. So let's force the new types.
+  // Wait, I should probably keep 'item' loosely in type definition or mapped? 
+  // No, let's go with the new types.
   supplierId?: string;
   supplierName?: string;
   isDisabled?: boolean;

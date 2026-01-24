@@ -120,9 +120,19 @@
       "consulting": "Consulenza",
       "maintenance": "Manutenzione",
       "supplies": "Forniture",
+      "license": "Licenza",
+      "specialistic": "Specialistica",
+      "technical": "Tecnica",
+      "governance": "Governance",
+      "reports": "Reportistica",
+      "monitoring": "Monitoraggio",
       "other": "Altro"
     },
-    "selectOption": "Seleziona un'opzione..."
+    "selectOption": "Seleziona un'opzione...",
+    "typeSupply": "Fornitura",
+    "typeConsulting": "Consulenza",
+    "description": "Descrizione",
+    "subcategory": "Sottocategoria"
   },
   "specialBids": {
     "title": "Offerte Speciali",
