@@ -289,20 +289,20 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             {userRole === 'admin' ? (
               <>
-                <h3 className="text-lg font-bold text-slate-800">No work units created yet</h3>
+                <h3 className="text-lg font-bold text-slate-800">
+                  {t('hr:workUnits.noWorkUnitsCreated')}
+                </h3>
                 <p className="text-slate-500 max-w-sm mt-1">
-                  {t('common:messages.useNewWorkUnitButton', {
-                    defaultValue:
-                      'Use the &quot;New Work Unit&quot; button above to start organizing your teams.',
-                  })}
+                  {t('hr:workUnits.noWorkUnitsCreatedDescription')}
                 </p>
               </>
             ) : (
               <>
-                <h3 className="text-lg font-bold text-slate-800">No work units assigned</h3>
+                <h3 className="text-lg font-bold text-slate-800">
+                  {t('hr:workUnits.noWorkUnitsAssigned')}
+                </h3>
                 <p className="text-slate-500 max-w-md mt-1">
-                  You are not assigned to any work units. Please contact an administrator for
-                  assistance.
+                  {t('hr:workUnits.noWorkUnitsAssignedDescription')}
                 </p>
               </>
             )}
@@ -477,9 +477,11 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden animate-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Manage Members</h3>
+                <h3 className="text-lg font-bold text-slate-800">
+                  {t('hr:workUnits.manageMembers')}
+                </h3>
                 <p className="text-sm text-slate-500 font-medium">
-                  Add or remove users from <span className="text-praetor">{targetUnit.name}</span>
+                  {t('hr:workUnits.addRemoveUsers', { name: targetUnit.name })}
                 </p>
               </div>
               <button
@@ -539,7 +541,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                   ))}
                   {filteredUsersForAssignment.length === 0 && (
                     <p className="col-span-full text-center text-slate-400 py-8">
-                      No users found matching your search.
+                      {t('hr:workUnits.noUsersFound')}
                     </p>
                   )}
                 </div>
@@ -574,11 +576,11 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-800">Delete Work Unit?</h3>
+                <h3 className="text-lg font-black text-slate-800">
+                  {t('hr:workUnits.deleteWorkUnit')}
+                </h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  Are you sure you want to delete{' '}
-                  <span className="font-bold text-slate-800">{targetUnit.name}</span>? This action
-                  cannot be undone. User assignments will be removed.
+                  {t('hr:workUnits.deleteConfirmMessage', { name: targetUnit.name })}
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
@@ -586,13 +588,13 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                   onClick={() => setIsDeleteConfirmOpen(false)}
                   className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
                 >
-                  Cancel
+                  {t('common:buttons.cancel')}
                 </button>
                 <button
                   onClick={handleDelete}
                   className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
                 >
-                  Yes, Delete
+                  {t('hr:workUnits.yesDelete')}
                 </button>
               </div>
             </div>
