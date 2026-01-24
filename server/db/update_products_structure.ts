@@ -14,11 +14,11 @@ export async function migrate() {
         // 3. Handle duplicates before adding unique constraint
         await query(`
             WITH duplicates AS (
-                SELECT id, name, ROW_NUMBER() OVER (PARTITION BY name ORDER BY created_at) as rn
+                SELECT id, ROW_NUMBER() OVER (PARTITION BY name ORDER BY created_at) as rn
                 FROM products
             )
             UPDATE products 
-            SET name = name || ' (Copy ' || (rn - 1) || ')'
+            SET name = products.name || ' (Copy ' || (duplicates.rn - 1) || ')'
             FROM duplicates 
             WHERE products.id = duplicates.id AND duplicates.rn > 1;
         `);
