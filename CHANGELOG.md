@@ -8,3 +8,4 @@
 - Rimossi i termini di pagamento dalla creazione del cliente.
 - Impostato l'euro come valuta predefinita.
 - Rimossa la possibilità di cancellare o modificare Special Bid scaduti
+- Aggiunta valuta alle colonne costo, prezzo di vendita e margine nella pagina dei prodotti
