@@ -9,7 +9,7 @@
 - Impostato l'euro come valuta predefinita.
 - Rimossa la possibilità di cancellare o modificare Special Bid scaduti
 - Aggiunta valuta alle colonne costo, prezzo di vendita e margine nella pagina dei prodotti
-- - Aggiunti campi opzionali per la descrizione e la sottocategoria al tipo di prodotto per migliorare i dettagli del prodotto.
+- Aggiunti campi opzionali per la descrizione e la sottocategoria al tipo di prodotto per migliorare i dettagli del prodotto.
 - Aggiornato il componente ProductsView per gestire i nuovi campi e modificata la gestione dei tipi per includere “fornitura” e “consulenza”.
 - Implementata la gestione degli errori per le operazioni asincrone sui prodotti e aggiunta la gestione dello stato degli errori del server.
 - Introdotto un modale per l'aggiunta di sottocategorie, migliorando la gestione delle categorie.

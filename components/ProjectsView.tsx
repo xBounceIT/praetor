@@ -413,7 +413,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-black text-slate-800">{t('projects:projects.title')}</h2>
-          <p className="text-slate-500 text-sm">{t('projects:projects.manageProjects')}</p>
+          <p className="text-slate-500 text-sm">{t('projects:projects.subtitle')}</p>
         </div>
       </div>
 
@@ -453,7 +453,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       </div>
 
       <StandardTable
-        title={`${t('projects:projects.projectsDirectory')} (${filteredActiveProjectsTotal.length})`}
+        title={t('projects:projects.projectsDirectory')}
         totalCount={filteredActiveProjectsTotal.length}
         headerAction={
           isManagement ? (
@@ -611,7 +611,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       {isManagement && (
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -794,7 +794,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       {isManagement && (
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
