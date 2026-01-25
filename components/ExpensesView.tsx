@@ -354,7 +354,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <i className="fa-solid fa-rotate-left"></i>
-            {t('common.labels.clearFilters')}
+            {t('common:labels.clearFilters')}
           </button>
         </div>
       </div>
@@ -376,7 +376,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           <>
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold text-slate-500">
-                {t('common.labels.rowsPerPage')}:
+                {t('common:labels.rowsPerPage')}:
               </span>
               <CustomSelect
                 options={[
@@ -434,7 +434,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 {t('expenses.amount')}
               </th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                {t('common.more')}
+                {t('common:labels.actions')}
               </th>
             </tr>
           </thead>
@@ -485,7 +485,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             {paginatedExpenses.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-12 text-center text-slate-400 text-sm font-bold">
-                  {t('expenses.noExpenses')}
+                  {t('common:emptyStates.noData')}
                 </td>
               </tr>
             )}
