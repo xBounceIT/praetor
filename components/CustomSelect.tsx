@@ -86,37 +86,34 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
   useLayoutEffect(() => {
     if (!isOpen) return;
-    let rafId = 0;
 
     const updatePosition = () => {
-      rafId = requestAnimationFrame(() => {
-        const buttonRect = buttonRef.current?.getBoundingClientRect();
-        const dropdownRect = dropdownRef.current?.getBoundingClientRect();
-        if (!buttonRect) return;
+      const buttonRect = buttonRef.current?.getBoundingClientRect();
+      const dropdownRect = dropdownRef.current?.getBoundingClientRect();
+      if (!buttonRect) return;
 
-        const dropdownHeight = dropdownRect?.height ?? 0;
-        const spaceBelow = window.innerHeight - buttonRect.bottom;
-        const shouldOpenUp =
-          dropdownPosition === 'top' ||
-          (dropdownPosition === 'bottom' &&
-            dropdownHeight > 0 &&
-            spaceBelow < dropdownHeight &&
-            buttonRect.top > dropdownHeight);
+      const dropdownHeight = dropdownRect?.height ?? 0;
+      const spaceBelow = window.innerHeight - buttonRect.bottom;
+      const shouldOpenUp =
+        dropdownPosition === 'top' ||
+        (dropdownPosition === 'bottom' &&
+          dropdownHeight > 0 &&
+          spaceBelow < dropdownHeight &&
+          buttonRect.top > dropdownHeight);
 
-        const top = shouldOpenUp
-          ? Math.max(8, buttonRect.top - dropdownHeight - 4)
-          : buttonRect.bottom + 4;
+      const top = shouldOpenUp
+        ? Math.max(8, buttonRect.top - dropdownHeight - 4)
+        : buttonRect.bottom + 4;
 
-        const minWidth = buttonRect.width;
-        const left = Math.min(Math.max(8, buttonRect.left), window.innerWidth - minWidth - 8);
+      const minWidth = buttonRect.width;
+      const left = Math.min(Math.max(8, buttonRect.left), window.innerWidth - minWidth - 8);
 
-        setDropdownStyles({
-          position: 'fixed',
-          top,
-          left,
-          minWidth,
-          zIndex: 1000,
-        });
+      setDropdownStyles({
+        position: 'fixed',
+        top,
+        left,
+        minWidth,
+        zIndex: 1000,
       });
     };
 
@@ -127,7 +124,6 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     return () => {
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
-      cancelAnimationFrame(rafId);
     };
   }, [isOpen, dropdownPosition]);
 
