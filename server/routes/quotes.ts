@@ -95,25 +95,25 @@ export default async function (fastify, _opts) {
   fastify.get('/', async (_request, _reply) => {
     // Get all quotes
     const quotesResult = await query(
-      `SELECT 
-                id, 
-                client_id as "clientId", 
-                client_name as "clientName", 
-                payment_terms as "paymentTerms", 
-                discount, 
-                status, 
-                expiration_date as "expirationDate", 
+      `SELECT
+                id,
+                client_id as "clientId",
+                client_name as "clientName",
+                payment_terms as "paymentTerms",
+                discount,
+                status,
+                expiration_date as "expirationDate",
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM quotes 
+            FROM quotes
             ORDER BY created_at DESC`,
       [],
     );
 
     // Get all quote items
     const itemsResult = await query(
-      `SELECT 
+      `SELECT
                 id,
                 quote_id as "quoteId",
                 product_id as "productId",
@@ -216,16 +216,16 @@ export default async function (fastify, _opts) {
 
       // Insert quote
       const quoteResult = await query(
-        `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-                 RETURNING 
-                    id, 
-                    client_id as "clientId", 
-                    client_name as "clientName", 
-                    payment_terms as "paymentTerms", 
-                    discount, 
-                    status, 
-                    expiration_date as "expirationDate", 
+        `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 RETURNING
+                    id,
+                    client_id as "clientId",
+                    client_name as "clientName",
+                    payment_terms as "paymentTerms",
+                    discount,
+                    status,
+                    expiration_date as "expirationDate",
                     notes,
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                     EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -246,9 +246,9 @@ export default async function (fastify, _opts) {
       for (const item of normalizedItems) {
         const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                     RETURNING 
+          `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     RETURNING
                         id,
                         quote_id as "quoteId",
                         product_id as "productId",
@@ -288,8 +288,17 @@ export default async function (fastify, _opts) {
   // PUT /:id - Update quote
   fastify.put('/:id', async (request, reply) => {
     const { id } = request.params;
-    const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } =
-      request.body;
+    const {
+      clientId,
+      clientName,
+      items,
+      paymentTerms,
+      discount,
+      status,
+      expirationDate,
+      notes,
+      isExpired: isExpiredOverride,
+    } = request.body;
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -427,7 +436,7 @@ export default async function (fastify, _opts) {
 
     // Update quote
     const quoteResult = await query(
-      `UPDATE quotes 
+      `UPDATE quotes
              SET client_id = COALESCE($1, client_id),
                  client_name = COALESCE($2, client_name),
                  payment_terms = COALESCE($3, payment_terms),
@@ -436,15 +445,15 @@ export default async function (fastify, _opts) {
                  expiration_date = COALESCE($6, expiration_date),
                  notes = COALESCE($7, notes),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8 
-             RETURNING 
-                id, 
-                client_id as "clientId", 
-                client_name as "clientName", 
-                payment_terms as "paymentTerms", 
-                discount, 
-                status, 
-                expiration_date as "expirationDate", 
+             WHERE id = $8
+             RETURNING
+                id,
+                client_id as "clientId",
+                client_name as "clientName",
+                payment_terms as "paymentTerms",
+                discount,
+                status,
+                expiration_date as "expirationDate",
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -474,9 +483,9 @@ export default async function (fastify, _opts) {
       for (const item of normalizedItems) {
         const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                     RETURNING 
+          `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     RETURNING
                         id,
                         quote_id as "quoteId",
                         product_id as "productId",
@@ -503,7 +512,7 @@ export default async function (fastify, _opts) {
     } else {
       // Fetch existing items
       const itemsResult = await query(
-        `SELECT 
+        `SELECT
                     id,
                     quote_id as "quoteId",
                     product_id as "productId",
@@ -523,7 +532,10 @@ export default async function (fastify, _opts) {
     return {
       ...quoteResult.rows[0],
       items: updatedItems,
-      isExpired: isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate),
+      isExpired:
+        typeof isExpiredOverride === 'boolean'
+          ? isExpiredOverride
+          : isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate),
     };
   });
 

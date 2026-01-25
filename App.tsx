@@ -1494,8 +1494,21 @@ const App: React.FC = () => {
 
   const handleUpdateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
-      const updated = await api.quotes.update(id, updates);
-      setQuotes(quotes.map((q) => (q.id === id ? updated : q)));
+      const isRestore = updates.status === 'draft' && updates.isExpired === false;
+      if (isRestore) {
+        const linkedSales = sales.filter((sale) => sale.linkedQuoteId === id);
+        if (linkedSales.length > 0) {
+          await Promise.all(linkedSales.map((sale) => api.sales.delete(sale.id)));
+          setSales((prev) => prev.filter((sale) => sale.linkedQuoteId !== id));
+        }
+      }
+
+      const updatesWithRestore = isRestore
+        ? { ...updates, expirationDate: new Date().toISOString().split('T')[0] }
+        : updates;
+
+      const updated = await api.quotes.update(id, updatesWithRestore);
+      setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)));
     } catch (err) {
       console.error('Failed to update quote:', err);
     }
