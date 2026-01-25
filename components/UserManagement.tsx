@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { User, UserRole, Client, Project, ProjectTask } from '../types';
 import CustomSelect from './CustomSelect';
@@ -1228,259 +1229,261 @@ const UserManagement: React.FC<UserManagementProps> = ({
       )}
 
       {/* Assignment Modal */}
-      {managingUserId && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <h3 className="font-bold text-lg text-slate-800">
-                {t('hr:workforce.manageAccess', { name: managingUser?.name })}
-              </h3>
-              <button
-                onClick={closeAssignments}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
+      {managingUserId &&
+        createPortal(
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <h3 className="font-bold text-lg text-slate-800">
+                  {t('hr:workforce.manageAccess', { name: managingUser?.name })}
+                </h3>
+                <button
+                  onClick={closeAssignments}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <i className="fa-solid fa-xmark text-xl"></i>
+                </button>
+              </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              {isLoadingAssignments ? (
-                <div className="flex items-center justify-center py-12">
-                  <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <CustomSelect
-                      options={clientFilterOptions}
-                      value={filterClientId}
-                      onChange={(val) => setFilterClientId(val as string)}
-                      placeholder={t('hr:workforce.filterByClient')}
-                      searchable={true}
-                      buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
-                    />
-                    <CustomSelect
-                      options={projectFilterOptions}
-                      value={filterProjectId}
-                      onChange={(val) => setFilterProjectId(val as string)}
-                      placeholder={t('hr:workforce.filterByProject')}
-                      searchable={true}
-                      buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
-                      disabled={projectFilterOptions.length === 1}
-                    />
+              <div className="p-6 overflow-y-auto flex-1">
+                {isLoadingAssignments ? (
+                  <div className="flex items-center justify-center py-12">
+                    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
                   </div>
-
-                  <div
-                    className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
-                  >
-                    {/* Clients Column */}
-                    <div className="space-y-3">
-                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                        <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                            {t('hr:workforce.clients')}
-                          </h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                            {assignments.clientIds.length}
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder={t('hr:workforce.searchClients')}
-                          value={clientSearch}
-                          onChange={(e) => setClientSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        {visibleClients.map((client) => (
-                          <label
-                            key={client.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                              assignments.clientIds.includes(client.id)
-                                ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="relative flex items-center justify-center shrink-0">
-                              <input
-                                type="checkbox"
-                                checked={assignments.clientIds.includes(client.id)}
-                                onChange={() => toggleAssignment('client', client.id)}
-                                className="sr-only peer"
-                              />
-                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                                <div
-                                  className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                                ></div>
-                              </div>
-                            </div>
-                            <span
-                              className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                            >
-                              {client.name}
-                            </span>
-                          </label>
-                        ))}
-                        {clients.length === 0 && (
-                          <p className="text-xs text-slate-400 italic">
-                            {t('hr:workforce.noClientsFound')}
-                          </p>
-                        )}
-                      </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <CustomSelect
+                        options={clientFilterOptions}
+                        value={filterClientId}
+                        onChange={(val) => setFilterClientId(val as string)}
+                        placeholder={t('hr:workforce.filterByClient')}
+                        searchable={true}
+                        buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                      />
+                      <CustomSelect
+                        options={projectFilterOptions}
+                        value={filterProjectId}
+                        onChange={(val) => setFilterProjectId(val as string)}
+                        placeholder={t('hr:workforce.filterByProject')}
+                        searchable={true}
+                        buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                        disabled={projectFilterOptions.length === 1}
+                      />
                     </div>
 
-                    {/* Projects Column */}
-                    <div className="space-y-3">
-                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                        <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                            Projects
-                          </h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                            {assignments.projectIds.length}
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Search projects..."
-                          value={projectSearch}
-                          onChange={(e) => setProjectSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        {visibleProjects.map((project) => (
-                          <label
-                            key={project.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                              assignments.projectIds.includes(project.id)
-                                ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="relative flex items-center justify-center shrink-0">
-                              <input
-                                type="checkbox"
-                                checked={assignments.projectIds.includes(project.id)}
-                                onChange={() => toggleAssignment('project', project.id)}
-                                className="sr-only peer"
-                              />
-                              <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                                <div
-                                  className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                                ></div>
-                              </div>
-                            </div>
-                            <div className="flex flex-col">
-                              <span
-                                className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                              >
-                                {project.name}
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                {clients.find((c) => c.id === project.clientId)?.name ||
-                                  t('hr:workforce.unknownClient')}
-                              </span>
-                            </div>
-                          </label>
-                        ))}
-                        {projects.length === 0 && (
-                          <p className="text-xs text-slate-400 italic">
-                            {t('hr:workforce.noProjectsFound')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {canManageAssignments && (
+                    <div
+                      className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
+                    >
+                      {/* Clients Column */}
                       <div className="space-y-3">
                         <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
                           <div className="flex items-center justify-between py-2">
                             <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                              Tasks
+                              {t('hr:workforce.clients')}
                             </h4>
                             <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                              {assignments.taskIds.length}
+                              {assignments.clientIds.length}
                             </span>
                           </div>
                           <input
                             type="text"
-                            placeholder="Search tasks..."
-                            value={taskSearch}
-                            onChange={(e) => setTaskSearch(e.target.value)}
+                            placeholder={t('hr:workforce.searchClients')}
+                            value={clientSearch}
+                            onChange={(e) => setClientSearch(e.target.value)}
                             className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                           />
                         </div>
                         <div className="space-y-2">
-                          {visibleTasks.map((task) => {
-                            const project = projects.find((p) => p.id === task.projectId);
-                            return (
-                              <label
-                                key={task.id}
-                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                  assignments.taskIds.includes(task.id)
-                                    ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                    : 'bg-white border-slate-200 hover:border-slate-300'
-                                }`}
+                          {visibleClients.map((client) => (
+                            <label
+                              key={client.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                assignments.clientIds.includes(client.id)
+                                  ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="relative flex items-center justify-center shrink-0">
+                                <input
+                                  type="checkbox"
+                                  checked={assignments.clientIds.includes(client.id)}
+                                  onChange={() => toggleAssignment('client', client.id)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                                  <div
+                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                  ></div>
+                                </div>
+                              </div>
+                              <span
+                                className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
                               >
-                                <div className="relative flex items-center justify-center shrink-0">
-                                  <input
-                                    type="checkbox"
-                                    checked={assignments.taskIds.includes(task.id)}
-                                    onChange={() => toggleAssignment('task', task.id)}
-                                    className="sr-only peer"
-                                  />
-                                  <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                                    <div
-                                      className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                                    ></div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span
-                                    className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                                  >
-                                    {task.name}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    {project?.name || t('hr:workforce.unknownProject')}
-                                  </span>
-                                </div>
-                              </label>
-                            );
-                          })}
-                          {tasks.length === 0 && (
+                                {client.name}
+                              </span>
+                            </label>
+                          ))}
+                          {clients.length === 0 && (
                             <p className="text-xs text-slate-400 italic">
-                              {t('hr:workforce.noTasksFound')}
+                              {t('hr:workforce.noClientsFound')}
                             </p>
                           )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
 
-            <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-              <button
-                onClick={closeAssignments}
-                className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={saveAssignments}
-                disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-                className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
-              >
-                {t('hr:workforce.saveAssignments')}
-              </button>
+                      {/* Projects Column */}
+                      <div className="space-y-3">
+                        <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                          <div className="flex items-center justify-between py-2">
+                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                              Projects
+                            </h4>
+                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                              {assignments.projectIds.length}
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Search projects..."
+                            value={projectSearch}
+                            onChange={(e) => setProjectSearch(e.target.value)}
+                            className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          {visibleProjects.map((project) => (
+                            <label
+                              key={project.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                assignments.projectIds.includes(project.id)
+                                  ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="relative flex items-center justify-center shrink-0">
+                                <input
+                                  type="checkbox"
+                                  checked={assignments.projectIds.includes(project.id)}
+                                  onChange={() => toggleAssignment('project', project.id)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                                  <div
+                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                  ></div>
+                                </div>
+                              </div>
+                              <div className="flex flex-col">
+                                <span
+                                  className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                                >
+                                  {project.name}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {clients.find((c) => c.id === project.clientId)?.name ||
+                                    t('hr:workforce.unknownClient')}
+                                </span>
+                              </div>
+                            </label>
+                          ))}
+                          {projects.length === 0 && (
+                            <p className="text-xs text-slate-400 italic">
+                              {t('hr:workforce.noProjectsFound')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {canManageAssignments && (
+                        <div className="space-y-3">
+                          <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                            <div className="flex items-center justify-between py-2">
+                              <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                                Tasks
+                              </h4>
+                              <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                                {assignments.taskIds.length}
+                              </span>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Search tasks..."
+                              value={taskSearch}
+                              onChange={(e) => setTaskSearch(e.target.value)}
+                              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            {visibleTasks.map((task) => {
+                              const project = projects.find((p) => p.id === task.projectId);
+                              return (
+                                <label
+                                  key={task.id}
+                                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                    assignments.taskIds.includes(task.id)
+                                      ? 'bg-slate-50 border-slate-300 shadow-sm'
+                                      : 'bg-white border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <div className="relative flex items-center justify-center shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={assignments.taskIds.includes(task.id)}
+                                      onChange={() => toggleAssignment('task', task.id)}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                                      <div
+                                        className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span
+                                      className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                                    >
+                                      {task.name}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">
+                                      {project?.name || t('hr:workforce.unknownProject')}
+                                    </span>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                            {tasks.length === 0 && (
+                              <p className="text-xs text-slate-400 italic">
+                                {t('hr:workforce.noTasksFound')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                <button
+                  onClick={closeAssignments}
+                  className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
+                >
+                  {t('common:buttons.cancel')}
+                </button>
+                <button
+                  onClick={saveAssignments}
+                  disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
+                  className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
+                >
+                  {t('hr:workforce.saveAssignments')}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };

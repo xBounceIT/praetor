@@ -476,28 +476,13 @@ const TasksView: React.FC<TasksViewProps> = ({
                           : 'bg-slate-50 border-slate-200'
                       }`}
                     >
-                      <div className="flex gap-3 items-center">
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                            isCurrentlyDisabled
-                              ? 'bg-white text-red-500'
-                              : 'bg-white text-slate-400'
-                          }`}
-                        >
-                          <i
-                            className={`fa-solid ${isCurrentlyDisabled ? 'fa-ban' : 'fa-check'}`}
-                          ></i>
-                        </div>
-                        <div>
-                          <p
-                            className={`text-sm font-black ${
-                              isCurrentlyDisabled ? 'text-red-700' : 'text-slate-700'
-                            }`}
-                          >
-                            {t('tasks.isDisabled')}
-                          </p>
-                        </div>
-                      </div>
+                      <p
+                        className={`text-sm font-black ${
+                          isCurrentlyDisabled ? 'text-red-700' : 'text-slate-700'
+                        }`}
+                      >
+                        {t('tasks.isDisabled')}
+                      </p>
                       <button
                         type="button"
                         disabled={isInheritedDisabled}
@@ -697,6 +682,9 @@ const TasksView: React.FC<TasksViewProps> = ({
               <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[160px]">
                 {t('tasks.project')}
               </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[140px]">
+                {t('common:labels.client')}
+              </th>
               <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[200px]">
                 {t('tasks.name')}
               </th>
@@ -714,7 +702,7 @@ const TasksView: React.FC<TasksViewProps> = ({
           <tbody className="divide-y divide-slate-100">
             {activeTasksTotal.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center">
+                <td colSpan={6} className="px-6 py-12 text-center">
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
                     <i className="fa-solid fa-list-check text-2xl"></i>
                   </div>
@@ -752,32 +740,34 @@ const TasksView: React.FC<TasksViewProps> = ({
                     } ${isInheritedDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
                   >
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: project?.color || '#ccc' }}
-                          ></div>
-                          <span
-                            className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                              isProjectDisabled
-                                ? 'text-amber-600 bg-amber-50 border-amber-100'
-                                : 'text-praetor'
-                            }`}
-                          >
-                            {project?.name || t('projects.unknown')}
-                          </span>
-                        </div>
-                        {client && (
-                          <span
-                            className={`text-[9px] font-bold ml-4 ${
-                              isClientDisabled ? 'text-amber-500' : 'text-slate-400'
-                            }`}
-                          >
-                            {client.name} {isClientDisabled && t('projects.disabledLabel')}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: project?.color || '#ccc' }}
+                        ></div>
+                        <span
+                          className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
+                            isProjectDisabled
+                              ? 'text-amber-600 bg-amber-50 border-amber-100'
+                              : 'text-praetor'
+                          }`}
+                        >
+                          {project?.name || t('projects.unknown')}
+                        </span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {client ? (
+                        <span
+                          className={`text-xs font-bold ${
+                            isClientDisabled ? 'text-amber-500' : 'text-slate-600'
+                          }`}
+                        >
+                          {client.name} {isClientDisabled && t('projects.disabledLabel')}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-slate-800">{task.name}</span>
@@ -935,6 +925,9 @@ const TasksView: React.FC<TasksViewProps> = ({
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[160px]">
                   {t('tasks.project')}
                 </th>
+                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[140px]">
+                  {t('common:labels.client')}
+                </th>
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[200px]">
                   {t('tasks.name')}
                 </th>
@@ -967,28 +960,28 @@ const TasksView: React.FC<TasksViewProps> = ({
                     }`}
                   >
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: project?.color || '#ccc' }}
-                          ></div>
-                          <span
-                            className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                              isProjectDisabled
-                                ? 'text-amber-600 bg-amber-50 border-amber-100'
-                                : 'text-slate-400'
-                            }`}
-                          >
-                            {project?.name || t('projects.unknown')}
-                          </span>
-                        </div>
-                        {client && (
-                          <span className={`text-[9px] font-bold ml-4 text-slate-400`}>
-                            {client.name}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: project?.color || '#ccc' }}
+                        ></div>
+                        <span
+                          className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
+                            isProjectDisabled
+                              ? 'text-amber-600 bg-amber-50 border-amber-100'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {project?.name || t('projects.unknown')}
+                        </span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {client ? (
+                        <span className="text-xs font-bold text-slate-400">{client.name}</span>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-slate-600 line-through decoration-slate-300">

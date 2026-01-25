@@ -501,6 +501,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     formData.taxRate > 30 &&
     formData.taxRate <= 100;
 
+  const showProductCodeWarning = !formData.productCode?.trim();
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add Category Modal */}
@@ -660,9 +662,18 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.productCode')}
-                    </label>
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                      <div className="flex flex-col">
+                        {showProductCodeWarning && (
+                          <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
+                            {t('common:validation.required')}
+                          </p>
+                        )}
+                        <label className="text-xs font-bold text-slate-500">
+                          {t('crm:products.productCode')}
+                        </label>
+                      </div>
+                    </div>
                     <input
                       type="text"
                       required
