@@ -34,24 +34,24 @@ export default async function (fastify, _opts) {
   fastify.get('/', async (_request, _reply) => {
     // Get all sales
     const salesResult = await query(
-      `SELECT 
-                id, 
+      `SELECT
+                id,
                 linked_quote_id as "linkedQuoteId",
-                client_id as "clientId", 
-                client_name as "clientName", 
-                payment_terms as "paymentTerms", 
-                discount, 
-                status, 
+                client_id as "clientId",
+                client_name as "clientName",
+                payment_terms as "paymentTerms",
+                discount,
+                status,
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM sales 
+            FROM sales
             ORDER BY created_at DESC`,
     );
 
     // Get all sale items
     const itemsResult = await query(
-      `SELECT 
+      `SELECT
                 id,
                 sale_id as "saleId",
                 product_id as "productId",
@@ -131,16 +131,16 @@ export default async function (fastify, _opts) {
 
     // Insert sale
     const saleResult = await query(
-      `INSERT INTO sales (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-             RETURNING 
-                id, 
+      `INSERT INTO sales (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING
+                id,
                 linked_quote_id as "linkedQuoteId",
-                client_id as "clientId", 
-                client_name as "clientName", 
-                payment_terms as "paymentTerms", 
-                discount, 
-                status, 
+                client_id as "clientId",
+                client_name as "clientName",
+                payment_terms as "paymentTerms",
+                discount,
+                status,
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -161,9 +161,9 @@ export default async function (fastify, _opts) {
     for (const item of normalizedItems) {
       const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
       const itemResult = await query(
-        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                 RETURNING 
+        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 RETURNING
                     id,
                     sale_id as "saleId",
                     product_id as "productId",
@@ -328,7 +328,7 @@ export default async function (fastify, _opts) {
     }
 
     const existingSaleResult = await query(
-      `SELECT 
+      `SELECT
                     id,
                     linked_quote_id as "linkedQuoteId",
                     client_id as "clientId",
@@ -411,7 +411,7 @@ export default async function (fastify, _opts) {
 
       if (items !== undefined) {
         const itemsResult = await query(
-          `SELECT 
+          `SELECT
                             id,
                             sale_id as "saleId",
                             product_id as "productId",
@@ -443,7 +443,7 @@ export default async function (fastify, _opts) {
 
     // Update sale
     const saleResult = await query(
-      `UPDATE sales 
+      `UPDATE sales
              SET client_id = COALESCE($1, client_id),
                  client_name = COALESCE($2, client_name),
                  payment_terms = COALESCE($3, payment_terms),
@@ -451,15 +451,15 @@ export default async function (fastify, _opts) {
                  status = COALESCE($5, status),
                  notes = COALESCE($6, notes),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7 
-             RETURNING 
-                id, 
+             WHERE id = $7
+             RETURNING
+                id,
                 linked_quote_id as "linkedQuoteId",
-                client_id as "clientId", 
-                client_name as "clientName", 
-                payment_terms as "paymentTerms", 
-                discount, 
-                status, 
+                client_id as "clientId",
+                client_name as "clientName",
+                payment_terms as "paymentTerms",
+                discount,
+                status,
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -477,7 +477,7 @@ export default async function (fastify, _opts) {
         updatedItems = existingItems;
       } else {
         const itemsResult = await query(
-          `SELECT 
+          `SELECT
                         id,
                         sale_id as "saleId",
                         product_id as "productId",
@@ -502,9 +502,9 @@ export default async function (fastify, _opts) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                     RETURNING 
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     RETURNING
                         id,
                         sale_id as "saleId",
                         product_id as "productId",
@@ -531,7 +531,7 @@ export default async function (fastify, _opts) {
     } else {
       // Fetch existing items
       const itemsResult = await query(
-        `SELECT 
+        `SELECT
                     id,
                     sale_id as "saleId",
                     product_id as "productId",
@@ -550,9 +550,12 @@ export default async function (fastify, _opts) {
 
     // Auto-create projects when sale is confirmed for the first time
     if (status === 'confirmed' && existingSale.status !== 'confirmed') {
-      // Fetch sale items with notes for project creation
+      // Fetch sale items with notes and product codes for project creation
       const saleItemsResult = await query(
-        `SELECT product_id, product_name, note FROM sale_items WHERE sale_id = $1`,
+        `SELECT si.product_id, si.product_name, si.note, p.product_code
+         FROM sale_items si
+         LEFT JOIN products p ON si.product_id = p.id
+         WHERE si.sale_id = $1`,
         [idResult.value],
       );
 
@@ -567,7 +570,8 @@ export default async function (fastify, _opts) {
 
       // Create a project for each sale item
       for (const saleItem of saleItemsResult.rows) {
-        const projectName = `${clientCode}_${saleItem.product_id}_${saleYear}`;
+        const productCode = saleItem.product_code || saleItem.product_id;
+        const projectName = `${clientCode}_${productCode}_${saleYear}`;
 
         // Check if project with this exact name already exists for this client
         const existingProject = await query(
@@ -578,7 +582,7 @@ export default async function (fastify, _opts) {
         if (existingProject.rows.length === 0) {
           const projectId = 'p-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
           await query(
-            `INSERT INTO projects (id, name, client_id, color, description, is_disabled) 
+            `INSERT INTO projects (id, name, client_id, color, description, is_disabled)
              VALUES ($1, $2, $3, $4, $5, $6)`,
             [
               projectId,
@@ -594,7 +598,7 @@ export default async function (fastify, _opts) {
 
       // Create notifications for all managers except the one who confirmed the sale
       const projectNames = saleItemsResult.rows.map(
-        (item) => `${clientCode}_${item.product_id}_${saleYear}`,
+        (item) => `${clientCode}_${item.product_code || item.product_id}_${saleYear}`,
       );
 
       // Get all managers except the current user
