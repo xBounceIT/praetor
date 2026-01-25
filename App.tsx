@@ -884,12 +884,16 @@ const App: React.FC = () => {
           }
           case 'catalog': {
             if (currentUser.role !== 'manager') return;
-            const [productsData, specialBidsData] = await Promise.all([
+            const [productsData, specialBidsData, clientsData, suppliersData] = await Promise.all([
               api.products.list(),
               api.specialBids.list(),
+              api.clients.list(),
+              api.suppliers.list(),
             ]);
             setProducts(productsData);
             setSpecialBids(specialBidsData);
+            setClients(clientsData);
+            setSuppliers(suppliersData);
             await loadGeneralSettings();
             break;
           }
