@@ -685,7 +685,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="relative ml-1 min-h-[20px] pr-16">
+                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500">
                         {t('crm:products.type')}
                       </label>
@@ -759,7 +759,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="relative ml-1 min-h-[20px] pr-16">
+                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
                       <div className="space-y-1">
                         {showTaxRateWarning && (
                           <p className="text-amber-600 text-[10px] font-bold">
@@ -784,7 +784,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="relative ml-1 min-h-[20px] pr-16">
+                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500 font-black">
                         {t('crm:products.unitOfMeasure')}
                       </label>
@@ -810,7 +810,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="relative ml-1 min-h-[20px] pr-16">
+                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500">
                         {t('crm:products.supplier')}
                       </label>

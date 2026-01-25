@@ -567,7 +567,7 @@ export default async function (fastify, _opts) {
 
       // Create a project for each sale item
       for (const saleItem of saleItemsResult.rows) {
-        const projectName = `${clientCode}_${saleItem.product_name}_${saleYear}`;
+        const projectName = `${clientCode}_${saleItem.product_id}_${saleYear}`;
 
         // Check if project with this exact name already exists for this client
         const existingProject = await query(

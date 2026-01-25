@@ -1198,7 +1198,7 @@ const SalesView: React.FC<SalesViewProps> = ({
         <StandardTable
           title={t('crm:sales.history')}
           totalCount={historySales.length}
-          totalLabel={t('crm:sales.history').toUpperCase()}
+          totalLabel={t('common:labels.total').toUpperCase()}
           containerClassName="border-dashed bg-slate-50"
           footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
           footer={
