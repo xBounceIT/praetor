@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useId } from 'react';
+import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 export interface Option {
@@ -42,7 +43,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dropdownStyles, setDropdownStyles] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownId = useId();
 
   const selectedOptions = isMulti
     ? options.filter((o) => (value as string[]).includes(o.id))
@@ -50,7 +55,12 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setIsOpen(false);
         onClose?.();
         setSearchTerm(''); // Reset search on close
@@ -59,6 +69,67 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
+
+  useEffect(() => {
+    const handleOtherOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string }>).detail;
+      if (detail?.id !== dropdownId) {
+        setIsOpen(false);
+        onClose?.();
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('custom-select-open', handleOtherOpen as EventListener);
+    return () =>
+      document.removeEventListener('custom-select-open', handleOtherOpen as EventListener);
+  }, [onClose, dropdownId]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    let rafId = 0;
+
+    const updatePosition = () => {
+      rafId = requestAnimationFrame(() => {
+        const buttonRect = buttonRef.current?.getBoundingClientRect();
+        const dropdownRect = dropdownRef.current?.getBoundingClientRect();
+        if (!buttonRect) return;
+
+        const dropdownHeight = dropdownRect?.height ?? 0;
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+        const shouldOpenUp =
+          dropdownPosition === 'top' ||
+          (dropdownPosition === 'bottom' &&
+            dropdownHeight > 0 &&
+            spaceBelow < dropdownHeight &&
+            buttonRect.top > dropdownHeight);
+
+        const top = shouldOpenUp
+          ? Math.max(8, buttonRect.top - dropdownHeight - 4)
+          : buttonRect.bottom + 4;
+
+        const minWidth = buttonRect.width;
+        const left = Math.min(Math.max(8, buttonRect.left), window.innerWidth - minWidth - 8);
+
+        setDropdownStyles({
+          position: 'fixed',
+          top,
+          left,
+          minWidth,
+          zIndex: 1000,
+        });
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      cancelAnimationFrame(rafId);
+    };
+  }, [isOpen, dropdownPosition]);
 
   const filteredOptions = searchable
     ? options.filter((o) => o.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -106,13 +177,20 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         </label>
       )}
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
         onClick={() => {
           const nextState = !isOpen;
           setIsOpen(nextState);
-          if (nextState) onOpen?.();
-          else onClose?.();
+          if (nextState) {
+            document.dispatchEvent(
+              new CustomEvent('custom-select-open', { detail: { id: dropdownId } }),
+            );
+            onOpen?.();
+          } else {
+            onClose?.();
+          }
         }}
         className={`w-full flex items-center justify-between rounded-xl focus:ring-2 focus:ring-praetor outline-none text-left transition-all
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-300'}
@@ -170,74 +248,79 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         </div>
       </button>
 
-      {isOpen && !disabled && (
-        <div
-          className={`absolute z-[100] min-w-full w-max bg-white border border-slate-200 rounded-xl shadow-xl py-1 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100 ${dropdownPosition === 'top' ? 'bottom-full mb-1 origin-bottom' : 'mt-1 origin-top'}`}
-        >
-          {searchable && (
-            <div className="px-2 pt-2 pb-1 sticky top-0 bg-white border-b border-slate-50 z-10">
-              <input
-                type="text"
-                autoFocus
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('select.search')}
-                className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-praetor text-slate-700"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
+      {isOpen &&
+        !disabled &&
+        ReactDOM.createPortal(
+          <div
+            ref={dropdownRef}
+            style={dropdownStyles}
+            className={`bg-white border border-slate-200 rounded-xl shadow-xl py-1 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100 ${dropdownPosition === 'top' ? 'origin-bottom' : 'origin-top'}`}
+          >
+            {searchable && (
+              <div className="px-2 pt-2 pb-1 sticky top-0 bg-white border-b border-slate-50 z-10">
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t('select.search')}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-praetor text-slate-700"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
 
-          {filteredOptions.length === 0 ? (
-            <div className="px-4 py-3 text-xs text-slate-400 italic text-center">
-              {t('select.noOptions')}
-            </div>
-          ) : (
-            <>
-              {isMulti && filteredOptions.length > 1 && (
-                <div className="px-2 py-1 border-b border-slate-50 mb-1 flex gap-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-4 py-3 text-xs text-slate-400 italic text-center">
+                {t('select.noOptions')}
+              </div>
+            ) : (
+              <>
+                {isMulti && filteredOptions.length > 1 && (
+                  <div className="px-2 py-1 border-b border-slate-50 mb-1 flex gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const allIds = options.map((o) => o.id);
+                        onChange(allIds);
+                      }}
+                      className="flex-1 text-[10px] font-bold py-1 px-2 rounded bg-slate-100 text-praetor hover:bg-slate-200 transition-colors"
+                    >
+                      {t('select.selectAll')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onChange([]);
+                      }}
+                      className="flex-1 text-[10px] font-bold py-1 px-2 rounded bg-slate-50 text-slate-500 hover:bg-slate-100 transition-colors"
+                    >
+                      {t('select.clear')}
+                    </button>
+                  </div>
+                )}
+                {filteredOptions.map((option) => (
                   <button
+                    key={option.id}
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const allIds = options.map((o) => o.id);
-                      onChange(allIds);
-                    }}
-                    className="flex-1 text-[10px] font-bold py-1 px-2 rounded bg-slate-100 text-praetor hover:bg-slate-200 transition-colors"
+                    onClick={(e) => handleToggle(option.id, e)}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                      isSelected(option.id)
+                        ? 'bg-slate-100 text-praetor font-bold'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
                   >
-                    {t('select.selectAll')}
+                    <span className="truncate">{option.name}</span>
+                    {isSelected(option.id) && <i className="fa-solid fa-check text-[10px]"></i>}
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChange([]);
-                    }}
-                    className="flex-1 text-[10px] font-bold py-1 px-2 rounded bg-slate-50 text-slate-500 hover:bg-slate-100 transition-colors"
-                  >
-                    {t('select.clear')}
-                  </button>
-                </div>
-              )}
-              {filteredOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={(e) => handleToggle(option.id, e)}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
-                    isSelected(option.id)
-                      ? 'bg-slate-100 text-praetor font-bold'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="truncate">{option.name}</span>
-                  {isSelected(option.id) && <i className="fa-solid fa-check text-[10px]"></i>}
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
+                ))}
+              </>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
