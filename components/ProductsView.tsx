@@ -31,6 +31,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -148,6 +149,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     });
     setErrors({});
     setServerError(null);
+    setHasAttemptedSave(false);
     setIsModalOpen(true);
   };
 
@@ -168,11 +170,13 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     });
     setErrors({});
     setServerError(null);
+    setHasAttemptedSave(false);
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setHasAttemptedSave(true);
     setErrors({});
     setServerError(null);
 
@@ -504,7 +508,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     formData.taxRate > 30 &&
     formData.taxRate <= 100;
 
-  const showProductCodeWarning = !formData.productCode?.trim();
+  const showProductCodeWarning = hasAttemptedSave && !formData.productCode?.trim();
+  const showProductNameWarning = hasAttemptedSave && !formData.name?.trim();
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -645,9 +650,18 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.productName')}
-                    </label>
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                      <div className="flex flex-col">
+                        {showProductNameWarning && (
+                          <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
+                            {t('common:validation.required')}
+                          </p>
+                        )}
+                        <label className="text-xs font-bold text-slate-500">
+                          {t('crm:products.productName')}
+                        </label>
+                      </div>
+                    </div>
                     <input
                       type="text"
                       required
