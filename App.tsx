@@ -1068,6 +1068,22 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleDeleteNotification = useCallback(
+    async (id: string) => {
+      try {
+        const notification = notifications.find((n) => n.id === id);
+        await api.notifications.delete(id);
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
+        if (notification && !notification.isRead) {
+          setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
+        }
+      } catch (err) {
+        console.error('Failed to delete notification:', err);
+      }
+    },
+    [notifications],
+  );
+
   // Determine available users for the dropdown based on role
   const availableUsers = useMemo(() => {
     if (!currentUser) return [];
@@ -1940,6 +1956,7 @@ const App: React.FC = () => {
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
         onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
+        onDeleteNotification={handleDeleteNotification}
       >
         {!isRouteAccessible ? (
           <NotFound onReturn={() => setActiveView('timesheets/tracker')} />

@@ -46,6 +46,7 @@ interface LayoutProps {
   unreadNotificationCount?: number;
   onMarkNotificationAsRead?: (id: string) => void;
   onMarkAllNotificationsAsRead?: () => void;
+  onDeleteNotification?: (id: string) => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -59,6 +60,7 @@ const Layout: React.FC<LayoutProps> = ({
   unreadNotificationCount = 0,
   onMarkNotificationAsRead,
   onMarkAllNotificationsAsRead,
+  onDeleteNotification,
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -142,7 +144,7 @@ const Layout: React.FC<LayoutProps> = ({
     <div className="h-screen flex flex-col md:flex-row bg-slate-50 overflow-hidden">
       <nav
         className={`bg-praetor text-white/90 flex flex-col border-r border-white/10 shrink-0 transition-all duration-300 ease-in-out relative z-30
-          ${isCollapsed ? 'md:w-20' : 'md:w-64'} 
+          ${isCollapsed ? 'md:w-20' : 'md:w-64'}
           w-full`}
       >
         <div
@@ -190,7 +192,7 @@ const Layout: React.FC<LayoutProps> = ({
           <div className="relative mb-4" ref={moduleSwitcherRef}>
             <button
               onClick={() => setIsModuleSwitcherOpen(!isModuleSwitcherOpen)}
-              className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 
+              className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
                 bg-black/20 border border-white/10 hover:bg-black/30 hover:border-white/20
                 ${isCollapsed ? 'justify-center' : ''}`}
             >
@@ -582,12 +584,14 @@ const Layout: React.FC<LayoutProps> = ({
             {/* Notification Bell - only for managers */}
             {currentUser.role === 'manager' &&
               onMarkNotificationAsRead &&
-              onMarkAllNotificationsAsRead && (
+              onMarkAllNotificationsAsRead &&
+              onDeleteNotification && (
                 <NotificationBell
                   notifications={notifications}
                   unreadCount={unreadNotificationCount}
                   onMarkAsRead={onMarkNotificationAsRead}
                   onMarkAllAsRead={onMarkAllNotificationsAsRead}
+                  onDelete={onDeleteNotification}
                 />
               )}
 

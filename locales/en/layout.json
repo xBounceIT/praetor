@@ -76,6 +76,8 @@
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago",
     "showProjects": "Show projects",
-    "hideProjects": "Hide projects"
+    "hideProjects": "Hide projects",
+    "delete": "Delete",
+    "deleteNotification": "Delete notification"
   }
 }

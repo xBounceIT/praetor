@@ -76,6 +76,7 @@
     "hoursAgo": "{{count}}h fa",
     "daysAgo": "{{count}}g fa",
     "showProjects": "Mostra progetti",
-    "hideProjects": "Nascondi progetti"
+    "hideProjects": "Nascondi progetti",
+    "delete": "Elimina"
   }
 }

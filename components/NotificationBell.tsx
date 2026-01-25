@@ -7,6 +7,7 @@ interface NotificationBellProps {
   unreadCount: number;
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
+  onDelete: (id: string) => void;
 }
 
 const NotificationBell: React.FC<NotificationBellProps> = ({
@@ -14,6 +15,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   unreadCount,
   onMarkAsRead,
   onMarkAllAsRead,
+  onDelete,
 }) => {
   const { t } = useTranslation('layout');
   const [isOpen, setIsOpen] = useState(false);
@@ -56,6 +58,11 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     setExpandedId(expandedId === notification.id ? null : notification.id);
   };
 
+  const handleDelete = (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation();
+    onDelete(notificationId);
+  };
+
   const formatTimeAgo = useCallback(
     (timestamp: number) => {
       const diff = currentTime - timestamp;
@@ -71,6 +78,20 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     },
     [currentTime, t],
   );
+
+  const getLocalizedTitle = (notification: Notification): string => {
+    if (notification.type === 'new_projects') {
+      const projectCount = notification.data?.projectNames?.length || 1;
+      if (projectCount === 1) {
+        return t('notifications.newProject', '1 new project available');
+      }
+      return t('notifications.newProjects', '{{count}} new projects available', {
+        count: projectCount,
+      });
+    }
+    // Fallback to the original title for unknown types
+    return notification.title;
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -119,7 +140,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                   key={notification.id}
                   className={`px-4 py-3 border-b border-slate-100 last:border-b-0 cursor-pointer transition-colors ${
                     notification.isRead ? 'bg-white' : 'bg-blue-50/50'
-                  } hover:bg-slate-50`}
+                  } hover:bg-slate-50 group`}
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex items-start gap-3">
@@ -135,15 +156,23 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p
-                          className={`text-sm ${
+                          className={`text-sm flex-1 ${
                             notification.isRead ? 'text-slate-600' : 'text-slate-800 font-medium'
                           }`}
                         >
-                          {notification.title}
+                          {getLocalizedTitle(notification)}
                         </p>
                         {!notification.isRead && (
                           <span className="w-2 h-2 bg-praetor rounded-full flex-shrink-0"></span>
                         )}
+                        <button
+                          onClick={(e) => handleDelete(e, notification.id)}
+                          className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                          aria-label={t('notifications.delete', 'Delete notification')}
+                          title={t('notifications.delete', 'Delete notification')}
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </button>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {formatTimeAgo(notification.createdAt)}
