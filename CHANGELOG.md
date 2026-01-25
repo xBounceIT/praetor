@@ -1,4 +1,4 @@
-## 24/01/2026 - Operativo
+## 24-25/01/2026 - Operativo
 
 - Aggiornato lo stato dei preventivi e delle vendite a: bozza, inviato, accettato, rifiutato
 - Aggiunta l'opzione di localizzazione automatica in base alla lingua del browser
@@ -20,6 +20,6 @@
 - Aggiornata vista assegnazione clienti, progetti e task
 - Allineato stile pagina Prodoti e Task con pagine piu recenti
 
-## 24/01/2026 - Sicurezza
+## 24-25/01/2026 - Sicurezza
 
 - Risolto il problema che consentiva ai manager di leggere, aggiornare ed eliminare le voci dei fogli presenze degli utenti che non gestivano.
