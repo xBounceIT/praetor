@@ -439,7 +439,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                           {originalPriceDisplay}
                         </div>
                       </div>
-                      <div className="hidden md:flex items-center justify-center">
+                      <div className="hidden md:flex items-center justify-center self-end h-[42px]">
                         <i className="fa-solid fa-arrow-right text-slate-400"></i>
                       </div>
                       <div className="space-y-1.5">
@@ -480,7 +480,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                           {originalMolDisplay}
                         </div>
                       </div>
-                      <div className="hidden md:flex items-center justify-center">
+                      <div className="hidden md:flex items-center justify-center self-end h-[42px]">
                         <i className="fa-solid fa-arrow-right text-slate-400"></i>
                       </div>
                       <div className="space-y-1.5">
