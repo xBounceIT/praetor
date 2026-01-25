@@ -260,6 +260,25 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       ? `${originalMolValue.toFixed(2)} %`
       : '--';
 
+  const calcSalePrice = (costo: number, molPercentage: number) => {
+    if (molPercentage >= 100) return costo;
+    return costo / (1 - molPercentage / 100);
+  };
+
+  const calcMargin = (costo: number, molPercentage: number) => {
+    return calcSalePrice(costo, molPercentage) - costo;
+  };
+
+  const bidCostValue =
+    formData.unitPrice !== undefined && !Number.isNaN(formData.unitPrice)
+      ? Number(formData.unitPrice)
+      : undefined;
+  const bidMolValue =
+    formData.molPercentage !== undefined && !Number.isNaN(formData.molPercentage)
+      ? Number(formData.molPercentage)
+      : undefined;
+  const hasBidPricing = bidCostValue !== undefined && bidMolValue !== undefined;
+
   const activeClients = clients.filter((c) => !c.isDisabled);
   const activeProducts = products.filter(
     (p) => !p.isDisabled && (p.type === 'item' || p.type === 'supply'),
@@ -463,6 +482,28 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                         className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                         placeholder="--"
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:products.salePriceCalculated')}
+                    </label>
+                    <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                      {hasBidPricing
+                        ? `${calcSalePrice(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
+                        : '--'}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:products.marginCalculated')}
+                    </label>
+                    <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
+                      {hasBidPricing
+                        ? `${calcMargin(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
+                        : '--'}
                     </div>
                   </div>
                 </div>

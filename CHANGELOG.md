@@ -18,7 +18,7 @@
 - Allineato stile pagina Prodoti e Task con pagine piu recenti
 - Aggiunto sistema di notifiche
 - Aggiunta notifica creazione progetti a manager
-- Aggiunto nuovo MOL % a creazione special bid
+- Aggiunto nuovo MOL %, nuovo margine calcolato e nuovo prezzo di vendita calcolato a creazione special bid
 
 ## 20260125 - Sicurezza
 
