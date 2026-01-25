@@ -58,6 +58,8 @@
     "type": "Type",
     "typeItem": "Item",
     "typeService": "Service",
+    "productCode": "Product Code",
+    "productCodeHint": "Only letters, numbers, underscores, and hyphens allowed",
     "supplier": "Supplier",
     "noProducts": "No products found",
     "createFirst": "Create your first product to get started",

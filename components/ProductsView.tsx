@@ -232,10 +232,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     if (!typeValue || !['supply', 'service', 'consulting', 'item'].includes(typeValue)) {
       newErrors.type = t('common:validation.typeRequired');
     }
-    const costUnitValue = formData.costUnit;
-    if (!costUnitValue || !['unit', 'hour'].includes(costUnitValue)) {
-      newErrors.costUnit = t('common:validation.unitOfMeasureRequired');
-    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -628,7 +624,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   {t('crm:products.productDetails')}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="col-span-full space-y-1.5">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 ml-1">
                       {t('crm:products.productName')}
                     </label>
@@ -648,8 +644,10 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                     )}
                   </div>
 
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Product Code</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('crm:products.productCode')}
+                    </label>
                     <input
                       type="text"
                       required
@@ -667,7 +665,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                       </p>
                     )}
                     <p className="text-[10px] text-slate-400 ml-1">
-                      Only letters, numbers, underscores, and hyphens allowed
+                      {t('crm:products.productCodeHint')}
                     </p>
                   </div>
 
@@ -685,7 +683,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500">
                         {t('crm:products.type')}
                       </label>
@@ -707,7 +705,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500">
                         {t('crm:products.category')}
                       </label>
@@ -731,7 +729,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500">
                         {t('crm:products.subcategory')}
                       </label>
@@ -759,15 +757,15 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
-                      <div className="space-y-1">
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                      <div className="flex flex-col">
                         {showTaxRateWarning && (
-                          <p className="text-amber-600 text-[10px] font-bold">
+                          <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
                             {t('crm:products.unusualTaxRate')}
                           </p>
                         )}
                         <label className="text-xs font-bold text-slate-500">
-                          {t('crm:products.taxRate')}{' '}
+                          {t('crm:products.taxRate')}
                         </label>
                       </div>
                     </div>
@@ -784,7 +782,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500 font-black">
                         {t('crm:products.unitOfMeasure')}
                       </label>
@@ -810,7 +808,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1 min-h-[20px]">
+                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
                       <label className="text-xs font-bold text-slate-500">
                         {t('crm:products.supplier')}
                       </label>

@@ -58,6 +58,8 @@
     "type": "Tipo",
     "typeItem": "Articolo",
     "typeService": "Servizio",
+    "productCode": "Codice Prodotto",
+    "productCodeHint": "Sono ammessi solo lettere, numeri, trattini bassi e trattini",
     "supplier": "Fornitore",
     "noProducts": "Nessun prodotto trovato",
     "createFirst": "Crea il tuo primo prodotto per iniziare",

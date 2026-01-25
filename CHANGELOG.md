@@ -14,7 +14,7 @@
 - Implementata la gestione degli errori per le operazioni asincrone sui prodotti e aggiunta la gestione dello stato degli errori del server.
 - Introdotto un modale per l'aggiunta di sottocategorie, migliorando la gestione delle categorie.
 - Aggiunti controlli pre commit di linting con husky
-- Aggiunto ESLint
+- Aggiunto ESLint per analisi codice statica
 - Aggiunta generazione progetto automatica per ciascuna voce quando una vendita viene accettata. La nomenclatura del progetto sarà "$ID_CLIENTE_$PRODOTTO_$ANNO"
 - Aggiunta auto assegnazione dei manager a tutti i clienti, progetti e task
 - Aggiornata vista assegnazione clienti, progetti e task
