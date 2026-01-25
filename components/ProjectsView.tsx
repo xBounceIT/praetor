@@ -664,7 +664,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         <StandardTable
           title={t('projects:projects.disabledProjects')}
           totalCount={filteredDisabledProjectsTotal.length}
-          totalLabel="DISABLED"
+          totalLabel={t('common:table.total')}
           containerClassName="border-dashed bg-slate-50"
           footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
           footer={
