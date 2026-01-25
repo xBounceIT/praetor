@@ -177,6 +177,8 @@ const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
 const normalizeSpecialBid = (b: SpecialBid): SpecialBid => ({
   ...b,
   unitPrice: Number(b.unitPrice || 0),
+  molPercentage:
+    b.molPercentage === undefined || b.molPercentage === null ? undefined : Number(b.molPercentage),
 });
 
 export interface LoginResponse {

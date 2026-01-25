@@ -48,7 +48,7 @@ BEGIN
         INSERT INTO work_unit_managers (work_unit_id, user_id)
         SELECT id, manager_id FROM work_units WHERE manager_id IS NOT NULL
         ON CONFLICT DO NOTHING;
-        
+
         -- Drop the column constraint first if strictly needed, though dropping column usually handles it.
         -- We just drop the column.
         ALTER TABLE work_units DROP COLUMN manager_id;
@@ -86,8 +86,8 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
 
 -- Ensure VAT number is unique (case-insensitive, non-empty)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_vat_number_unique 
-    ON clients (LOWER(vat_number)) 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_vat_number_unique
+    ON clients (LOWER(vat_number))
     WHERE vat_number IS NOT NULL AND vat_number <> '';
 
 -- Projects table
@@ -293,7 +293,7 @@ CREATE TABLE IF NOT EXISTS products (
 
 -- Ensure type column exists for existing installations
 ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'item';
--- Update default to supply for new products if we changed the code, but schema standard stays generic string often. 
+-- Update default to supply for new products if we changed the code, but schema standard stays generic string often.
 -- But let's reflect the description/subcategory existence:
 ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
@@ -315,13 +315,13 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='cost') THEN
         UPDATE products SET costo = cost WHERE costo = 0 OR costo IS NULL;
     END IF;
-    
+
     -- Calculate mol_percentage from sale_price if it exists
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sale_price') THEN
-        UPDATE products 
-        SET mol_percentage = CASE 
+        UPDATE products
+        SET mol_percentage = CASE
             WHEN sale_price > 0 THEN ROUND((1 - (costo / sale_price)) * 100, 2)
-            ELSE 0 
+            ELSE 0
         END
         WHERE mol_percentage = 0 OR mol_percentage IS NULL;
     END IF;
@@ -402,6 +402,7 @@ CREATE TABLE IF NOT EXISTS special_bids (
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    mol_percentage DECIMAL(5, 2),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -418,6 +419,8 @@ END $$;
 ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS start_date DATE;
 UPDATE special_bids SET start_date = CURRENT_DATE WHERE start_date IS NULL;
 ALTER TABLE special_bids ALTER COLUMN start_date SET NOT NULL;
+
+ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS mol_percentage DECIMAL(5, 2);
 
 DROP INDEX IF EXISTS idx_special_bids_unique;
 CREATE INDEX IF NOT EXISTS idx_special_bids_client_product ON special_bids(client_id, product_id);
@@ -522,15 +525,15 @@ BEGIN
     UPDATE ldap_config
     SET role_mappings = (
         SELECT jsonb_agg(
-            CASE 
-                WHEN elem ? 'tempoRole' 
+            CASE
+                WHEN elem ? 'tempoRole'
                 THEN (elem - 'tempoRole') || jsonb_build_object('praetorRole', elem->'tempoRole')
-                ELSE elem 
+                ELSE elem
             END
         )
         FROM jsonb_array_elements(role_mappings) AS elem
     )
-    WHERE role_mappings @> '[{"tempoRole": "user"}]' 
+    WHERE role_mappings @> '[{"tempoRole": "user"}]'
        OR role_mappings @> '[{"tempoRole": "admin"}]'
        OR role_mappings @> '[{"tempoRole": "manager"}]';
 EXCEPTION WHEN OTHERS THEN
@@ -618,7 +621,7 @@ BEGIN
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
         JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
-        WHERE tc.table_name = 'payments' 
+        WHERE tc.table_name = 'payments'
         AND tc.constraint_type = 'FOREIGN KEY'
         AND kcu.column_name = 'invoice_id'
         AND ccu.table_name = 'invoices'

@@ -6,6 +6,7 @@ import {
   parseDateString,
   optionalDateString,
   parseLocalizedPositiveNumber,
+  optionalLocalizedNonNegativeNumber,
   badRequest,
 } from '../utils/validation.ts';
 
@@ -15,13 +16,14 @@ export default async function (fastify, _opts) {
 
   fastify.get('/', async () => {
     const result = await query(
-      `SELECT 
+      `SELECT
                 id,
                 client_id as "clientId",
                 client_name as "clientName",
                 product_id as "productId",
                 product_name as "productName",
                 unit_price as "unitPrice",
+                mol_percentage as "molPercentage",
                 start_date as "startDate",
                 end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -33,8 +35,16 @@ export default async function (fastify, _opts) {
   });
 
   fastify.post('/', async (request, reply) => {
-    const { clientId, clientName, productId, productName, unitPrice, startDate, endDate } =
-      request.body;
+    const {
+      clientId,
+      clientName,
+      productId,
+      productName,
+      unitPrice,
+      molPercentage,
+      startDate,
+      endDate,
+    } = request.body;
 
     const clientIdResult = requireNonEmptyString(clientId, 'clientId');
     if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -50,6 +60,12 @@ export default async function (fastify, _opts) {
 
     const unitPriceResult = parseLocalizedPositiveNumber(unitPrice, 'unitPrice');
     if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+
+    const molPercentageResult = optionalLocalizedNonNegativeNumber(molPercentage, 'molPercentage');
+    if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+    if (molPercentageResult.value !== null && molPercentageResult.value > 100) {
+      return badRequest(reply, 'molPercentage must be between 0 and 100');
+    }
 
     const productCostResult = await query('SELECT costo FROM products WHERE id = $1', [
       productIdResult.value,
@@ -93,15 +109,16 @@ export default async function (fastify, _opts) {
 
     const id = 'sb-' + Date.now();
     const result = await query(
-      `INSERT INTO special_bids (id, client_id, client_name, product_id, product_name, unit_price, start_date, end_date)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING 
+      `INSERT INTO special_bids (id, client_id, client_name, product_id, product_name, unit_price, mol_percentage, start_date, end_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             RETURNING
                 id,
                 client_id as "clientId",
                 client_name as "clientName",
                 product_id as "productId",
                 product_name as "productName",
                 unit_price as "unitPrice",
+                mol_percentage as "molPercentage",
                 start_date as "startDate",
                 end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -113,6 +130,7 @@ export default async function (fastify, _opts) {
         productIdResult.value,
         productNameResult.value,
         unitPriceResult.value,
+        molPercentageResult.value,
         startDateResult.value,
         endDateResult.value,
       ],
@@ -123,8 +141,16 @@ export default async function (fastify, _opts) {
 
   fastify.put('/:id', async (request, reply) => {
     const { id } = request.params;
-    const { clientId, clientName, productId, productName, unitPrice, startDate, endDate } =
-      request.body;
+    const {
+      clientId,
+      clientName,
+      productId,
+      productName,
+      unitPrice,
+      molPercentage,
+      startDate,
+      endDate,
+    } = request.body;
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -161,6 +187,19 @@ export default async function (fastify, _opts) {
       const unitPriceResult = parseLocalizedPositiveNumber(unitPrice, 'unitPrice');
       if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
       unitPriceValue = unitPriceResult.value;
+    }
+
+    let molPercentageValue = molPercentage;
+    if (molPercentage !== undefined) {
+      const molPercentageResult = optionalLocalizedNonNegativeNumber(
+        molPercentage,
+        'molPercentage',
+      );
+      if (!molPercentageResult.ok) return badRequest(reply, molPercentageResult.message);
+      if (molPercentageResult.value !== null && molPercentageResult.value > 100) {
+        return badRequest(reply, 'molPercentage must be between 0 and 100');
+      }
+      molPercentageValue = molPercentageResult.value;
     }
 
     let startDateValue = startDate;
@@ -255,17 +294,19 @@ export default async function (fastify, _opts) {
                  product_id = COALESCE($3, product_id),
                  product_name = COALESCE($4, product_name),
                  unit_price = COALESCE($5, unit_price),
-                 start_date = COALESCE($6, start_date),
-                 end_date = COALESCE($7, end_date),
+                 mol_percentage = COALESCE($6, mol_percentage),
+                 start_date = COALESCE($7, start_date),
+                 end_date = COALESCE($8, end_date),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8
-             RETURNING 
+             WHERE id = $9
+             RETURNING
                 id,
                 client_id as "clientId",
                 client_name as "clientName",
                 product_id as "productId",
                 product_name as "productName",
                 unit_price as "unitPrice",
+                mol_percentage as "molPercentage",
                 start_date as "startDate",
                 end_date as "endDate",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
@@ -276,6 +317,7 @@ export default async function (fastify, _opts) {
         productIdValue,
         productNameValue,
         unitPriceValue,
+        molPercentageValue,
         startDateValue,
         endDateValue,
         idResult.value,
