@@ -92,6 +92,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     productId: '',
     productName: '',
     unitPrice: 0,
+    molPercentage: undefined,
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
   });
@@ -104,6 +105,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       productId: '',
       productName: '',
       unitPrice: 0,
+      molPercentage: undefined,
       startDate: new Date().toISOString().split('T')[0],
       endDate: new Date().toISOString().split('T')[0],
     });
@@ -123,6 +125,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       productId: bid.productId,
       productName: bid.productName,
       unitPrice: bid.unitPrice,
+      molPercentage: bid.molPercentage,
       startDate: formattedStartDate,
       endDate: formattedEndDate,
     });
@@ -248,6 +251,13 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   const originalPriceDisplay =
     originalPriceValue !== undefined && !Number.isNaN(originalPriceValue)
       ? `${originalPriceValue.toFixed(2)} ${currency}`
+      : '--';
+  const originalMolValue = selectedProductForPrice
+    ? Number(selectedProductForPrice.molPercentage)
+    : undefined;
+  const originalMolDisplay =
+    originalMolValue !== undefined && !Number.isNaN(originalMolValue)
+      ? `${originalMolValue.toFixed(2)} %`
       : '--';
 
   const activeClients = clients.filter((c) => !c.isDisabled);
@@ -429,6 +439,29 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                     {errors.unitPrice && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.unitPrice}</p>
                     )}
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('specialBids.originalMolToNewMol')}
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                        {originalMolDisplay}
+                      </div>
+                      <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                      <ValidatedNumberInput
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={formData.molPercentage ?? ''}
+                        onValueChange={(value) => {
+                          const parsed = parseNumberInputValue(value);
+                          setFormData({ ...formData, molPercentage: parsed });
+                        }}
+                        className="flex-1 text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                        placeholder="--"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

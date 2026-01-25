@@ -144,6 +144,7 @@ export interface SpecialBid {
   productId: string;
   productName: string;
   unitPrice: number;
+  molPercentage?: number;
   startDate: string;
   endDate: string;
   createdAt: number;

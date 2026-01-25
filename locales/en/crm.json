@@ -178,6 +178,7 @@
     "dedicatedClient": "Dedicated Client",
     "productItem": "Product (Item)",
     "originalPriceToSpecialPrice": "Original Price → Special Price ({{currency}})",
+    "originalMolToNewMol": "MOL % → New MOL %",
     "selectClient": "Select a client...",
     "selectProduct": "Select a product...",
     "specialBidDetails": "Special Bid Details",
