@@ -12,8 +12,8 @@ interface QuotesViewProps {
   clients: Client[];
   products: Product[];
   specialBids: SpecialBid[];
-  onAddQuote: (quoteData: Partial<Quote>) => void;
-  onUpdateQuote: (id: string, updates: Partial<Quote>) => void;
+  onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
+  onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
   onCreateSale?: (quote: Quote) => void;
   quoteFilterId?: string | null;
@@ -225,7 +225,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isReadOnly) {
@@ -270,9 +270,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     }
 
     if (editingQuote) {
-      onUpdateQuote(editingQuote.id, formData);
+      await onUpdateQuote(editingQuote.id, formData);
     } else {
-      onAddQuote(formData);
+      await onAddQuote(formData);
     }
     setIsModalOpen(false);
   };
