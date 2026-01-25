@@ -159,6 +159,10 @@ export interface QuoteItem {
   specialBidId?: string;
   quantity: number;
   unitPrice: number;
+  productCost?: number;
+  productMolPercentage?: number | null;
+  specialBidUnitPrice?: number | null;
+  specialBidMolPercentage?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
 }
@@ -197,6 +201,10 @@ export interface SaleItem {
   specialBidId?: string;
   quantity: number;
   unitPrice: number;
+  productCost?: number;
+  productMolPercentage?: number | null;
+  specialBidUnitPrice?: number | null;
+  specialBidMolPercentage?: number | null;
   discount?: number;
   note?: string;
 }

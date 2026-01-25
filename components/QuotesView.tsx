@@ -249,10 +249,41 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       return;
     }
 
+    const itemsWithSnapshots = (formData.items || []).map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      const bid = item.specialBidId
+        ? specialBids.find((b) => b.id === item.specialBidId)
+        : undefined;
+      const hasBid = Boolean(item.specialBidId);
+
+      const productCost = Number(item.productCost ?? product?.costo ?? 0);
+      const productMolPercentage = item.productMolPercentage ?? product?.molPercentage ?? null;
+
+      const specialBidUnitPrice = hasBid
+        ? Number(item.specialBidUnitPrice ?? bid?.unitPrice ?? 0)
+        : null;
+      const specialBidMolPercentage = hasBid
+        ? (item.specialBidMolPercentage ?? bid?.molPercentage ?? null)
+        : null;
+
+      return {
+        ...item,
+        productCost,
+        productMolPercentage,
+        specialBidUnitPrice,
+        specialBidMolPercentage,
+      };
+    });
+
+    const payload = {
+      ...formData,
+      items: itemsWithSnapshots,
+    };
+
     if (editingQuote) {
-      await onUpdateQuote(editingQuote.id, formData);
+      await onUpdateQuote(editingQuote.id, payload);
     } else {
-      await onAddQuote(formData);
+      await onAddQuote(payload);
     }
     setIsModalOpen(false);
   };
@@ -298,6 +329,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
           ...item,
           specialBidId: applicableBid ? applicableBid.id : '',
           unitPrice: calcProductSalePrice(cost, mol),
+          productCost: Number(product.costo),
+          productMolPercentage: product.molPercentage,
+          specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
+          specialBidMolPercentage: applicableBid?.molPercentage ?? null,
         };
       });
 
@@ -325,6 +360,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       productName: '',
       quantity: 1,
       unitPrice: 0,
+      productCost: 0,
+      productMolPercentage: null,
+      specialBidUnitPrice: null,
+      specialBidMolPercentage: null,
       discount: 0,
       note: '',
     };
@@ -370,10 +409,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({
           const mol = molSource ? Number(molSource) : 0;
           console.log(`[SpecialBid] Bid: ${applicableBid.unitPrice}, Mol: ${mol}`);
           newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
+          newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
         } else {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].specialBidId = '';
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidUnitPrice = null;
+          newItems[index].specialBidMolPercentage = null;
         }
       }
     }
@@ -381,11 +428,15 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     if (field === 'specialBidId') {
       if (!value) {
         newItems[index].specialBidId = '';
+        newItems[index].specialBidUnitPrice = null;
+        newItems[index].specialBidMolPercentage = null;
         // Revert to standard product cost
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData({ ...formData, items: newItems });
         return;
@@ -401,6 +452,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
           const molSource = bid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
+          newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
         }
       }
     }
@@ -429,9 +484,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
         const taxAmount = lineNetAfterGlobal * (taxRate / 100);
         taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-        // Determine cost: if special bid, use bid price, else use product cost
-        const bid = specialBids.find((b) => b.id === item.specialBidId);
-        const cost = bid ? Number(bid.unitPrice) : product.costo;
+        // Determine cost: use stored snapshot values to avoid retroactive changes
+        const cost = item.specialBidId
+          ? Number(item.specialBidUnitPrice ?? 0)
+          : Number(item.productCost ?? product.costo);
 
         totalCost += item.quantity * cost;
       }
@@ -880,14 +936,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                         : undefined;
 
                       // Cost is the bid price if selected, otherwise product cost
-                      const cost = selectedBid
-                        ? Number(selectedBid.unitPrice)
-                        : selectedProduct
-                          ? Number(selectedProduct.costo)
-                          : 0;
+                      const cost = item.specialBidId
+                        ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
+                        : (item.productCost ?? selectedProduct?.costo ?? 0);
 
-                      const molSource =
-                        selectedBid?.molPercentage ?? selectedProduct?.molPercentage;
+                      const molSource = item.specialBidId
+                        ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
+                        : (item.productMolPercentage ?? selectedProduct?.molPercentage);
                       const molPercentage = molSource ? Number(molSource) : 0;
                       const margin = Number(item.unitPrice || 0) - cost;
                       return (

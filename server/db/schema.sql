@@ -384,12 +384,20 @@ CREATE TABLE IF NOT EXISTS quote_items (
     special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    product_mol_percentage DECIMAL(5, 2),
+    special_bid_unit_price DECIMAL(10, 2),
+    special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0;
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS note TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
@@ -474,11 +482,19 @@ CREATE TABLE IF NOT EXISTS sale_items (
     special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    product_mol_percentage DECIMAL(5, 2),
+    special_bid_unit_price DECIMAL(10, 2),
+    special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0;
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
 
 -- Ensure note column exists for sale items (mirrors quote_items structure)
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS note TEXT;

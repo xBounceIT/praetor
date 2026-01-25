@@ -59,6 +59,10 @@ export default async function (fastify, _opts) {
                 special_bid_id as "specialBidId",
                 quantity,
                 unit_price as "unitPrice",
+                product_cost as "productCost",
+                product_mol_percentage as "productMolPercentage",
+                special_bid_unit_price as "specialBidUnitPrice",
+                special_bid_mol_percentage as "specialBidMolPercentage",
                 note,
                 discount
             FROM sale_items
@@ -120,6 +124,19 @@ export default async function (fastify, _opts) {
         productName: productNameResult.value,
         quantity: quantityResult.value,
         unitPrice: unitPriceResult.value,
+        productCost: Number(item.productCost ?? 0),
+        productMolPercentage:
+          item.productMolPercentage === undefined || item.productMolPercentage === null
+            ? null
+            : Number(item.productMolPercentage),
+        specialBidUnitPrice:
+          item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+            ? null
+            : Number(item.specialBidUnitPrice),
+        specialBidMolPercentage:
+          item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+            ? null
+            : Number(item.specialBidMolPercentage),
         discount: itemDiscountResult.value || 0,
       });
     }
@@ -161,8 +178,8 @@ export default async function (fastify, _opts) {
     for (const item of normalizedItems) {
       const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
       const itemResult = await query(
-        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                  RETURNING
                     id,
                     sale_id as "saleId",
@@ -171,6 +188,10 @@ export default async function (fastify, _opts) {
                     special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
+                    product_cost as "productCost",
+                    product_mol_percentage as "productMolPercentage",
+                    special_bid_unit_price as "specialBidUnitPrice",
+                    special_bid_mol_percentage as "specialBidMolPercentage",
                     discount,
                     note`,
         [
@@ -181,6 +202,10 @@ export default async function (fastify, _opts) {
           item.specialBidId || null,
           item.quantity,
           item.unitPrice,
+          item.productCost,
+          item.productMolPercentage ?? null,
+          item.specialBidUnitPrice ?? null,
+          item.specialBidMolPercentage ?? null,
           item.discount || 0,
           item.note || null,
         ],
@@ -268,6 +293,19 @@ export default async function (fastify, _opts) {
           productName: productNameResult.value,
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
+          productCost: Number(item.productCost ?? 0),
+          productMolPercentage:
+            item.productMolPercentage === undefined || item.productMolPercentage === null
+              ? null
+              : Number(item.productMolPercentage),
+          specialBidUnitPrice:
+            item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+              ? null
+              : Number(item.specialBidUnitPrice),
+          specialBidMolPercentage:
+            item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+              ? null
+              : Number(item.specialBidMolPercentage),
           discount: itemDiscountResult.value || 0,
         });
       }
@@ -502,8 +540,8 @@ export default async function (fastify, _opts) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, discount, note)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                      RETURNING
                         id,
                         sale_id as "saleId",
@@ -512,6 +550,10 @@ export default async function (fastify, _opts) {
                         special_bid_id as "specialBidId",
                         quantity,
                         unit_price as "unitPrice",
+                        product_cost as "productCost",
+                        product_mol_percentage as "productMolPercentage",
+                        special_bid_unit_price as "specialBidUnitPrice",
+                        special_bid_mol_percentage as "specialBidMolPercentage",
                         discount,
                         note`,
           [
@@ -522,6 +564,10 @@ export default async function (fastify, _opts) {
             item.specialBidId || null,
             item.quantity,
             item.unitPrice,
+            item.productCost,
+            item.productMolPercentage ?? null,
+            item.specialBidUnitPrice ?? null,
+            item.specialBidMolPercentage ?? null,
             item.discount || 0,
             item.note || null,
           ],
@@ -539,6 +585,10 @@ export default async function (fastify, _opts) {
                     special_bid_id as "specialBidId",
                     quantity,
                     unit_price as "unitPrice",
+                    product_cost as "productCost",
+                    product_mol_percentage as "productMolPercentage",
+                    special_bid_unit_price as "specialBidUnitPrice",
+                    special_bid_mol_percentage as "specialBidMolPercentage",
                     discount,
                     note
                 FROM sale_items

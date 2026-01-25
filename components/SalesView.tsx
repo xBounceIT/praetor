@@ -204,10 +204,41 @@ const SalesView: React.FC<SalesViewProps> = ({
       return;
     }
 
+    const itemsWithSnapshots = (formData.items || []).map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      const bid = item.specialBidId
+        ? specialBids.find((b) => b.id === item.specialBidId)
+        : undefined;
+      const hasBid = Boolean(item.specialBidId);
+
+      const productCost = Number(item.productCost ?? product?.costo ?? 0);
+      const productMolPercentage = item.productMolPercentage ?? product?.molPercentage ?? null;
+
+      const specialBidUnitPrice = hasBid
+        ? Number(item.specialBidUnitPrice ?? bid?.unitPrice ?? 0)
+        : null;
+      const specialBidMolPercentage = hasBid
+        ? (item.specialBidMolPercentage ?? bid?.molPercentage ?? null)
+        : null;
+
+      return {
+        ...item,
+        productCost,
+        productMolPercentage,
+        specialBidUnitPrice,
+        specialBidMolPercentage,
+      };
+    });
+
+    const payload = {
+      ...formData,
+      items: itemsWithSnapshots,
+    };
+
     if (editingSale) {
-      onUpdateSale(editingSale.id, formData);
+      onUpdateSale(editingSale.id, payload);
     } else {
-      onAddSale(formData);
+      onAddSale(payload);
     }
     setIsModalOpen(false);
   };
@@ -244,13 +275,18 @@ const SalesView: React.FC<SalesViewProps> = ({
         const applicableBid = activeSpecialBids.find(
           (b) => b.clientId === clientId && b.productId === item.productId,
         );
-        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+        const molSource = applicableBid?.molPercentage ?? product.molPercentage;
+        const mol = molSource ? Number(molSource) : 0;
         const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
 
         return {
           ...item,
           specialBidId: applicableBid ? applicableBid.id : '',
           unitPrice: calcProductSalePrice(cost, mol),
+          productCost: Number(product.costo),
+          productMolPercentage: product.molPercentage,
+          specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
+          specialBidMolPercentage: applicableBid?.molPercentage ?? null,
         };
       });
 
@@ -278,6 +314,10 @@ const SalesView: React.FC<SalesViewProps> = ({
       specialBidId: '',
       quantity: 1,
       unitPrice: 0,
+      productCost: 0,
+      productMolPercentage: null,
+      specialBidUnitPrice: null,
+      specialBidMolPercentage: null,
       discount: 0,
     };
     setFormData({
@@ -312,14 +352,23 @@ const SalesView: React.FC<SalesViewProps> = ({
           (b) => b.clientId === formData.clientId && b.productId === value,
         );
 
-        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-
         if (applicableBid) {
+          const molSource = applicableBid.molPercentage ?? product.molPercentage;
+          const mol = molSource ? Number(molSource) : 0;
           newItems[index].specialBidId = applicableBid.id;
           newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
+          newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
         } else {
+          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].specialBidId = '';
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidUnitPrice = null;
+          newItems[index].specialBidMolPercentage = null;
         }
       }
     }
@@ -327,10 +376,14 @@ const SalesView: React.FC<SalesViewProps> = ({
     if (field === 'specialBidId') {
       if (!value) {
         newItems[index].specialBidId = '';
+        newItems[index].specialBidUnitPrice = null;
+        newItems[index].specialBidMolPercentage = null;
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData({ ...formData, items: newItems });
         return;
@@ -342,8 +395,13 @@ const SalesView: React.FC<SalesViewProps> = ({
         if (product) {
           newItems[index].productId = bid.productId;
           newItems[index].productName = product.name;
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+          const molSource = bid.molPercentage ?? product.molPercentage;
+          const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
+          newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
         }
       }
     }
@@ -371,8 +429,10 @@ const SalesView: React.FC<SalesViewProps> = ({
         const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
         const taxAmount = lineNetAfterGlobal * (taxRate / 100);
         taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-        const bid = specialBids.find((b) => b.id === item.specialBidId);
-        const cost = bid ? Number(bid.unitPrice) : product.costo;
+        // Use stored snapshot values to avoid retroactive changes
+        const cost = item.specialBidId
+          ? Number(item.specialBidUnitPrice ?? 0)
+          : Number(item.productCost ?? product.costo);
         totalCost += item.quantity * cost;
       }
     });
@@ -573,14 +633,16 @@ const SalesView: React.FC<SalesViewProps> = ({
                       const selectedBid = item.specialBidId
                         ? specialBids.find((b) => b.id === item.specialBidId)
                         : undefined;
-                      const cost = selectedBid
-                        ? Number(selectedBid.unitPrice)
-                        : selectedProduct
-                          ? Number(selectedProduct.costo)
-                          : 0;
-                      const molPercentage = selectedProduct
-                        ? Number(selectedProduct.molPercentage)
-                        : 0;
+
+                      // Use stored snapshot values to avoid retroactive changes
+                      const cost = item.specialBidId
+                        ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
+                        : (item.productCost ?? selectedProduct?.costo ?? 0);
+
+                      const molSource = item.specialBidId
+                        ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
+                        : (item.productMolPercentage ?? selectedProduct?.molPercentage);
+                      const molPercentage = molSource ? Number(molSource) : 0;
                       const salePrice = Number(item.unitPrice || 0);
                       const margin = salePrice - cost;
 
@@ -1089,7 +1151,7 @@ const SalesView: React.FC<SalesViewProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onViewQuote(sale.linkedQuoteId);
+                            onViewQuote(sale.linkedQuoteId!);
                           }}
                           className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
                           title={t('crm:quotes.viewQuote')}
