@@ -495,7 +495,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   const isQuoteExpired = (quote: Quote) =>
     quote.status !== 'accepted' &&
     quote.status !== 'denied' &&
-    (quote.isExpired ?? isExpired(quote.expirationDate));
+    quote.isExpired !== false &&
+    (quote.isExpired === true || isExpired(quote.expirationDate));
   const hasSaleForQuote = (quote: Quote) => Boolean(quoteIdsWithSales?.has(quote.id));
   const getSaleStatusForQuote = (quote: Quote) => quoteSaleStatuses?.[quote.id];
   const isQuoteHistory = (quote: Quote) =>
@@ -1403,7 +1404,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {paginatedActiveQuotes.map(renderQuoteRow)}
+            {paginatedActiveQuotes.map((quote) => renderQuoteRow(quote, false))}
             {filteredActiveQuotes.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-12 text-center">
