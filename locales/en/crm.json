@@ -247,7 +247,7 @@
     "convertConfirm": "Convert this quote to a sale?",
     "readOnlyStatus": "{{status}} quotes are read-only",
     "linkedSales": "Linked Sales",
-    "deleteConfirm": "Are you sure you want to delete this quote?",
+    "deleteConfirm": "Are you sure you want to delete this quote? This action cannot be undone.",
     "activeQuotes": "Active Quotes",
     "historyQuotes": "History",
     "createNewQuote": "Create New Quote",

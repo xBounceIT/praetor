@@ -110,6 +110,16 @@ export default async function (fastify, _opts) {
         }
       }
 
+      // Check for existing client ID
+      if (clientCodeResult.value) {
+        const existingCode = await query('SELECT id FROM clients WHERE client_code = $1', [
+          clientCodeResult.value,
+        ]);
+        if (existingCode.rows.length > 0) {
+          return badRequest(reply, 'Client ID already exists');
+        }
+      }
+
       const id = 'c-' + Date.now();
 
       try {
@@ -161,6 +171,16 @@ export default async function (fastify, _opts) {
       } catch (err) {
         if (err.code === '23505') {
           // Unique violation
+          if (err.constraint === 'idx_clients_vat_number_unique') {
+            return badRequest(reply, 'VAT number already exists');
+          }
+          if (err.constraint === 'idx_clients_client_code_unique') {
+            return badRequest(reply, 'Client ID already exists');
+          }
+          // Fallback or generic unique error
+          if (err.detail && err.detail.includes('client_code')) {
+            return badRequest(reply, 'Client ID already exists');
+          }
           return badRequest(reply, 'VAT number already exists');
         }
         throw err;
@@ -243,6 +263,17 @@ export default async function (fastify, _opts) {
         }
       }
 
+      // Check for existing client ID on other clients
+      if (clientCodeValue) {
+        const existingCode = await query(
+          'SELECT id FROM clients WHERE client_code = $1 AND id <> $2',
+          [clientCodeValue, idResult.value],
+        );
+        if (existingCode.rows.length > 0) {
+          return badRequest(reply, 'Client ID already exists');
+        }
+      }
+
       try {
         const result = await query(
           `
@@ -300,6 +331,15 @@ export default async function (fastify, _opts) {
       } catch (err) {
         if (err.code === '23505') {
           // Unique violation
+          if (err.constraint === 'idx_clients_vat_number_unique') {
+            return badRequest(reply, 'VAT number already exists');
+          }
+          if (err.constraint === 'idx_clients_client_code_unique') {
+            return badRequest(reply, 'Client ID already exists');
+          }
+          if (err.detail && err.detail.includes('client_code')) {
+            return badRequest(reply, 'Client ID already exists');
+          }
           return badRequest(reply, 'VAT number already exists');
         }
         throw err;

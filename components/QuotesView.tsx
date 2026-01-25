@@ -1277,7 +1277,6 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 </h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                   {t('crm:quotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
-                  This action cannot be undone.
                 </p>
               </div>
               <div className="flex gap-3 pt-2">

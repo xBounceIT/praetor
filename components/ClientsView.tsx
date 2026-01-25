@@ -139,6 +139,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       newErrors.clientCode = t('common:validation.clientCodeRequired');
     } else if (!/^[a-zA-Z0-9_-]+$/.test(trimmedClientCode)) {
       newErrors.clientCode = t('common:validation.clientCodeInvalid');
+    } else {
+      const isDuplicate = clients.some(
+        (c) =>
+          (c.clientCode || '').toLowerCase() === trimmedClientCode.toLowerCase() &&
+          (!editingClient || c.id !== editingClient.id),
+      );
+      if (isDuplicate) {
+        newErrors.clientCode = t('common:validation.clientCodeUnique');
+      }
     }
     if (!trimmedVatNumber && !trimmedTaxCode) {
       const msg = t('common:validation.vatOrTaxRequired');

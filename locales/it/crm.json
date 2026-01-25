@@ -241,7 +241,7 @@
     "convertConfirm": "Convertire questo preventivo in una vendita?",
     "readOnlyStatus": "I preventivi in stato {{status}} sono in sola lettura",
     "linkedSales": "Vendite Collegate",
-    "deleteConfirm": "Sei sicuro di voler eliminare questo preventivo?",
+    "deleteConfirm": "Sei sicuro di voler eliminare questo preventivo? Questa azione non può essere annullata.",
     "activeQuotes": "Preventivi Attivi",
     "historyQuotes": "Storico",
     "createNewQuote": "Crea Nuovo Preventivo",

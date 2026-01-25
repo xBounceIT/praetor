@@ -114,6 +114,7 @@
     "clientIdRequired": "Client is required",
     "taskNameRequired": "Task name is required",
     "clientCodeInvalid": "Only letters, numbers, dashes (-), and underscores (_) are allowed",
+    "clientCodeUnique": "This client code already exists",
     "productCodeRequired": "Product code is required",
     "productCodeInvalid": "Only letters, numbers, dashes (-), and underscores (_) are allowed",
     "productCodeUnique": "This product code already exists",

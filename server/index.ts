@@ -176,6 +176,14 @@ try {
     } catch (err) {
       console.error('Failed to run currency precision update migration:', err);
     }
+
+    // Run migration to add unique constraint to client_code
+    try {
+      const { addUniqueClientCode } = await import('./db/add_unique_client_code.ts');
+      await addUniqueClientCode();
+    } catch (err) {
+      console.error('Failed to run client_code unique constraint migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

@@ -25,3 +25,4 @@
 - Risolto il problema che consentiva ai manager di leggere, aggiornare ed eliminare le voci dei fogli presenze degli utenti che non gestivano.
 - Aggiunti controlli pre commit di linting con husky
 - Aggiunto ESLint per analisi codice statica
+- Aggiunto controllo su id prodotto e cliente per evitare duplicati
