@@ -19,7 +19,12 @@
     "supplierSaved": "Fornitore salvato con successo",
     "supplierDeleted": "Fornitore eliminato",
     "isDisabled": "Il fornitore è disabilitato",
-    "deleteConfirm": "Sei sicuro di voler eliminare questo fornitore?"
+    "deleteConfirm": "Sei sicuro di voler eliminare questo fornitore?",
+    "allSuppliers": "Tutti i Fornitori",
+    "contacts": "Contatti",
+    "administrativeDetails": "Dettagli Amministrativi",
+    "deleteConfirmTitle": "Eliminare Fornitore?",
+    "actionUndone": " Questa azione non può essere annullata."
   },
   "quotes": {
     "title": "Preventivi",

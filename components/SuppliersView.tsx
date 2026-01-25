@@ -418,7 +418,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         <div>
           <CustomSelect
             options={[
-              { id: 'all', name: t('common.all', { defaultValue: 'All' }) },
+              { id: 'all', name: t('common:common.all', { defaultValue: 'All' }) },
               { id: 'active', name: t('common.active') },
             ]}
             value={filterStatus}
@@ -442,7 +442,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       </div>
 
       <StandardTable
-        title={t('suppliers.allSuppliers', { defaultValue: 'All Suppliers' })}
+        title={t('suppliers:suppliers.allSuppliers', { defaultValue: 'All Suppliers' })}
         totalCount={filteredSuppliers.length}
         totalLabel={t('common.total')}
         headerAction={

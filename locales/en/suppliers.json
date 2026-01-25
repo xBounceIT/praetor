@@ -19,7 +19,12 @@
     "supplierSaved": "Supplier saved successfully",
     "supplierDeleted": "Supplier deleted",
     "isDisabled": "Supplier is disabled",
-    "deleteConfirm": "Are you sure you want to delete this supplier?"
+    "deleteConfirm": "Are you sure you want to delete this supplier?",
+    "allSuppliers": "All Suppliers",
+    "contacts": "Contacts",
+    "administrativeDetails": "Administrative Details",
+    "deleteConfirmTitle": "Delete Supplier?",
+    "actionUndone": " This action cannot be undone."
   },
   "quotes": {
     "title": "Quotes",
