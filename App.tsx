@@ -1476,7 +1476,7 @@ const App: React.FC = () => {
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
-      setQuotes((prev) => [...prev, quote]);
+      setQuotes((prev) => [quote, ...prev]);
     } catch (err) {
       console.error('Failed to add quote:', err);
     }
