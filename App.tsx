@@ -1436,6 +1436,7 @@ const App: React.FC = () => {
       setProducts([...products, product]);
     } catch (err) {
       console.error('Failed to add product:', err);
+      throw err;
     }
   };
 
@@ -1475,6 +1476,7 @@ const App: React.FC = () => {
       setProducts(products.map((p) => (p.id === id ? updated : p)));
     } catch (err) {
       console.error('Failed to update product:', err);
+      throw err;
     }
   };
 
