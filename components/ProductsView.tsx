@@ -396,7 +396,10 @@ const ProductsView: React.FC<ProductsViewProps> = ({
 
   // Filter options
   const allCategories = Array.from(
-    new Set(products.map((p) => p.category).filter((c): c is string => !!c)),
+    new Set([
+      ...Object.values(defaultCategoriesMap).flat(),
+      ...products.map((p) => p.category).filter((c): c is string => !!c),
+    ]),
   ).sort();
   const filterCategoryOptions: Option[] = [
     { id: 'all', name: t('crm:products.allCategories') },
