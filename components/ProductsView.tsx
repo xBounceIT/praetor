@@ -98,6 +98,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
+    productCode: '',
     description: '',
     costo: undefined,
     molPercentage: undefined,
@@ -134,6 +135,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     setEditingProduct(null);
     setFormData({
       name: '',
+      productCode: '',
       description: '',
       costo: undefined,
       molPercentage: undefined,
@@ -153,6 +155,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     setEditingProduct(product);
     setFormData({
       name: product.name || '',
+      productCode: product.productCode || '',
       description: product.description || '',
       costo: product.costo || 0,
       molPercentage: product.molPercentage || 0,
@@ -175,6 +178,14 @@ const ProductsView: React.FC<ProductsViewProps> = ({
 
     const newErrors: Record<string, string> = {};
     if (!formData.name?.trim()) newErrors.name = t('common:validation.productNameRequired');
+
+    // Validate product code
+    const trimmedProductCode = formData.productCode?.trim() || '';
+    if (!trimmedProductCode) {
+      newErrors.productCode = t('common:validation.productCodeRequired');
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(trimmedProductCode)) {
+      newErrors.productCode = t('common:validation.productCodeInvalid');
+    }
 
     // Frontend uniqueness check (optional, but good UX)
     // const isDuplicate = products.some(p => p.name.toLowerCase() === formData.name?.trim().toLowerCase() && p.id !== editingProduct?.id);
@@ -222,7 +233,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
       newErrors.type = t('common:validation.typeRequired');
     }
     const costUnitValue = formData.costUnit;
-    if (!costUnitValue || !['unit', 'hours'].includes(costUnitValue)) {
+    if (!costUnitValue || !['unit', 'hour'].includes(costUnitValue)) {
       newErrors.costUnit = t('common:validation.unitOfMeasureRequired');
     }
 
@@ -240,7 +251,11 @@ const ProductsView: React.FC<ProductsViewProps> = ({
       setIsModalOpen(false);
     } catch (err: unknown) {
       if (err instanceof Error && err.message.includes('unique')) {
-        setErrors({ ...newErrors, name: t('common:validation.productNameUnique') });
+        if (err.message.toLowerCase().includes('product code')) {
+          setErrors({ ...newErrors, productCode: t('common:validation.productCodeUnique') });
+        } else {
+          setErrors({ ...newErrors, name: t('common:validation.productNameUnique') });
+        }
       } else {
         setServerError(err instanceof Error ? err.message : 'An error occurred');
       }
@@ -299,6 +314,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
       const matchesSearch =
         normalizedSearch === '' ||
         product.name.toLowerCase().includes(normalizedSearch) ||
+        (product.productCode ?? '').toLowerCase().includes(normalizedSearch) ||
         (product.category ?? '').toLowerCase().includes(normalizedSearch) ||
         (product.supplierName ?? '').toLowerCase().includes(normalizedSearch);
 
@@ -391,19 +407,43 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     ...allCategories.map((c: string) => ({ id: c, name: c })),
   ];
 
+  // Helper to get localized name for product types
+  const getLocalizedTypeName = (type: string) => {
+    switch (type) {
+      case 'supply':
+        return t('crm:products.typeSupply');
+      case 'service':
+        return t('crm:products.typeService');
+      case 'consulting':
+        return t('crm:products.typeConsulting');
+      case 'item':
+        return t('crm:products.typeItem');
+      default:
+        return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+  };
+
   // Include all actually used types in filter
   const allUsedTypes = Array.from(new Set(products.map((p) => p.type))).sort();
   const filterTypeOptions: Option[] = [{ id: 'all', name: t('common:filters.allTypes') }];
+
   // Add standard types
-  (['supply', 'service', 'consulting'] as const).forEach((t) => {
-    if (!filterTypeOptions.find((o) => o.id === t)) {
-      filterTypeOptions.push({ id: t, name: t.charAt(0).toUpperCase() + t.slice(1) });
+  (['supply', 'service', 'consulting'] as const).forEach((typeId) => {
+    if (!filterTypeOptions.find((o) => o.id === typeId)) {
+      filterTypeOptions.push({
+        id: typeId,
+        name: getLocalizedTypeName(typeId),
+      });
     }
   });
-  // Add any legacy types if they exist in data
-  allUsedTypes.forEach((t: string) => {
-    if (!filterTypeOptions.find((o) => o.id === t)) {
-      filterTypeOptions.push({ id: t, name: t });
+
+  // Add any other types if they exist in data
+  allUsedTypes.forEach((typeId: string) => {
+    if (!filterTypeOptions.find((o) => o.id === typeId)) {
+      filterTypeOptions.push({
+        id: typeId,
+        name: getLocalizedTypeName(typeId),
+      });
     }
   });
 
@@ -417,10 +457,10 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     const type = val as Product['type'];
     let unit = 'unit';
     if (type === 'service' || type === 'consulting') {
-      // Default to hours or unit? "Service" logic usually hours, Consulting usually days/hours, Supply units.
-      // Original logic: type === 'item' ? 'unit' : 'hours';
-      // Let's infer: Supply -> unit, Service/Consulting -> hours
-      unit = type === 'service' || type === 'consulting' ? 'hours' : 'unit';
+      // Default to hour or unit? "Service" logic usually hour, Consulting usually days/hour, Supply units.
+      // Original logic: type === 'item' ? 'unit' : 'hour';
+      // Let's infer: Supply -> unit, Service/Consulting -> hour
+      unit = type === 'service' || type === 'consulting' ? 'hour' : 'unit';
     }
 
     setFormData({
@@ -609,6 +649,29 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
 
                   <div className="col-span-full space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">Product Code</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.productCode}
+                      onChange={(e) => {
+                        setFormData({ ...formData, productCode: e.target.value });
+                        if (errors.productCode) setErrors({ ...errors, productCode: '' });
+                      }}
+                      placeholder="e.g., LAPTOP-001"
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.productCode ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                    />
+                    {errors.productCode && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
+                        {errors.productCode}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-slate-400 ml-1">
+                      Only letters, numbers, underscores, and hyphens allowed
+                    </p>
+                  </div>
+
+                  <div className="col-span-full space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 ml-1">
                       {t('crm:products.description')}
                     </label>
@@ -732,8 +795,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                       <i
                         className={`fa-solid ${formData.type === 'supply' || formData.type === 'item' ? 'fa-box-open' : 'fa-clock'}`}
                       ></i>
-                      {formData.costUnit === 'hours'
-                        ? t('crm:products.hours')
+                      {formData.costUnit === 'hour'
+                        ? t('crm:products.hour')
                         : t('crm:products.unit')}
                     </div>
                     {errors.costUnit && (
@@ -1059,7 +1122,14 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                       <i className="fa-solid fa-box"></i>
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                        {p.productCode && (
+                          <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase flex-shrink-0">
+                            {p.productCode}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] font-black text-slate-400 uppercase truncate">
                         {p.category || t('crm:products.noCategory')}
                       </div>
@@ -1070,27 +1140,24 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                   </div>
                 </td>
                 <td className="px-4 py-5">
-                  <div className="flex flex-col gap-1.5">
-                    <span
-                      className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${p.type === 'service' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}
-                    >
-                      {p.type === 'service'
-                        ? t('crm:products.typeService')
-                        : t('crm:products.typeItem')}
-                    </span>
-                    <StatusBadge type="active" label={t('common:labels.active')} />
-                  </div>
+                  <span
+                    className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${p.type === 'service' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}
+                  >
+                    {p.type === 'service'
+                      ? t('crm:products.typeService')
+                      : t('crm:products.typeItem')}
+                  </span>
                 </td>
                 <td className="px-6 py-5 text-sm font-semibold text-slate-500">
                   {Number(p.costo).toFixed(2)} {currency} /{' '}
-                  {p.costUnit === 'hours' ? t('crm:products.hours') : t('crm:products.unit')}
+                  {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
                 </td>
                 <td className="px-6 py-5 text-sm font-semibold text-slate-500">
                   {Number(p.molPercentage).toFixed(2)}%
                 </td>
                 <td className="px-6 py-5 text-sm font-semibold text-slate-700">
                   {calcSalePrice(Number(p.costo), Number(p.molPercentage)).toFixed(2)} {currency} /{' '}
-                  {p.costUnit === 'hours' ? t('crm:products.hours') : t('crm:products.unit')}
+                  {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
                 </td>
                 <td className="px-6 py-5 text-sm font-semibold text-emerald-600">
                   {calcMargine(Number(p.costo), Number(p.molPercentage)).toFixed(2)} {currency}

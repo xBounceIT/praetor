@@ -278,6 +278,7 @@ CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);
 CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    product_code VARCHAR(50) UNIQUE NOT NULL,
     costo DECIMAL(10, 2) NOT NULL DEFAULT 0,
     mol_percentage DECIMAL(5, 2) NOT NULL DEFAULT 0,
     cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit',
@@ -296,6 +297,9 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'item';
 -- But let's reflect the description/subcategory existence:
 ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
+
+-- Ensure product_code column exists for existing installations
+ALTER TABLE products ADD COLUMN IF NOT EXISTS product_code VARCHAR(50);
 
 -- Ensure supplier_id column exists for existing installations
 ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id VARCHAR(50) REFERENCES suppliers(id) ON DELETE SET NULL;
@@ -339,6 +343,7 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name_unique ON products(name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_product_code_unique ON products(product_code);
 
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (

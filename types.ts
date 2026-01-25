@@ -101,10 +101,11 @@ export type TrackerViewMode = 'daily' | 'weekly';
 export interface Product {
   id: string;
   name: string;
+  productCode: string;
   description?: string;
   costo: number;
   molPercentage: number;
-  costUnit: 'unit' | 'hours';
+  costUnit: 'unit' | 'hour';
   category?: string;
   subcategory?: string;
   taxRate: number;

@@ -16,7 +16,7 @@ export default async function (fastify, _opts) {
   // GET / - List all products
   fastify.get('/', async (_request, _reply) => {
     const result = await query(
-      `SELECT p.id, p.name, p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
+      `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
              FROM products p 
              LEFT JOIN suppliers s ON p.supplier_id = s.id 
              ORDER BY p.name ASC`,
@@ -28,6 +28,7 @@ export default async function (fastify, _opts) {
   fastify.post('/', async (request, reply) => {
     const {
       name,
+      productCode,
       description,
       costo,
       molPercentage,
@@ -48,6 +49,26 @@ export default async function (fastify, _opts) {
     ]);
     if (existingName.rows.length > 0) {
       return badRequest(reply, 'Product name must be unique');
+    }
+
+    // Validate product code
+    const productCodeResult = requireNonEmptyString(productCode, 'productCode');
+    if (!productCodeResult.ok) return badRequest(reply, productCodeResult.message);
+
+    // Check product code format (alphanumeric, underscores, hyphens only)
+    if (!/^[a-zA-Z0-9_-]+$/.test(productCodeResult.value)) {
+      return badRequest(
+        reply,
+        'Product code can only contain letters, numbers, underscores, and hyphens',
+      );
+    }
+
+    // Check product code uniqueness
+    const existingCode = await query('SELECT id FROM products WHERE product_code = $1', [
+      productCodeResult.value,
+    ]);
+    if (existingCode.rows.length > 0) {
+      return badRequest(reply, 'Product code must be unique');
     }
 
     if (costo === undefined || costo === null || costo === '') {
@@ -89,12 +110,13 @@ export default async function (fastify, _opts) {
 
     const id = 'p-' + Date.now();
     const result = await query(
-      `INSERT INTO products (id, name, description, costo, mol_percentage, cost_unit, category, subcategory, tax_rate, type, supplier_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-             RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
+      `INSERT INTO products (id, name, product_code, description, costo, mol_percentage, cost_unit, category, subcategory, tax_rate, type, supplier_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+             RETURNING id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
       [
         id,
         nameResult.value,
+        productCodeResult.value,
         description || null,
         costoResult.value,
         molPercentageResult.value,
@@ -144,6 +166,31 @@ export default async function (fastify, _opts) {
       }
       fields.push(`name = $${paramIndex++}`);
       values.push(nameResult.value);
+    }
+
+    // Product Code
+    if (body.productCode !== undefined) {
+      const productCodeResult = requireNonEmptyString(body.productCode, 'productCode');
+      if (!productCodeResult.ok) return badRequest(reply, productCodeResult.message);
+
+      // Check product code format (alphanumeric, underscores, hyphens only)
+      if (!/^[a-zA-Z0-9_-]+$/.test(productCodeResult.value)) {
+        return badRequest(
+          reply,
+          'Product code can only contain letters, numbers, underscores, and hyphens',
+        );
+      }
+
+      // Check product code uniqueness (exclude current product)
+      const existingCode = await query(
+        'SELECT id FROM products WHERE product_code = $1 AND id != $2',
+        [productCodeResult.value, idResult.value],
+      );
+      if (existingCode.rows.length > 0) {
+        return badRequest(reply, 'Product code must be unique');
+      }
+      fields.push(`product_code = $${paramIndex++}`);
+      values.push(productCodeResult.value);
     }
 
     // Description (nullable)
@@ -229,7 +276,7 @@ export default async function (fastify, _opts) {
     if (fields.length === 0) {
       // No updates
       const result = await query(
-        `SELECT id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId" 
+        `SELECT id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId" 
                  FROM products WHERE id = $1`,
         [idResult.value],
       );
@@ -252,7 +299,7 @@ export default async function (fastify, _opts) {
             UPDATE products 
             SET ${fields.join(', ')}
             WHERE id = $${paramIndex}
-            RETURNING id, name, description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"
+            RETURNING id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"
         `;
 
     const result = await query(queryText, values);
