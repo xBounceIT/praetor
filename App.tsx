@@ -648,6 +648,16 @@ const App: React.FC = () => {
     return ids;
   }, [sales]);
 
+  const quoteSaleStatuses = useMemo(() => {
+    const map: Record<string, Sale['status']> = {};
+    sales.forEach((sale) => {
+      if (sale.linkedQuoteId) {
+        map[sale.linkedQuoteId] = sale.status;
+      }
+    });
+    return map;
+  }, [sales]);
+
   const isRouteAccessible = useMemo(() => {
     if (!currentUser) return false;
     if (activeView === '404') return false;
@@ -2056,6 +2066,7 @@ const App: React.FC = () => {
                   onCreateSale={handleCreateSaleFromQuote}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithSales={quoteIdsWithSales}
+                  quoteSaleStatuses={quoteSaleStatuses}
                   currency={generalSettings.currency}
                 />
               )}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Quote, QuoteItem, Client, Product, SpecialBid } from '../types';
+import { Quote, QuoteItem, Client, Product, SpecialBid, Sale } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
@@ -18,6 +18,7 @@ interface QuotesViewProps {
   onCreateSale?: (quote: Quote) => void;
   quoteFilterId?: string | null;
   quoteIdsWithSales?: Set<string>;
+  quoteSaleStatuses?: Record<string, Sale['status']>;
   currency: string;
 }
 
@@ -36,6 +37,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   onDeleteQuote,
   onCreateSale,
   quoteIdsWithSales,
+  quoteSaleStatuses,
   currency,
 }) => {
   const { t } = useTranslation(['crm', 'common', 'form']);
@@ -495,11 +497,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     quote.status !== 'denied' &&
     (quote.isExpired ?? isExpired(quote.expirationDate));
   const hasSaleForQuote = (quote: Quote) => Boolean(quoteIdsWithSales?.has(quote.id));
+  const getSaleStatusForQuote = (quote: Quote) => quoteSaleStatuses?.[quote.id];
   const isQuoteHistory = (quote: Quote) =>
     quote.status === 'accepted' ||
     quote.status === 'denied' ||
     isQuoteExpired(quote) ||
-    hasSaleForQuote(quote);
+    (hasSaleForQuote(quote) && getSaleStatusForQuote(quote) !== 'draft');
   const sortedQuotes = useMemo(() => {
     if (expirationSort === 'none') return filteredQuotes;
     const direction = expirationSort === 'asc' ? 1 : -1;
@@ -527,19 +530,44 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     historyStartIndex + rowsPerPage,
   );
 
-  const renderQuoteRow = (quote: Quote) => {
+  const renderQuoteRow = (quote: Quote, isHistory = false) => {
     const { total } = calculateTotals(quote.items, quote.discount);
     const expired = isQuoteExpired(quote);
+    const hasSale = hasSaleForQuote(quote);
+    const saleStatus = getSaleStatusForQuote(quote);
+    const isHistoryRow = Boolean(isHistory);
 
-    const isDeleteDisabled = expired || quote.status !== 'draft';
-    const deleteTitle = expired
-      ? t('crm:quotes.errors.expiredCannotDelete')
-      : t('crm:quotes.deleteQuote');
+    const isDeleteDisabled = expired || quote.status !== 'draft' || isHistoryRow;
+    const deleteTitle = isHistoryRow
+      ? t('crm:quotes.historyActionsDisabled', {
+          defaultValue: 'History entries cannot be modified.',
+        })
+      : expired
+        ? t('crm:quotes.errors.expiredCannotDelete')
+        : t('crm:quotes.deleteQuote');
+
+    const isCreateSaleDisabled = isHistoryRow || hasSale;
+    const createSaleTitle = hasSale
+      ? t('crm:quotes.saleAlreadyExists', {
+          defaultValue: 'A sale order for this quote already exists.',
+        })
+      : isHistoryRow
+        ? t('crm:quotes.historyActionsDisabled', {
+            defaultValue: 'History entries cannot be modified.',
+          })
+        : t('crm:quotes.convertToSale');
+
+    const canRestore = !hasSale || saleStatus === 'draft';
+    const restoreTitle = !canRestore
+      ? t('crm:quotes.restoreDisabledSaleStatus', {
+          defaultValue: 'Restore is only possible when the linked sale order is in draft status.',
+        })
+      : t('crm:quotes.restoreQuote', { defaultValue: 'Restore quote' });
     return (
       <tr
         key={quote.id}
-        onClick={() => openEditModal(quote)}
-        className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : ''}`}
+        onClick={isHistoryRow ? undefined : () => openEditModal(quote)}
+        className={`transition-colors group ${isHistoryRow ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50 cursor-pointer'} ${!isHistoryRow && expired ? 'bg-red-50/30' : ''}`}
       >
         <td className="px-8 py-5">
           <div className="flex items-center gap-3">
@@ -550,7 +578,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               <div className="text-[10px] font-black text-slate-400 tracking-wider">
                 ID {quote.id}
               </div>
-              <div className="font-bold text-slate-800">{quote.clientName}</div>
+              <div
+                className={isHistoryRow ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}
+              >
+                {quote.clientName}
+              </div>
               <div className="text-[10px] font-black text-slate-400 uppercase">
                 {t('crm:quotes.itemsCount', { count: quote.items.length })}
               </div>
@@ -558,23 +590,41 @@ const QuotesView: React.FC<QuotesViewProps> = ({
           </div>
         </td>
         <td className="px-8 py-5">
-          <StatusBadge
-            type={expired ? 'expired' : (quote.status as StatusType)}
-            label={getStatusLabel(quote.status)}
-          />
+          <div className={isHistoryRow ? 'opacity-60' : ''}>
+            <StatusBadge
+              type={expired ? 'expired' : (quote.status as StatusType)}
+              label={getStatusLabel(quote.status)}
+            />
+          </div>
         </td>
-        <td className="px-8 py-5 text-sm font-bold text-slate-700">
+        <td
+          className={`px-8 py-5 text-sm font-bold ${
+            isHistoryRow ? 'text-slate-400' : 'text-slate-700'
+          }`}
+        >
           {total.toFixed(2)} {currency}
         </td>
-        <td className="px-8 py-5 text-sm font-semibold text-slate-600">
+        <td
+          className={`px-8 py-5 text-sm font-semibold ${
+            isHistoryRow ? 'text-slate-400' : 'text-slate-600'
+          }`}
+        >
           {quote.paymentTerms === 'immediate'
             ? t('crm:quotes.immediatePayment')
             : quote.paymentTerms}
         </td>
         <td className="px-8 py-5">
-          <div className={`text-sm ${expired ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
+          <div
+            className={`text-sm ${
+              isHistoryRow
+                ? 'text-slate-400'
+                : expired
+                  ? 'text-red-600 font-bold'
+                  : 'text-slate-600'
+            }`}
+          >
             {new Date(quote.expirationDate).toLocaleDateString()}
-            {expired && (
+            {expired && !isHistoryRow && (
               <span className="ml-2 text-[10px] font-black">{t('crm:quotes.expiredLabel')}</span>
             )}
           </div>
@@ -584,10 +634,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                if (isHistoryRow) return;
                 openEditModal(quote);
               }}
-              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-              title={t('crm:quotes.editQuote')}
+              disabled={isHistoryRow}
+              className={`p-2 rounded-lg transition-all ${isHistoryRow ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+              title={
+                isHistoryRow
+                  ? t('crm:quotes.historyActionsDisabled', {
+                      defaultValue: 'History entries cannot be modified.',
+                    })
+                  : t('crm:quotes.editQuote')
+              }
             >
               <i className="fa-solid fa-pen-to-square"></i>
             </button>
@@ -595,10 +653,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isCreateSaleDisabled) return;
                   onCreateSale(quote);
                 }}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                title={t('crm:quotes.convertToSale')}
+                disabled={isCreateSaleDisabled}
+                className={`p-2 rounded-lg transition-all ${isCreateSaleDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                title={createSaleTitle}
               >
                 <i className="fa-solid fa-cart-plus"></i>
               </button>
@@ -607,10 +667,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isHistoryRow) return;
                   onUpdateQuote(quote.id, { status: 'sent' });
                 }}
-                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                title={t('crm:quotes.markAsSent')}
+                disabled={isHistoryRow}
+                className={`p-2 rounded-lg transition-all ${isHistoryRow ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                title={
+                  isHistoryRow
+                    ? t('crm:quotes.historyActionsDisabled', {
+                        defaultValue: 'History entries cannot be modified.',
+                      })
+                    : t('crm:quotes.markAsSent')
+                }
               >
                 <i className="fa-solid fa-paper-plane"></i>
               </button>
@@ -620,20 +688,36 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (isHistoryRow) return;
                     onUpdateQuote(quote.id, { status: 'accepted' });
                   }}
-                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                  title={t('crm:quotes.markAsConfirmed')}
+                  disabled={isHistoryRow}
+                  className={`p-2 rounded-lg transition-all ${isHistoryRow ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                  title={
+                    isHistoryRow
+                      ? t('crm:quotes.historyActionsDisabled', {
+                          defaultValue: 'History entries cannot be modified.',
+                        })
+                      : t('crm:quotes.markAsConfirmed')
+                  }
                 >
                   <i className="fa-solid fa-check"></i>
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (isHistoryRow) return;
                     onUpdateQuote(quote.id, { status: 'denied' });
                   }}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title={t('crm:quotes.markAsDenied')}
+                  disabled={isHistoryRow}
+                  className={`p-2 rounded-lg transition-all ${isHistoryRow ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+                  title={
+                    isHistoryRow
+                      ? t('crm:quotes.historyActionsDisabled', {
+                          defaultValue: 'History entries cannot be modified.',
+                        })
+                      : t('crm:quotes.markAsDenied')
+                  }
                 >
                   <i className="fa-solid fa-xmark"></i>
                 </button>
@@ -651,6 +735,20 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 title={deleteTitle}
               >
                 <i className="fa-solid fa-trash-can"></i>
+              </button>
+            )}
+            {isHistoryRow && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canRestore) return;
+                  onUpdateQuote(quote.id, { status: 'draft', isExpired: false });
+                }}
+                disabled={!canRestore}
+                className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-slate-400'}`}
+                title={restoreTitle}
+              >
+                <i className="fa-solid fa-rotate-left"></i>
               </button>
             )}
           </div>
@@ -1327,7 +1425,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       </StandardTable>
 
       <StandardTable
-        title={t('crm:quotes.historyQuotes', { defaultValue: t('crm:quotes.expiredQuotes') })}
+        title={t('crm:quotes.historyQuotes', { defaultValue: 'History' })}
         totalCount={filteredHistoryQuotes.length}
         totalLabel={t('crm:quotes.totalLabel')}
         containerClassName="border-dashed bg-slate-50"
@@ -1428,7 +1526,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {paginatedHistoryQuotes.map(renderQuoteRow)}
+            {paginatedHistoryQuotes.map((quote) => renderQuoteRow(quote, true))}
             {filteredHistoryQuotes.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-12 text-center">

@@ -302,6 +302,10 @@
     "itemsCount": "{{count}} articolo",
     "itemsCount_other": "{{count}} articoli",
     "expiredLabel": "(SCADUTO)",
+    "saleAlreadyExists": "Esiste già un ordine di vendita per questo preventivo.",
+    "historyActionsDisabled": "Le voci dello storico non possono essere modificate.",
+    "restoreDisabledSaleStatus": "Il ripristino è possibile solo se l'ordine di vendita collegato è in stato Bozza.",
+    "restoreQuote": "Ripristina preventivo",
     "rowsPerPage": "Righe per pagina:"
   },
   "sales": {

@@ -308,6 +308,10 @@
     "itemsCount": "{{count}} item",
     "itemsCount_other": "{{count}} items",
     "expiredLabel": "(EXPIRED)",
+    "saleAlreadyExists": "A sale order for this quote already exists.",
+    "historyActionsDisabled": "History entries cannot be modified.",
+    "restoreDisabledSaleStatus": "Restore is only possible when the linked sale order is in draft status.",
+    "restoreQuote": "Restore quote",
     "rowsPerPage": "Rows per page:"
   },
   "sales": {
