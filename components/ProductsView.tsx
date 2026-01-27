@@ -921,7 +921,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.productName')} / {t('crm:products.category')} /{' '}
+                {t('common:labels.name')} / {t('crm:products.category')} /{' '}
                 {t('crm:products.supplier')}
               </th>
               <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
