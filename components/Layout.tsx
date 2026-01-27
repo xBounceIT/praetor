@@ -66,9 +66,8 @@ const Layout: React.FC<LayoutProps> = ({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
+  /* Removed module switcher state and refs */
   const menuRef = useRef<HTMLDivElement>(null);
-  const moduleSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Create modules array with localized names
   const modules: Module[] = useMemo(
@@ -118,16 +117,12 @@ const Layout: React.FC<LayoutProps> = ({
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
-      if (moduleSwitcherRef.current && !moduleSwitcherRef.current.contains(event.target as Node)) {
-        setIsModuleSwitcherOpen(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleModuleSwitch = (module: Module) => {
-    setIsModuleSwitcherOpen(false);
     // Navigate to the default route for the selected module
     const defaultRoute = moduleDefaultRoutes[module.id];
     if (defaultRoute) {
@@ -136,7 +131,283 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+  /* Removed module switcher state and refs */
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+
+  const renderModuleNavItems = (moduleId: string) => {
+    switch (moduleId) {
+      case 'timesheets':
+        return (
+          <>
+            <NavItem
+              icon="fa-list-check"
+              label={t('routes.timeTracker')}
+              active={activeView === 'timesheets/tracker'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('timesheets/tracker');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            <NavItem
+              icon="fa-chart-pie"
+              label={t('routes.reports')}
+              active={activeView === 'timesheets/reports'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('timesheets/reports');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            <NavItem
+              icon="fa-repeat"
+              label={t('routes.recurringTasks')}
+              active={activeView === 'timesheets/recurring'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('timesheets/recurring');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            <NavItem
+              icon="fa-folder-tree"
+              label={t('routes.projects')}
+              active={activeView === 'timesheets/projects'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('timesheets/projects');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            <NavItem
+              icon="fa-tasks"
+              label={t('routes.tasks')}
+              active={activeView === 'timesheets/tasks'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('timesheets/tasks');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'crm':
+        return (
+          <>
+            <NavItem
+              icon="fa-building"
+              label={t('routes.clients')}
+              active={activeView === 'crm/clients'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('crm/clients');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-file-invoice"
+              label={t('routes.quotes')}
+              active={activeView === 'crm/quotes'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('crm/quotes');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-cart-shopping"
+              label={t('routes.sales')}
+              active={activeView === 'crm/sales'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('crm/sales');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'catalog':
+        return (
+          <>
+            <NavItem
+              icon="fa-box"
+              label={t('routes.products')}
+              active={activeView === 'catalog/products'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('catalog/products');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-tags"
+              label={t('routes.specialBids')}
+              active={activeView === 'catalog/special-bids'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('catalog/special-bids');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'hr':
+        return (
+          <>
+            <NavItem
+              icon="fa-users"
+              label={t('routes.workforce')}
+              active={activeView === 'hr/workforce'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('hr/workforce');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            {isManagement && (
+              <NavItem
+                icon="fa-sitemap"
+                label={t('routes.workUnits')}
+                active={activeView === 'hr/work-units'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('hr/work-units');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+          </>
+        );
+      case 'projects':
+        return (
+          <>
+            <NavItem
+              icon="fa-folder-tree"
+              label={t('routes.projects')}
+              active={activeView === 'projects/manage'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('projects/manage');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            <NavItem
+              icon="fa-tasks"
+              label={t('routes.tasks')}
+              active={activeView === 'projects/tasks'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('projects/tasks');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'finances':
+        return (
+          <>
+            <NavItem
+              icon="fa-file-invoice-dollar"
+              label={t('routes.invoices')}
+              active={activeView === 'finances/invoices'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('finances/invoices');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-money-bill-wave"
+              label={t('routes.payments')}
+              active={activeView === 'finances/payments'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('finances/payments');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-receipt"
+              label={t('routes.expenses')}
+              active={activeView === 'finances/expenses'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('finances/expenses');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-chart-line"
+              label={t('routes.reports')}
+              active={activeView === 'finances/reports'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('finances/reports');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'suppliers':
+        return (
+          <>
+            <NavItem
+              icon="fa-industry"
+              label={t('routes.suppliers')}
+              active={activeView === 'suppliers/manage'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('suppliers/manage');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-file-invoice"
+              label={t('routes.supplierQuotes')}
+              active={activeView === 'suppliers/quotes'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('suppliers/quotes');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'configuration':
+        return (
+          <>
+            <NavItem
+              icon="fa-shield-halved"
+              label={t('routes.authentication')}
+              active={activeView === 'configuration/authentication'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('configuration/authentication');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            <NavItem
+              icon="fa-sliders"
+              label={t('routes.general')}
+              active={activeView === 'configuration/general'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('configuration/general');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      default:
+        return null;
+    }
+  };
 
   const isManagement = currentUser.role === 'admin' || currentUser.role === 'manager';
 
@@ -186,350 +457,56 @@ const Layout: React.FC<LayoutProps> = ({
         )}
 
         <div
-          className={`flex-1 px-4 space-y-2 overflow-y-auto ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}
+          className={`flex-1 px-3 space-y-1 overflow-y-auto ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}
         >
-          {/* Module Switcher */}
-          <div className="relative mb-4" ref={moduleSwitcherRef}>
-            <button
-              onClick={() => setIsModuleSwitcherOpen(!isModuleSwitcherOpen)}
-              className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
-                bg-black/20 border border-white/10 hover:bg-black/30 hover:border-white/20
-                ${isCollapsed ? 'justify-center' : ''}`}
-            >
-              <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-black/10">
-                <i className={`fa-solid ${activeModule.icon} text-white text-sm`}></i>
-              </div>
-              {!isCollapsed && (
-                <>
-                  <div className="flex-1 text-left">
-                    <div className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
-                      {t('module')}
-                    </div>
-                    <div className="text-sm font-semibold text-white">{activeModule.name}</div>
-                  </div>
-                  <i
-                    className={`fa-solid fa-chevron-down text-[10px] text-white/50 transition-transform duration-200 ${isModuleSwitcherOpen ? 'rotate-180' : ''}`}
-                  ></i>
-                </>
-              )}
-            </button>
-
-            {isModuleSwitcherOpen && (
-              <div
-                className={`absolute z-50 mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top
-                ${isCollapsed ? 'left-full ml-2 top-0 w-56' : 'left-0 right-0'}`}
+          {accessibleModules.map((module) => (
+            <div key={module.id} className="space-y-1 mb-2">
+              <button
+                onClick={() => handleModuleSwitch(module)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
+                  ${
+                    activeModule.id === module.id
+                      ? 'bg-praetor text-white shadow-lg shadow-black/10'
+                      : 'text-white/60 hover:bg-white/10 hover:text-white'
+                  }
+                  ${isCollapsed ? 'justify-center' : ''}`}
               >
-                <div className="p-2 space-y-1">
-                  {accessibleModules.map((module) => (
-                    <button
-                      key={module.id}
-                      onClick={() => handleModuleSwitch(module)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                        ${
-                          activeModule.id === module.id
-                            ? 'bg-praetor text-white shadow-lg shadow-slate-900/30'
-                            : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                        }`}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-                        ${activeModule.id === module.id ? 'bg-white/20' : 'bg-slate-700'}`}
-                      >
-                        <i className={`fa-solid ${module.icon} text-sm`}></i>
-                      </div>
-                      <span className="font-medium text-sm">{module.name}</span>
-                      {activeModule.id === module.id && (
-                        <i className="fa-solid fa-check ml-auto text-xs"></i>
-                      )}
-                    </button>
-                  ))}
+                <div
+                  className={`flex items-center justify-center transition-colors ${activeModule.id === module.id ? 'text-white' : ''}`}
+                >
+                  <i className={`fa-solid ${module.icon} text-lg w-6 text-center`}></i>
                 </div>
-              </div>
-            )}
 
-            {isCollapsed && (
-              <div className="absolute left-full ml-4 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700 top-1/2 -translate-y-1/2">
-                {t('modules_label')}
-                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-800 border-l border-b border-slate-700 rotate-45"></div>
-              </div>
-            )}
-          </div>
+                {!isCollapsed && (
+                  <>
+                    <span className="font-bold text-sm tracking-wide flex-1 text-left uppercase">
+                      {module.name}
+                    </span>
+                    <i
+                      className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${activeModule.id === module.id ? 'rotate-180' : ''}`}
+                    ></i>
+                  </>
+                )}
 
-          {/* Timesheets Module Nav Items */}
-          {activeModule.id === 'timesheets' && (
-            <>
-              <NavItem
-                icon="fa-list-check"
-                label={t('routes.timeTracker')}
-                active={activeView === 'timesheets/tracker'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/tracker');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
+                {/* Tooltip for collapsed state */}
+                {isCollapsed && (
+                  <div className="absolute left-full ml-4 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700 top-1/2 -translate-y-1/2">
+                    {module.name}
+                    <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-800 border-l border-b border-slate-700 rotate-45"></div>
+                  </div>
+                )}
+              </button>
 
-              <NavItem
-                icon="fa-chart-pie"
-                label={t('routes.reports')}
-                active={activeView === 'timesheets/reports'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/reports');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-
-              <NavItem
-                icon="fa-repeat"
-                label={t('routes.recurringTasks')}
-                active={activeView === 'timesheets/recurring'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/recurring');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-
-              <NavItem
-                icon="fa-folder-tree"
-                label={t('routes.projects')}
-                active={activeView === 'timesheets/projects'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/projects');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-
-              <NavItem
-                icon="fa-tasks"
-                label={t('routes.tasks')}
-                active={activeView === 'timesheets/tasks'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('timesheets/tasks');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
-
-          {/* CRM Module Nav Items */}
-          {activeModule.id === 'crm' && (
-            <>
-              <NavItem
-                icon="fa-building"
-                label={t('routes.clients')}
-                active={activeView === 'crm/clients'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('crm/clients');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-file-invoice"
-                label={t('routes.quotes')}
-                active={activeView === 'crm/quotes'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('crm/quotes');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-cart-shopping"
-                label={t('routes.sales')}
-                active={activeView === 'crm/sales'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('crm/sales');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
-
-          {/* Catalog Module Nav Items */}
-          {activeModule.id === 'catalog' && (
-            <>
-              <NavItem
-                icon="fa-box"
-                label={t('routes.products')}
-                active={activeView === 'catalog/products'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('catalog/products');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-tags"
-                label={t('routes.specialBids')}
-                active={activeView === 'catalog/special-bids'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('catalog/special-bids');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
-
-          {/* HR Module Nav Items */}
-          {activeModule.id === 'hr' && (
-            <>
-              <NavItem
-                icon="fa-users"
-                label={t('routes.workforce')}
-                active={activeView === 'hr/workforce'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('hr/workforce');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              {isManagement && (
-                <NavItem
-                  icon="fa-sitemap"
-                  label={t('routes.workUnits')}
-                  active={activeView === 'hr/work-units'}
-                  isCollapsed={isCollapsed}
-                  onClick={() => {
-                    onViewChange('hr/work-units');
-                    setIsMobileMenuOpen(false);
-                  }}
-                />
+              {/* Module Sub-items */}
+              {activeModule.id === module.id && (
+                <div
+                  className={`animate-in slide-in-from-top-2 duration-200 space-y-1 mt-1 pb-2 ${isCollapsed ? '' : 'bg-black/10 rounded-xl p-2'}`}
+                >
+                  {renderModuleNavItems(module.id)}
+                </div>
               )}
-            </>
-          )}
-
-          {/* Projects Module Nav Items */}
-          {activeModule.id === 'projects' && (
-            <>
-              <NavItem
-                icon="fa-folder-tree"
-                label={t('routes.projects')}
-                active={activeView === 'projects/manage'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('projects/manage');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-
-              <NavItem
-                icon="fa-tasks"
-                label={t('routes.tasks')}
-                active={activeView === 'projects/tasks'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('projects/tasks');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
-
-          {/* Finances Module */}
-          {activeModule.id === 'finances' && (
-            <>
-              <NavItem
-                icon="fa-file-invoice-dollar"
-                label={t('routes.invoices')}
-                active={activeView === 'finances/invoices'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('finances/invoices');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-money-bill-wave"
-                label={t('routes.payments')}
-                active={activeView === 'finances/payments'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('finances/payments');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-receipt"
-                label={t('routes.expenses')}
-                active={activeView === 'finances/expenses'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('finances/expenses');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-chart-line"
-                label={t('routes.reports')}
-                active={activeView === 'finances/reports'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('finances/reports');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
-
-          {/* Suppliers Module */}
-          {activeModule.id === 'suppliers' && (
-            <>
-              <NavItem
-                icon="fa-industry"
-                label={t('routes.suppliers')}
-                active={activeView === 'suppliers/manage'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('suppliers/manage');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-              <NavItem
-                icon="fa-file-invoice"
-                label={t('routes.supplierQuotes')}
-                active={activeView === 'suppliers/quotes'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('suppliers/quotes');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
-
-          {/* Configuration Module Nav Items */}
-          {activeModule.id === 'configuration' && (
-            <>
-              <NavItem
-                icon="fa-shield-halved"
-                label={t('routes.authentication')}
-                active={activeView === 'configuration/authentication'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('configuration/authentication');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-
-              <NavItem
-                icon="fa-sliders"
-                label={t('routes.general')}
-                active={activeView === 'configuration/general'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('configuration/general');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            </>
-          )}
+            </div>
+          ))}
         </div>
 
         <div

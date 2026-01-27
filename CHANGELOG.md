@@ -1,3 +1,9 @@
+
+## 20260127 - Operativo
+
+- Ridisegnata la sidebar per avere tutti i moduli disponibili nel menu esposti e le loro pagine come voci del dropdown
+
+
 ## 20260125 - Operativo
 
 - Aggiornato lo stato dei preventivi e delle vendite a: bozza, inviato, accettato, rifiutato
