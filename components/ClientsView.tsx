@@ -53,26 +53,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     setDisabledCurrentPage(1);
   };
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterClientType, setFilterClientType] = useState('all');
-
-  // Reset pages on filter change
-  React.useEffect(() => {
-    setCurrentPage(1);
-    setDisabledCurrentPage(1);
-  }, [searchTerm, filterClientType]);
-
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const hasActiveFilters = normalizedSearch !== '' || filterClientType !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterClientType('all');
-    setCurrentPage(1);
-    setDisabledCurrentPage(1);
-  };
-
   // Form State
   const [formData, setFormData] = useState<Partial<Client>>({
     name: '',
@@ -204,33 +184,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
   };
 
-  const matchesClientFilters = React.useCallback(
-    (client: Client) => {
-      const matchesSearch =
-        normalizedSearch === '' ||
-        client.name.toLowerCase().includes(normalizedSearch) ||
-        (client.clientCode ?? '').toLowerCase().includes(normalizedSearch) ||
-        (client.email ?? '').toLowerCase().includes(normalizedSearch) ||
-        (client.phone ?? '').toLowerCase().includes(normalizedSearch) ||
-        (client.vatNumber ?? '').toLowerCase().includes(normalizedSearch) ||
-        (client.taxCode ?? '').toLowerCase().includes(normalizedSearch);
-
-      const clientType = client.type ?? 'company';
-      const matchesType =
-        filterClientType === 'all' || clientType === (filterClientType as Client['type']);
-
-      return matchesSearch && matchesType;
-    },
-    [normalizedSearch, filterClientType],
-  );
-
   const filteredActiveClientsTotal = React.useMemo(() => {
-    return clients.filter((c) => !c.isDisabled).filter(matchesClientFilters);
-  }, [clients, matchesClientFilters]);
+    return clients.filter((c) => !c.isDisabled);
+  }, [clients]);
 
   const filteredDisabledClientsTotal = React.useMemo(() => {
-    return clients.filter((c) => c.isDisabled).filter(matchesClientFilters);
-  }, [clients, matchesClientFilters]);
+    return clients.filter((c) => c.isDisabled);
+  }, [clients]);
 
   const hasAnyDisabledClients = clients.some((c) => c.isDisabled);
 
@@ -244,12 +204,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     disabledStartIndex,
     disabledStartIndex + disabledRowsPerPage,
   );
-
-  const clientTypeFilterOptions = [
-    { id: 'all', name: t('common:filters.allTypes') },
-    { id: 'company', name: t('common:filters.companies') },
-    { id: 'individual', name: t('common:filters.individuals') },
-  ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -544,41 +498,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-2 relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            placeholder={t('common:form.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={clientTypeFilterOptions}
-            value={filterClientType}
-            onChange={setFilterClientType}
-            placeholder={t('common:form.selectOption')}
-            searchable={false}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            {t('common:form.clearFilters')}
-          </button>
-        </div>
-      </div>
-
       <StandardTable
         title={t('crm:clients.activeClients')}
         totalCount={filteredActiveClientsTotal.length}
@@ -605,7 +524,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   { id: '50', name: '50' },
                 ]}
                 value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val)}
+                onChange={(val) => handleRowsPerPageChange(val as string)}
                 className="w-20"
                 buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
                 searchable={false}
@@ -777,7 +696,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     { id: '50', name: '50' },
                   ]}
                   value={disabledRowsPerPage.toString()}
-                  onChange={(val) => handleDisabledRowsPerPageChange(val)}
+                  onChange={(val) => handleDisabledRowsPerPageChange(val as string)}
                   className="w-20"
                   buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
                   searchable={false}

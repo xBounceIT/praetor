@@ -97,59 +97,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   };
 
   // Filter State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [expirationSort, setExpirationSort] = useState<'none' | 'asc' | 'desc'>('none');
-
-  // Filter Logic
-  const filteredQuotes = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    return quotes.filter((quote) => {
-      const matchesSearch =
-        normalizedSearch === '' ||
-        quote.id.toLowerCase().includes(normalizedSearch) ||
-        quote.clientName.toLowerCase().includes(normalizedSearch) ||
-        quote.items.some((item) => item.productName.toLowerCase().includes(normalizedSearch));
-
-      const matchesClient = filterClientId === 'all' || quote.clientId === filterClientId;
-      const matchesStatus = filterStatus === 'all' || quote.status === filterStatus;
-
-      return matchesSearch && matchesClient && matchesStatus;
-    });
-  }, [quotes, searchTerm, filterClientId, filterStatus]);
-
-  // Reset page on filter change
-  React.useEffect(() => {
-    setCurrentPage(1);
-    setHistoryPage(1);
-  }, [searchTerm, filterClientId, filterStatus, expirationSort]);
-
-  const hasActiveFilters =
-    searchTerm.trim() !== '' || filterClientId !== 'all' || filterStatus !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterClientId('all');
-    setFilterStatus('all');
-    setCurrentPage(1);
-    setHistoryPage(1);
-  };
-
-  const toggleExpirationSort = () => {
-    setExpirationSort((prev) => (prev === 'none' ? 'asc' : prev === 'asc' ? 'desc' : 'none'));
-  };
-
-  const nextExpirationSort =
-    expirationSort === 'none' ? 'asc' : expirationSort === 'asc' ? 'desc' : 'none';
-  const expirationSortTitle =
-    nextExpirationSort === 'asc'
-      ? t('crm:quotes.orderExpirationAsc')
-      : nextExpirationSort === 'desc'
-        ? t('crm:quotes.orderExpirationDesc')
-        : t('crm:quotes.clearExpirationOrder');
-  const expirationSortIndicator =
-    expirationSort === 'asc' ? '↑' : expirationSort === 'desc' ? '↓' : '';
+  /* Filters removed */
+  const filteredQuotes = quotes;
 
   // Form State
   const [formData, setFormData] = useState<Partial<Quote>>({
@@ -532,15 +481,6 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     return bid ? `${bid.clientName} · ${bid.productName}` : t('crm:quotes.noSpecialBid');
   };
 
-  const getExpirationTimestamp = (expirationDate: string) => {
-    if (!expirationDate) return 0;
-    const normalizedDate = expirationDate.includes('T')
-      ? expirationDate
-      : `${expirationDate}T00:00:00`;
-    const timestamp = new Date(normalizedDate).getTime();
-    return Number.isNaN(timestamp) ? 0 : timestamp;
-  };
-
   // Check if quote is expired
   const isExpired = (expirationDate: string) => {
     const normalizedDate = expirationDate.includes('T')
@@ -560,15 +500,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   const getSaleStatusForQuote = (quote: Quote) => quoteSaleStatuses?.[quote.id];
   const isQuoteHistory = (quote: Quote) =>
     quote.status === 'denied' || isQuoteExpired(quote) || hasSaleForQuote(quote);
-  const sortedQuotes = useMemo(() => {
-    if (expirationSort === 'none') return filteredQuotes;
-    const direction = expirationSort === 'asc' ? 1 : -1;
-    return [...filteredQuotes].sort(
-      (a, b) =>
-        (getExpirationTimestamp(a.expirationDate) - getExpirationTimestamp(b.expirationDate)) *
-        direction,
-    );
-  }, [filteredQuotes, expirationSort]);
+  const sortedQuotes = filteredQuotes;
   const filteredActiveQuotes = sortedQuotes.filter((quote) => !isQuoteHistory(quote));
   const filteredHistoryQuotes = sortedQuotes.filter((quote) => isQuoteHistory(quote));
 
@@ -1306,53 +1238,6 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       </div>
 
       {/* Search and Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="md:col-span-2 relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            placeholder={t('crm:quotes.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-          />
-        </div>
-
-        <div>
-          <CustomSelect
-            options={[
-              { id: 'all', name: t('common:filters.allClients') },
-              ...activeClients.map((c) => ({ id: c.id, name: c.name })),
-            ]}
-            value={filterClientId}
-            onChange={(val) => setFilterClientId(val as string)}
-            placeholder={t('crm:quotes.filterByClient')}
-            searchable={true}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={[{ id: 'all', name: t('crm:quotes.allStatuses') }, ...STATUS_OPTIONS]}
-            value={filterStatus}
-            onChange={(val) => setFilterStatus(val as string)}
-            placeholder={t('crm:quotes.filterByStatus')}
-            searchable={false}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            {t('crm:quotes.clearFiltersButton')}
-          </button>
-        </div>
-      </div>
 
       <StandardTable
         title={t('crm:quotes.activeQuotes')}
@@ -1444,17 +1329,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 {t('crm:quotes.paymentTermsColumn')}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <button
-                  type="button"
-                  onClick={toggleExpirationSort}
-                  title={expirationSortTitle}
-                  className="w-full inline-flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none hover:text-slate-600"
-                >
-                  {t('crm:quotes.expirationColumn')}
-                  {expirationSortIndicator && (
-                    <span className="text-[10px]">{expirationSortIndicator}</span>
-                  )}
-                </button>
+                {t('crm:quotes.expirationColumn')}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
                 {t('crm:quotes.actionsColumn')}
@@ -1567,17 +1442,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 {t('crm:quotes.paymentTermsColumn')}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <button
-                  type="button"
-                  onClick={toggleExpirationSort}
-                  title={expirationSortTitle}
-                  className="w-full inline-flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none hover:text-slate-600"
-                >
-                  {t('crm:quotes.expirationColumn')}
-                  {expirationSortIndicator && (
-                    <span className="text-[10px]">{expirationSortIndicator}</span>
-                  )}
-                </button>
+                {t('crm:quotes.expirationColumn')}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
                 {t('crm:quotes.actionsColumn')}

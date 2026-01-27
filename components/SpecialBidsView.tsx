@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
@@ -49,42 +49,15 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     setExpiredPage(1);
   };
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
+  /* Filters removed as per user request */
+  const filteredBids = bids;
 
   const isExpired = (endDate: string) => new Date(endDate) < new Date();
   const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
   const isActiveBid = (bid: SpecialBid) => !isExpired(bid.endDate) && !isNotStarted(bid.startDate);
 
-  const filteredBids = useMemo(() => {
-    return bids.filter((bid) => {
-      const matchesSearch =
-        searchTerm === '' ||
-        bid.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bid.productName.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesClient = filterClientId === 'all' || bid.clientId === filterClientId;
-
-      return matchesSearch && matchesClient;
-    });
-  }, [bids, searchTerm, filterClientId]);
-
   const filteredActiveBids = filteredBids.filter((bid) => !isExpired(bid.endDate));
   const filteredExpiredBids = filteredBids.filter((bid) => isExpired(bid.endDate));
-
-  React.useEffect(() => {
-    setCurrentPage(1);
-    setExpiredPage(1);
-  }, [searchTerm, filterClientId]);
-
-  const hasActiveFilters = searchTerm.trim() !== '' || filterClientId !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterClientId('all');
-    setCurrentPage(1);
-    setExpiredPage(1);
-  };
 
   const [formData, setFormData] = useState<Partial<SpecialBid>>({
     clientId: '',
@@ -627,43 +600,6 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
         <div>
           <h2 className="text-2xl font-black text-slate-800">{t('specialBids.title')}</h2>
           <p className="text-slate-500 text-sm">{t('specialBids.subtitle')}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-2 relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            placeholder={t('specialBids.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={[
-              { id: 'all', name: t('specialBids.allClients') },
-              ...activeClients.map((c) => ({ id: c.id, name: c.name })),
-            ]}
-            value={filterClientId}
-            onChange={(val) => setFilterClientId(val as string)}
-            placeholder={t('specialBids.filterByClient')}
-            searchable={true}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            {t('specialBids.clearFilters')}
-          </button>
         </div>
       </div>
 

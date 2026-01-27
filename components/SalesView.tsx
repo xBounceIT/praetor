@@ -97,26 +97,8 @@ const SalesView: React.FC<SalesViewProps> = ({
   };
 
   // Filter State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-
-  // Filter Logic
-  const filteredSales = useMemo(() => {
-    return sales.filter((sale) => {
-      const matchesSearch =
-        searchTerm === '' ||
-        sale.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.items.some((item) =>
-          item.productName.toLowerCase().includes(searchTerm.toLowerCase()),
-        );
-
-      const matchesClient = filterClientId === 'all' || sale.clientId === filterClientId;
-      const matchesStatus = filterStatus === 'all' || sale.status === filterStatus;
-
-      return matchesSearch && matchesClient && matchesStatus;
-    });
-  }, [sales, searchTerm, filterClientId, filterStatus]);
+  /* Filters removed */
+  const filteredSales = sales;
 
   const activeSales = useMemo(
     () => filteredSales.filter((sale) => sale.status === 'draft' || sale.status === 'sent'),
@@ -126,23 +108,6 @@ const SalesView: React.FC<SalesViewProps> = ({
     () => filteredSales.filter((sale) => sale.status === 'confirmed' || sale.status === 'denied'),
     [filteredSales],
   );
-
-  // Reset page on filter change
-  React.useEffect(() => {
-    setCurrentPage(1);
-    setHistoryCurrentPage(1);
-  }, [searchTerm, filterClientId, filterStatus]);
-
-  const hasActiveFilters =
-    searchTerm.trim() !== '' || filterClientId !== 'all' || filterStatus !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterClientId('all');
-    setFilterStatus('all');
-    setCurrentPage(1);
-    setHistoryCurrentPage(1);
-  };
 
   // Form State
   const [formData, setFormData] = useState<Partial<Sale>>({
@@ -976,52 +941,6 @@ const SalesView: React.FC<SalesViewProps> = ({
       </div>
 
       {/* Search and Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="md:col-span-2 relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            placeholder={t('crm:sales.searchSalesOrProducts')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={[
-              { id: 'all', name: t('crm:specialBids.allClients') },
-              ...activeClients.map((c) => ({ id: c.id, name: c.name })),
-            ]}
-            value={filterClientId}
-            onChange={(val) => setFilterClientId(val as string)}
-            placeholder={t('crm:quotes.filterByClient')}
-            searchable={true}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={[{ id: 'all', name: t('crm:quotes.allStatuses') }, ...getStatusOptions(t)]}
-            value={filterStatus}
-            onChange={(val) => setFilterStatus(val as string)}
-            placeholder={t('crm:quotes.filterByStatus')}
-            searchable={false}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            {t('crm:products.clearFilters')}
-          </button>
-        </div>
-      </div>
 
       <StandardTable
         title={t('crm:sales.activeSales')}
