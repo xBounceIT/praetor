@@ -62,12 +62,31 @@ const StandardTable = <T extends Record<string, any>>({
   const popupRef = useRef<HTMLDivElement>(null); // Ref for the Portal popup
 
   // Internal State for Data Mode
+  // Helper for key generation
+  const getStorageKey = (t: string) =>
+    `praetor_table_rows_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+
   const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
   const [filterState, setFilterState] = useState<Record<string, string[]>>({});
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
+
+  // Lazy initialization for rowsPerPage
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    if (typeof window === 'undefined') return defaultRowsPerPage;
+    const key = getStorageKey(title);
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const val = Number(saved);
+      if ([5, 10, 20, 50].includes(val)) {
+        return val;
+      }
+    }
+    return defaultRowsPerPage;
+  });
+
+  const storageKey = useMemo(() => getStorageKey(title), [title]);
 
   // Close filter popup when clicking outside
   useEffect(() => {
@@ -201,8 +220,12 @@ const StandardTable = <T extends Record<string, any>>({
           ]}
           value={rowsPerPage.toString()}
           onChange={(val) => {
-            setRowsPerPage(Number(val));
+            const newValue = Number(val);
+            setRowsPerPage(newValue);
             setCurrentPage(1);
+            if (storageKey) {
+              localStorage.setItem(storageKey, String(newValue));
+            }
           }}
           className="w-20"
           buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"

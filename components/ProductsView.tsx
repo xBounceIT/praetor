@@ -835,6 +835,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
 
       <StandardTable
         title={t('crm:products.title')}
+        defaultRowsPerPage={5}
         data={products}
         headerAction={
           <button

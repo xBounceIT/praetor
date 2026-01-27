@@ -518,7 +518,7 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
 
               {/* Module Sub-items */}
-              {expandedModuleId === module.id && (
+              {expandedModuleId === module.id && !isCollapsed && (
                 <div
                   className={`animate-in slide-in-from-top-2 duration-200 space-y-1 mt-1 pb-2 ${isCollapsed ? '' : 'bg-black/10 rounded-xl p-2'}`}
                 >
