@@ -251,7 +251,7 @@ const StandardTable = <T extends Record<string, any>>({
         )}
       </div>
 
-      <div className={tableContainerClassName ?? 'overflow-x-auto'}>
+      <div className={tableContainerClassName ?? 'overflow-visible'}>
         {columns && data ? (
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
