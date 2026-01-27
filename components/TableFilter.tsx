@@ -53,7 +53,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
     !isAllSelected && filteredOptions.some((opt) => selectedValues.includes(opt));
 
   return (
-    <div className="absolute top-0 left-full ml-1 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 duration-200">
+    <div className="w-56 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 duration-200">
       {/* Header */}
       <div className="p-2 border-b border-slate-100 flex items-center justify-between">
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">

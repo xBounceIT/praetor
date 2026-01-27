@@ -1,4 +1,5 @@
 import { ReactNode, useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import TableFilter from './TableFilter';
 import CustomSelect from './CustomSelect';
@@ -57,19 +58,27 @@ const StandardTable = <T extends Record<string, any>>({
   onRowClick,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
-  const filterRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null); // Ref for the filter logic/container in the table
+  const popupRef = useRef<HTMLDivElement>(null); // Ref for the Portal popup
 
   // Internal State for Data Mode
   const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
   const [filterState, setFilterState] = useState<Record<string, string[]>>({});
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
+  const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
 
   // Close filter popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+      // Check if click is outside BOTH the trigger button (filterRef) AND the popup (popupRef)
+      if (
+        filterRef.current &&
+        !filterRef.current.contains(event.target as Node) &&
+        popupRef.current &&
+        !popupRef.current.contains(event.target as Node)
+      ) {
         setActiveFilterCol(null);
       }
     };
@@ -292,34 +301,59 @@ const StandardTable = <T extends Record<string, any>>({
                       >
                         <span>{col.header}</span>
                         {!col.disableFiltering && !col.disableSorting && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveFilterCol(activeFilterCol === colId ? null : colId);
-                            }}
-                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                              isFiltered || isSorted || activeFilterCol === colId
-                                ? 'text-praetor'
-                                : 'text-slate-400'
-                            }`}
+                          <div
+                            ref={activeFilterCol === colId ? filterRef : undefined}
+                            className="inline-block"
                           >
-                            <i className="fa-solid fa-filter"></i>
-                          </button>
-                        )}
-
-                        {activeFilterCol === colId && (
-                          <div ref={filterRef}>
-                            <TableFilter
-                              title={col.header}
-                              options={getFilterOptions(colId)}
-                              selectedValues={filterState[colId] || []}
-                              onFilterChange={(selected) => handleFilter(colId, selected)}
-                              sortDirection={sortState?.colId === colId ? sortState.px : null}
-                              onSortChange={(dir) => handleSort(colId, dir)}
-                              onClose={() => setActiveFilterCol(null)}
-                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (activeFilterCol === colId) {
+                                  setActiveFilterCol(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setFilterPos({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.left + window.scrollX,
+                                  });
+                                  setActiveFilterCol(colId);
+                                }
+                              }}
+                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                                isFiltered || isSorted || activeFilterCol === colId
+                                  ? 'text-praetor'
+                                  : 'text-slate-400'
+                              }`}
+                            >
+                              <i className="fa-solid fa-filter"></i>
+                            </button>
                           </div>
                         )}
+
+                        {activeFilterCol === colId &&
+                          filterPos &&
+                          createPortal(
+                            <div
+                              ref={popupRef}
+                              style={{
+                                top: filterPos.top,
+                                left: filterPos.left,
+                                position: 'absolute',
+                                zIndex: 9999,
+                              }}
+                            >
+                              <TableFilter
+                                title={col.header}
+                                options={getFilterOptions(colId)}
+                                selectedValues={filterState[colId] || []}
+                                onFilterChange={(selected) => handleFilter(colId, selected)}
+                                sortDirection={sortState?.colId === colId ? sortState.px : null}
+                                onSortChange={(dir) => handleSort(colId, dir)}
+                                onClose={() => setActiveFilterCol(null)}
+                              />
+                            </div>,
+                            document.body,
+                          )}
                       </div>
                     </th>
                   );
