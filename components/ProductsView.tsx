@@ -5,7 +5,7 @@ import CustomSelect, { Option } from './CustomSelect';
 import StandardTable from './StandardTable';
 import StatusBadge, { StatusType } from './StatusBadge';
 import ValidatedNumberInput from './ValidatedNumberInput';
-import { parseNumberInputValue } from '../utils/numbers';
+import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
 
 interface ProductsViewProps {
   products: Product[];
@@ -202,9 +202,23 @@ const ProductsView: React.FC<ProductsViewProps> = ({
 
     try {
       if (editingProduct) {
-        await onUpdateProduct(editingProduct.id, formData);
+        await onUpdateProduct(editingProduct.id, {
+          ...formData,
+          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
+          molPercentage:
+            formData.molPercentage !== undefined
+              ? roundToTwoDecimals(formData.molPercentage)
+              : undefined,
+        });
       } else {
-        await onAddProduct(formData);
+        await onAddProduct({
+          ...formData,
+          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
+          molPercentage:
+            formData.molPercentage !== undefined
+              ? roundToTwoDecimals(formData.molPercentage)
+              : undefined,
+        });
       }
       setIsModalOpen(false);
     } catch (err: unknown) {
@@ -862,21 +876,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
               </div>
             ),
           },
-          {
-            header: t('common:labels.status'),
-            accessorKey: 'isDisabled', // Use as accessor for filtering (true/false)
-            id: 'status',
-            cell: ({ row: p }) => (
-              <StatusBadge
-                type={p.isDisabled ? 'disabled' : 'active'}
-                label={p.isDisabled ? t('crm:products.disabled') : t('crm:products.active')}
-              />
-            ),
-            // We might want to customize filter options for boolean, but string logic 'true'/'false' works basic.
-            // Ideally we map true->Disabled, false->Active for filtering value.
-            accessorFn: (row) =>
-              row.isDisabled ? t('crm:products.disabled') : t('crm:products.active'),
-          },
+
           {
             header: t('crm:products.type'),
             accessorKey: 'type',
@@ -910,6 +910,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
             header: t('crm:products.salePrice'),
             id: 'salePrice', // calculated
             accessorFn: (row) => calcSalePrice(Number(row.costo), Number(row.molPercentage)),
+            filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ row: p, value }) => (
               <span className="text-sm font-semibold text-slate-700">
                 {Number(value).toFixed(2)} {currency} /{' '}
@@ -921,6 +922,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
             header: t('crm:products.margin'),
             id: 'margin',
             accessorFn: (row) => calcMargine(Number(row.costo), Number(row.molPercentage)),
+            filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ value }) => (
               <span className="text-sm font-semibold text-emerald-600">
                 {Number(value).toFixed(2)} {currency}
@@ -933,6 +935,21 @@ const ProductsView: React.FC<ProductsViewProps> = ({
             cell: ({ row: p }) => (
               <span className="text-sm font-bold text-praetor">{p.taxRate}%</span>
             ),
+          },
+          {
+            header: t('common:labels.status'),
+            accessorKey: 'isDisabled', // Use as accessor for filtering (true/false)
+            id: 'status',
+            cell: ({ row: p }) => (
+              <StatusBadge
+                type={p.isDisabled ? 'disabled' : 'active'}
+                label={p.isDisabled ? t('crm:products.disabled') : t('crm:products.active')}
+              />
+            ),
+            // We might want to customize filter options for boolean, but string logic 'true'/'false' works basic.
+            // Ideally we map true->Disabled, false->Active for filtering value.
+            accessorFn: (row) =>
+              row.isDisabled ? t('crm:products.disabled') : t('crm:products.active'),
           },
           {
             header: t('common:labels.actions'),

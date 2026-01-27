@@ -4,7 +4,7 @@ import { Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
-import { parseNumberInputValue } from '../utils/numbers';
+import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
 import Calendar from './Calendar';
 import StatusBadge from './StatusBadge';
 
@@ -156,10 +156,19 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       return;
     }
 
+    const payload = {
+      ...formData,
+      unitPrice: formData.unitPrice !== undefined ? roundToTwoDecimals(formData.unitPrice) : 0,
+      molPercentage:
+        formData.molPercentage !== undefined
+          ? roundToTwoDecimals(formData.molPercentage)
+          : undefined,
+    };
+
     if (editingBid) {
-      onUpdateBid(editingBid.id, formData);
+      onUpdateBid(editingBid.id, payload);
     } else {
-      onAddBid(formData);
+      onAddBid(payload);
     }
     setIsModalOpen(false);
   };

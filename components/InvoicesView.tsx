@@ -4,6 +4,7 @@ import { Invoice, InvoiceItem, Client, Product, Sale } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
+import { roundToTwoDecimals } from '../utils/numbers';
 import StatusBadge, { StatusType } from './StatusBadge';
 
 interface InvoicesViewProps {
@@ -176,13 +177,24 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
       return;
     }
 
+    // Round items first
+    const items = formData.items || [];
+    const roundedItems = items.map((item) => ({
+      ...item,
+      unitPrice: roundToTwoDecimals(item.unitPrice),
+      discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
+      taxRate: roundToTwoDecimals(item.taxRate || 0),
+    }));
+
     // Recalculate totals before submit to be safe
-    const { subtotal, totalTax, total } = calculateTotals(formData.items || []);
+    const { subtotal, totalTax, total } = calculateTotals(roundedItems);
     const finalData = {
       ...formData,
-      subtotal,
-      taxAmount: totalTax,
-      total,
+      items: roundedItems,
+      amountPaid: formData.amountPaid ? roundToTwoDecimals(formData.amountPaid) : 0,
+      subtotal: roundToTwoDecimals(subtotal),
+      taxAmount: roundToTwoDecimals(totalTax),
+      total: roundToTwoDecimals(total),
     };
 
     if (editingInvoice) {

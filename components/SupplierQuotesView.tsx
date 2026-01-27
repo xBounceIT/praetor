@@ -4,6 +4,7 @@ import { SupplierQuote, SupplierQuoteItem, Supplier, Product } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
+import { roundToTwoDecimals } from '../utils/numbers';
 
 interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
@@ -189,10 +190,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       return;
     }
 
+    const payload = {
+      ...formData,
+      discount: formData.discount ? roundToTwoDecimals(formData.discount) : 0,
+      items: formData.items?.map((item) => ({
+        ...item,
+        unitPrice: roundToTwoDecimals(item.unitPrice),
+        discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
+      })),
+    };
+
     if (editingQuote) {
-      onUpdateQuote(editingQuote.id, formData);
+      onUpdateQuote(editingQuote.id, payload);
     } else {
-      onAddQuote(formData);
+      onAddQuote(payload);
     }
     setIsModalOpen(false);
   };

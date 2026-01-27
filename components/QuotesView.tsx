@@ -5,7 +5,7 @@ import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import StatusBadge, { StatusType } from './StatusBadge';
-import { parseNumberInputValue } from '../utils/numbers';
+import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
 
 interface QuotesViewProps {
   quotes: Quote[];
@@ -217,15 +217,23 @@ const QuotesView: React.FC<QuotesViewProps> = ({
 
       return {
         ...item,
-        productCost,
-        productMolPercentage,
-        specialBidUnitPrice,
-        specialBidMolPercentage,
+        unitPrice: roundToTwoDecimals(item.unitPrice),
+        discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
+        productCost: roundToTwoDecimals(productCost),
+        productMolPercentage:
+          productMolPercentage !== null ? roundToTwoDecimals(Number(productMolPercentage)) : null,
+        specialBidUnitPrice:
+          specialBidUnitPrice !== null ? roundToTwoDecimals(specialBidUnitPrice) : null,
+        specialBidMolPercentage:
+          specialBidMolPercentage !== null
+            ? roundToTwoDecimals(Number(specialBidMolPercentage))
+            : null,
       };
     });
 
     const payload = {
       ...formData,
+      discount: formData.discount ? roundToTwoDecimals(formData.discount) : 0,
       items: itemsWithSnapshots,
     };
 
