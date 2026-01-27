@@ -887,6 +887,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           },
           {
             header: t('crm:products.cost'),
+            align: 'right',
+            className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorFn: (row) => Number(row.costo), // Numeric for sorting
             filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ row: p }) => (
@@ -898,6 +900,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           },
           {
             header: t('crm:products.mol'),
+            align: 'right',
+            className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorKey: 'molPercentage',
             filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ row: p }) => (
@@ -908,6 +912,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           },
           {
             header: t('crm:products.salePrice'),
+            align: 'right',
+            className: 'px-6 py-5 whitespace-nowrap text-right',
             id: 'salePrice', // calculated
             accessorFn: (row) => calcSalePrice(Number(row.costo), Number(row.molPercentage)),
             filterFormat: (val) => Number(val).toFixed(2),
@@ -920,6 +926,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           },
           {
             header: t('crm:products.margin'),
+            align: 'right',
+            className: 'px-6 py-5 whitespace-nowrap text-right',
             id: 'margin',
             accessorFn: (row) => calcMargine(Number(row.costo), Number(row.molPercentage)),
             filterFormat: (val) => Number(val).toFixed(2),
@@ -931,6 +939,8 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           },
           {
             header: t('crm:products.taxRate'),
+            align: 'right',
+            className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorKey: 'taxRate',
             cell: ({ row: p }) => (
               <span className="text-sm font-bold text-praetor">{p.taxRate}%</span>

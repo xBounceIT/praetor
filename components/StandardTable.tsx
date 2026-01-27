@@ -15,6 +15,7 @@ export type Column<T> = {
   disableSorting?: boolean;
   disableFiltering?: boolean;
   filterFormat?: (value: unknown) => string;
+  align?: 'left' | 'center' | 'right';
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -271,7 +272,7 @@ const StandardTable = <T extends Record<string, any>>({
         )}
       </div>
 
-      <div className={tableContainerClassName ?? 'overflow-visible'}>
+      <div className={tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'}>
         {columns && data ? (
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
@@ -284,9 +285,11 @@ const StandardTable = <T extends Record<string, any>>({
                   return (
                     <th
                       key={colId}
-                      className={`relative px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.headerClassName || ''}`}
+                      className={`relative px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
                     >
-                      <div className="flex items-center gap-2 group">
+                      <div
+                        className={`flex items-center gap-2 group ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}
+                      >
                         <span>{col.header}</span>
                         {!col.disableFiltering && !col.disableSorting && (
                           <button
@@ -334,7 +337,10 @@ const StandardTable = <T extends Record<string, any>>({
                     {columns.map((col) => {
                       const val = getValue(row, col);
                       return (
-                        <td key={getColId(col)} className={`${col.className || 'px-6 py-5'}`}>
+                        <td
+                          key={getColId(col)}
+                          className={`${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.className || 'px-6 py-5'}`}
+                        >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
                             : (val as ReactNode)}
