@@ -3,6 +3,7 @@
 - Ridisegnata la sidebar per avere tutti i moduli disponibili nel menu esposti e le loro pagine come voci del dropdown
 - Rimossi filtri dalle pagine
 - Rimosse tabelle storico / scadute / disattive e unificato tutto nella tabella principale, aggiungendo ove mancante la colonna stato
+- Aggiunta possibilità di filtrare sulle colonne stile excel
 
 ## 20260125 - Operativo
 

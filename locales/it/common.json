@@ -225,7 +225,13 @@
     "allClients": "Tutti i Clienti"
   },
   "table": {
-    "total": "totale"
+    "total": "totale",
+    "sortAsc": "Ordina Crescente",
+    "sortDesc": "Ordina Decrescente",
+    "search": "Cerca...",
+    "selectAll": "Seleziona Tutto",
+    "noResults": "Nessun risultato",
+    "clearFilter": "Pulisci Filtri"
   },
   "select": {
     "placeholder": "Seleziona...",

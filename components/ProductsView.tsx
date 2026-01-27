@@ -32,20 +32,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_products_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-
-  const handleRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setRowsPerPage(value);
-    localStorage.setItem('praetor_products_rowsPerPage', value.toString());
-    setCurrentPage(1); // Reset to first page
-  };
-
   // Category Management State
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddSubcategoryModalOpen, setIsAddSubcategoryModalOpen] = useState(false);
@@ -264,11 +250,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
       setProductToDelete(null);
     }
   };
-
-  // Pagination Logic
-  const totalPages = Math.ceil(products.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedProducts = products.slice(startIndex, startIndex + rowsPerPage);
 
   // Get unique categories from existing products + defaults
   const availableCategories = React.useMemo(() => {
@@ -847,7 +828,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
 
       <StandardTable
         title={t('crm:products.title')}
-        totalCount={products.length}
+        data={products}
         headerAction={
           <button
             onClick={openAddModal}
@@ -856,216 +837,157 @@ const ProductsView: React.FC<ProductsViewProps> = ({
             <i className="fa-solid fa-plus"></i> {t('crm:products.addProduct')}
           </button>
         }
-        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                {t('common:labels.rowsPerPage')}
-              </span>
-              <CustomSelect
-                options={[
-                  { id: '5', name: '5' },
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val as string)}
-                className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                searchable={false}
-              />
-              <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('crm:products.showing')} {paginatedProducts.length > 0 ? startIndex + 1 : 0}-
-                {Math.min(startIndex + rowsPerPage, products.length)} {t('crm:products.of')}{' '}
-                {products.length}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      currentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-right text-xs"></i>
-              </button>
-            </div>
-          </>
+        rowClassName={(p) =>
+          p.isDisabled
+            ? 'bg-slate-50/50 grayscale opacity-75 hover:bg-slate-100'
+            : 'hover:bg-slate-50/50'
         }
-      >
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('common:labels.name')}
-              </th>
-              <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('common:labels.status')}
-              </th>
-              <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.type')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.cost')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.mol')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.salePrice')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.margin')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:products.taxRate')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                {t('common:labels.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {paginatedProducts.map((p) => (
-              <tr
-                key={p.id}
-                onClick={() => openEditModal(p)}
-                className={`transition-colors group cursor-pointer ${
-                  p.isDisabled
-                    ? 'bg-slate-50/50 grayscale opacity-75 hover:bg-slate-100 hover:opacity-100 hover:grayscale-0'
-                    : 'hover:bg-slate-50/50'
-                }`}
+        onRowClick={openEditModal}
+        columns={[
+          {
+            header: t('common:labels.name'),
+            accessorKey: 'name',
+            cell: ({ row: p }) => (
+              <div className="flex items-center gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                    {p.productCode && (
+                      <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase flex-shrink-0">
+                        {p.productCode}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase truncate">
+                    {p.category || t('crm:products.noCategory')}
+                    {p.category && p.subcategory && ` - ${p.subcategory}`}
+                  </div>
+                  <div className="text-[10px] font-semibold text-slate-500 truncate">
+                    {p.supplierName || t('crm:products.noSupplier')}
+                  </div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            header: t('common:labels.status'),
+            accessorKey: 'isDisabled', // Use as accessor for filtering (true/false)
+            id: 'status',
+            cell: ({ row: p }) => (
+              <StatusBadge
+                type={p.isDisabled ? 'disabled' : 'active'}
+                label={p.isDisabled ? t('crm:products.disabled') : t('crm:products.active')}
+              />
+            ),
+            // We might want to customize filter options for boolean, but string logic 'true'/'false' works basic.
+            // Ideally we map true->Disabled, false->Active for filtering value.
+            accessorFn: (row) =>
+              row.isDisabled ? t('crm:products.disabled') : t('crm:products.active'),
+          },
+          {
+            header: t('crm:products.type'),
+            accessorKey: 'type',
+            cell: ({ row: p }) => (
+              <span
+                className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${getTypeBadgeColor(p.type)}`}
               >
-                <td className="px-8 py-5">
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="font-bold text-slate-800 truncate">{p.name}</div>
-                        {p.productCode && (
-                          <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase flex-shrink-0">
-                            {p.productCode}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] font-black text-slate-400 uppercase truncate">
-                        {p.category || t('crm:products.noCategory')}
-                        {p.category && p.subcategory && ` - ${p.subcategory}`}
-                      </div>
-                      <div className="text-[10px] font-semibold text-slate-500 truncate">
-                        {p.supplierName || t('crm:products.noSupplier')}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-5">
-                  <StatusBadge
-                    type={p.isDisabled ? 'disabled' : 'active'}
-                    label={p.isDisabled ? t('crm:products.disabled') : t('crm:products.active')}
-                  />
-                </td>
-                <td className="px-4 py-5">
-                  <span
-                    className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${getTypeBadgeColor(p.type)}`}
-                  >
-                    {getLocalizedTypeName(p.type)}
-                  </span>
-                </td>
-                <td className="px-6 py-5 text-sm font-semibold text-slate-500">
-                  {Number(p.costo).toFixed(2)} {currency} /{' '}
-                  {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
-                </td>
-                <td className="px-6 py-5 text-sm font-semibold text-slate-500">
-                  {Number(p.molPercentage).toFixed(2)}%
-                </td>
-                <td className="px-6 py-5 text-sm font-semibold text-slate-700">
-                  {calcSalePrice(Number(p.costo), Number(p.molPercentage)).toFixed(2)} {currency} /{' '}
-                  {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
-                </td>
-                <td className="px-6 py-5 text-sm font-semibold text-emerald-600">
-                  {calcMargine(Number(p.costo), Number(p.molPercentage)).toFixed(2)} {currency}
-                </td>
-                <td className="px-6 py-5 text-sm font-bold text-praetor">{p.taxRate}%</td>
-                <td className="px-8 py-5">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (p.isDisabled) {
-                          onUpdateProduct(p.id, { isDisabled: false });
-                        } else {
-                          onUpdateProduct(p.id, { isDisabled: true });
-                        }
-                      }}
-                      className={`p-2 rounded-lg transition-all ${
-                        p.isDisabled
-                          ? 'text-praetor hover:bg-slate-100'
-                          : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                      }`}
-                      title={
-                        p.isDisabled
-                          ? t('crm:products.enableProduct')
-                          : t('crm:products.disableProduct')
-                      }
-                    >
-                      <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        confirmDelete(p);
-                      }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      title={t('crm:products.deleteProductTooltip')}
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {paginatedProducts.length === 0 && (
-              <tr>
-                <td colSpan={9} className="p-12 text-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
-                    <i className="fa-solid fa-boxes-stacked text-2xl"></i>
-                  </div>
-                  <p className="text-slate-400 text-sm font-bold">{t('crm:products.noProducts')}</p>
-                  <button
-                    onClick={openAddModal}
-                    className="mt-4 text-praetor text-sm font-black hover:underline"
-                  >
-                    {t('crm:products.addFirstProduct')}
-                  </button>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </StandardTable>
+                {getLocalizedTypeName(p.type)}
+              </span>
+            ),
+            accessorFn: (row) => getLocalizedTypeName(row.type),
+          },
+          {
+            header: t('crm:products.cost'),
+            accessorFn: (row) => row.costo, // Numeric for sorting
+            cell: ({ row: p }) => (
+              <span className="text-sm font-semibold text-slate-500">
+                {Number(p.costo).toFixed(2)} {currency} /{' '}
+                {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
+              </span>
+            ),
+          },
+          {
+            header: t('crm:products.mol'),
+            accessorKey: 'molPercentage',
+            cell: ({ row: p }) => (
+              <span className="text-sm font-semibold text-slate-500">
+                {Number(p.molPercentage).toFixed(2)}%
+              </span>
+            ),
+          },
+          {
+            header: t('crm:products.salePrice'),
+            id: 'salePrice', // calculated
+            accessorFn: (row) => calcSalePrice(Number(row.costo), Number(row.molPercentage)),
+            cell: ({ row: p, value }) => (
+              <span className="text-sm font-semibold text-slate-700">
+                {Number(value).toFixed(2)} {currency} /{' '}
+                {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
+              </span>
+            ),
+          },
+          {
+            header: t('crm:products.margin'),
+            id: 'margin',
+            accessorFn: (row) => calcMargine(Number(row.costo), Number(row.molPercentage)),
+            cell: ({ value }) => (
+              <span className="text-sm font-semibold text-emerald-600">
+                {Number(value).toFixed(2)} {currency}
+              </span>
+            ),
+          },
+          {
+            header: t('crm:products.taxRate'),
+            accessorKey: 'taxRate',
+            cell: ({ row: p }) => (
+              <span className="text-sm font-bold text-praetor">{p.taxRate}%</span>
+            ),
+          },
+          {
+            header: t('common:labels.actions'),
+            id: 'actions',
+            disableSorting: true,
+            disableFiltering: true,
+            cell: ({ row: p }) => (
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (p.isDisabled) {
+                      onUpdateProduct(p.id, { isDisabled: false });
+                    } else {
+                      onUpdateProduct(p.id, { isDisabled: true });
+                    }
+                  }}
+                  className={`p-2 rounded-lg transition-all ${
+                    p.isDisabled
+                      ? 'text-praetor hover:bg-emerald-50'
+                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                  }`}
+                  title={
+                    p.isDisabled
+                      ? t('crm:products.enableProduct')
+                      : t('crm:products.disableProduct')
+                  }
+                >
+                  <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    confirmDelete(p);
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title={t('crm:products.deleteProductTooltip')}
+                >
+                  <i className="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            ),
+            className: 'px-8 py-5',
+          },
+        ]}
+      />
     </div>
   );
 };

@@ -1,7 +1,23 @@
-import type { ReactNode } from 'react';
+import { ReactNode, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import TableFilter from './TableFilter';
+import CustomSelect from './CustomSelect';
 
-type StandardTableProps = {
+export type Column<T> = {
+  header: string;
+  accessorKey?: keyof T;
+  accessorFn?: (row: T) => string | number | boolean | null | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cell?: (info: { getValue: () => any; row: T; value: any }) => ReactNode;
+  id?: string; // Unique ID for the column, required if accessorKey is missing
+  className?: string;
+  headerClassName?: string;
+  disableSorting?: boolean;
+  disableFiltering?: boolean;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StandardTableProps<T = any> = {
   title: string;
   totalCount?: number;
   totalLabel?: string;
@@ -11,22 +27,207 @@ type StandardTableProps = {
   tableContainerClassName?: string;
   footer?: ReactNode;
   footerClassName?: string;
-  children: ReactNode;
+  children?: ReactNode;
+  // Data-driven props
+  data?: T[];
+  columns?: Column<T>[];
+  defaultRowsPerPage?: number;
+  rowClassName?: (row: T) => string;
+  onRowClick?: (row: T) => void;
 };
 
-const StandardTable = ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const StandardTable = <T extends Record<string, any>>({
   title,
-  totalCount,
+  totalCount: externalTotalCount,
   totalLabel,
   headerExtras,
   headerAction,
   containerClassName,
   tableContainerClassName,
-  footer,
+  footer: externalFooter,
   footerClassName,
   children,
-}: StandardTableProps) => {
+  data,
+  columns,
+  defaultRowsPerPage = 10,
+  rowClassName,
+  onRowClick,
+}: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
+
+  // Internal State for Data Mode
+  const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
+  const [filterState, setFilterState] = useState<Record<string, string[]>>({});
+  const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
+
+  // Helper to resolve value
+  const getValue = useCallback((row: T, col: Column<T>) => {
+    if (col.accessorFn) return col.accessorFn(row);
+    if (col.accessorKey) return row[col.accessorKey];
+    return null;
+  }, []);
+
+  const getColId = useCallback(
+    (col: Column<T>) => col.id || (col.accessorKey as string) || col.header,
+    [],
+  );
+
+  // Derived Data
+  const processedData = useMemo(() => {
+    if (!data || !columns) return [];
+    let result = [...data];
+
+    // 1. Filtering
+    Object.keys(filterState).forEach((filterColId) => {
+      const selectedValues = filterState[filterColId];
+      if (selectedValues && selectedValues.length > 0) {
+        const col = columns.find((c) => getColId(c) === filterColId);
+        if (col) {
+          result = result.filter((row) => {
+            const val = String(getValue(row, col));
+            return selectedValues.includes(val);
+          });
+        }
+      }
+    });
+
+    // 2. Sorting
+    if (sortState) {
+      const col = columns.find((c) => getColId(c) === sortState.colId);
+      if (col) {
+        result.sort((a, b) => {
+          const valA = getValue(a, col);
+          const valB = getValue(b, col);
+
+          // Simple comparison handling numbers and strings
+          if (typeof valA === 'number' && typeof valB === 'number') {
+            return sortState.px === 'asc' ? valA - valB : valB - valA;
+          }
+          const strA = String(valA || '').toLowerCase();
+          const strB = String(valB || '').toLowerCase();
+          if (strA < strB) return sortState.px === 'asc' ? -1 : 1;
+          if (strA > strB) return sortState.px === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+    }
+
+    return result;
+  }, [data, columns, filterState, sortState, getValue, getColId]);
+
+  // Pagination
+  const totalItems = data ? processedData.length : externalTotalCount || 0;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const paginatedData = data ? processedData.slice(startIndex, startIndex + rowsPerPage) : [];
+
+  // Filter Options Generator
+  const getFilterOptions = (colId: string) => {
+    if (!data || !columns) return [];
+    const col = columns.find((c) => getColId(c) === colId);
+    if (!col) return [];
+
+    // Get all unique values from the FULL dataset
+    const values = new Set<string>();
+    data.forEach((row) => {
+      const val = getValue(row, col);
+      values.add(String(val));
+    });
+    return Array.from(values).sort();
+  };
+
+  // Handlers
+  const handleSort = (colId: string, dir: 'asc' | 'desc' | null) => {
+    if (!dir) setSortState(null);
+    else setSortState({ colId, px: dir });
+  };
+
+  const handleFilter = (colId: string, selected: string[]) => {
+    setFilterState((prev) => {
+      const next = { ...prev };
+      if (selected.length === 0) delete next[colId];
+      else next[colId] = selected;
+      return next;
+    });
+    setCurrentPage(1); // Reset to page 1 on filter
+  };
+
+  // Close popup on click outside (simplified, relies on conditional rendering)
+
+  // Internal Footer Render
+  const renderInternalFooter = () => (
+    <>
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-bold text-slate-500">{t('pagination.rowsPerPage')}</span>
+        <CustomSelect
+          options={[
+            { id: '5', name: '5' },
+            { id: '10', name: '10' },
+            { id: '20', name: '20' },
+            { id: '50', name: '50' },
+          ]}
+          value={rowsPerPage.toString()}
+          onChange={(val) => {
+            setRowsPerPage(Number(val));
+            setCurrentPage(1);
+          }}
+          className="w-20"
+          buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
+          searchable={false}
+        />
+        <span className="text-xs font-bold text-slate-400 ml-2">
+          {t('pagination.showing')
+            .replace('{{start}}', String(totalItems > 0 ? startIndex + 1 : 0))
+            .replace('{{end}}', String(Math.min(startIndex + rowsPerPage, totalItems)))
+            .replace('{{total}}', String(totalItems))}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+          disabled={currentPage === 1}
+          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+        >
+          <i className="fa-solid fa-chevron-left text-xs"></i>
+        </button>
+        <div className="flex items-center gap-1">
+          {/* Simple pagination logic: show all pages logic might be too big, limiting to 5 mostly used in ProductsView */}
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter(
+              (p) => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1),
+            )
+            .map((page, i, arr) => (
+              <div key={page} className="flex items-center">
+                {i > 0 && page - arr[i - 1] > 1 && <span className="text-slate-400 mx-1">...</span>}
+                <button
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                    currentPage === page
+                      ? 'bg-praetor text-white shadow-md shadow-slate-200'
+                      : 'text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  {page}
+                </button>
+              </div>
+            ))}
+        </div>
+        <button
+          onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={currentPage === totalPages || totalPages === 0}
+          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+        >
+          <i className="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+      </div>
+    </>
+  );
+
+  // Render Columns
   return (
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
@@ -36,9 +237,9 @@ const StandardTable = ({
           <h4 className="font-black text-slate-400 uppercase text-[10px] tracking-widest">
             {title}
           </h4>
-          {typeof totalCount === 'number' && (
+          {typeof totalItems === 'number' && (
             <span className="bg-slate-100 text-praetor px-3 py-1 rounded-full text-[10px] font-black uppercase">
-              {totalCount} {totalLabel || t('table.total')}
+              {totalItems} {totalLabel || t('table.total')}
             </span>
           )}
         </div>
@@ -49,14 +250,101 @@ const StandardTable = ({
           </div>
         )}
       </div>
-      <div className={tableContainerClassName ?? 'overflow-x-auto'}>{children}</div>
-      {footer && (
+
+      <div className={tableContainerClassName ?? 'overflow-x-auto min-h-[300px]'}>
+        {columns && data ? (
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr>
+                {columns.map((col) => {
+                  const colId = getColId(col);
+                  const isFiltered = filterState[colId] && filterState[colId].length > 0;
+                  const isSorted = sortState?.colId === colId;
+
+                  return (
+                    <th
+                      key={colId}
+                      className={`relative px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.headerClassName || ''}`}
+                    >
+                      <div className="flex items-center gap-2 group">
+                        <span>{col.header}</span>
+                        {!col.disableFiltering && !col.disableSorting && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterCol(activeFilterCol === colId ? null : colId);
+                            }}
+                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                              isFiltered || isSorted || activeFilterCol === colId
+                                ? 'text-praetor opacity-100'
+                                : 'text-slate-300 opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <i className="fa-solid fa-filter"></i>
+                          </button>
+                        )}
+
+                        {activeFilterCol === colId && (
+                          <TableFilter
+                            title={col.header}
+                            options={getFilterOptions(colId)}
+                            selectedValues={filterState[colId] || []}
+                            onFilterChange={(selected) => handleFilter(colId, selected)}
+                            sortDirection={sortState?.colId === colId ? sortState.px : null}
+                            onSortChange={(dir) => handleSort(colId, dir)}
+                            onClose={() => setActiveFilterCol(null)}
+                          />
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedData.length > 0 ? (
+                paginatedData.map((row, idx) => (
+                  <tr
+                    key={idx}
+                    onClick={() => onRowClick && onRowClick(row)}
+                    className={`transition-colors text-sm ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
+                  >
+                    {columns.map((col) => {
+                      const val = getValue(row, col);
+                      return (
+                        <td key={getColId(col)} className={`${col.className || 'px-6 py-5'}`}>
+                          {col.cell
+                            ? col.cell({ getValue: () => val, row, value: val })
+                            : (val as ReactNode)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={columns.length}
+                    className="p-12 text-center text-slate-400 text-sm font-bold"
+                  >
+                    {t('table.noResults')}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : (
+          children
+        )}
+      </div>
+
+      {(externalFooter || (data && columns)) && (
         <div
           className={`px-8 py-4 bg-slate-50 border-t border-slate-200 rounded-b-3xl ${
-            footerClassName ?? 'flex justify-between items-center'
+            footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
           }`}
         >
-          {footer}
+          {data && columns ? renderInternalFooter() : externalFooter}
         </div>
       )}
     </div>
