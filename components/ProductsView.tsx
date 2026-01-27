@@ -316,10 +316,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     const type = val as Product['type'];
     let unit = 'unit';
     if (type === 'service' || type === 'consulting') {
-      // Default to hour or unit? "Service" logic usually hour, Consulting usually days/hour, Supply units.
-      // Original logic: type === 'item' ? 'unit' : 'hour';
-      // Let's infer: Supply -> unit, Service/Consulting -> hour
-      unit = type === 'service' || type === 'consulting' ? 'hour' : 'unit';
+      unit = 'hours';
     }
 
     setFormData({
@@ -648,24 +645,28 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                         {t('crm:products.unitOfMeasure')}
                       </label>
                     </div>
-                    <div
-                      className={`w-full text-sm px-4 py-2.5 border rounded-xl font-bold flex items-center gap-2 ${errors.costUnit ? 'border-red-500 bg-red-50 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-500'}`}
-                    >
-                      <i
-                        className={`fa-solid ${formData.type === 'supply' || formData.type === 'item' ? 'fa-box-open' : 'fa-clock'}`}
-                      ></i>
-                      {formData.costUnit === 'hour'
-                        ? t('crm:products.hour')
-                        : t('crm:products.unit')}
-                    </div>
+                    <CustomSelect
+                      options={[
+                        { id: 'unit', name: t('crm:products.unit') },
+                        { id: 'hours', name: t('crm:products.hour') },
+                      ]}
+                      value={formData.costUnit || 'unit'}
+                      onChange={(val) =>
+                        setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })
+                      }
+                      placeholder={t('crm:products.selectOption')}
+                      searchable={false}
+                      buttonClassName={
+                        errors.costUnit
+                          ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
+                          : 'py-2.5 text-sm'
+                      }
+                    />
                     {errors.costUnit && (
                       <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
                         {errors.costUnit}
                       </p>
                     )}
-                    <p className="text-[10px] text-slate-400 ml-1">
-                      {t('crm:products.autoSetBasedOnType')}
-                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -697,8 +698,13 @@ const ProductsView: React.FC<ProductsViewProps> = ({
                     </label>
                     <div className="flex gap-2">
                       <ValidatedNumberInput
-                        value={formData.costo ?? ''}
+                        value={formData.costo !== undefined ? formData.costo.toFixed(2) : ''}
                         onValueChange={handleNumericValueChange('costo')}
+                        onBlur={() => {
+                          if (formData.costo !== undefined) {
+                            // Ensure internal state consistency if needed, though toFixed(2) above handles display
+                          }
+                        }}
                         className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                       />
                     </div>
@@ -883,7 +889,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
             cell: ({ row: p }) => (
               <span className="text-sm font-semibold text-slate-500">
                 {Number(p.costo).toFixed(2)} {currency} /{' '}
-                {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
+                {p.costUnit === 'hours' ? t('crm:products.hour') : t('crm:products.unit')}
               </span>
             ),
           },
@@ -903,7 +909,7 @@ const ProductsView: React.FC<ProductsViewProps> = ({
             cell: ({ row: p, value }) => (
               <span className="text-sm font-semibold text-slate-700">
                 {Number(value).toFixed(2)} {currency} /{' '}
-                {p.costUnit === 'hour' ? t('crm:products.hour') : t('crm:products.unit')}
+                {p.costUnit === 'hours' ? t('crm:products.hour') : t('crm:products.unit')}
               </span>
             ),
           },

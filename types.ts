@@ -121,7 +121,7 @@ export interface Product {
   description?: string;
   costo: number;
   molPercentage: number;
-  costUnit: 'unit' | 'hour';
+  costUnit: 'unit' | 'hours';
   category?: string;
   subcategory?: string;
   taxRate: number;
