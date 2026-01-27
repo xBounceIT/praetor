@@ -122,11 +122,31 @@ const Layout: React.FC<LayoutProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
+  const [prevActiveModuleId, setPrevActiveModuleId] = useState<string | null>(null);
+
+  // Sync expanded module with active module activeModule changes
+  if (activeModule.id !== prevActiveModuleId) {
+    setPrevActiveModuleId(activeModule.id);
+    setExpandedModuleId(activeModule.id);
+  }
+
   const handleModuleSwitch = (module: Module) => {
-    // Navigate to the default route for the selected module
-    const defaultRoute = moduleDefaultRoutes[module.id];
-    if (defaultRoute) {
-      onViewChange(defaultRoute);
+    if (expandedModuleId === module.id) {
+      // Toggle collapse if clicking the already expanded module
+      setExpandedModuleId(null);
+    } else {
+      // Expand and navigate if clicking a different module
+      setExpandedModuleId(module.id);
+
+      // Navigate to default route if we're not already in this module
+      // This ensures that expanding a module also shows its content if we were elsewhere
+      if (activeModule.id !== module.id) {
+        const defaultRoute = moduleDefaultRoutes[module.id];
+        if (defaultRoute) {
+          onViewChange(defaultRoute);
+        }
+      }
     }
   };
 
@@ -483,7 +503,7 @@ const Layout: React.FC<LayoutProps> = ({
                       {module.name}
                     </span>
                     <i
-                      className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${activeModule.id === module.id ? 'rotate-180' : ''}`}
+                      className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${expandedModuleId === module.id ? 'rotate-180' : ''}`}
                     ></i>
                   </>
                 )}
@@ -498,7 +518,7 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
 
               {/* Module Sub-items */}
-              {activeModule.id === module.id && (
+              {expandedModuleId === module.id && (
                 <div
                   className={`animate-in slide-in-from-top-2 duration-200 space-y-1 mt-1 pb-2 ${isCollapsed ? '' : 'bg-black/10 rounded-xl p-2'}`}
                 >

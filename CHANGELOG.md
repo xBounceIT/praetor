@@ -1,8 +1,7 @@
 
 ## 20260127 - Operativo
-
 - Ridisegnata la sidebar per avere tutti i moduli disponibili nel menu esposti e le loro pagine come voci del dropdown
-
+- Rimossi filtri dalle pagine
 
 ## 20260125 - Operativo
 

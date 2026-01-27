@@ -44,12 +44,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     return saved ? parseInt(saved, 10) : 5;
   });
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterType, setFilterType] = useState('all');
-  const [filterSupplierId, setFilterSupplierId] = useState('all');
-
   const handleRowsPerPageChange = (val: string) => {
     const value = parseInt(val, 10);
     setRowsPerPage(value);
@@ -63,12 +57,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     localStorage.setItem('praetor_products_disabled_rowsPerPage', value.toString());
     setDisabledCurrentPage(1);
   };
-
-  // Reset pages on filter change
-  React.useEffect(() => {
-    setCurrentPage(1);
-    setDisabledCurrentPage(1);
-  }, [searchTerm, filterCategory, filterType, filterSupplierId]);
 
   // Category Management State
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
@@ -289,52 +277,13 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     }
   };
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const hasActiveFilters =
-    normalizedSearch !== '' ||
-    filterCategory !== 'all' ||
-    filterType !== 'all' ||
-    filterSupplierId !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterCategory('all');
-    setFilterType('all');
-    setFilterSupplierId('all');
-    setCurrentPage(1);
-    setDisabledCurrentPage(1);
-  };
-
-  const matchesProductFilters = React.useCallback(
-    (product: Product) => {
-      const matchesSearch =
-        normalizedSearch === '' ||
-        product.name.toLowerCase().includes(normalizedSearch) ||
-        (product.productCode ?? '').toLowerCase().includes(normalizedSearch) ||
-        (product.category ?? '').toLowerCase().includes(normalizedSearch) ||
-        (product.supplierName ?? '').toLowerCase().includes(normalizedSearch);
-
-      const matchesCategory =
-        filterCategory === 'all' || (product.category ?? '') === filterCategory;
-      const matchesType = filterType === 'all' || product.type === (filterType as Product['type']);
-      const matchesSupplier =
-        filterSupplierId === 'all' ||
-        (filterSupplierId === 'none'
-          ? !product.supplierId
-          : product.supplierId === filterSupplierId);
-
-      return matchesSearch && matchesCategory && matchesType && matchesSupplier;
-    },
-    [normalizedSearch, filterCategory, filterType, filterSupplierId],
-  );
-
   const filteredActiveProductsTotal = React.useMemo(() => {
-    return products.filter((p) => !p.isDisabled).filter(matchesProductFilters);
-  }, [products, matchesProductFilters]);
+    return products.filter((p) => !p.isDisabled);
+  }, [products]);
 
   const filteredDisabledProductsTotal = React.useMemo(() => {
-    return products.filter((p) => p.isDisabled).filter(matchesProductFilters);
-  }, [products, matchesProductFilters]);
+    return products.filter((p) => p.isDisabled);
+  }, [products]);
 
   const hasAnyDisabledProducts = products.some((p) => p.isDisabled);
 
@@ -394,18 +343,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
     ...activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
   ];
 
-  // Filter options
-  const allCategories = Array.from(
-    new Set([
-      ...Object.values(defaultCategoriesMap).flat(),
-      ...products.map((p) => p.category).filter((c): c is string => !!c),
-    ]),
-  ).sort();
-  const filterCategoryOptions: Option[] = [
-    { id: 'all', name: t('crm:products.allCategories') },
-    ...allCategories.map((c: string) => ({ id: c, name: c })),
-  ];
-
   // Helper to get localized name for product types
   const getLocalizedTypeName = (type: string) => {
     switch (type) {
@@ -436,36 +373,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
         return 'bg-slate-100 text-slate-600';
     }
   };
-
-  // Include all actually used types in filter
-  const allUsedTypes = Array.from(new Set(products.map((p) => p.type))).sort();
-  const filterTypeOptions: Option[] = [{ id: 'all', name: t('common:filters.allTypes') }];
-
-  // Add standard types
-  (['supply', 'service', 'consulting'] as const).forEach((typeId) => {
-    if (!filterTypeOptions.find((o) => o.id === typeId)) {
-      filterTypeOptions.push({
-        id: typeId,
-        name: getLocalizedTypeName(typeId),
-      });
-    }
-  });
-
-  // Add any other types if they exist in data
-  allUsedTypes.forEach((typeId: string) => {
-    if (!filterTypeOptions.find((o) => o.id === typeId)) {
-      filterTypeOptions.push({
-        id: typeId,
-        name: getLocalizedTypeName(typeId),
-      });
-    }
-  });
-
-  const filterSupplierOptions: Option[] = [
-    { id: 'all', name: t('common:filters.allSuppliers') },
-    { id: 'none', name: t('crm:products.noSupplier') },
-    ...activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
-  ];
 
   const handleTypeChange = (val: string) => {
     const type = val as Product['type'];
@@ -963,61 +870,6 @@ const ProductsView: React.FC<ProductsViewProps> = ({
         <div>
           <h2 className="text-2xl font-black text-slate-800">{t('crm:products.title')}</h2>
           <p className="text-slate-500 text-sm">{t('crm:products.subtitle')}</p>
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-        <div className="md:col-span-2 relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            placeholder={t('crm:products.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={filterCategoryOptions}
-            value={filterCategory}
-            onChange={(val) => setFilterCategory(val as string)}
-            placeholder={t('crm:products.filterByCategory')}
-            searchable={true}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={filterTypeOptions}
-            value={filterType}
-            onChange={(val) => setFilterType(val as string)}
-            placeholder={t('crm:products.filterByType')}
-            searchable={false}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={filterSupplierOptions}
-            value={filterSupplierId}
-            onChange={(val) => setFilterSupplierId(val as string)}
-            placeholder={t('crm:products.filterBySupplier')}
-            searchable={true}
-            buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-          />
-        </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            {t('crm:products.clearFilters')}
-          </button>
         </div>
       </div>
 
