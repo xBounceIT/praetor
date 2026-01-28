@@ -107,6 +107,14 @@ try {
       console.error('CRITICAL: user_clients table was not created!');
     }
 
+    // Run migration to add quote_code (Must run BEFORE seed.sql because seed.sql references this column)
+    try {
+      const { addQuoteCode } = await import('./db/add_quote_code.ts');
+      await addQuoteCode();
+    } catch (err) {
+      console.error('Failed to run quote_code migration:', err);
+    }
+
     // Run seed.sql for initial data (uses ON CONFLICT DO NOTHING, safe to run repeatedly)
     const seedPath = path.join(__dirname, 'db', 'seed.sql');
     if (fs.existsSync(seedPath)) {
@@ -183,14 +191,6 @@ try {
       await addUniqueClientCode();
     } catch (err) {
       console.error('Failed to run client_code unique constraint migration:', err);
-    }
-
-    // Run migration to add quote_code
-    try {
-      const { addQuoteCode } = await import('./db/add_quote_code.ts');
-      await addQuoteCode();
-    } catch (err) {
-      console.error('Failed to run quote_code migration:', err);
     }
   } else {
     console.warn('Schema file not found at:', schemaPath);
