@@ -190,12 +190,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.email'),
         accessorKey: 'email',
-        cell: ({ row }) => <span className="text-slate-500">{row.email || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-slate-500">{row.email || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.phone'),
         accessorKey: 'phone',
-        cell: ({ row }) => <span className="text-slate-500">{row.phone || '-'}</span>,
+        cell: ({ row }) => <span className="text-xs text-slate-500">{row.phone || '-'}</span>,
       },
       {
         header: t('crm:clients.tableHeaders.vat'),
@@ -216,11 +216,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.status'),
         id: 'status',
         accessorFn: (row) =>
-          row.isDisabled ? t('common:labels.disabled') : t('common:labels.active'),
+          row.isDisabled ? t('common:common.disabled') : t('common:common.active'),
         cell: ({ row }) => (
           <StatusBadge
             type={row.isDisabled ? 'disabled' : 'active'}
-            label={row.isDisabled ? t('common:labels.disabled') : t('common:labels.active')}
+            label={row.isDisabled ? t('common:common.disabled') : t('common:common.active')}
           />
         ),
       },
