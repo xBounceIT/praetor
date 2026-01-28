@@ -580,33 +580,23 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   const columns = useMemo<Column<Quote>[]>(
     () => [
       {
-        header: t('crm:quotes.quoteCode', { defaultValue: 'CODE' }),
-        accessorKey: 'quoteCode',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
-        ),
-      },
-      {
         header: t('crm:quotes.clientColumn'),
         accessorKey: 'clientName',
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-                <i className="fa-solid fa-file-invoice"></i>
-              </div>
-              <div>
-                <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
-                  {row.clientName}
-                </div>
-                <div className="text-[10px] font-black text-slate-400 uppercase">
-                  {t('crm:quotes.itemsCount', { count: row.items.length })}
-                </div>
-              </div>
+            <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+              {row.clientName}
             </div>
           );
         },
+      },
+      {
+        header: t('crm:quotes.quoteCodeColumn'),
+        accessorKey: 'quoteCode',
+        cell: ({ row }) => (
+          <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
+        ),
       },
       {
         header: t('crm:quotes.totalColumn'),

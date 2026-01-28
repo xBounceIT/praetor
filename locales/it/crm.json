@@ -312,6 +312,7 @@
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",
     "clearFiltersButton": "Cancella filtri",
     "clientColumn": "Cliente",
+    "quoteCodeColumn": "Codice",
     "statusColumn": "Stato",
     "totalColumn": "Totale",
     "paymentTermsColumn": "Termini di Pagamento",

@@ -318,6 +318,7 @@
     "quotesSubtitle": "Manage client quotes and proposals",
     "clearFiltersButton": "Clear filters",
     "clientColumn": "Client",
+    "quoteCodeColumn": "Code",
     "statusColumn": "Status",
     "totalColumn": "Total",
     "paymentTermsColumn": "Payment Terms",
