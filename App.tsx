@@ -906,19 +906,32 @@ const App: React.FC = () => {
           }
           case 'projects': {
             if (currentUser.role !== 'manager' && currentUser.role !== 'user') return;
-            const [projectsData, tasksData, clientsData, usersData, workUnitsData] =
-              await Promise.all([
+            // User role only needs projects, tasks, and clients for read-only view
+            if (currentUser.role === 'user') {
+              const [projectsData, tasksData, clientsData] = await Promise.all([
                 api.projects.list(),
                 api.tasks.list(),
                 api.clients.list(),
-                api.users.list(),
-                api.workUnits.list(),
               ]);
-            setProjects(projectsData);
-            setProjectTasks(tasksData);
-            setClients(clientsData);
-            setUsers(usersData);
-            setWorkUnits(workUnitsData);
+              setProjects(projectsData);
+              setProjectTasks(tasksData);
+              setClients(clientsData);
+            } else {
+              // Manager needs additional data for full CRUD operations
+              const [projectsData, tasksData, clientsData, usersData, workUnitsData] =
+                await Promise.all([
+                  api.projects.list(),
+                  api.tasks.list(),
+                  api.clients.list(),
+                  api.users.list(),
+                  api.workUnits.list(),
+                ]);
+              setProjects(projectsData);
+              setProjectTasks(tasksData);
+              setClients(clientsData);
+              setUsers(usersData);
+              setWorkUnits(workUnitsData);
+            }
             break;
           }
           case 'suppliers': {
