@@ -70,45 +70,6 @@ const SalesView: React.FC<SalesViewProps> = ({
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_sales_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
-  const [historyRowsPerPage, setHistoryRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_sales_history_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-
-  const handleRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setRowsPerPage(value);
-    localStorage.setItem('praetor_sales_rowsPerPage', value.toString());
-    setCurrentPage(1); // Reset to first page
-  };
-
-  const handleHistoryRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setHistoryRowsPerPage(value);
-    localStorage.setItem('praetor_sales_history_rowsPerPage', value.toString());
-    setHistoryCurrentPage(1);
-  };
-
-  // Filter State
-  /* Filters removed */
-  const filteredSales = sales;
-
-  const activeSales = useMemo(
-    () => filteredSales.filter((sale) => sale.status === 'draft' || sale.status === 'sent'),
-    [filteredSales],
-  );
-  const historySales = useMemo(
-    () => filteredSales.filter((sale) => sale.status === 'confirmed' || sale.status === 'denied'),
-    [filteredSales],
-  );
-
   // Form State
   const [formData, setFormData] = useState<Partial<Sale>>({
     clientId: '',
@@ -452,15 +413,172 @@ const SalesView: React.FC<SalesViewProps> = ({
   const isLinkedQuote = Boolean(formData.linkedQuoteId);
   const isReadOnly = Boolean(isLinkedQuote || (editingSale && editingSale.status !== 'draft'));
 
-  // Pagination Logic
-  const totalPages = Math.ceil(activeSales.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedSales = activeSales.slice(startIndex, startIndex + rowsPerPage);
-  const historyTotalPages = Math.ceil(historySales.length / historyRowsPerPage);
-  const historyStartIndex = (historyCurrentPage - 1) * historyRowsPerPage;
-  const historySalesPage = historySales.slice(
-    historyStartIndex,
-    historyStartIndex + historyRowsPerPage,
+  // Table columns definition with TableFilter support
+  const columns = useMemo(
+    () => [
+      {
+        header: t('crm:quotes.clientColumn'),
+        accessorFn: (row: Sale) => row.clientName,
+        cell: ({ row }: { row: Sale }) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
+              <i className="fa-solid fa-cart-shopping"></i>
+            </div>
+            <div>
+              <div
+                className={`font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-800'}`}
+              >
+                {row.clientName}
+              </div>
+              <div
+                className={`text-[10px] font-black uppercase ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
+              >
+                {row.items.length} item{row.items.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: t('crm:quotes.totalColumn'),
+        accessorFn: (row: Sale) => {
+          const { total } = calculateTotals(row.items, row.discount);
+          return total;
+        },
+        cell: ({ row }: { row: Sale }) => {
+          const { total } = calculateTotals(row.items, row.discount);
+          return (
+            <span
+              className={`text-sm font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-700'}`}
+            >
+              {total.toFixed(2)} {currency}
+            </span>
+          );
+        },
+        filterFormat: (val: unknown) => (val as number).toFixed(2),
+      },
+      {
+        header: t('crm:quotes.paymentTermsColumn'),
+        accessorFn: (row: Sale) =>
+          row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms,
+        cell: ({ row }: { row: Sale }) => (
+          <span
+            className={`text-sm font-semibold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-600'}`}
+          >
+            {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
+          </span>
+        ),
+      },
+      {
+        header: t('crm:quotes.statusColumn'),
+        accessorFn: (row: Sale) => getSaleStatusLabel(row.status, t),
+        cell: ({ row }: { row: Sale }) => (
+          <div
+            className={row.status === 'confirmed' || row.status === 'denied' ? 'opacity-60' : ''}
+          >
+            <StatusBadge
+              type={row.status as StatusType}
+              label={getSaleStatusLabel(row.status, t)}
+            />
+          </div>
+        ),
+      },
+      {
+        header: t('crm:quotes.actionsColumn'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        align: 'right' as const,
+        cell: ({ row }: { row: Sale }) => (
+          <div className="flex justify-end gap-2">
+            {onViewQuote && row.linkedQuoteId && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewQuote(row.linkedQuoteId!);
+                }}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                title={t('crm:quotes.viewQuote')}
+              >
+                <i className="fa-solid fa-link"></i>
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openEditModal(row);
+              }}
+              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+              title={row.status === 'draft' ? t('crm:sales.editSale') : t('crm:quotes.viewQuote')}
+            >
+              <i
+                className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
+              ></i>
+            </button>
+            {row.status === 'draft' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateSale(row.id, { status: 'sent' });
+                }}
+                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                title={t('crm:sales.markAsSent')}
+              >
+                <i className="fa-solid fa-paper-plane"></i>
+              </button>
+            )}
+            {row.status === 'sent' && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateSale(row.id, { status: 'confirmed' });
+                  }}
+                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                  title={t('crm:sales.markAsConfirmed')}
+                >
+                  <i className="fa-solid fa-check"></i>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateSale(row.id, { status: 'denied' });
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title={t('crm:sales.markAsDenied')}
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateSale(row.id, { status: 'draft' });
+                  }}
+                  className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                  title={t('crm:sales.revertToDraft')}
+                >
+                  <i className="fa-solid fa-rotate-left"></i>
+                </button>
+              </>
+            )}
+            {row.status === 'draft' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  confirmDelete(row);
+                }}
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                title={t('crm:sales.deleteSale')}
+              >
+                <i className="fa-solid fa-trash-can"></i>
+              </button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currency, onUpdateSale, onViewQuote, t],
   );
 
   return (
@@ -948,11 +1066,12 @@ const SalesView: React.FC<SalesViewProps> = ({
         </div>
       </div>
 
-      {/* Search and Filters */}
-
+      {/* Main Table with all sales and TableFilter */}
       <StandardTable
-        title={t('crm:sales.activeSales')}
-        totalCount={activeSales.length}
+        title={t('crm:sales.title')}
+        data={sales}
+        columns={columns}
+        defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         headerAction={
           <button
@@ -962,390 +1081,13 @@ const SalesView: React.FC<SalesViewProps> = ({
             <i className="fa-solid fa-plus"></i> {t('crm:sales.createNewSale')}
           </button>
         }
-        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                {t('crm:products.rowsPerPage')}
-              </span>
-              <CustomSelect
-                options={[
-                  { id: '5', name: '5' },
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val as string)}
-                className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                searchable={false}
-              />
-              <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('crm:products.showing')} {paginatedSales.length > 0 ? startIndex + 1 : 0}-
-                {Math.min(startIndex + rowsPerPage, activeSales.length)} {t('crm:products.of')}{' '}
-                {activeSales.length}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      currentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
+        rowClassName={(row: Sale) =>
+          row.status === 'confirmed' || row.status === 'denied'
+            ? 'bg-slate-50 text-slate-400'
+            : 'hover:bg-slate-50/50'
         }
-      >
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:quotes.clientColumn')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:quotes.statusColumn')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:quotes.totalColumn')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('crm:quotes.paymentTermsColumn')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                {t('crm:quotes.actionsColumn')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {paginatedSales.map((sale) => {
-              const { total } = calculateTotals(sale.items, sale.discount);
-              return (
-                <tr
-                  key={sale.id}
-                  onClick={() => openEditModal(sale)}
-                  className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
-                >
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-                        <i className="fa-solid fa-cart-shopping"></i>
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-800">{sale.clientName}</div>
-                        <div className="text-[10px] font-black text-slate-400 uppercase">
-                          {sale.items.length} item{sale.items.length !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5">
-                    <StatusBadge
-                      type={sale.status as StatusType}
-                      label={getSaleStatusLabel(sale.status, t)}
-                    />
-                  </td>
-                  <td className="px-8 py-5 text-sm font-bold text-slate-700">
-                    {total.toFixed(2)} {currency}
-                  </td>
-                  <td className="px-8 py-5 text-sm font-semibold text-slate-600">
-                    {sale.paymentTerms === 'immediate'
-                      ? t('crm:paymentTerms.immediate')
-                      : sale.paymentTerms}
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="flex justify-end gap-2">
-                      {onViewQuote && sale.linkedQuoteId && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewQuote(sale.linkedQuoteId!);
-                          }}
-                          className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                          title={t('crm:quotes.viewQuote')}
-                        >
-                          <i className="fa-solid fa-link"></i>
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditModal(sale);
-                        }}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                        title={
-                          sale.status === 'draft'
-                            ? t('crm:sales.editSale')
-                            : t('crm:quotes.viewQuote')
-                        }
-                      >
-                        <i
-                          className={`fa-solid ${sale.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
-                        ></i>
-                      </button>
-                      {sale.status === 'draft' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateSale(sale.id, { status: 'sent' });
-                          }}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                          title={t('crm:sales.markAsSent')}
-                        >
-                          <i className="fa-solid fa-paper-plane"></i>
-                        </button>
-                      )}
-                      {sale.status === 'sent' && (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateSale(sale.id, { status: 'confirmed' });
-                            }}
-                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                            title={t('crm:sales.markAsConfirmed')}
-                          >
-                            <i className="fa-solid fa-check"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateSale(sale.id, { status: 'denied' });
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            title={t('crm:sales.markAsDenied')}
-                          >
-                            <i className="fa-solid fa-xmark"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateSale(sale.id, { status: 'draft' });
-                            }}
-                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                            title={t('crm:sales.revertToDraft')}
-                          >
-                            <i className="fa-solid fa-rotate-left"></i>
-                          </button>
-                        </>
-                      )}
-                      {sale.status === 'draft' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmDelete(sale);
-                          }}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                          title={t('crm:sales.deleteSale')}
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {activeSales.length === 0 && (
-              <tr>
-                <td colSpan={5} className="p-12 text-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
-                    <i className="fa-solid fa-cart-shopping text-2xl"></i>
-                  </div>
-                  <p className="text-slate-400 text-sm font-bold">{t('crm:sales.noActiveSales')}</p>
-                  <button
-                    onClick={openAddModal}
-                    className="mt-4 text-praetor text-sm font-black hover:underline"
-                  >
-                    {t('crm:sales.createFirst')}
-                  </button>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </StandardTable>
-
-      {historySales.length > 0 && (
-        <StandardTable
-          title={t('crm:sales.history')}
-          totalCount={historySales.length}
-          totalLabel={t('common:labels.total').toUpperCase()}
-          containerClassName="border-dashed bg-slate-50"
-          footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-          footer={
-            <>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-500">
-                  {t('crm:products.rowsPerPage')}
-                </span>
-                <CustomSelect
-                  options={[
-                    { id: '5', name: '5' },
-                    { id: '10', name: '10' },
-                    { id: '20', name: '20' },
-                    { id: '50', name: '50' },
-                  ]}
-                  value={historyRowsPerPage.toString()}
-                  onChange={(val) => handleHistoryRowsPerPageChange(val as string)}
-                  className="w-20"
-                  buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                  searchable={false}
-                />
-                <span className="text-xs font-bold text-slate-400 ml-2">
-                  {t('crm:products.showing')}{' '}
-                  {historySalesPage.length > 0 ? historyStartIndex + 1 : 0}-
-                  {Math.min(historyStartIndex + historyRowsPerPage, historySales.length)}{' '}
-                  {t('crm:products.of')} {historySales.length}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setHistoryCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={historyCurrentPage === 1}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-left text-xs"></i>
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: historyTotalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setHistoryCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                        historyCurrentPage === page
-                          ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                          : 'text-slate-500 hover:bg-slate-100'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() =>
-                    setHistoryCurrentPage((prev) => Math.min(historyTotalPages, prev + 1))
-                  }
-                  disabled={historyCurrentPage === historyTotalPages || historyTotalPages === 0}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-right text-xs"></i>
-                </button>
-              </div>
-            </>
-          }
-        >
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {t('crm:quotes.clientColumn')}
-                </th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {t('crm:quotes.statusColumn')}
-                </th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {t('crm:quotes.totalColumn')}
-                </th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {t('crm:quotes.paymentTermsColumn')}
-                </th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                  {t('crm:quotes.actionsColumn')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {historySalesPage.map((sale) => {
-                const { total } = calculateTotals(sale.items, sale.discount);
-                return (
-                  <tr
-                    key={sale.id}
-                    onClick={() => openEditModal(sale)}
-                    className="transition-colors group cursor-pointer bg-slate-50 text-slate-400"
-                  >
-                    <td className="px-8 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-                          <i className="fa-solid fa-cart-shopping"></i>
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-400">{sale.clientName}</div>
-                          <div className="text-[10px] font-black text-slate-400 uppercase">
-                            {sale.items.length} item{sale.items.length !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5">
-                      <div className="opacity-60">
-                        <StatusBadge
-                          type={sale.status as StatusType}
-                          label={getSaleStatusLabel(sale.status, t)}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-8 py-5 text-sm font-bold text-slate-400">
-                      {total.toFixed(2)} {currency}
-                    </td>
-                    <td className="px-8 py-5 text-sm font-semibold text-slate-400">
-                      {sale.paymentTerms === 'immediate'
-                        ? t('crm:paymentTerms.immediate')
-                        : sale.paymentTerms}
-                    </td>
-                    <td className="px-8 py-5">
-                      <div className="flex justify-end gap-2">
-                        {onViewQuote && sale.linkedQuoteId && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (sale.linkedQuoteId) onViewQuote(sale.linkedQuoteId);
-                            }}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                            title={t('crm:quotes.viewQuote')}
-                          >
-                            <i className="fa-solid fa-link"></i>
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditModal(sale);
-                          }}
-                          className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                          title={t('crm:quotes.viewQuote')}
-                        >
-                          <i className="fa-solid fa-eye"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </StandardTable>
-      )}
+        onRowClick={(row: Sale) => openEditModal(row)}
+      />
     </div>
   );
 };
