@@ -231,6 +231,7 @@ const TrackerView: React.FC<{
           onAddBulkEntries={onAddBulkEntries}
           startOfWeek={startOfWeek}
           treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+          allowWeekendSelection={generalSettings.allowWeekendSelection}
         />
       ) : (
         <div className="flex flex-col lg:flex-row gap-8">
@@ -420,6 +421,7 @@ const TrackerView: React.FC<{
               startOfWeek={startOfWeek}
               treatSaturdayAsHoliday={treatSaturdayAsHoliday}
               dailyGoal={dailyGoal}
+              allowWeekendSelection={generalSettings.allowWeekendSelection}
             />
 
             {enableAiInsights && (
@@ -563,6 +565,7 @@ const App: React.FC = () => {
     dailyLimit: 8,
     startOfWeek: 'Monday' as 'Monday' | 'Sunday',
     treatSaturdayAsHoliday: true,
+    allowWeekendSelection: true,
     enableAiInsights: false,
     geminiApiKey: '',
   });

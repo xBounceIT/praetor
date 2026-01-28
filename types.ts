@@ -40,6 +40,7 @@ export interface GeneralSettings {
   treatSaturdayAsHoliday: boolean;
   enableAiInsights: boolean;
   geminiApiKey?: string;
+  allowWeekendSelection: boolean;
 }
 
 export interface Client {

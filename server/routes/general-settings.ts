@@ -16,7 +16,7 @@ export default async function (fastify, _opts) {
     },
     async (request, _reply) => {
       const result = await query(
-        'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key FROM general_settings WHERE id = 1',
+        'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection FROM general_settings WHERE id = 1',
       );
       if (result.rows.length === 0) {
         return {
@@ -26,6 +26,7 @@ export default async function (fastify, _opts) {
           treatSaturdayAsHoliday: true,
           enableAiInsights: false,
           geminiApiKey: '',
+          allowWeekendSelection: true,
         };
       }
       const s = result.rows[0];
@@ -40,6 +41,7 @@ export default async function (fastify, _opts) {
         treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
         enableAiInsights: s.enable_ai_insights,
         geminiApiKey,
+        allowWeekendSelection: s.allow_weekend_selection ?? true,
       };
     },
   );
@@ -58,6 +60,7 @@ export default async function (fastify, _opts) {
         treatSaturdayAsHoliday,
         enableAiInsights,
         geminiApiKey,
+        allowWeekendSelection,
       } = request.body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -67,6 +70,7 @@ export default async function (fastify, _opts) {
 
       const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
       const enableAiInsightsValue = parseBoolean(enableAiInsights);
+      const allowWeekendSelectionValue = parseBoolean(allowWeekendSelection);
 
       const result = await query(
         `UPDATE general_settings 
@@ -76,9 +80,10 @@ export default async function (fastify, _opts) {
                  treat_saturday_as_holiday = COALESCE($4, treat_saturday_as_holiday),
                  enable_ai_insights = COALESCE($5, enable_ai_insights),
                  gemini_api_key = COALESCE($6, gemini_api_key),
+                 allow_weekend_selection = COALESCE($7, allow_weekend_selection),
                  updated_at = CURRENT_TIMESTAMP 
              WHERE id = 1 
-             RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key`,
+             RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection`,
         [
           currencyResult.value,
           dailyLimitResult.value,
@@ -86,6 +91,7 @@ export default async function (fastify, _opts) {
           treatSaturdayAsHolidayValue,
           enableAiInsightsValue,
           geminiApiKey,
+          allowWeekendSelectionValue,
         ],
       );
 
@@ -97,6 +103,7 @@ export default async function (fastify, _opts) {
         treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
         enableAiInsights: s.enable_ai_insights,
         geminiApiKey: s.gemini_api_key || '',
+        allowWeekendSelection: s.allow_weekend_selection ?? true,
       };
     },
   );

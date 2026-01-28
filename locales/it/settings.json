@@ -45,6 +45,7 @@
     "dailyLimit": "Limite Giornaliero",
     "startOfWeek": "Inizio Settimana",
     "treatSaturdayAsHoliday": "Tratta Sabato come Festività",
+    "allowWeekendSelection": "Permetti Selezione Weekend",
     "enableAiInsights": "Abilita Insight AI",
     "geminiApiKey": "Chiave API Gemini",
     "localizationDisplay": "Localizzazione e Visualizzazione",

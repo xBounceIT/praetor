@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS general_settings (
     start_of_week VARCHAR(10) DEFAULT 'Monday' CHECK (start_of_week IN ('Monday', 'Sunday')),
     treat_saturday_as_holiday BOOLEAN DEFAULT TRUE,
     enable_ai_insights BOOLEAN DEFAULT FALSE,
+    allow_weekend_selection BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -230,6 +231,7 @@ ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS daily_limit DECIMAL(4, 2) 
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS start_of_week VARCHAR(10) DEFAULT 'Monday';
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS treat_saturday_as_holiday BOOLEAN DEFAULT TRUE;
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS enable_ai_insights BOOLEAN DEFAULT FALSE;
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS allow_weekend_selection BOOLEAN DEFAULT TRUE;
 
 -- Insert default general settings room
 INSERT INTO general_settings (id, currency) VALUES (1, '€') ON CONFLICT (id) DO NOTHING;

@@ -20,6 +20,7 @@ interface WeeklyViewProps {
   onViewUserChange: (id: string) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
+  allowWeekendSelection?: boolean;
 }
 
 const toLocalISOString = (date: Date) => {
@@ -41,6 +42,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   availableUsers,
   onViewUserChange,
   treatSaturdayAsHoliday,
+  allowWeekendSelection = false,
 }) => {
   const { t, i18n } = useTranslation('timesheets');
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -60,7 +62,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       const holidayName = isItalianHoliday(new Date(dateStr + 'T00:00:00'));
       const isSunday = d.getDay() === 0;
       const isSaturday = d.getDay() === 6;
-      const isForbidden = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
+      const isForbidden =
+        !allowWeekendSelection &&
+        (isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName);
       const dayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()];
 
       return {
@@ -72,7 +76,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         holidayName,
       };
     });
-  }, [currentWeekStart, treatSaturdayAsHoliday, t]);
+  }, [currentWeekStart, treatSaturdayAsHoliday, allowWeekendSelection, t]);
 
   type RowData = {
     clientId: string;

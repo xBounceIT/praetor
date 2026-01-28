@@ -17,6 +17,9 @@ interface CalendarProps {
   startDate?: string;
   endDate?: string;
   onRangeSelect?: (start: string, end: string | null) => void;
+
+  // Allow weekend selection (e.g., for time tracker)
+  allowWeekendSelection?: boolean;
 }
 
 const Calendar: React.FC<CalendarProps> = ({
@@ -30,6 +33,7 @@ const Calendar: React.FC<CalendarProps> = ({
   startDate,
   endDate,
   onRangeSelect,
+  allowWeekendSelection = false,
 }) => {
   const { t } = useTranslation('timesheets');
   const [viewDate, setViewDate] = useState(new Date(selectedDate || startDate || new Date()));
@@ -151,6 +155,7 @@ const Calendar: React.FC<CalendarProps> = ({
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
     const isForbidden =
+      !allowWeekendSelection &&
       selectionMode === 'single' &&
       (isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName); // Typically specific to work-logging, maybe relax for reporting
 

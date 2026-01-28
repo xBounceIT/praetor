@@ -38,6 +38,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [treatSaturdayAsHoliday, setTreatSaturdayAsHoliday] = useState(
     settings.treatSaturdayAsHoliday,
   );
+  const [allowWeekendSelection, setAllowWeekendSelection] = useState(
+    settings.allowWeekendSelection ?? true,
+  );
   const [enableAiInsights, setEnableAiInsights] = useState(settings.enableAiInsights);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [activeTab, setActiveTab] = useState<'localization' | 'tracking' | 'ai'>('localization');
@@ -49,6 +52,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setDailyLimit(settings.dailyLimit);
     setStartOfWeek(settings.startOfWeek);
     setTreatSaturdayAsHoliday(settings.treatSaturdayAsHoliday);
+    setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
     setEnableAiInsights(settings.enableAiInsights);
     setGeminiApiKey(settings.geminiApiKey || '');
   }, [settings]);
@@ -65,6 +69,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         dailyLimit,
         startOfWeek,
         treatSaturdayAsHoliday,
+        allowWeekendSelection,
         enableAiInsights,
         geminiApiKey,
       });
@@ -82,7 +87,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     dailyLimit !== settings.dailyLimit ||
     startOfWeek !== settings.startOfWeek ||
     treatSaturdayAsHoliday !== settings.treatSaturdayAsHoliday ||
-    treatSaturdayAsHoliday !== settings.treatSaturdayAsHoliday ||
+    allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     enableAiInsights !== settings.enableAiInsights ||
     geminiApiKey !== (settings.geminiApiKey || '');
 
@@ -216,6 +221,24 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     type="checkbox"
                     checked={treatSaturdayAsHoliday}
                     onChange={(e) => setTreatSaturdayAsHoliday(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">Allow Weekend Selection</p>
+                  <p className="text-xs text-slate-500 italic">
+                    Enables Saturday and Sunday for time entry in both daily and weekly views.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowWeekendSelection}
+                    onChange={(e) => setAllowWeekendSelection(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
