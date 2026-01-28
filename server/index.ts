@@ -184,6 +184,14 @@ try {
     } catch (err) {
       console.error('Failed to run client_code unique constraint migration:', err);
     }
+
+    // Run migration to add quote_code
+    try {
+      const { addQuoteCode } = await import('./db/add_quote_code.ts');
+      await addQuoteCode();
+    } catch (err) {
+      console.error('Failed to run quote_code migration:', err);
+    }
   } else {
     console.warn('Schema file not found at:', schemaPath);
   }

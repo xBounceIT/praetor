@@ -57,12 +57,26 @@ import SuppliersView from './components/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
 import SpecialBidsView from './components/SpecialBidsView';
 
+const getCurrencySymbol = (currency: string) => {
+  switch (currency) {
+    case 'USD':
+      return '$';
+    case 'EUR':
+      return '€';
+    case 'GBP':
+      return '£';
+    default:
+      return currency;
+  }
+};
+
 const getModuleFromView = (view: View | '404'): string | null => {
   if (view === '404') return null;
   if (view.startsWith('timesheets/')) return 'timesheets';
   if (view.startsWith('crm/')) return 'crm';
   if (view.startsWith('catalog/')) return 'catalog';
-  if (view.startsWith('hr/')) return 'hr';
+  if (view.startsWith('catalog/')) return 'catalog';
+  if (view.startsWith('hr/')) return 'configuration'; // Remap old HR routes
   if (view.startsWith('projects/')) return 'projects';
   if (view.startsWith('finances/')) return 'finances';
   if (view.startsWith('suppliers/')) return 'suppliers';
@@ -574,8 +588,8 @@ const App: React.FC = () => {
       'timesheets/tracker',
       'timesheets/reports',
       'timesheets/recurring',
-      'hr/workforce',
-      'hr/work-units',
+      'configuration/user-management',
+      'configuration/work-units',
       'configuration/authentication',
       'configuration/general',
       'crm/clients',
@@ -605,8 +619,8 @@ const App: React.FC = () => {
       'timesheets/tracker',
       'timesheets/reports',
       'timesheets/recurring',
-      'hr/workforce',
-      'hr/work-units',
+      'configuration/user-management',
+      'configuration/work-units',
       'configuration/authentication',
       'configuration/general',
       'crm/clients',
@@ -661,12 +675,11 @@ const App: React.FC = () => {
       'timesheets/tracker': ['manager', 'user'],
       'timesheets/reports': ['manager', 'user'],
       'timesheets/recurring': ['manager', 'user'],
-      // HR module - admin/manager
-      'hr/workforce': ['admin', 'manager'],
-      'hr/work-units': ['admin', 'manager'],
-      // Configuration module - admin only
+      // Configuration module - admin/manager
       'configuration/authentication': ['admin'],
       'configuration/general': ['admin'],
+      'configuration/user-management': ['admin', 'manager'],
+      'configuration/work-units': ['admin', 'manager'],
       // CRM module - manager
       'crm/clients': ['manager'],
       'crm/quotes': ['manager'],
@@ -1818,26 +1831,6 @@ const App: React.FC = () => {
     }
   };
 
-  const addUser = async (name: string, username: string, password: string, role: UserRole) => {
-    try {
-      const user = await api.users.create(name, username, password, role);
-      setUsers([...users, user]);
-      return { success: true };
-    } catch (err) {
-      console.error('Failed to add user:', err);
-      return { success: false, error: (err as Error).message };
-    }
-  };
-
-  const deleteUser = async (id: string) => {
-    try {
-      await api.users.delete(id);
-      setUsers(users.filter((u) => u.id !== id));
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-    }
-  };
-
   const handleUpdateUser = async (id: string, updates: Partial<User>) => {
     try {
       const updated = await api.users.update(id, updates);
@@ -1868,7 +1861,7 @@ const App: React.FC = () => {
   };
 
   const getDefaultViewForRole = (role: UserRole): View =>
-    role === 'admin' ? 'hr/workforce' : 'timesheets/tracker';
+    role === 'admin' ? 'configuration/user-management' : 'timesheets/tracker';
 
   const handleLogin = async (user: User, token?: string) => {
     if (token) {
@@ -1882,8 +1875,8 @@ const App: React.FC = () => {
 
     if (user.role === 'admin') {
       const adminAllowed = new Set<View>([
-        'hr/workforce',
-        'hr/work-units',
+        'configuration/user-management',
+        'configuration/work-units',
         'configuration/authentication',
         'configuration/general',
         'settings',
@@ -1923,6 +1916,34 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddUser = async (
+    name: string,
+    username: string,
+    password: string,
+    role: UserRole,
+  ) => {
+    try {
+      const user = await api.users.create(name, username, password, role);
+      setUsers([...users, user]);
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to add user:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    try {
+      if (viewingUserId === id) {
+        setViewingUserId(currentUser?.id || '');
+      }
+      await api.users.delete(id);
+      setUsers(users.filter((u) => u.id !== id));
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+    }
+  };
+
   const addWorkUnit = async (data: Partial<WorkUnit>) => {
     try {
       const unit = await api.workUnits.create(data);
@@ -1953,7 +1974,7 @@ const App: React.FC = () => {
     }
   };
 
-  const refreshWorkUnits = async () => {
+  const fetchWorkUnits = async () => {
     try {
       const wu = await api.workUnits.list();
       setWorkUnits(wu);
@@ -2223,23 +2244,23 @@ const App: React.FC = () => {
             )}
 
             {(currentUser.role === 'admin' || currentUser.role === 'manager') &&
-              activeView === 'hr/workforce' && (
+              activeView === 'configuration/user-management' && (
                 <UserManagement
                   users={users}
                   clients={clients}
                   projects={projects}
                   tasks={projectTasks}
-                  onAddUser={addUser}
-                  onDeleteUser={deleteUser}
+                  onAddUser={handleAddUser}
+                  onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}
                   currentUserId={currentUser.id}
                   currentUserRole={currentUser.role}
-                  currency={generalSettings.currency}
+                  currency={getCurrencySymbol(generalSettings.currency)}
                 />
               )}
 
             {(currentUser.role === 'admin' || currentUser.role === 'manager') &&
-              activeView === 'hr/work-units' && (
+              activeView === 'configuration/work-units' && (
                 <WorkUnitsView
                   workUnits={workUnits}
                   users={users}
@@ -2247,7 +2268,7 @@ const App: React.FC = () => {
                   onAddWorkUnit={addWorkUnit}
                   onUpdateWorkUnit={updateWorkUnit}
                   onDeleteWorkUnit={deleteWorkUnit}
-                  refreshWorkUnits={refreshWorkUnits}
+                  refreshWorkUnits={fetchWorkUnits}
                 />
               )}
 

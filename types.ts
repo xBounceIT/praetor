@@ -169,6 +169,7 @@ export interface QuoteItem {
 
 export interface Quote {
   id: string;
+  quoteCode: string;
   clientId: string;
   clientName: string;
   items: QuoteItem[];
@@ -239,9 +240,11 @@ export type View =
   | 'timesheets/tracker'
   | 'timesheets/reports'
   | 'timesheets/recurring'
-  // Configuration module (admin)
+  // Configuration module (admin/manager)
   | 'configuration/authentication'
   | 'configuration/general'
+  | 'configuration/user-management'
+  | 'configuration/work-units'
   // CRM module
   | 'crm/clients'
   | 'crm/quotes'
@@ -254,9 +257,9 @@ export type View =
   | 'finances/payments'
   | 'finances/expenses'
   | 'finances/reports'
-  // HR module
-  | 'hr/workforce'
-  | 'hr/work-units'
+  // HR module (Deprecated/Moved)
+  // | 'hr/workforce'
+  // | 'hr/work-units'
   // Projects module
   | 'projects/manage'
   | 'projects/tasks'

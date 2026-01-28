@@ -35,3 +35,9 @@ INSERT INTO settings (user_id, full_name, email) VALUES
     ('u2', 'Manager User', 'manager@example.com'),
     ('u3', 'Standard User', 'user@example.com')
 ON CONFLICT (user_id) DO NOTHING;
+
+-- Default quotes
+INSERT INTO quotes (id, quote_code, client_id, client_name, expiration_date, status, discount, payment_terms) VALUES
+    ('q1', 'Q0001', 'c1', 'Acme Corp', '2026-12-31', 'sent', 0, '30gg'),
+    ('q2', 'Q0002', 'c2', 'Global Tech', '2026-11-30', 'draft', 5, 'immediate')
+ON CONFLICT (id) DO NOTHING;

@@ -348,6 +348,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_products_product_code_unique ON products(p
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (
     id VARCHAR(50) PRIMARY KEY,
+    quote_code VARCHAR(20) UNIQUE NOT NULL,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',

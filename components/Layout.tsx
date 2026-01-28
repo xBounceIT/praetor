@@ -15,7 +15,6 @@ const moduleDefaultRoutes: Record<string, View> = {
   timesheets: 'timesheets/tracker',
   crm: 'crm/clients',
   catalog: 'catalog/products',
-  hr: 'hr/workforce',
   projects: 'projects/manage',
   finances: 'finances/invoices',
   suppliers: 'suppliers/manage',
@@ -27,7 +26,8 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('timesheets/')) return 'timesheets';
   if (route.startsWith('crm/')) return 'crm';
   if (route.startsWith('catalog/')) return 'catalog';
-  if (route.startsWith('hr/')) return 'hr';
+  if (route.startsWith('catalog/')) return 'catalog';
+  if (route.startsWith('hr/')) return 'configuration'; // Remap old HR routes to configuration/administration
   if (route.startsWith('projects/')) return 'projects';
   if (route.startsWith('finances/')) return 'finances';
   if (route.startsWith('suppliers/')) return 'suppliers';
@@ -75,11 +75,10 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
       { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
       { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
-      { id: 'hr', name: t('modules.hr'), icon: 'fa-user-group', active: false },
       { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
       { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
       { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
-      { id: 'configuration', name: t('modules.configuration'), icon: 'fa-gears', active: false },
+      { id: 'configuration', name: t('modules.administration'), icon: 'fa-gears', active: false },
     ],
     [t],
   ).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
@@ -89,11 +88,9 @@ const Layout: React.FC<LayoutProps> = ({
 
   // Filter modules based on user role
   const accessibleModules = modules.filter((m) => {
-    // Admin only access to configuration
-    if (m.id === 'configuration') return currentUser.role === 'admin';
-
-    // Admin and Manager access to HR
-    if (m.id === 'hr') return currentUser.role === 'admin' || currentUser.role === 'manager';
+    // Admin and Manager access to Configuration (Administration)
+    if (m.id === 'configuration')
+      return currentUser.role === 'admin' || currentUser.role === 'manager';
 
     // Timesheets access for managers and users
     if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
@@ -253,32 +250,6 @@ const Layout: React.FC<LayoutProps> = ({
           </>
         );
       case 'hr':
-        return (
-          <>
-            <NavItem
-              icon="fa-users"
-              label={t('routes.workforce')}
-              active={activeView === 'hr/workforce'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('hr/workforce');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            {isManagement && (
-              <NavItem
-                icon="fa-sitemap"
-                label={t('routes.workUnits')}
-                active={activeView === 'hr/work-units'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('hr/work-units');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
       case 'projects':
         return (
           <>
@@ -399,6 +370,30 @@ const Layout: React.FC<LayoutProps> = ({
                 setIsMobileMenuOpen(false);
               }}
             />
+
+            <NavItem
+              icon="fa-users"
+              label={t('routes.userManagement')}
+              active={activeView === 'configuration/user-management'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('configuration/user-management');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+
+            {isManagement && (
+              <NavItem
+                icon="fa-sitemap"
+                label={t('routes.workUnits')}
+                active={activeView === 'configuration/work-units'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('configuration/work-units');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       default:
@@ -624,7 +619,11 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
           </div>
         </header>
-        <div className="p-4 md:p-8 max-w-7xl mx-auto">{children}</div>
+        <div
+          className={`p-4 md:p-8 mx-auto ${activeView === 'catalog/products' ? 'max-w-[96%]' : 'max-w-7xl'}`}
+        >
+          {children}
+        </div>
       </main>
     </div>
   );

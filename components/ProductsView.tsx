@@ -855,29 +855,55 @@ const ProductsView: React.FC<ProductsViewProps> = ({
           {
             header: t('common:labels.name'),
             accessorKey: 'name',
+            className: 'px-6 py-5 font-bold text-slate-800 min-w-[200px]',
+            cell: ({ row: p }) => <div className="font-bold text-slate-800">{p.name}</div>,
+          },
+          {
+            header: t('crm:products.productCode'),
+            accessorKey: 'productCode',
+            cell: ({ row: p }) =>
+              p.productCode ? (
+                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase flex-shrink-0 whitespace-nowrap">
+                  {p.productCode}
+                </span>
+              ) : (
+                <span className="text-slate-300">-</span>
+              ),
+          },
+          {
+            header: t('crm:products.category'),
+            accessorKey: 'category',
             cell: ({ row: p }) => (
-              <div className="flex items-center gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="font-bold text-slate-800 truncate">{p.name}</div>
-                    {p.productCode && (
-                      <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase flex-shrink-0">
-                        {p.productCode}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase truncate">
-                    {p.category || t('crm:products.noCategory')}
-                    {p.category && p.subcategory && ` - ${p.subcategory}`}
-                  </div>
-                  <div className="text-[10px] font-semibold text-slate-500 truncate">
-                    {p.supplierName || t('crm:products.noSupplier')}
-                  </div>
-                </div>
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight whitespace-nowrap">
+                {p.category || '-'}
+              </span>
+            ),
+          },
+          {
+            header: t('crm:products.subcategory'),
+            accessorKey: 'subcategory',
+            cell: ({ row: p }) => (
+              <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
+                {p.subcategory || '-'}
+              </span>
+            ),
+          },
+          {
+            header: t('crm:products.supplier'),
+            accessorKey: 'supplierName',
+            className: 'px-6 py-5 whitespace-nowrap',
+            cell: ({ row: p }) => (
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-truck text-slate-300 text-xs"></i>
+                <span
+                  className="text-xs font-semibold text-slate-600 truncate max-w-[150px]"
+                  title={p.supplierName}
+                >
+                  {p.supplierName || t('crm:products.noSupplier')}
+                </span>
               </div>
             ),
           },
-
           {
             header: t('crm:products.type'),
             accessorKey: 'type',

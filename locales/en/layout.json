@@ -7,7 +7,8 @@
     "projects": "Projects",
     "finances": "Finances",
     "suppliers": "Suppliers",
-    "configuration": "Configuration"
+    "configuration": "Configuration",
+    "administration": "Administration"
   },
   "routes": {
     "timeTracker": "Time Tracker",
@@ -23,6 +24,7 @@
     "quotes": "Quotes",
     "sales": "Sales",
     "workforce": "Workforce",
+    "userManagement": "User Management",
     "workUnits": "Work Units",
     "manage": "Manage",
     "invoices": "Invoices",

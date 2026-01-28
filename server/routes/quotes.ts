@@ -144,6 +144,7 @@ export default async function (fastify, _opts) {
     // Attach items to quotes
     const quotes = quotesResult.rows.map((quote) => ({
       ...quote,
+      quoteCode: quote.quote_code,
       items: itemsByQuote[quote.id] || [],
       isExpired: isQuoteExpired(quote.status, quote.expirationDate),
     }));
@@ -153,8 +154,26 @@ export default async function (fastify, _opts) {
 
   // POST / - Create quote with items
   fastify.post('/', async (request, reply) => {
-    const { clientId, clientName, items, paymentTerms, discount, status, expirationDate, notes } =
-      request.body;
+    const {
+      quoteCode,
+      clientId,
+      clientName,
+      items,
+      paymentTerms,
+      discount,
+      status,
+      expirationDate,
+      notes,
+    } = request.body;
+
+    const quoteCodeResult = requireNonEmptyString(quoteCode, 'quoteCode');
+    if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
+    const existingQuoteCode = await query('SELECT id FROM quotes WHERE quote_code = $1', [
+      quoteCodeResult.value,
+    ]);
+    if (existingQuoteCode.rows.length > 0) {
+      return reply.code(409).send({ error: 'Quote code already exists' });
+    }
 
     const clientIdResult = requireNonEmptyString(clientId, 'clientId');
     if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -237,10 +256,11 @@ export default async function (fastify, _opts) {
 
       // Insert quote
       const quoteResult = await query(
-        `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO quotes (id, quote_code, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING
                     id,
+                    quote_code as "quoteCode",
                     client_id as "clientId",
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
@@ -252,6 +272,7 @@ export default async function (fastify, _opts) {
                     EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
         [
           quoteId,
+          quoteCodeResult.value,
           clientIdResult.value,
           clientNameResult.value,
           paymentTerms || 'immediate',
@@ -318,6 +339,7 @@ export default async function (fastify, _opts) {
   fastify.put('/:id', async (request, reply) => {
     const { id } = request.params;
     const {
+      quoteCode,
       clientId,
       clientName,
       items,
@@ -347,9 +369,25 @@ export default async function (fastify, _opts) {
       paymentTerms !== undefined ||
       discount !== undefined ||
       expirationDate !== undefined ||
-      notes !== undefined;
+      notes !== undefined ||
+      quoteCode !== undefined;
     if (currentStatus === 'confirmed' && hasNonStatusUpdates) {
       return reply.code(409).send({ error: 'Confirmed quotes are read-only' });
+    }
+
+    let quoteCodeValue: string | undefined = undefined;
+    if (quoteCode !== undefined) {
+      const quoteCodeResult = requireNonEmptyString(quoteCode, 'quoteCode');
+      if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
+      quoteCodeValue = quoteCodeResult.value;
+
+      const existingQuoteCode = await query(
+        'SELECT id FROM quotes WHERE quote_code = $1 AND id <> $2',
+        [quoteCodeValue, idResult.value],
+      );
+      if (existingQuoteCode.rows.length > 0) {
+        return reply.code(409).send({ error: 'Quote code already exists' });
+      }
     }
 
     let clientIdValue = clientId;
@@ -501,17 +539,19 @@ export default async function (fastify, _opts) {
     // Update quote
     const quoteResult = await query(
       `UPDATE quotes
-             SET client_id = COALESCE($1, client_id),
-                 client_name = COALESCE($2, client_name),
-                 payment_terms = COALESCE($3, payment_terms),
-                 discount = COALESCE($4, discount),
-                 status = COALESCE($5, status),
-                 expiration_date = COALESCE($6, expiration_date),
-                 notes = COALESCE($7, notes),
+             SET quote_code = COALESCE($1, quote_code),
+                 client_id = COALESCE($2, client_id),
+                 client_name = COALESCE($3, client_name),
+                 payment_terms = COALESCE($4, payment_terms),
+                 discount = COALESCE($5, discount),
+                 status = COALESCE($6, status),
+                 expiration_date = COALESCE($7, expiration_date),
+                 notes = COALESCE($8, notes),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8
+             WHERE id = $9
              RETURNING
                 id,
+                quote_code as "quoteCode",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -522,6 +562,7 @@ export default async function (fastify, _opts) {
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
       [
+        quoteCodeValue,
         clientIdValue,
         clientNameValue,
         paymentTerms,
