@@ -1,5 +1,16 @@
 {
   "clients": {
+    "tableHeaders": {
+      "name": "Name",
+      "clientCode": "Code",
+      "type": "Type",
+      "email": "Email",
+      "phone": "Phone",
+      "vat": "VAT",
+      "taxCode": "Tax Code",
+      "billingCode": "SDI",
+      "status": "Status"
+    },
     "title": "Clients",
     "subtitle": "Manage your client directory",
     "addClient": "Add New Client",

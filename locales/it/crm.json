@@ -1,5 +1,16 @@
 {
   "clients": {
+    "tableHeaders": {
+      "name": "Nome",
+      "clientCode": "Codice",
+      "type": "Tipo",
+      "email": "Email",
+      "phone": "Telefono",
+      "vat": "P.IVA",
+      "taxCode": "C.F.",
+      "billingCode": "SDI",
+      "status": "Stato"
+    },
     "title": "Clienti",
     "subtitle": "Gestisci la tua directory clienti",
     "addClient": "Aggiungi Nuovo Cliente",

@@ -197,15 +197,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   // Column definitions
   const columns = useMemo(
     () => [
-      { key: 'name', label: t('crm:clients.companyName') },
-      { key: 'clientCode', label: t('crm:clients.uniqueId') },
-      { key: 'type', label: t('crm:clients.subjectType') },
-      { key: 'email', label: t('crm:clients.primaryEmail') },
-      { key: 'phone', label: t('crm:clients.phoneLabel') },
-      { key: 'vatNumber', label: t('crm:clients.vatNumber') },
-      { key: 'taxCode', label: t('crm:clients.taxCode') },
-      { key: 'billingCode', label: t('crm:clients.billingCode') },
-      { key: 'status', label: t('common:labels.status') },
+      { key: 'name', label: t('crm:clients.tableHeaders.name') },
+      { key: 'clientCode', label: t('crm:clients.tableHeaders.clientCode') },
+      { key: 'type', label: t('crm:clients.tableHeaders.type') },
+      { key: 'email', label: t('crm:clients.tableHeaders.email') },
+      { key: 'phone', label: t('crm:clients.tableHeaders.phone') },
+      { key: 'vatNumber', label: t('crm:clients.tableHeaders.vat') },
+      { key: 'taxCode', label: t('crm:clients.tableHeaders.taxCode') },
+      { key: 'billingCode', label: t('crm:clients.tableHeaders.billingCode') },
+      { key: 'status', label: t('crm:clients.tableHeaders.status') },
     ],
     [t],
   );
