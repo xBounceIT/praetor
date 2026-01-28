@@ -284,6 +284,7 @@
       "itemsRequired": "At least one product is required",
       "quantityGreaterThanZero": "All items must have quantity greater than 0",
       "totalGreaterThanZero": "Total must be greater than 0",
+      "quoteCodeRequired": "Quote Code is required",
       "expiredCannotModify": "Expired quotes cannot be confirmed or reverted",
       "expiredCannotDelete": "Expired quotes cannot be deleted"
     },
@@ -318,6 +319,7 @@
     "quotesSubtitle": "Manage client quotes and proposals",
     "clearFiltersButton": "Clear filters",
     "clientColumn": "Client",
+    "quoteCode": "Quote Code",
     "quoteCodeColumn": "Code",
     "statusColumn": "Status",
     "totalColumn": "Total",

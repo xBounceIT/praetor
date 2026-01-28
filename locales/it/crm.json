@@ -278,6 +278,7 @@
       "itemsRequired": "Almeno un prodotto è richiesto",
       "quantityGreaterThanZero": "Tutti gli articoli devono avere quantità maggiore di 0",
       "totalGreaterThanZero": "Il totale deve essere maggiore di 0",
+      "quoteCodeRequired": "Il codice preventivo è obbligatorio",
       "expiredCannotModify": "I preventivi scaduti non possono essere confermati o ripristinati",
       "expiredCannotDelete": "I preventivi scaduti non possono essere eliminati"
     },
@@ -312,6 +313,7 @@
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",
     "clearFiltersButton": "Cancella filtri",
     "clientColumn": "Cliente",
+    "quoteCode": "Codice Preventivo",
     "quoteCodeColumn": "Codice",
     "statusColumn": "Stato",
     "totalColumn": "Totale",

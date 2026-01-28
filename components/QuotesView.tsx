@@ -917,7 +917,6 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                     </label>
                     <input
                       type="text"
-                      required
                       value={formData.quoteCode || ''}
                       onChange={(e) => {
                         setFormData({ ...formData, quoteCode: e.target.value });
