@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Product, SpecialBid } from '../types';
 import CustomSelect from './CustomSelect';
@@ -18,6 +18,14 @@ interface SpecialBidsViewProps {
   currency: string;
 }
 
+const getBidStatus = (bid: SpecialBid) => {
+  const isExpired = new Date(bid.endDate) < new Date();
+  const isNotStarted = new Date(bid.startDate) > new Date();
+  if (isExpired) return 'expired';
+  if (isNotStarted) return 'notStarted';
+  return 'active';
+};
+
 const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   bids,
   clients,
@@ -33,23 +41,6 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [bidToDelete, setBidToDelete] = useState<SpecialBid | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_special_bids_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-
-  const handleRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setRowsPerPage(value);
-    localStorage.setItem('praetor_special_bids_rowsPerPage', value.toString());
-    setCurrentPage(1);
-  };
-
-  /* Filters removed as per user request */
-  const filteredBids = bids;
 
   const isExpired = (endDate: string) => new Date(endDate) < new Date();
   const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
@@ -265,73 +256,125 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     (p) => !p.isDisabled && (p.type === 'item' || p.type === 'supply'),
   );
 
-  const totalPages = Math.ceil(filteredBids.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedBids = filteredBids.slice(startIndex, startIndex + rowsPerPage);
-
-  const renderBidRow = (bid: SpecialBid) => {
-    const expired = isExpired(bid.endDate);
-    const notStarted = isNotStarted(bid.startDate);
-
-    return (
-      <tr
-        key={bid.id}
-        onClick={() => openEditModal(bid)}
-        className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : notStarted ? 'bg-amber-50/30' : ''}`}
-      >
-        <td className="px-8 py-5">
-          <div className="font-bold text-slate-800">{bid.clientName}</div>
-        </td>
-        <td className="px-8 py-5 text-sm font-bold text-slate-700">{bid.productName}</td>
-        <td className="px-8 py-5 text-sm font-bold text-slate-700">
-          {Number(bid.unitPrice).toFixed(2)} {currency}
-        </td>
-        <td className="px-8 py-5 text-sm font-bold text-slate-700">
-          {bid.molPercentage !== undefined && bid.molPercentage !== null
-            ? `${Number(bid.molPercentage).toFixed(2)} %`
-            : '--'}
-        </td>
-        <td className="px-8 py-5">
-          <div
-            className={`text-sm ${expired ? 'text-red-600 font-bold' : notStarted ? 'text-amber-600 font-bold' : 'text-slate-600'}`}
-          >
-            {new Date(bid.startDate).toLocaleDateString()} -{' '}
-            {new Date(bid.endDate).toLocaleDateString()}
-          </div>
-        </td>
-        <td className="px-8 py-5">
-          {expired ? (
-            <StatusBadge type="expired" label={t('specialBids.expired')} />
-          ) : notStarted ? (
-            <StatusBadge type="pending" label={t('specialBids.notStarted')} />
-          ) : (
-            <StatusBadge type="active" label={t('specialBids.active')} />
-          )}
-        </td>
-        <td className="px-8 py-5">
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!expired) {
-                  confirmDelete(bid);
-                }
-              }}
-              disabled={expired}
-              className={`p-2 rounded-lg transition-all ${expired ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
-              title={
-                expired
-                  ? t('specialBids.cannotDeleteExpired')
-                  : t('specialBids.deleteSpecialBidTooltip')
-              }
+  // Table columns definition with TableFilter support
+  const columns = useMemo(
+    () => [
+      {
+        header: t('specialBids.client'),
+        accessorFn: (row: SpecialBid) => row.clientName,
+        cell: ({ row }: { row: SpecialBid }) => (
+          <div className="font-bold text-slate-800">{row.clientName}</div>
+        ),
+      },
+      {
+        header: t('specialBids.product'),
+        accessorFn: (row: SpecialBid) => row.productName,
+        cell: ({ row }: { row: SpecialBid }) => (
+          <span className="text-sm font-bold text-slate-700">{row.productName}</span>
+        ),
+      },
+      {
+        header: t('specialBids.unitPrice'),
+        accessorFn: (row: SpecialBid) => row.unitPrice,
+        cell: ({ row }: { row: SpecialBid }) => (
+          <span className="text-sm font-bold text-slate-700">
+            {Number(row.unitPrice).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (val: unknown) => Number(val).toFixed(2),
+      },
+      {
+        header: t('specialBids.mol'),
+        accessorFn: (row: SpecialBid) =>
+          row.molPercentage !== undefined && row.molPercentage !== null
+            ? `${Number(row.molPercentage).toFixed(2)} %`
+            : '--',
+        cell: ({ row }: { row: SpecialBid }) => (
+          <span className="text-sm font-bold text-slate-700">
+            {row.molPercentage !== undefined && row.molPercentage !== null
+              ? `${Number(row.molPercentage).toFixed(2)} %`
+              : '--'}
+          </span>
+        ),
+      },
+      {
+        header: t('specialBids.validityPeriod'),
+        accessorFn: (row: SpecialBid) => {
+          const start = new Date(row.startDate).toLocaleDateString();
+          const end = new Date(row.endDate).toLocaleDateString();
+          return `${start} - ${end}`;
+        },
+        cell: ({ row }: { row: SpecialBid }) => {
+          const expired = isExpired(row.endDate);
+          const notStarted = isNotStarted(row.startDate);
+          return (
+            <div
+              className={`text-sm ${expired ? 'text-red-600 font-bold' : notStarted ? 'text-amber-600 font-bold' : 'text-slate-600'}`}
             >
-              <i className="fa-solid fa-trash-can"></i>
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  };
+              {new Date(row.startDate).toLocaleDateString()} -{' '}
+              {new Date(row.endDate).toLocaleDateString()}
+            </div>
+          );
+        },
+      },
+      {
+        header: t('common:labels.status'),
+        accessorFn: (row: SpecialBid) => {
+          const status = getBidStatus(row);
+          if (status === 'expired') return t('specialBids.expired');
+          if (status === 'notStarted') return t('specialBids.notStarted');
+          return t('specialBids.active');
+        },
+        cell: ({ row }: { row: SpecialBid }) => {
+          const expired = isExpired(row.endDate);
+          const notStarted = isNotStarted(row.startDate);
+          return (
+            <div className={expired || notStarted ? 'opacity-60' : ''}>
+              {expired ? (
+                <StatusBadge type="expired" label={t('specialBids.expired')} />
+              ) : notStarted ? (
+                <StatusBadge type="pending" label={t('specialBids.notStarted')} />
+              ) : (
+                <StatusBadge type="active" label={t('specialBids.active')} />
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        header: t('common:labels.actions'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        align: 'right' as const,
+        cell: ({ row }: { row: SpecialBid }) => {
+          const expired = isExpired(row.endDate);
+          return (
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!expired) {
+                    confirmDelete(row);
+                  }
+                }}
+                disabled={expired}
+                className={`p-2 rounded-lg transition-all ${expired ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+                title={
+                  expired
+                    ? t('specialBids.cannotDeleteExpired')
+                    : t('specialBids.deleteSpecialBidTooltip')
+                }
+              >
+                <i className="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [currency, t],
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -619,7 +662,10 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
 
       <StandardTable
         title={t('specialBids.title')}
-        totalCount={filteredBids.length}
+        data={bids}
+        columns={columns}
+        defaultRowsPerPage={5}
+        containerClassName="overflow-visible"
         headerAction={
           <button
             onClick={openAddModal}
@@ -628,116 +674,13 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <i className="fa-solid fa-plus"></i> {t('specialBids.createSpecialBid')}
           </button>
         }
-        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                {t('specialBids.rowsPerPage')}
-              </span>
-              <CustomSelect
-                options={[
-                  { id: '5', name: '5' },
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={rowsPerPage.toString()}
-                onChange={(val) => handleRowsPerPageChange(val as string)}
-                className="w-20"
-                buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                searchable={false}
-              />
-              <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('specialBids.showing')} {paginatedBids.length > 0 ? startIndex + 1 : 0}-
-                {Math.min(startIndex + rowsPerPage, filteredBids.length)} {t('specialBids.of')}{' '}
-                {filteredBids.length}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-left text-xs"></i>
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      currentPage === page
-                        ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-chevron-right text-xs"></i>
-              </button>
-            </div>
-          </>
-        }
-      >
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('specialBids.client')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('specialBids.product')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('specialBids.unitPrice')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('specialBids.mol')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('specialBids.validityPeriod')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('common:labels.status')}
-              </th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                {t('common:labels.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {paginatedBids.map(renderBidRow)}
-            {filteredBids.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-12 text-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
-                    <i className="fa-solid fa-tags text-2xl"></i>
-                  </div>
-                  <p className="text-slate-400 text-sm font-bold">
-                    {t('specialBids.noActiveSpecialBids')}
-                  </p>
-                  <button
-                    onClick={openAddModal}
-                    className="mt-4 text-praetor text-sm font-black hover:underline"
-                  >
-                    {t('specialBids.createYourFirstSpecialBid')}
-                  </button>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </StandardTable>
+        rowClassName={(row: SpecialBid) => {
+          const expired = isExpired(row.endDate);
+          const notStarted = isNotStarted(row.startDate);
+          return expired ? 'bg-red-50/30' : notStarted ? 'bg-amber-50/30' : 'hover:bg-slate-50/50';
+        }}
+        onRowClick={(row: SpecialBid) => openEditModal(row)}
+      />
     </div>
   );
 };
