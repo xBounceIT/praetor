@@ -43,11 +43,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [userSearch, setUserSearch] = useState('');
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const hasActiveFilters = normalizedSearch !== '';
+  // Pagination State
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,23 +71,6 @@ const TasksView: React.FC<TasksViewProps> = ({
     setDisabledCurrentPage(1);
   };
 
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setCurrentPage(1);
-    setDisabledCurrentPage(1);
-  };
-
-  const matchesFilters = useCallback(
-    (task: ProjectTask) => {
-      if (normalizedSearch === '') return true;
-      return (
-        task.name.toLowerCase().includes(normalizedSearch) ||
-        (task.description || '').toLowerCase().includes(normalizedSearch)
-      );
-    },
-    [normalizedSearch],
-  );
-
   const checkInheritedDisabled = useCallback(
     (task: ProjectTask) => {
       const project = projects.find((p) => p.id === task.projectId);
@@ -102,12 +81,12 @@ const TasksView: React.FC<TasksViewProps> = ({
   );
 
   const activeTasksTotal = useMemo(() => {
-    return tasks.filter((t) => !t.isDisabled && !checkInheritedDisabled(t)).filter(matchesFilters);
-  }, [tasks, matchesFilters, checkInheritedDisabled]);
+    return tasks.filter((t) => !t.isDisabled && !checkInheritedDisabled(t));
+  }, [tasks, checkInheritedDisabled]);
 
   const disabledTasksTotal = useMemo(() => {
-    return tasks.filter((t) => t.isDisabled || checkInheritedDisabled(t)).filter(matchesFilters);
-  }, [tasks, matchesFilters, checkInheritedDisabled]);
+    return tasks.filter((t) => t.isDisabled || checkInheritedDisabled(t));
+  }, [tasks, checkInheritedDisabled]);
 
   const hasAnyDisabledTasks = tasks.some((t) => t.isDisabled || checkInheritedDisabled(t));
 
@@ -879,22 +858,6 @@ const TasksView: React.FC<TasksViewProps> = ({
         data={activeTasksPage}
         columns={activeColumns}
         defaultRowsPerPage={rowsPerPage}
-        headerExtras={
-          <div className="relative">
-            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-            <input
-              type="text"
-              placeholder={t('tasks.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-                setDisabledCurrentPage(1);
-              }}
-              className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal w-48"
-            />
-          </div>
-        }
         footer={
           <>
             <div className="flex items-center gap-3">
