@@ -1,5 +1,10 @@
 {
   "permissions": {
-    "allow": ["Bash(npx tsc:*)"]
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(findstr:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs"
+    ]
   }
 }
