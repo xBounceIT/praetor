@@ -86,3 +86,4 @@ Backend routes in `/server/routes/` with prefix-based registration:
 - **No automated tests**: Manual testing only
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
 - **Remote Testing**: App runs on remote Docker containers - do not run commands locally for testing
+- **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
