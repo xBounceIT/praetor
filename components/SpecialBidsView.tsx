@@ -341,12 +341,14 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingBid ? (isExpired(editingBid.endDate) ? 'fa-eye' : 'fa-pen-to-square') : 'fa-plus'}`}></i>
+                  <i
+                    className={`fa-solid ${editingBid ? (isExpired(editingBid.endDate) ? 'fa-eye' : 'fa-pen-to-square') : 'fa-plus'}`}
+                  ></i>
                 </div>
-                {editingBid 
-                  ? isExpired(editingBid.endDate) 
-                    ? t('specialBids.viewSpecialBid') 
-                    : t('specialBids.editSpecialBid') 
+                {editingBid
+                  ? isExpired(editingBid.endDate)
+                    ? t('specialBids.viewSpecialBid')
+                    : t('specialBids.editSpecialBid')
                   : t('specialBids.createSpecialBid')}
               </h3>
               <button
@@ -548,7 +550,9 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                   onClick={() => setIsModalOpen(false)}
                   className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
                 >
-                  {editingBid && isExpired(editingBid.endDate) ? t('specialBids.close') : t('specialBids.cancel')}
+                  {editingBid && isExpired(editingBid.endDate)
+                    ? t('specialBids.close')
+                    : t('specialBids.cancel')}
                 </button>
                 {!(editingBid && isExpired(editingBid.endDate)) && (
                   <button
