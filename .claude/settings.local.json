@@ -4,7 +4,8 @@
       "Bash(npx tsc:*)",
       "Bash(findstr:*)",
       "mcp__context7__resolve-library-id",
-      "mcp__context7__query-docs"
+      "mcp__context7__query-docs",
+      "Bash(cd:*)"
     ]
   }
 }
