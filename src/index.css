@@ -1,5 +1,15 @@
 @import 'tailwindcss';
 
+@layer base {
+  button:not(:disabled),
+  [type='button']:not(:disabled),
+  [type='reset']:not(:disabled),
+  [type='submit']:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @theme {
   --color-praetor: var(--color-primary);
   --color-secondary: var(--color-secondary);
