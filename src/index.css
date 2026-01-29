@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-praetor: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-accent: var(--color-accent);
+  --color-neutral: var(--color-neutral);
+}
+
+:root {
+  --color-primary: #20293f;
+  --color-primary-hover: #2d3a55;
+  --color-secondary: #94783f;
+  --color-accent: #9a2222;
+  --color-neutral: #b8b5b3;
+}
+
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Custom Horizontal Scrollbar for Financial Reports Graphs */
+.custom-horizontal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) #f1f5f9;
+  /* Force scrollbar to always show when content overflows */
+  overflow-x: auto !important;
+  overflow-y: hidden;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+.custom-horizontal-scrollbar::-webkit-scrollbar {
+  height: 12px !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-radius: 10px;
+  margin: 0 4px;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-primary) !important;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+  border: 2px solid #f1f5f9;
+  min-width: 20px;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-hover) !important;
+}
+
+/* Hide scrollbar buttons/arrows */
+.custom-horizontal-scrollbar::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-corner {
+  display: none !important;
+}
