@@ -831,16 +831,6 @@ const TasksView: React.FC<TasksViewProps> = ({
             <p className="text-slate-500 text-sm">{t('tasks.subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                <i className="fa-solid fa-rotate-left"></i>
-                {t('common:filters.clearFilters')}
-              </button>
-            )}
             {isManagement && (
               <button
                 onClick={openAddModal}
