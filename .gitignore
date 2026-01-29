@@ -34,4 +34,7 @@ todo.md
 opencode.json
 .gitignore
 TODO.md
+<<<<<<< HEAD
 .claude/*
+=======
+>>>>>>> 3340c69a3d9090bfc63fa4a6c7d9a0a71260d77e

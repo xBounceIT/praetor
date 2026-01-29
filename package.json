@@ -27,6 +27,7 @@
     "flag-icons": "^7.5.0",
     "i18next": "^25.8.0",
     "i18next-browser-languagedetector": "^8.2.0",
+    "inquirer": "^13.2.2",
     "ldapjs": "^3.0.7",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
