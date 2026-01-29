@@ -2,9 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProjectTask, Project, Client, UserRole, User } from '../types';
 import CustomSelect from './CustomSelect';
-import StandardTable from './StandardTable';
+import StandardTable, { Column } from './StandardTable';
 import StatusBadge from './StatusBadge';
-import TableFilter from './TableFilter';
 import { tasksApi } from '../services/api';
 
 interface TasksViewProps {
@@ -46,20 +45,9 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [projectSort, setProjectSort] = useState<'asc' | 'desc' | null>(null);
-  const [clientSort, setClientSort] = useState<'asc' | 'desc' | null>(null);
-  const [statusSort, setStatusSort] = useState<'asc' | 'desc' | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const hasActiveFilters =
-    normalizedSearch !== '' ||
-    selectedProjects.length > 0 ||
-    selectedClients.length > 0 ||
-    selectedStatuses.length > 0;
+  const hasActiveFilters = normalizedSearch !== '';
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -89,39 +77,19 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const handleClearFilters = () => {
     setSearchTerm('');
-    setSelectedProjects([]);
-    setSelectedClients([]);
-    setSelectedStatuses([]);
-    setProjectSort(null);
-    setClientSort(null);
-    setStatusSort(null);
     setCurrentPage(1);
     setDisabledCurrentPage(1);
   };
 
   const matchesFilters = useCallback(
     (task: ProjectTask) => {
-      const project = projects.find((p) => p.id === task.projectId);
-      const client = clients.find((c) => c.id === project?.clientId);
-      const isProjectDisabled = project?.isDisabled || false;
-      const isClientDisabled = client?.isDisabled || false;
-      const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-      const status = task.isDisabled ? 'disabled' : isInheritedDisabled ? 'inherited' : 'active';
-
-      const matchesSearch =
-        normalizedSearch === '' ||
+      if (normalizedSearch === '') return true;
+      return (
         task.name.toLowerCase().includes(normalizedSearch) ||
-        (task.description || '').toLowerCase().includes(normalizedSearch);
-
-      const matchesProject =
-        selectedProjects.length === 0 || selectedProjects.includes(project?.name || '');
-      const matchesClient =
-        selectedClients.length === 0 || selectedClients.includes(client?.name || '');
-      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(status);
-
-      return matchesSearch && matchesProject && matchesClient && matchesStatus;
+        (task.description || '').toLowerCase().includes(normalizedSearch)
+      );
     },
-    [normalizedSearch, selectedProjects, selectedClients, selectedStatuses, projects, clients],
+    [normalizedSearch],
   );
 
   const checkInheritedDisabled = useCallback(
@@ -155,26 +123,312 @@ const TasksView: React.FC<TasksViewProps> = ({
     disabledStartIndex + disabledRowsPerPage,
   );
 
-  const projectOptions = useMemo(() => {
-    const names = Array.from(new Set(projects.map((p) => p.name)));
-    return names.sort();
-  }, [projects]);
+  const isManagement = role === 'admin' || role === 'manager';
 
-  const clientOptions = useMemo(() => {
-    const names = Array.from(new Set(clients.map((c) => c.name)));
-    return names.sort();
-  }, [clients]);
-
-  const statusOptions = useMemo(
+  // Column definitions for StandardTable
+  const activeColumns: Column<ProjectTask>[] = useMemo(
     () => [
-      t('projects:projects.statusActive'),
-      t('projects:projects.statusDisabled'),
-      t('projects:projects.statusInheritedDisable'),
+      {
+        header: t('common:labels.client'),
+        accessorFn: (task) => {
+          const project = projects.find((p) => p.id === task.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          return client?.name || '—';
+        },
+        cell: ({ row }) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          const isClientDisabled = client?.isDisabled || false;
+          return client ? (
+            <span
+              className={`text-sm font-bold ${isClientDisabled ? 'text-amber-500' : 'text-slate-700'}`}
+            >
+              {client.name} {isClientDisabled && t('projects.disabledLabel')}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400 italic">—</span>
+          );
+        },
+      },
+      {
+        header: t('tasks.project'),
+        accessorFn: (task) => {
+          const project = projects.find((p) => p.id === task.projectId);
+          return project?.name || t('projects.unknown');
+        },
+        cell: ({ row }) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const isProjectDisabled = project?.isDisabled || false;
+          return (
+            <div className="flex items-center gap-2">
+              <div
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: project?.color || '#ccc' }}
+              ></div>
+              <span
+                className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
+                  isProjectDisabled ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-praetor'
+                }`}
+              >
+                {project?.name || t('projects.unknown')}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        header: t('tasks.name'),
+        accessorKey: 'name',
+        cell: ({ value }) => <span className="text-sm font-bold text-slate-800">{value}</span>,
+      },
+      {
+        header: t('tasks.description'),
+        accessorFn: (task) => task.description || '',
+        cell: ({ value }) => (
+          <p className="text-xs text-slate-500 truncate max-w-[200px]">
+            {value || (
+              <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
+            )}
+          </p>
+        ),
+      },
+      {
+        header: t('projects.tableHeaders.status'),
+        accessorFn: (task) => {
+          const project = projects.find((p) => p.id === task.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          const isProjectDisabled = project?.isDisabled || false;
+          const isClientDisabled = client?.isDisabled || false;
+          const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+          return isInheritedDisabled
+            ? t('projects:projects.statusInheritedDisable')
+            : t('projects:projects.statusActive');
+        },
+        cell: ({ row }) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          const isProjectDisabled = project?.isDisabled || false;
+          const isClientDisabled = client?.isDisabled || false;
+          const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+          return isInheritedDisabled ? (
+            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
+          ) : (
+            <StatusBadge type="active" label={t('projects:projects.statusActive')} />
+          );
+        },
+      },
+      {
+        header: t('projects.tableHeaders.actions'),
+        id: 'actions',
+        className: 'text-right w-[140px]',
+        headerClassName: 'text-right',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) =>
+          isManagement ? (
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openAssignments(row.id);
+                }}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                title={t('tasks.manageMembers')}
+              >
+                <i className="fa-solid fa-users"></i>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditModal(row);
+                }}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                title={t('tasks.editTask')}
+              >
+                <i className="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateTask(row.id, { isDisabled: true });
+                }}
+                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                title={t('projects.disableProject')}
+              >
+                <i className="fa-solid fa-ban"></i>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingTask(row);
+                  confirmDelete();
+                }}
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                title={t('common:buttons.delete')}
+              >
+                <i className="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          ) : null,
+      },
     ],
-    [t],
+    [t, projects, clients, isManagement, onUpdateTask],
   );
 
-  const isManagement = role === 'admin' || role === 'manager';
+  const disabledColumns: Column<ProjectTask>[] = useMemo(
+    () => [
+      {
+        header: t('common:labels.client'),
+        accessorFn: (task) => {
+          const project = projects.find((p) => p.id === task.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          return client?.name || '—';
+        },
+        cell: ({ row }) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          return client ? (
+            <span className="text-sm font-bold text-slate-500">{client.name}</span>
+          ) : (
+            <span className="text-xs text-slate-400 italic">—</span>
+          );
+        },
+      },
+      {
+        header: t('tasks.project'),
+        accessorFn: (task) => {
+          const project = projects.find((p) => p.id === task.projectId);
+          return project?.name || t('projects.unknown');
+        },
+        cell: ({ row }) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const isProjectDisabled = project?.isDisabled || false;
+          return (
+            <div className="flex items-center gap-2">
+              <div
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: project?.color || '#ccc' }}
+              ></div>
+              <span
+                className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
+                  isProjectDisabled
+                    ? 'text-amber-600 bg-amber-50 border-amber-100'
+                    : 'text-slate-400'
+                }`}
+              >
+                {project?.name || t('projects.unknown')}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        header: t('tasks.name'),
+        accessorKey: 'name',
+        cell: ({ value }) => (
+          <span className="text-sm font-bold text-slate-600 line-through decoration-slate-300">
+            {value}
+          </span>
+        ),
+      },
+      {
+        header: t('tasks.description'),
+        accessorFn: (task) => task.description || '',
+        cell: ({ value }) => (
+          <p className="text-xs text-slate-400 truncate max-w-[200px] italic">
+            {value || (
+              <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
+            )}
+          </p>
+        ),
+      },
+      {
+        header: t('projects.tableHeaders.status'),
+        accessorFn: (task) => {
+          const project = projects.find((p) => p.id === task.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          const isProjectDisabled = project?.isDisabled || false;
+          const isClientDisabled = client?.isDisabled || false;
+          const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+          if (task.isDisabled) return t('projects:projects.statusDisabled');
+          if (isInheritedDisabled) return t('projects:projects.statusInheritedDisable');
+          return t('projects:projects.statusActive');
+        },
+        cell: ({ row }) => {
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          const isProjectDisabled = project?.isDisabled || false;
+          const isClientDisabled = client?.isDisabled || false;
+          const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+          return isInheritedDisabled ? (
+            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
+          ) : (
+            <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
+          );
+        },
+      },
+      {
+        header: t('projects.tableHeaders.actions'),
+        id: 'actions',
+        className: 'text-right w-[140px]',
+        headerClassName: 'text-right',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) =>
+          isManagement ? (
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openAssignments(row.id);
+                }}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                title={t('tasks.manageMembers')}
+              >
+                <i className="fa-solid fa-users"></i>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditModal(row);
+                }}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                title={t('tasks.editTask')}
+              >
+                <i className="fa-solid fa-pen-to-square"></i>
+              </button>
+              {!(() => {
+                const project = projects.find((p) => p.id === row.projectId);
+                const client = clients.find((c) => c.id === project?.clientId);
+                return project?.isDisabled || client?.isDisabled;
+              })() && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateTask(row.id, { isDisabled: false });
+                  }}
+                  className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <i className="fa-solid fa-rotate-left"></i>
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingTask(row);
+                  confirmDelete();
+                }}
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                title={t('common:buttons.delete')}
+              >
+                <i className="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          ) : null,
+      },
+    ],
+    [t, projects, clients, isManagement, onUpdateTask],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -597,180 +851,50 @@ const TasksView: React.FC<TasksViewProps> = ({
             <h2 className="text-2xl font-black text-slate-800">{t('tasks.title')}</h2>
             <p className="text-slate-500 text-sm">{t('tasks.subtitle')}</p>
           </div>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              <i className="fa-solid fa-rotate-left"></i>
-              {t('common:filters.clearFilters')}
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                <i className="fa-solid fa-rotate-left"></i>
+                {t('common:filters.clearFilters')}
+              </button>
+            )}
+            {isManagement && (
+              <button
+                onClick={openAddModal}
+                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+              >
+                <i className="fa-solid fa-plus"></i> {t('tasks.addTask')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       <StandardTable
         title={t('tasks.tasksDirectory')}
-        totalCount={activeTasksTotal.length}
-        filterRow={
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <button
-                onClick={() => setActiveFilter(activeFilter === 'client' ? null : 'client')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-colors flex items-center gap-2 ${
-                  selectedClients.length > 0 || clientSort
-                    ? 'bg-praetor text-white border-praetor'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {t('common:labels.client')}
-                {clientSort && (
-                  <i
-                    className={`fa-solid fa-arrow-${clientSort === 'asc' ? 'down-a-z' : 'up-a-z'} ml-1`}
-                  ></i>
-                )}
-                {selectedClients.length > 0 && (
-                  <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-[9px]">
-                    {selectedClients.length}
-                  </span>
-                )}
-              </button>
-              {activeFilter === 'client' && (
-                <div className="absolute top-full left-0 mt-2 z-50">
-                  <TableFilter
-                    title={t('common:labels.client')}
-                    options={clientOptions}
-                    selectedValues={selectedClients}
-                    onFilterChange={(selected) => {
-                      setSelectedClients(selected);
-                      setCurrentPage(1);
-                      setDisabledCurrentPage(1);
-                    }}
-                    sortDirection={clientSort}
-                    onSortChange={(dir) => {
-                      setClientSort(dir);
-                      setCurrentPage(1);
-                      setDisabledCurrentPage(1);
-                    }}
-                    onClose={() => setActiveFilter(null)}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setActiveFilter(activeFilter === 'project' ? null : 'project')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-colors flex items-center gap-2 ${
-                  selectedProjects.length > 0 || projectSort
-                    ? 'bg-praetor text-white border-praetor'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {t('tasks.project')}
-                {projectSort && (
-                  <i
-                    className={`fa-solid fa-arrow-${projectSort === 'asc' ? 'down-a-z' : 'up-a-z'} ml-1`}
-                  ></i>
-                )}
-                {selectedProjects.length > 0 && (
-                  <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-[9px]">
-                    {selectedProjects.length}
-                  </span>
-                )}
-              </button>
-              {activeFilter === 'project' && (
-                <div className="absolute top-full left-0 mt-2 z-50">
-                  <TableFilter
-                    title={t('tasks.project')}
-                    options={projectOptions}
-                    selectedValues={selectedProjects}
-                    onFilterChange={(selected) => {
-                      setSelectedProjects(selected);
-                      setCurrentPage(1);
-                      setDisabledCurrentPage(1);
-                    }}
-                    sortDirection={projectSort}
-                    onSortChange={(dir) => {
-                      setProjectSort(dir);
-                      setCurrentPage(1);
-                      setDisabledCurrentPage(1);
-                    }}
-                    onClose={() => setActiveFilter(null)}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setActiveFilter(activeFilter === 'status' ? null : 'status')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-colors flex items-center gap-2 ${
-                  selectedStatuses.length > 0 || statusSort
-                    ? 'bg-praetor text-white border-praetor'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {t('projects.tableHeaders.status')}
-                {statusSort && (
-                  <i
-                    className={`fa-solid fa-arrow-${statusSort === 'asc' ? 'down-a-z' : 'up-a-z'} ml-1`}
-                  ></i>
-                )}
-                {selectedStatuses.length > 0 && (
-                  <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-[9px]">
-                    {selectedStatuses.length}
-                  </span>
-                )}
-              </button>
-              {activeFilter === 'status' && (
-                <div className="absolute top-full left-0 mt-2 z-50">
-                  <TableFilter
-                    title={t('projects.tableHeaders.status')}
-                    options={statusOptions}
-                    selectedValues={selectedStatuses}
-                    onFilterChange={(selected) => {
-                      setSelectedStatuses(selected);
-                      setCurrentPage(1);
-                      setDisabledCurrentPage(1);
-                    }}
-                    sortDirection={statusSort}
-                    onSortChange={(dir) => {
-                      setStatusSort(dir);
-                      setCurrentPage(1);
-                      setDisabledCurrentPage(1);
-                    }}
-                    onClose={() => setActiveFilter(null)}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="relative flex-1 max-w-xs ml-auto">
-              <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input
-                type="text"
-                placeholder={t('tasks.searchPlaceholder')}
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                  setDisabledCurrentPage(1);
-                }}
-                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-              />
-            </div>
+        data={activeTasksPage}
+        columns={activeColumns}
+        defaultRowsPerPage={rowsPerPage}
+        headerExtras={
+          <div className="relative">
+            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input
+              type="text"
+              placeholder={t('tasks.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+                setDisabledCurrentPage(1);
+              }}
+              className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal w-48"
+            />
           </div>
         }
-        headerAction={
-          isManagement && (
-            <button
-              onClick={openAddModal}
-              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i> {t('tasks.addTask')}
-            </button>
-          )
-        }
-        footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
         footer={
           <>
             <div className="flex items-center gap-3">
@@ -831,183 +955,15 @@ const TasksView: React.FC<TasksViewProps> = ({
             </div>
           </>
         }
-      >
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('common:labels.client')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('tasks.project')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                {t('tasks.name')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[200px]">
-                {t('tasks.description')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[120px]">
-                {t('projects.tableHeaders.status')}
-              </th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right w-[140px]">
-                {t('projects.tableHeaders.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {activeTasksTotal.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300 mb-4">
-                    <i className="fa-solid fa-list-check text-2xl"></i>
-                  </div>
-                  <p className="text-slate-400 text-sm font-bold">{t('tasks.noTasks')}</p>
-                  {isManagement && (
-                    <button
-                      onClick={openAddModal}
-                      className="mt-4 text-praetor text-sm font-black hover:underline"
-                    >
-                      {t('tasks.createFirstTask')}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ) : (
-              activeTasksPage.map((task) => {
-                const project = projects.find((p) => p.id === task.projectId);
-                const client = clients.find((c) => c.id === project?.clientId);
-
-                const isProjectDisabled = project?.isDisabled || false;
-                const isClientDisabled = client?.isDisabled || false;
-                const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-                // isEffectivelyDisabled in this table is only due to inheritance, as task.isDisabled is false here
-
-                return (
-                  <tr
-                    key={task.id}
-                    onClick={() => {
-                      if (isManagement) {
-                        openEditModal(task);
-                      }
-                    }}
-                    className={`group hover:bg-slate-50 transition-colors ${
-                      isManagement ? 'cursor-pointer' : 'cursor-default'
-                    } ${isInheritedDisabled ? 'opacity-60 grayscale bg-slate-50/50' : ''}`}
-                  >
-                    <td className="px-6 py-4">
-                      {client ? (
-                        <span
-                          className={`text-sm font-bold ${
-                            isClientDisabled ? 'text-amber-500' : 'text-slate-700'
-                          }`}
-                        >
-                          {client.name} {isClientDisabled && t('projects.disabledLabel')}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: project?.color || '#ccc' }}
-                        ></div>
-                        <span
-                          className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                            isProjectDisabled
-                              ? 'text-amber-600 bg-amber-50 border-amber-100'
-                              : 'text-praetor'
-                          }`}
-                        >
-                          {project?.name || t('projects.unknown')}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-800">{task.name}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs text-slate-500 truncate max-w-[200px]">
-                        {task.description || (
-                          <span className="italic text-slate-400">
-                            {t('projects.noDescriptionProvided')}
-                          </span>
-                        )}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      {isInheritedDisabled ? (
-                        <StatusBadge
-                          type="inherited"
-                          label={t('projects:projects.statusInheritedDisable')}
-                        />
-                      ) : (
-                        <StatusBadge type="active" label={t('projects:projects.statusActive')} />
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {isManagement && (
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAssignments(task.id);
-                            }}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                            title={t('tasks.manageMembers')}
-                          >
-                            <i className="fa-solid fa-users"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditModal(task);
-                            }}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                            title={t('tasks.editTask')}
-                          >
-                            <i className="fa-solid fa-pen-to-square"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateTask(task.id, { isDisabled: true });
-                            }}
-                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                            title={t('projects.disableProject')}
-                          >
-                            <i className="fa-solid fa-ban"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTask(task);
-                              confirmDelete();
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            title={t('common:buttons.delete')}
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </StandardTable>
+      />
 
       {hasAnyDisabledTasks && (
         <StandardTable
           title={t('tasks.disabledTasks')}
-          totalCount={disabledTasksTotal.length}
+          data={disabledTasksPage}
+          columns={disabledColumns}
+          defaultRowsPerPage={disabledRowsPerPage}
           containerClassName="border-dashed bg-slate-50"
-          footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
           footer={
             <>
               <div className="flex items-center gap-3">
@@ -1074,152 +1030,7 @@ const TasksView: React.FC<TasksViewProps> = ({
               </div>
             </>
           }
-        >
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  {t('common:labels.client')}
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  {t('tasks.project')}
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  {t('tasks.name')}
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[200px]">
-                  {t('tasks.description')}
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest w-[120px]">
-                  {t('projects.tableHeaders.status')}
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right w-[140px]">
-                  {t('projects.tableHeaders.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {disabledTasksPage.map((task) => {
-                const project = projects.find((p) => p.id === task.projectId);
-                const client = clients.find((c) => c.id === project?.clientId);
-
-                const isProjectDisabled = project?.isDisabled || false;
-                const isClientDisabled = client?.isDisabled || false;
-                const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-
-                return (
-                  <tr
-                    key={task.id}
-                    onClick={() => isManagement && openEditModal(task)}
-                    className={`group hover:bg-slate-100 transition-colors opacity-70 grayscale hover:grayscale-0 ${
-                      isManagement ? 'cursor-pointer' : 'cursor-default'
-                    }`}
-                  >
-                    <td className="px-6 py-4">
-                      {client ? (
-                        <span className="text-sm font-bold text-slate-500">{client.name}</span>
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: project?.color || '#ccc' }}
-                        ></div>
-                        <span
-                          className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                            isProjectDisabled
-                              ? 'text-amber-600 bg-amber-50 border-amber-100'
-                              : 'text-slate-400'
-                          }`}
-                        >
-                          {project?.name || t('projects.unknown')}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-600 line-through decoration-slate-300">
-                        {task.name}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs text-slate-400 truncate max-w-[200px] italic">
-                        {task.description || (
-                          <span className="italic text-slate-400">
-                            {t('projects.noDescriptionProvided')}
-                          </span>
-                        )}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      {isInheritedDisabled ? (
-                        <StatusBadge
-                          type="inherited"
-                          label={t('projects:projects.statusInheritedDisable')}
-                        />
-                      ) : (
-                        <StatusBadge
-                          type="disabled"
-                          label={t('projects:projects.statusDisabled')}
-                        />
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {isManagement && (
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAssignments(task.id);
-                            }}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                            title={t('tasks.manageMembers')}
-                          >
-                            <i className="fa-solid fa-users"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditModal(task);
-                            }}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                            title={t('tasks.editTask')}
-                          >
-                            <i className="fa-solid fa-pen-to-square"></i>
-                          </button>
-                          {!isInheritedDisabled && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdateTask(task.id, { isDisabled: false });
-                              }}
-                              className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              <i className="fa-solid fa-rotate-left"></i>
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTask(task);
-                              confirmDelete();
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            title={t('common:buttons.delete')}
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </StandardTable>
+        />
       )}
     </div>
   );
