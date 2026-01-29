@@ -276,8 +276,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     return (
       <tr
         key={bid.id}
-        onClick={() => !expired && openEditModal(bid)}
-        className={`hover:bg-slate-50/50 transition-colors group ${expired ? 'bg-red-50/30 cursor-default' : 'cursor-pointer'} ${notStarted ? 'bg-amber-50/30' : ''}`}
+        onClick={() => openEditModal(bid)}
+        className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : notStarted ? 'bg-amber-50/30' : ''}`}
       >
         <td className="px-8 py-5">
           <div className="font-bold text-slate-800">{bid.clientName}</div>
