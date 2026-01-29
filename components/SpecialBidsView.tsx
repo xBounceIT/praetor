@@ -273,8 +273,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     return (
       <tr
         key={bid.id}
-        onClick={() => openEditModal(bid)}
-        className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${expired ? 'bg-red-50/30' : notStarted ? 'bg-amber-50/30' : ''}`}
+        onClick={() => !expired && openEditModal(bid)}
+        className={`hover:bg-slate-50/50 transition-colors group ${expired ? 'bg-red-50/30 cursor-default' : 'cursor-pointer'} ${notStarted ? 'bg-amber-50/30' : ''}`}
       >
         <td className="px-8 py-5">
           <div className="font-bold text-slate-800">{bid.clientName}</div>
@@ -310,10 +310,17 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                confirmDelete(bid);
+                if (!expired) {
+                  confirmDelete(bid);
+                }
               }}
-              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-              title={t('specialBids.deleteSpecialBidTooltip')}
+              disabled={expired}
+              className={`p-2 rounded-lg transition-all ${expired ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+              title={
+                expired
+                  ? t('specialBids.cannotDeleteExpired')
+                  : t('specialBids.deleteSpecialBidTooltip')
+              }
             >
               <i className="fa-solid fa-trash-can"></i>
             </button>
