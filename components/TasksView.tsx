@@ -4,6 +4,7 @@ import { ProjectTask, Project, Client, UserRole, User } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import StatusBadge from './StatusBadge';
+import TableFilter from './TableFilter';
 import { tasksApi } from '../services/api';
 
 interface TasksViewProps {
@@ -45,10 +46,20 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterProjectId, setFilterProjectId] = useState('all');
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [projectSort, setProjectSort] = useState<'asc' | 'desc' | null>(null);
+  const [clientSort, setClientSort] = useState<'asc' | 'desc' | null>(null);
+  const [statusSort, setStatusSort] = useState<'asc' | 'desc' | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const hasActiveFilters = normalizedSearch !== '' || filterProjectId !== 'all';
+  const hasActiveFilters =
+    normalizedSearch !== '' ||
+    selectedProjects.length > 0 ||
+    selectedClients.length > 0 ||
+    selectedStatuses.length > 0;
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,23 +89,39 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const handleClearFilters = () => {
     setSearchTerm('');
-    setFilterProjectId('all');
+    setSelectedProjects([]);
+    setSelectedClients([]);
+    setSelectedStatuses([]);
+    setProjectSort(null);
+    setClientSort(null);
+    setStatusSort(null);
     setCurrentPage(1);
     setDisabledCurrentPage(1);
   };
 
   const matchesFilters = useCallback(
     (task: ProjectTask) => {
+      const project = projects.find((p) => p.id === task.projectId);
+      const client = clients.find((c) => c.id === project?.clientId);
+      const isProjectDisabled = project?.isDisabled || false;
+      const isClientDisabled = client?.isDisabled || false;
+      const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+      const status = task.isDisabled ? 'disabled' : isInheritedDisabled ? 'inherited' : 'active';
+
       const matchesSearch =
         normalizedSearch === '' ||
         task.name.toLowerCase().includes(normalizedSearch) ||
         (task.description || '').toLowerCase().includes(normalizedSearch);
 
-      const matchesProject = filterProjectId === 'all' || task.projectId === filterProjectId;
+      const matchesProject =
+        selectedProjects.length === 0 || selectedProjects.includes(project?.name || '');
+      const matchesClient =
+        selectedClients.length === 0 || selectedClients.includes(client?.name || '');
+      const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(status);
 
-      return matchesSearch && matchesProject;
+      return matchesSearch && matchesProject && matchesClient && matchesStatus;
     },
-    [normalizedSearch, filterProjectId],
+    [normalizedSearch, selectedProjects, selectedClients, selectedStatuses, projects, clients],
   );
 
   const checkInheritedDisabled = useCallback(
@@ -128,10 +155,24 @@ const TasksView: React.FC<TasksViewProps> = ({
     disabledStartIndex + disabledRowsPerPage,
   );
 
-  const projectFilterOptions = [
-    { id: 'all', name: t('common:filters.allProjects') },
-    ...projects.map((p) => ({ id: p.id, name: p.name })),
-  ];
+  const projectOptions = useMemo(() => {
+    const names = Array.from(new Set(projects.map((p) => p.name)));
+    return names.sort();
+  }, [projects]);
+
+  const clientOptions = useMemo(() => {
+    const names = Array.from(new Set(clients.map((c) => c.name)));
+    return names.sort();
+  }, [clients]);
+
+  const statusOptions = useMemo(
+    () => [
+      t('projects:projects.statusActive'),
+      t('projects:projects.statusDisabled'),
+      t('projects:projects.statusInheritedDisable'),
+    ],
+    [t],
+  );
 
   const isManagement = role === 'admin' || role === 'manager';
 
@@ -229,7 +270,7 @@ const TasksView: React.FC<TasksViewProps> = ({
     }
   };
 
-  const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
+  const projectSelectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
 
   const managingTask = tasks.find((t) => t.id === managingTaskId);
 
@@ -424,7 +465,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                   {t('tasks.project')}
                 </label>
                 <CustomSelect
-                  options={projectOptions}
+                  options={projectSelectOptions}
                   value={projectId}
                   onChange={(val) => setProjectId(val as string)}
                   placeholder={t('projects.selectProject')}
@@ -549,61 +590,176 @@ const TasksView: React.FC<TasksViewProps> = ({
         </div>
       )}
 
-      {/* Header & Filters */}
-      <div className="space-y-6">
+      {/* Header */}
+      <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-2xl font-black text-slate-800">{t('tasks.title')}</h2>
             <p className="text-slate-500 text-sm">{t('tasks.subtitle')}</p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2 relative">
-            <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input
-              type="text"
-              placeholder={t('tasks.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-                setDisabledCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
-            />
-          </div>
-          <div>
-            <CustomSelect
-              options={projectFilterOptions}
-              value={filterProjectId}
-              onChange={(val) => {
-                setFilterProjectId(val as string);
-                setCurrentPage(1);
-                setDisabledCurrentPage(1);
-              }}
-              placeholder={t('common:filters.filterByProject')}
-              searchable={true}
-              buttonClassName="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 shadow-sm"
-            />
-          </div>
-          <div className="flex items-center justify-end">
+          {hasActiveFilters && (
             <button
               type="button"
               onClick={handleClearFilters}
-              disabled={!hasActiveFilters}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
             >
               <i className="fa-solid fa-rotate-left"></i>
               {t('common:filters.clearFilters')}
             </button>
-          </div>
+          )}
         </div>
       </div>
 
       <StandardTable
         title={t('tasks.tasksDirectory')}
         totalCount={activeTasksTotal.length}
+        filterRow={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setActiveFilter(activeFilter === 'client' ? null : 'client')}
+                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-colors flex items-center gap-2 ${
+                  selectedClients.length > 0 || clientSort
+                    ? 'bg-praetor text-white border-praetor'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {t('common:labels.client')}
+                {clientSort && (
+                  <i
+                    className={`fa-solid fa-arrow-${clientSort === 'asc' ? 'down-a-z' : 'up-a-z'} ml-1`}
+                  ></i>
+                )}
+                {selectedClients.length > 0 && (
+                  <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-[9px]">
+                    {selectedClients.length}
+                  </span>
+                )}
+              </button>
+              {activeFilter === 'client' && (
+                <div className="absolute top-full left-0 mt-2 z-50">
+                  <TableFilter
+                    title={t('common:labels.client')}
+                    options={clientOptions}
+                    selectedValues={selectedClients}
+                    onFilterChange={(selected) => {
+                      setSelectedClients(selected);
+                      setCurrentPage(1);
+                      setDisabledCurrentPage(1);
+                    }}
+                    sortDirection={clientSort}
+                    onSortChange={(dir) => {
+                      setClientSort(dir);
+                      setCurrentPage(1);
+                      setDisabledCurrentPage(1);
+                    }}
+                    onClose={() => setActiveFilter(null)}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => setActiveFilter(activeFilter === 'project' ? null : 'project')}
+                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-colors flex items-center gap-2 ${
+                  selectedProjects.length > 0 || projectSort
+                    ? 'bg-praetor text-white border-praetor'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {t('tasks.project')}
+                {projectSort && (
+                  <i
+                    className={`fa-solid fa-arrow-${projectSort === 'asc' ? 'down-a-z' : 'up-a-z'} ml-1`}
+                  ></i>
+                )}
+                {selectedProjects.length > 0 && (
+                  <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-[9px]">
+                    {selectedProjects.length}
+                  </span>
+                )}
+              </button>
+              {activeFilter === 'project' && (
+                <div className="absolute top-full left-0 mt-2 z-50">
+                  <TableFilter
+                    title={t('tasks.project')}
+                    options={projectOptions}
+                    selectedValues={selectedProjects}
+                    onFilterChange={(selected) => {
+                      setSelectedProjects(selected);
+                      setCurrentPage(1);
+                      setDisabledCurrentPage(1);
+                    }}
+                    sortDirection={projectSort}
+                    onSortChange={(dir) => {
+                      setProjectSort(dir);
+                      setCurrentPage(1);
+                      setDisabledCurrentPage(1);
+                    }}
+                    onClose={() => setActiveFilter(null)}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => setActiveFilter(activeFilter === 'status' ? null : 'status')}
+                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-colors flex items-center gap-2 ${
+                  selectedStatuses.length > 0 || statusSort
+                    ? 'bg-praetor text-white border-praetor'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {t('projects.tableHeaders.status')}
+                {statusSort && (
+                  <i
+                    className={`fa-solid fa-arrow-${statusSort === 'asc' ? 'down-a-z' : 'up-a-z'} ml-1`}
+                  ></i>
+                )}
+                {selectedStatuses.length > 0 && (
+                  <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-[9px]">
+                    {selectedStatuses.length}
+                  </span>
+                )}
+              </button>
+              {activeFilter === 'status' && (
+                <div className="absolute top-full left-0 mt-2 z-50">
+                  <TableFilter
+                    title={t('projects.tableHeaders.status')}
+                    options={statusOptions}
+                    selectedValues={selectedStatuses}
+                    onFilterChange={(selected) => {
+                      setSelectedStatuses(selected);
+                      setCurrentPage(1);
+                      setDisabledCurrentPage(1);
+                    }}
+                    sortDirection={statusSort}
+                    onSortChange={(dir) => {
+                      setStatusSort(dir);
+                      setCurrentPage(1);
+                      setDisabledCurrentPage(1);
+                    }}
+                    onClose={() => setActiveFilter(null)}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="relative flex-1 max-w-xs ml-auto">
+              <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input
+                type="text"
+                placeholder={t('tasks.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                  setDisabledCurrentPage(1);
+                }}
+                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-praetor outline-none shadow-sm placeholder:font-normal"
+              />
+            </div>
+          </div>
+        }
         headerAction={
           isManagement && (
             <button
