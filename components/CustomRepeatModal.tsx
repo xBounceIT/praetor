@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import CustomSelect from './CustomSelect';
+import Modal from './Modal';
 
 interface CustomRepeatModalProps {
   isOpen: boolean;
@@ -10,8 +11,6 @@ interface CustomRepeatModalProps {
 const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, onSave }) => {
   const [type, setType] = useState<'first' | 'second' | 'third' | 'fourth' | 'last'>('first');
   const [dayOfWeek, setDayOfWeek] = useState<number>(1); // 1 = Monday, 7 = Sunday (standard JS getDay is 0=Sun, but usually we map 1-7 for UI)
-
-  if (!isOpen) return null;
 
   const days = [
     { id: '1', name: 'Monday' },
@@ -38,7 +37,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -90,7 +89,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

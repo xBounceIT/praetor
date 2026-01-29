@@ -4,6 +4,7 @@ import { Expense } from '../types';
 import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
+import Modal from './Modal';
 
 interface ExpensesViewProps {
   expenses: Expense[];
@@ -141,181 +142,175 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingExpense ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-                </div>
-                {editingExpense ? t('expenses.editExpense') : t('expenses.recordExpense')}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingExpense ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {editingExpense ? t('expenses.editExpense') : t('expenses.recordExpense')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('expenses.description')}
+              </label>
+              <input
+                type="text"
+                required
+                placeholder={t('expenses.descriptionPlaceholder')}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
+              />
+              {errors.description && (
+                <p className="text-red-500 text-[10px] font-bold ml-1">{errors.description}</p>
+              )}
             </div>
 
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('expenses.description')}
+                  {t('expenses.category')}
                 </label>
-                <input
-                  type="text"
+                <CustomSelect
+                  options={categoryOptions}
+                  value={formData.category || 'other'}
+                  onChange={(val) =>
+                    setFormData({ ...formData, category: val as Expense['category'] })
+                  }
+                  searchable={false}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('expenses.amount')} ({currency})
+                </label>
+                <ValidatedNumberInput
+                  step="0.01"
                   required
-                  placeholder={t('expenses.descriptionPlaceholder')}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  value={formData.amount}
+                  onValueChange={(value) => {
+                    const parsed = parseFloat(value);
+                    setFormData({
+                      ...formData,
+                      amount: value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                    });
+                  }}
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
                 />
-                {errors.description && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.description}</p>
+                {errors.amount && (
+                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.amount}</p>
                 )}
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('expenses.category')}
-                  </label>
-                  <CustomSelect
-                    options={categoryOptions}
-                    value={formData.category || 'other'}
-                    onChange={(val) =>
-                      setFormData({ ...formData, category: val as Expense['category'] })
-                    }
-                    searchable={false}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('expenses.amount')} ({currency})
-                  </label>
-                  <ValidatedNumberInput
-                    step="0.01"
-                    required
-                    value={formData.amount}
-                    onValueChange={(value) => {
-                      const parsed = parseFloat(value);
-                      setFormData({
-                        ...formData,
-                        amount: value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                      });
-                    }}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
-                  />
-                  {errors.amount && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.amount}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('expenses.expenseDate')}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.expenseDate}
-                    onChange={(e) => setFormData({ ...formData, expenseDate: e.target.value })}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
-                  />
-                  {errors.expenseDate && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.expenseDate}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('expenses.vendor')} ({t('common.optional')})
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={t('expenses.vendorPlaceholder')}
-                    value={formData.vendor || ''}
-                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
-                  />
-                </div>
-              </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('expenses.receiptReference')}
+                  {t('expenses.expenseDate')}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.expenseDate}
+                  onChange={(e) => setFormData({ ...formData, expenseDate: e.target.value })}
+                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
+                />
+                {errors.expenseDate && (
+                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.expenseDate}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('expenses.vendor')} ({t('common.optional')})
                 </label>
                 <input
                   type="text"
-                  placeholder={t('expenses.receiptPlaceholder')}
-                  value={formData.receiptReference || ''}
-                  onChange={(e) => setFormData({ ...formData, receiptReference: e.target.value })}
+                  placeholder={t('expenses.vendorPlaceholder')}
+                  value={formData.vendor || ''}
+                  onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('expenses.notes')}
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.notes || ''}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder={t('expenses.notesPlaceholder')}
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
-                >
-                  {t('common.buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
-                >
-                  {t('common.buttons.save')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
-            <h3 className="text-lg font-black text-slate-800">{t('expenses.expenseDeleted')}?</h3>
-            <p className="text-sm text-slate-500">{t('expenses.deleteConfirm')}</p>
-            <div className="flex gap-3 pt-2">
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('expenses.receiptReference')}
+              </label>
+              <input
+                type="text"
+                placeholder={t('expenses.receiptPlaceholder')}
+                value={formData.receiptReference || ''}
+                onChange={(e) => setFormData({ ...formData, receiptReference: e.target.value })}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">{t('expenses.notes')}</label>
+              <textarea
+                rows={3}
+                value={formData.notes || ''}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder={t('expenses.notesPlaceholder')}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
               >
                 {t('common.buttons.cancel')}
               </button>
               <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
+                type="submit"
+                className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
               >
-                {t('common.buttons.delete')}
+                {t('common.buttons.save')}
               </button>
             </div>
+          </form>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+          </div>
+          <h3 className="text-lg font-black text-slate-800">{t('expenses.expenseDeleted')}?</h3>
+          <p className="text-sm text-slate-500">{t('expenses.deleteConfirm')}</p>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
+            >
+              {t('common.buttons.cancel')}
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
+            >
+              {t('common.buttons.delete')}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

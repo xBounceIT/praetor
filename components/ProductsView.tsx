@@ -6,6 +6,7 @@ import StandardTable from './StandardTable';
 import StatusBadge, { StatusType } from './StatusBadge';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
+import Modal from './Modal';
 
 interface ProductsViewProps {
   products: Product[];
@@ -363,468 +364,464 @@ const ProductsView: React.FC<ProductsViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add Category Modal */}
-      {isAddCategoryModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                  <i className="fa-solid fa-plus"></i>
-                </div>
-                {t('crm:products.addCategoryModalTitle')}
-              </h3>
+      <Modal
+        isOpen={isAddCategoryModalOpen}
+        onClose={() => setIsAddCategoryModalOpen(false)}
+        zIndex={70}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                <i className="fa-solid fa-plus"></i>
+              </div>
+              {t('crm:products.addCategoryModalTitle')}
+            </h3>
+            <button
+              onClick={() => setIsAddCategoryModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('crm:products.categoryName')}
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                placeholder={t('crm:products.categoryNamePlaceholder')}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+              />
+            </div>
+            <div className="flex justify-between gap-3">
               <button
                 onClick={() => setIsAddCategoryModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                <i className="fa-solid fa-xmark"></i>
+                {t('crm:products.cancel')}
               </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('crm:products.categoryName')}
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                  placeholder={t('crm:products.categoryNamePlaceholder')}
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                />
-              </div>
-              <div className="flex justify-between gap-3">
-                <button
-                  onClick={() => setIsAddCategoryModalOpen(false)}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {t('crm:products.cancel')}
-                </button>
-                <button
-                  onClick={handleAddCategory}
-                  className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  {t('crm:products.addCategory')}
-                </button>
-              </div>
+              <button
+                onClick={handleAddCategory}
+                className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+              >
+                {t('crm:products.addCategory')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Add Subcategory Modal */}
-      {isAddSubcategoryModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-                {t('crm:products.addSubcategoryModalTitle')}
-              </h3>
+      <Modal
+        isOpen={isAddSubcategoryModalOpen}
+        onClose={() => setIsAddSubcategoryModalOpen(false)}
+        zIndex={70}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+              {t('crm:products.addSubcategoryModalTitle')}
+            </h3>
+            <button
+              onClick={() => setIsAddSubcategoryModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('crm:products.subcategoryName')}
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={newSubcategoryName}
+                onChange={(e) => setNewSubcategoryName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSubcategory()}
+                placeholder={t('crm:products.subcategoryNamePlaceholder')}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+              />
+            </div>
+            <div className="flex justify-between gap-3">
               <button
                 onClick={() => setIsAddSubcategoryModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                <i className="fa-solid fa-xmark"></i>
+                {t('crm:products.cancel')}
               </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('crm:products.subcategoryName')}
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={newSubcategoryName}
-                  onChange={(e) => setNewSubcategoryName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddSubcategory()}
-                  placeholder={t('crm:products.subcategoryNamePlaceholder')}
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                />
-              </div>
-              <div className="flex justify-between gap-3">
-                <button
-                  onClick={() => setIsAddSubcategoryModalOpen(false)}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {t('crm:products.cancel')}
-                </button>
-                <button
-                  onClick={handleAddSubcategory}
-                  className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  {t('crm:products.add')}
-                </button>
-              </div>
+              <button
+                onClick={handleAddSubcategory}
+                className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+              >
+                {t('crm:products.add')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {editingProduct
+                ? t('crm:products.editProductTitle')
+                : t('crm:products.addProductTitle')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+            {serverError && (
+              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-3">
+                <i className="fa-solid fa-triangle-exclamation"></i>
+                {serverError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('crm:products.productDetails')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.productName')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      if (errors.name) setErrors({ ...errors, name: '' });
+                    }}
+                    placeholder={t('crm:products.productNamePlaceholder')}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  />
+                  {errors.name && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>
+                  )}
                 </div>
-                {editingProduct
-                  ? t('crm:products.editProductTitle')
-                  : t('crm:products.addProductTitle')}
-              </h3>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.productCode')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.productCode}
+                    onChange={(e) => {
+                      setFormData({ ...formData, productCode: e.target.value });
+                      if (errors.productCode) setErrors({ ...errors, productCode: '' });
+                    }}
+                    placeholder={t('common:form.placeholderCode')}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.productCode ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  />
+                  {errors.productCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
+                      {errors.productCode}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-slate-400 ml-1">
+                    {t('crm:products.productCodeHint')}
+                  </p>
+                </div>
+
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.description')}
+                  </label>
+                  <textarea
+                    value={formData.description || ''}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder={t('crm:products.productDescriptionPlaceholder')}
+                    rows={2}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                    <label className="text-xs font-bold text-slate-500">
+                      {t('crm:products.type')}
+                    </label>
+                  </div>
+                  <CustomSelect
+                    options={typeOptions}
+                    value={formData.type || 'supply'}
+                    onChange={(val) => handleTypeChange(val as string)}
+                    searchable={false}
+                    buttonClassName={
+                      errors.type
+                        ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'py-2.5 text-sm'
+                    }
+                  />
+                  {errors.type && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                    <label className="text-xs font-bold text-slate-500">
+                      {t('crm:products.category')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddCategoryModalOpen(true)}
+                      className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-plus"></i> {t('crm:products.addCategory')}
+                    </button>
+                  </div>
+                  <CustomSelect
+                    options={categoryOptions}
+                    value={formData.category || ''}
+                    onChange={(val) =>
+                      setFormData({ ...formData, category: val as string, subcategory: '' })
+                    }
+                    placeholder={t('crm:products.selectOption')}
+                    searchable={true}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                    <label className="text-xs font-bold text-slate-500">
+                      {t('crm:products.subcategory')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddSubcategoryModalOpen(true)}
+                      disabled={!formData.category} // Disable if no category selected
+                      className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-slate-300 cursor-not-allowed' : 'text-praetor hover:text-slate-700'}`}
+                    >
+                      <i className="fa-solid fa-plus"></i> {t('crm:products.addSubcategory')}
+                    </button>
+                  </div>
+                  <CustomSelect
+                    options={subcategoryOptions}
+                    value={formData.subcategory || ''}
+                    onChange={(val) => setFormData({ ...formData, subcategory: val as string })}
+                    placeholder={
+                      !formData.category
+                        ? t('crm:products.selectCategoryFirst')
+                        : t('crm:products.selectOption')
+                    }
+                    searchable={true}
+                    disabled={!formData.category}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                    <div className="flex flex-col">
+                      {showTaxRateWarning && (
+                        <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
+                          {t('crm:products.unusualTaxRate')}
+                        </p>
+                      )}
+                      <label className="text-xs font-bold text-slate-500">
+                        {t('crm:products.taxRate')}
+                      </label>
+                    </div>
+                  </div>
+                  <ValidatedNumberInput
+                    value={formData.taxRate ?? ''}
+                    onValueChange={handleNumericValueChange('taxRate')}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.taxRate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                  />
+                  {errors.taxRate && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.taxRate}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                    <label className="text-xs font-bold text-slate-500 font-black">
+                      {t('crm:products.unitOfMeasure')}
+                    </label>
+                  </div>
+                  <CustomSelect
+                    options={[
+                      { id: 'unit', name: t('crm:products.unit') },
+                      { id: 'hours', name: t('crm:products.hour') },
+                    ]}
+                    value={formData.costUnit || 'unit'}
+                    onChange={(val) =>
+                      setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })
+                    }
+                    placeholder={t('crm:products.selectOption')}
+                    searchable={false}
+                    buttonClassName={
+                      errors.costUnit
+                        ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'py-2.5 text-sm'
+                    }
+                  />
+                  {errors.costUnit && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
+                      {errors.costUnit}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                    <label className="text-xs font-bold text-slate-500">
+                      {t('crm:products.supplier')}
+                    </label>
+                  </div>
+                  <CustomSelect
+                    options={supplierOptions}
+                    value={formData.supplierId || ''}
+                    onChange={(val) => setFormData({ ...formData, supplierId: val as string })}
+                    placeholder={t('crm:products.selectOption')}
+                    searchable={true}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('crm:products.pricingAndUnit')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.cost')}
+                  </label>
+                  <div className="flex gap-2">
+                    <ValidatedNumberInput
+                      value={formData.costo !== undefined ? Number(formData.costo).toFixed(2) : ''}
+                      onValueChange={handleNumericValueChange('costo')}
+                      onBlur={() => {
+                        if (formData.costo !== undefined) {
+                          // Ensure internal state consistency if needed, though toFixed(2) above handles display
+                        }
+                      }}
+                      className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                    />
+                  </div>
+                  {errors.costo && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costo}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.mol')}
+                  </label>
+                  <div className="flex gap-2">
+                    <ValidatedNumberInput
+                      value={formData.molPercentage ?? ''}
+                      onValueChange={handleNumericValueChange('molPercentage')}
+                      className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
+                    />
+                  </div>
+                  {errors.molPercentage && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
+                      {errors.molPercentage}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.salePriceCalculated')}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                    {hasPricing
+                      ? `${calcSalePrice(formData.costo!, formData.molPercentage!).toFixed(2)} ${currency}`
+                      : '--'}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.marginCalculated')}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
+                    {hasPricing
+                      ? `${calcMargine(formData.costo!, formData.molPercentage!).toFixed(2)} ${currency}`
+                      : '--'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between pt-8 border-t border-slate-100 mt-4">
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+                className="px-10 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                <i className="fa-solid fa-xmark text-lg"></i>
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="px-12 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+              >
+                {editingProduct ? t('crm:products.updateProduct') : t('crm:products.saveProduct')}
               </button>
             </div>
-
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
-              {serverError && (
-                <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-3">
-                  <i className="fa-solid fa-triangle-exclamation"></i>
-                  {serverError}
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:products.productDetails')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.productName')}
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => {
-                        setFormData({ ...formData, name: e.target.value });
-                        if (errors.name) setErrors({ ...errors, name: '' });
-                      }}
-                      placeholder={t('crm:products.productNamePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.productCode')}
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.productCode}
-                      onChange={(e) => {
-                        setFormData({ ...formData, productCode: e.target.value });
-                        if (errors.productCode) setErrors({ ...errors, productCode: '' });
-                      }}
-                      placeholder={t('common:form.placeholderCode')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.productCode ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                    />
-                    {errors.productCode && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                        {errors.productCode}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-slate-400 ml-1">
-                      {t('crm:products.productCodeHint')}
-                    </p>
-                  </div>
-
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.description')}
-                    </label>
-                    <textarea
-                      value={formData.description || ''}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder={t('crm:products.productDescriptionPlaceholder')}
-                      rows={2}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                      <label className="text-xs font-bold text-slate-500">
-                        {t('crm:products.type')}
-                      </label>
-                    </div>
-                    <CustomSelect
-                      options={typeOptions}
-                      value={formData.type || 'supply'}
-                      onChange={(val) => handleTypeChange(val as string)}
-                      searchable={false}
-                      buttonClassName={
-                        errors.type
-                          ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
-                          : 'py-2.5 text-sm'
-                      }
-                    />
-                    {errors.type && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                      <label className="text-xs font-bold text-slate-500">
-                        {t('crm:products.category')}
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddCategoryModalOpen(true)}
-                        className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
-                      >
-                        <i className="fa-solid fa-plus"></i> {t('crm:products.addCategory')}
-                      </button>
-                    </div>
-                    <CustomSelect
-                      options={categoryOptions}
-                      value={formData.category || ''}
-                      onChange={(val) =>
-                        setFormData({ ...formData, category: val as string, subcategory: '' })
-                      }
-                      placeholder={t('crm:products.selectOption')}
-                      searchable={true}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                      <label className="text-xs font-bold text-slate-500">
-                        {t('crm:products.subcategory')}
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddSubcategoryModalOpen(true)}
-                        disabled={!formData.category} // Disable if no category selected
-                        className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-slate-300 cursor-not-allowed' : 'text-praetor hover:text-slate-700'}`}
-                      >
-                        <i className="fa-solid fa-plus"></i> {t('crm:products.addSubcategory')}
-                      </button>
-                    </div>
-                    <CustomSelect
-                      options={subcategoryOptions}
-                      value={formData.subcategory || ''}
-                      onChange={(val) => setFormData({ ...formData, subcategory: val as string })}
-                      placeholder={
-                        !formData.category
-                          ? t('crm:products.selectCategoryFirst')
-                          : t('crm:products.selectOption')
-                      }
-                      searchable={true}
-                      disabled={!formData.category}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                      <div className="flex flex-col">
-                        {showTaxRateWarning && (
-                          <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
-                            {t('crm:products.unusualTaxRate')}
-                          </p>
-                        )}
-                        <label className="text-xs font-bold text-slate-500">
-                          {t('crm:products.taxRate')}
-                        </label>
-                      </div>
-                    </div>
-                    <ValidatedNumberInput
-                      value={formData.taxRate ?? ''}
-                      onValueChange={handleNumericValueChange('taxRate')}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.taxRate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                    />
-                    {errors.taxRate && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                        {errors.taxRate}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                      <label className="text-xs font-bold text-slate-500 font-black">
-                        {t('crm:products.unitOfMeasure')}
-                      </label>
-                    </div>
-                    <CustomSelect
-                      options={[
-                        { id: 'unit', name: t('crm:products.unit') },
-                        { id: 'hours', name: t('crm:products.hour') },
-                      ]}
-                      value={formData.costUnit || 'unit'}
-                      onChange={(val) =>
-                        setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })
-                      }
-                      placeholder={t('crm:products.selectOption')}
-                      searchable={false}
-                      buttonClassName={
-                        errors.costUnit
-                          ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
-                          : 'py-2.5 text-sm'
-                      }
-                    />
-                    {errors.costUnit && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                        {errors.costUnit}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                      <label className="text-xs font-bold text-slate-500">
-                        {t('crm:products.supplier')}
-                      </label>
-                    </div>
-                    <CustomSelect
-                      options={supplierOptions}
-                      value={formData.supplierId || ''}
-                      onChange={(val) => setFormData({ ...formData, supplierId: val as string })}
-                      placeholder={t('crm:products.selectOption')}
-                      searchable={true}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:products.pricingAndUnit')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.cost')}
-                    </label>
-                    <div className="flex gap-2">
-                      <ValidatedNumberInput
-                        value={
-                          formData.costo !== undefined ? Number(formData.costo).toFixed(2) : ''
-                        }
-                        onValueChange={handleNumericValueChange('costo')}
-                        onBlur={() => {
-                          if (formData.costo !== undefined) {
-                            // Ensure internal state consistency if needed, though toFixed(2) above handles display
-                          }
-                        }}
-                        className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                      />
-                    </div>
-                    {errors.costo && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costo}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.mol')}
-                    </label>
-                    <div className="flex gap-2">
-                      <ValidatedNumberInput
-                        value={formData.molPercentage ?? ''}
-                        onValueChange={handleNumericValueChange('molPercentage')}
-                        className={`flex-1 text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                      />
-                    </div>
-                    {errors.molPercentage && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                        {errors.molPercentage}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.salePriceCalculated')}
-                    </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
-                      {hasPricing
-                        ? `${calcSalePrice(formData.costo!, formData.molPercentage!).toFixed(2)} ${currency}`
-                        : '--'}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.marginCalculated')}
-                    </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
-                      {hasPricing
-                        ? `${calcMargine(formData.costo!, formData.molPercentage!).toFixed(2)} ${currency}`
-                        : '--'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-8 border-t border-slate-100 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-10 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="px-12 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  {editingProduct ? t('crm:products.updateProduct') : t('crm:products.saveProduct')}
-                </button>
-              </div>
-            </form>
-          </div>
+          </form>
         </div>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('crm:products.deleteProductTitle')}
-                </h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  {t('crm:products.deleteConfirm', { productName: productToDelete?.name })}
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('crm:products.yesDelete')}
-                </button>
-              </div>
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('crm:products.deleteProductTitle')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('crm:products.deleteConfirm', { productName: productToDelete?.name })}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('crm:products.yesDelete')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { useTranslation } from 'react-i18next';
+import Modal from './Modal';
 
 interface SessionTimeoutHandlerProps {
   onLogout: () => void;
@@ -78,10 +79,15 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     }
   };
 
-  if (!showWarning) return null;
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+    <Modal
+      isOpen={showWarning}
+      onClose={() => {}}
+      closeOnBackdrop={false}
+      closeOnEsc={false}
+      zIndex={100}
+      backdropClass="bg-slate-900/60 backdrop-blur-md"
+    >
       <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-200">
         <div className="p-8 text-center">
           <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -123,7 +129,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
           </p>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

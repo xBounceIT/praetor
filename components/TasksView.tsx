@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import StandardTable, { Column } from './StandardTable';
 import StatusBadge from './StatusBadge';
 import { tasksApi } from '../services/api';
+import Modal from './Modal';
 
 interface TasksViewProps {
   tasks: ProjectTask[];
@@ -517,311 +518,301 @@ const TasksView: React.FC<TasksViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">{t('tasks.deleteTaskTitle')}</h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  <span
-                    dangerouslySetInnerHTML={{
-                      __html: t('tasks.deleteConfirmDesc', { name: editingTask?.name }),
-                    }}
-                  />
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={cancelDelete}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('tasks.yesDelete')}
-                </button>
-              </div>
+      <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* User Assignment Modal */}
-      {managingTaskId && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-lg text-slate-800 flex flex-col">
-                <span>{t('tasks.assignUsers')}</span>
-                <span className="text-xs font-normal text-slate-500 mt-0.5">
-                  {t('common:labels.task')}:{' '}
-                  <span className="font-bold text-praetor">{managingTask?.name}</span>
-                </span>
-              </h3>
-              <button
-                onClick={closeAssignments}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
-
-            <div className="p-4 border-b border-slate-100 bg-white">
-              <div className="relative">
-                <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                <input
-                  type="text"
-                  placeholder={t('tasks.searchUsers')}
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none text-sm font-medium transition-all"
-                  autoFocus
+            <div>
+              <h3 className="text-lg font-black text-slate-800">{t('tasks.deleteTaskTitle')}</h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                <span
+                  dangerouslySetInnerHTML={{
+                    __html: t('tasks.deleteConfirmDesc', { name: editingTask?.name }),
+                  }}
                 />
-              </div>
+              </p>
             </div>
-
-            <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
-              {isLoadingAssignments ? (
-                <div className="flex items-center justify-center py-12">
-                  <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredUsers.map((user) => (
-                    <label
-                      key={user.id}
-                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
-                        assignedUserIds.includes(user.id)
-                          ? 'bg-white border-praetor shadow-sm ring-1 ring-praetor/10'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
-                            assignedUserIds.includes(user.id)
-                              ? 'bg-praetor text-white'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {user.avatarInitials || user.name.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div className="flex flex-col">
-                          <span
-                            className={`text-sm font-bold ${assignedUserIds.includes(user.id) ? 'text-slate-800' : 'text-slate-600'}`}
-                          >
-                            {user.name}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">{user.role}</span>
-                        </div>
-                      </div>
-                      <div
-                        className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-colors ${
-                          assignedUserIds.includes(user.id)
-                            ? 'bg-praetor border-praetor'
-                            : 'bg-white border-slate-300'
-                        }`}
-                      >
-                        {assignedUserIds.includes(user.id) && (
-                          <i className="fa-solid fa-check text-white text-xs"></i>
-                        )}
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="hidden"
-                        checked={assignedUserIds.includes(user.id)}
-                        onChange={() => toggleUserAssignment(user.id)}
-                      />
-                    </label>
-                  ))}
-                  {filteredUsers.length === 0 && (
-                    <div className="text-center py-12 text-slate-400 italic text-sm">
-                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
-                        <i className="fa-solid fa-user-slash text-2xl"></i>
-                      </div>
-                      {t('tasks.noUsersFound')}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3">
+            <div className="flex gap-3 pt-2">
               <button
-                onClick={closeAssignments}
-                className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors text-sm border border-slate-200"
+                onClick={cancelDelete}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
-                onClick={saveAssignments}
-                className="px-8 py-2.5 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg shadow-slate-200 active:scale-95 text-sm"
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('common:buttons.save')}
+                {t('tasks.yesDelete')}
               </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i
-                    className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}
-                  ></i>
-                </div>
-                {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
-              </h3>
-              <button
-                onClick={closeModal}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
+      {/* User Assignment Modal */}
+      <Modal isOpen={!!managingTaskId} onClose={closeAssignments}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="font-bold text-lg text-slate-800 flex flex-col">
+              <span>{t('tasks.assignUsers')}</span>
+              <span className="text-xs font-normal text-slate-500 mt-0.5">
+                {t('common:labels.task')}:{' '}
+                <span className="font-bold text-praetor">{managingTask?.name}</span>
+              </span>
+            </h3>
+            <button
+              onClick={closeAssignments}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <div className="p-4 border-b border-slate-100 bg-white">
+            <div className="relative">
+              <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input
+                type="text"
+                placeholder={t('tasks.searchUsers')}
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none text-sm font-medium transition-all"
+                autoFocus
+              />
             </div>
+          </div>
 
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('tasks.project')}
-                </label>
-                <CustomSelect
-                  options={projectSelectOptions}
-                  value={projectId}
-                  onChange={(val) => setProjectId(val as string)}
-                  placeholder={t('projects.selectProject')}
-                  searchable={true}
-                  buttonClassName="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
-                />
+          <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
+            {isLoadingAssignments ? (
+              <div className="flex items-center justify-center py-12">
+                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.name')}</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={t('tasks.taskNamePlaceholder')}
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-medium"
-                  autoFocus
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('tasks.description')}
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t('tasks.taskDescriptionPlaceholder')}
-                  rows={3}
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none font-medium"
-                />
-              </div>
-
-              {/* Status toggles - logic wrapped for conditional rendering */}
-              {(() => {
-                const project = projects.find((p) => p.id === projectId);
-                const client = clients.find((c) => c.id === project?.clientId);
-                const isProjectDisabled = project?.isDisabled || false;
-                const isClientDisabled = client?.isDisabled || false;
-                const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-                const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
-
-                return (
-                  <div className="space-y-2 pt-2">
-                    <div
-                      className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
-                        isCurrentlyDisabled
-                          ? 'bg-red-50 border-red-100'
-                          : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <p
-                        className={`text-sm font-black ${
-                          isCurrentlyDisabled ? 'text-red-700' : 'text-slate-700'
+            ) : (
+              <div className="space-y-2">
+                {filteredUsers.map((user) => (
+                  <label
+                    key={user.id}
+                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                      assignedUserIds.includes(user.id)
+                        ? 'bg-white border-praetor shadow-sm ring-1 ring-praetor/10'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
+                          assignedUserIds.includes(user.id)
+                            ? 'bg-praetor text-white'
+                            : 'bg-slate-100 text-slate-500'
                         }`}
                       >
-                        {t('tasks.isDisabled')}
-                      </p>
-                      <button
-                        type="button"
-                        disabled={isInheritedDisabled}
-                        onClick={() => {
-                          if (!isInheritedDisabled) {
-                            setTempIsDisabled(!tempIsDisabled);
-                          }
-                        }}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'
-                        } ${isInheritedDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
+                        {user.avatarInitials || user.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
+                          className={`text-sm font-bold ${assignedUserIds.includes(user.id) ? 'text-slate-800' : 'text-slate-600'}`}
+                        >
+                          {user.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{user.role}</span>
+                      </div>
                     </div>
-                    {isInheritedDisabled && (
-                      <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1.5 px-1 ml-1">
-                        <i className="fa-solid fa-triangle-exclamation"></i>
-                        {isClientDisabled
-                          ? t('projects.inheritedFromDisabledClient', { clientName: client?.name })
-                          : t('tasks.inheritedFromDisabledProject', {
-                              projectName: project?.name,
-                            })}
-                      </p>
-                    )}
+                    <div
+                      className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-colors ${
+                        assignedUserIds.includes(user.id)
+                          ? 'bg-praetor border-praetor'
+                          : 'bg-white border-slate-300'
+                      }`}
+                    >
+                      {assignedUserIds.includes(user.id) && (
+                        <i className="fa-solid fa-check text-white text-xs"></i>
+                      )}
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={assignedUserIds.includes(user.id)}
+                      onChange={() => toggleUserAssignment(user.id)}
+                    />
+                  </label>
+                ))}
+                {filteredUsers.length === 0 && (
+                  <div className="text-center py-12 text-slate-400 italic text-sm">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
+                      <i className="fa-solid fa-user-slash text-2xl"></i>
+                    </div>
+                    {t('tasks.noUsersFound')}
                   </div>
-                );
-              })()}
-
-              <div className="pt-6 flex items-center justify-between gap-4 border-t border-slate-100 mt-2">
-                {editingTask && (
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="px-5 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-sm font-bold transition-all border border-transparent hover:border-red-100"
-                  >
-                    <i className="fa-solid fa-trash-can mr-2"></i>
-                    {t('common:buttons.delete')}
-                  </button>
                 )}
-
-                <div className="flex gap-3 ml-auto">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                  >
-                    {t('common:buttons.cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-praetor shadow-slate-200 hover:bg-slate-700"
-                  >
-                    {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
-                  </button>
-                </div>
               </div>
-            </form>
+            )}
+          </div>
+
+          <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3">
+            <button
+              onClick={closeAssignments}
+              className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors text-sm border border-slate-200"
+            >
+              {t('common:buttons.cancel')}
+            </button>
+            <button
+              onClick={saveAssignments}
+              className="px-8 py-2.5 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg shadow-slate-200 active:scale-95 text-sm"
+            >
+              {t('common:buttons.save')}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
+
+      {/* Add/Edit Modal */}
+      <Modal isOpen={isModalOpen} onClose={closeModal}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-300">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingTask ? 'fa-pen-to-square' : 'fa-list-check'}`}></i>
+              </div>
+              {editingTask ? t('tasks.editTask') : t('tasks.createNewTask')}
+            </h3>
+            <button
+              onClick={closeModal}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.project')}</label>
+              <CustomSelect
+                options={projectSelectOptions}
+                value={projectId}
+                onChange={(val) => setProjectId(val as string)}
+                placeholder={t('projects.selectProject')}
+                searchable={true}
+                buttonClassName="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">{t('tasks.name')}</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('tasks.taskNamePlaceholder')}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-medium"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('tasks.description')}
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t('tasks.taskDescriptionPlaceholder')}
+                rows={3}
+                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none font-medium"
+              />
+            </div>
+
+            {/* Status toggles - logic wrapped for conditional rendering */}
+            {(() => {
+              const project = projects.find((p) => p.id === projectId);
+              const client = clients.find((c) => c.id === project?.clientId);
+              const isProjectDisabled = project?.isDisabled || false;
+              const isClientDisabled = client?.isDisabled || false;
+              const isInheritedDisabled = isProjectDisabled || isClientDisabled;
+              const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
+
+              return (
+                <div className="space-y-2 pt-2">
+                  <div
+                    className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
+                      isCurrentlyDisabled
+                        ? 'bg-red-50 border-red-100'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-black ${
+                        isCurrentlyDisabled ? 'text-red-700' : 'text-slate-700'
+                      }`}
+                    >
+                      {t('tasks.isDisabled')}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={isInheritedDisabled}
+                      onClick={() => {
+                        if (!isInheritedDisabled) {
+                          setTempIsDisabled(!tempIsDisabled);
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'
+                      } ${isInheritedDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  {isInheritedDisabled && (
+                    <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1.5 px-1 ml-1">
+                      <i className="fa-solid fa-triangle-exclamation"></i>
+                      {isClientDisabled
+                        ? t('projects.inheritedFromDisabledClient', { clientName: client?.name })
+                        : t('tasks.inheritedFromDisabledProject', {
+                            projectName: project?.name,
+                          })}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="pt-6 flex items-center justify-between gap-4 border-t border-slate-100 mt-2">
+              {editingTask && (
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-sm font-bold transition-all border border-transparent hover:border-red-100"
+                >
+                  <i className="fa-solid fa-trash-can mr-2"></i>
+                  {t('common:buttons.delete')}
+                </button>
+              )}
+
+              <div className="flex gap-3 ml-auto">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                >
+                  {t('common:buttons.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-praetor shadow-slate-200 hover:bg-slate-700"
+                >
+                  {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </Modal>
 
       {/* Header */}
       <div className="space-y-4">

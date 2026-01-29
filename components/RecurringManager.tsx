@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask } from '../types';
+import Modal from './Modal';
 
 interface RecurringManagerProps {
   tasks: ProjectTask[];
@@ -130,85 +131,88 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
       </div>
 
       {/* Action Modal */}
-      {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                {t('entry.stopRecurringTask')}
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                {t('entry.howHandleEntries')}{' '}
-                <strong className="text-slate-800">{selectedTask.name}</strong>?
+      <Modal
+        isOpen={!!selectedTask}
+        onClose={closeModal}
+        zIndex={50}
+        backdropClass="bg-slate-900/50 backdrop-blur-sm"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="p-6 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+              {t('entry.stopRecurringTask')}
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">
+              {t('entry.howHandleEntries')}{' '}
+              <strong className="text-slate-800">{selectedTask.name}</strong>?
+            </p>
+          </div>
+
+          <div className="p-4 space-y-3">
+            <button
+              onClick={() => {
+                onAction(selectedTask.id, 'stop');
+                closeModal();
+              }}
+              className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-slate-800 group-hover:text-praetor">
+                  {t('recurring.stopOnly')}
+                </span>
+                <i className="fa-solid fa-pause text-slate-300 group-hover:text-praetor"></i>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t('recurring.stopOnlyDesc')}
               </p>
-            </div>
+            </button>
 
-            <div className="p-4 space-y-3">
-              <button
-                onClick={() => {
-                  onAction(selectedTask.id, 'stop');
-                  closeModal();
-                }}
-                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-praetor">
-                    {t('recurring.stopOnly')}
-                  </span>
-                  <i className="fa-solid fa-pause text-slate-300 group-hover:text-praetor"></i>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {t('recurring.stopOnlyDesc')}
-                </p>
-              </button>
+            <button
+              onClick={() => {
+                onAction(selectedTask.id, 'delete_future');
+                closeModal();
+              }}
+              className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-slate-800 group-hover:text-red-700">
+                  {t('recurring.deleteFuture')}
+                </span>
+                <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t('recurring.deleteFutureDesc')}
+              </p>
+            </button>
 
-              <button
-                onClick={() => {
-                  onAction(selectedTask.id, 'delete_future');
-                  closeModal();
-                }}
-                className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 group-hover:text-red-700">
-                    {t('recurring.deleteFuture')}
-                  </span>
-                  <i className="fa-solid fa-forward text-slate-300 group-hover:text-red-500"></i>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  {t('recurring.deleteFutureDesc')}
-                </p>
-              </button>
+            <button
+              onClick={() => {
+                onAction(selectedTask.id, 'delete_all');
+                closeModal();
+              }}
+              className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
+                <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
+              </div>
+              <p className="text-xs text-red-600/70 leading-relaxed">
+                {t('recurring.deleteAllDesc')}
+              </p>
+            </button>
+          </div>
 
-              <button
-                onClick={() => {
-                  onAction(selectedTask.id, 'delete_all');
-                  closeModal();
-                }}
-                className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
-                  <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
-                </div>
-                <p className="text-xs text-red-600/70 leading-relaxed">
-                  {t('recurring.deleteAllDesc')}
-                </p>
-              </button>
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
-              >
-                {t('recurring.cancel')}
-              </button>
-            </div>
+          <div className="p-4 bg-slate-50 border-t border-slate-100 text-right">
+            <button
+              onClick={closeModal}
+              className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              {t('recurring.cancel')}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { User, UserRole, Client, Project, ProjectTask } from '../types';
 import CustomSelect from './CustomSelect';
@@ -7,6 +6,7 @@ import StandardTable from './StandardTable';
 
 import ValidatedNumberInput from './ValidatedNumberInput';
 import { usersApi } from '../services/api';
+import Modal from './Modal';
 
 interface UserManagementProps {
   users: User[];
@@ -517,140 +517,132 @@ const UserManagement: React.FC<UserManagementProps> = ({
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       {/* Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-                <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('hr:workforce.deleteUser')}
-                </h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={cancelDelete}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('hr:workforce.yesDelete')}
-                </button>
-              </div>
+      <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.deleteUser')}</h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('hr:workforce.yesDelete')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Edit User Modal */}
-      {editingUser && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                  <i className="fa-solid fa-user-pen text-praetor"></i>
-                </div>
-                <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.editUser')}</h3>
+      <Modal isOpen={!!editingUser} onClose={() => setEditingUser(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+                <i className="fa-solid fa-user-pen text-praetor"></i>
+              </div>
+              <h3 className="text-lg font-black text-slate-800">{t('hr:workforce.editUser')}</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  {t('hr:workforce.fullName')}
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
+                />
               </div>
 
-              <div className="space-y-4">
+              {currentUserRole === 'admin' && (
+                <div>
+                  <CustomSelect
+                    label={t('hr:workforce.role')}
+                    options={ROLE_OPTIONS}
+                    value={editRole}
+                    onChange={(val) => setEditRole(val as UserRole)}
+                    buttonClassName="py-2 text-sm"
+                    disabled={isEditingSelf}
+                  />
+                  {isEditingSelf && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {t('hr:workforce.cannotChangeOwnRole')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {currentUserRole !== 'admin' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    {t('hr:workforce.fullName')}
+                    {t('hr:workforce.costPerHour')}
                   </label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
-                  />
-                </div>
-
-                {currentUserRole === 'admin' && (
-                  <div>
-                    <CustomSelect
-                      label={t('hr:workforce.role')}
-                      options={ROLE_OPTIONS}
-                      value={editRole}
-                      onChange={(val) => setEditRole(val as UserRole)}
-                      buttonClassName="py-2 text-sm"
-                      disabled={isEditingSelf}
+                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+                    <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
+                      {currency}
+                    </div>
+                    <ValidatedNumberInput
+                      value={editCostPerHour}
+                      onValueChange={setEditCostPerHour}
+                      className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
+                      placeholder="0.00"
                     />
-                    {isEditingSelf && (
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {t('hr:workforce.cannotChangeOwnRole')}
-                      </p>
-                    )}
                   </div>
-                )}
+                </div>
+              )}
 
-                {currentUserRole !== 'admin' && (
+              {editingUser.id !== currentUserId && (
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      {t('hr:workforce.costPerHour')}
-                    </label>
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                      <div className="w-16 flex items-center justify-center text-slate-400 text-sm font-bold border-r border-slate-200 py-2 bg-slate-100/30">
-                        {currency}
-                      </div>
-                      <ValidatedNumberInput
-                        value={editCostPerHour}
-                        onValueChange={setEditCostPerHour}
-                        className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
-                        placeholder="0.00"
-                      />
-                    </div>
+                    <p className="text-sm font-bold text-slate-700">{t('hr:workforce.disabled')}</p>
                   </div>
-                )}
+                  <button
+                    onClick={() => setEditIsDisabled(!editIsDisabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editIsDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsDisabled ? 'translate-x-6' : 'translate-x-1'}`}
+                    />
+                  </button>
+                </div>
+              )}
+            </div>
 
-                {editingUser.id !== currentUserId && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div>
-                      <p className="text-sm font-bold text-slate-700">
-                        {t('hr:workforce.disabled')}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setEditIsDisabled(!editIsDisabled)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editIsDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsDisabled ? 'translate-x-6' : 'translate-x-1'}`}
-                      />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setEditingUser(null)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={saveEdit}
-                  disabled={!editName || !hasEditChanges}
-                  className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!editName || !hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
-                >
-                  {t('hr:workforce.saveChanges')}
-                </button>
-              </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setEditingUser(null)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={!editName || !hasEditChanges}
+                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!editName || !hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+              >
+                {t('hr:workforce.saveChanges')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
       {currentUserRole === 'admin' && (
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -1229,134 +1221,202 @@ const UserManagement: React.FC<UserManagementProps> = ({
       )}
 
       {/* Assignment Modal */}
-      {managingUserId &&
-        createPortal(
-          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <h3 className="font-bold text-lg text-slate-800">
-                  {t('hr:workforce.manageAccess', { name: managingUser?.name })}
-                </h3>
-                <button
-                  onClick={closeAssignments}
-                  className="text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <i className="fa-solid fa-xmark text-xl"></i>
-                </button>
-              </div>
+      <Modal
+        isOpen={!!managingUserId}
+        onClose={closeAssignments}
+        zIndex={50}
+        backdropClass="bg-slate-900/50 backdrop-blur-sm"
+      >
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <h3 className="font-bold text-lg text-slate-800">
+              {t('hr:workforce.manageAccess', { name: managingUser?.name })}
+            </h3>
+            <button
+              onClick={closeAssignments}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-xl"></i>
+            </button>
+          </div>
 
-              <div className="p-6 overflow-y-auto flex-1">
-                {isLoadingAssignments ? (
-                  <div className="flex items-center justify-center py-12">
-                    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <CustomSelect
-                        options={clientFilterOptions}
-                        value={filterClientId}
-                        onChange={(val) => setFilterClientId(val as string)}
-                        placeholder={t('hr:workforce.filterByClient')}
-                        searchable={true}
-                        buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
-                      />
-                      <CustomSelect
-                        options={projectFilterOptions}
-                        value={filterProjectId}
-                        onChange={(val) => setFilterProjectId(val as string)}
-                        placeholder={t('hr:workforce.filterByProject')}
-                        searchable={true}
-                        buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
-                        disabled={projectFilterOptions.length === 1}
+          <div className="p-6 overflow-y-auto flex-1">
+            {isLoadingAssignments ? (
+              <div className="flex items-center justify-center py-12">
+                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <CustomSelect
+                    options={clientFilterOptions}
+                    value={filterClientId}
+                    onChange={(val) => setFilterClientId(val as string)}
+                    placeholder={t('hr:workforce.filterByClient')}
+                    searchable={true}
+                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                  />
+                  <CustomSelect
+                    options={projectFilterOptions}
+                    value={filterProjectId}
+                    onChange={(val) => setFilterProjectId(val as string)}
+                    placeholder={t('hr:workforce.filterByProject')}
+                    searchable={true}
+                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
+                    disabled={projectFilterOptions.length === 1}
+                  />
+                </div>
+
+                <div
+                  className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
+                >
+                  {/* Clients Column */}
+                  <div className="space-y-3">
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="flex items-center justify-between py-2">
+                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                          {t('hr:workforce.clients')}
+                        </h4>
+                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                          {assignments.clientIds.length}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder={t('hr:workforce.searchClients')}
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
-
-                    <div
-                      className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
-                    >
-                      {/* Clients Column */}
-                      <div className="space-y-3">
-                        <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                          <div className="flex items-center justify-between py-2">
-                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                              {t('hr:workforce.clients')}
-                            </h4>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                              {assignments.clientIds.length}
-                            </span>
+                    <div className="space-y-2">
+                      {visibleClients.map((client) => (
+                        <label
+                          key={client.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            assignments.clientIds.includes(client.id)
+                              ? 'bg-slate-50 border-slate-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="relative flex items-center justify-center shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={assignments.clientIds.includes(client.id)}
+                              onChange={() => toggleAssignment('client', client.id)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                              <div
+                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                              ></div>
+                            </div>
                           </div>
-                          <input
-                            type="text"
-                            placeholder={t('hr:workforce.searchClients')}
-                            value={clientSearch}
-                            onChange={(e) => setClientSearch(e.target.value)}
-                            className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          {visibleClients.map((client) => (
-                            <label
-                              key={client.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                assignments.clientIds.includes(client.id)
-                                  ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                  : 'bg-white border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="relative flex items-center justify-center shrink-0">
-                                <input
-                                  type="checkbox"
-                                  checked={assignments.clientIds.includes(client.id)}
-                                  onChange={() => toggleAssignment('client', client.id)}
-                                  className="sr-only peer"
-                                />
-                                <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                                  <div
-                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                                  ></div>
-                                </div>
-                              </div>
-                              <span
-                                className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                              >
-                                {client.name}
-                              </span>
-                            </label>
-                          ))}
-                          {clients.length === 0 && (
-                            <p className="text-xs text-slate-400 italic">
-                              {t('hr:workforce.noClientsFound')}
-                            </p>
-                          )}
-                        </div>
+                          <span
+                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                          >
+                            {client.name}
+                          </span>
+                        </label>
+                      ))}
+                      {clients.length === 0 && (
+                        <p className="text-xs text-slate-400 italic">
+                          {t('hr:workforce.noClientsFound')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Projects Column */}
+                  <div className="space-y-3">
+                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                      <div className="flex items-center justify-between py-2">
+                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                          Projects
+                        </h4>
+                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                          {assignments.projectIds.length}
+                        </span>
                       </div>
-
-                      {/* Projects Column */}
-                      <div className="space-y-3">
-                        <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                          <div className="flex items-center justify-between py-2">
-                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                              Projects
-                            </h4>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                              {assignments.projectIds.length}
+                      <input
+                        type="text"
+                        placeholder="Search projects..."
+                        value={projectSearch}
+                        onChange={(e) => setProjectSearch(e.target.value)}
+                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      {visibleProjects.map((project) => (
+                        <label
+                          key={project.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            assignments.projectIds.includes(project.id)
+                              ? 'bg-slate-50 border-slate-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="relative flex items-center justify-center shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={assignments.projectIds.includes(project.id)}
+                              onChange={() => toggleAssignment('project', project.id)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                              <div
+                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                              ></div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col">
+                            <span
+                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                            >
+                              {project.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {clients.find((c) => c.id === project.clientId)?.name ||
+                                t('hr:workforce.unknownClient')}
                             </span>
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Search projects..."
-                            value={projectSearch}
-                            onChange={(e) => setProjectSearch(e.target.value)}
-                            className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                          />
+                        </label>
+                      ))}
+                      {projects.length === 0 && (
+                        <p className="text-xs text-slate-400 italic">
+                          {t('hr:workforce.noProjectsFound')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {canManageAssignments && (
+                    <div className="space-y-3">
+                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
+                        <div className="flex items-center justify-between py-2">
+                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
+                            Tasks
+                          </h4>
+                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                            {assignments.taskIds.length}
+                          </span>
                         </div>
-                        <div className="space-y-2">
-                          {visibleProjects.map((project) => (
+                        <input
+                          type="text"
+                          placeholder="Search tasks..."
+                          value={taskSearch}
+                          onChange={(e) => setTaskSearch(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        {visibleTasks.map((task) => {
+                          const project = projects.find((p) => p.id === task.projectId);
+                          return (
                             <label
-                              key={project.id}
+                              key={task.id}
                               className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                assignments.projectIds.includes(project.id)
+                                assignments.taskIds.includes(task.id)
                                   ? 'bg-slate-50 border-slate-300 shadow-sm'
                                   : 'bg-white border-slate-200 hover:border-slate-300'
                               }`}
@@ -1364,126 +1424,59 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               <div className="relative flex items-center justify-center shrink-0">
                                 <input
                                   type="checkbox"
-                                  checked={assignments.projectIds.includes(project.id)}
-                                  onChange={() => toggleAssignment('project', project.id)}
+                                  checked={assignments.taskIds.includes(task.id)}
+                                  onChange={() => toggleAssignment('task', task.id)}
                                   className="sr-only peer"
                                 />
                                 <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
                                   <div
-                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
+                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
                                   ></div>
                                 </div>
                               </div>
                               <div className="flex flex-col">
                                 <span
-                                  className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
+                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
                                 >
-                                  {project.name}
+                                  {task.name}
                                 </span>
                                 <span className="text-[10px] text-slate-400">
-                                  {clients.find((c) => c.id === project.clientId)?.name ||
-                                    t('hr:workforce.unknownClient')}
+                                  {project?.name || t('hr:workforce.unknownProject')}
                                 </span>
                               </div>
                             </label>
-                          ))}
-                          {projects.length === 0 && (
-                            <p className="text-xs text-slate-400 italic">
-                              {t('hr:workforce.noProjectsFound')}
-                            </p>
-                          )}
-                        </div>
+                          );
+                        })}
+                        {tasks.length === 0 && (
+                          <p className="text-xs text-slate-400 italic">
+                            {t('hr:workforce.noTasksFound')}
+                          </p>
+                        )}
                       </div>
-
-                      {canManageAssignments && (
-                        <div className="space-y-3">
-                          <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                            <div className="flex items-center justify-between py-2">
-                              <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                                Tasks
-                              </h4>
-                              <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                                {assignments.taskIds.length}
-                              </span>
-                            </div>
-                            <input
-                              type="text"
-                              placeholder="Search tasks..."
-                              value={taskSearch}
-                              onChange={(e) => setTaskSearch(e.target.value)}
-                              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            {visibleTasks.map((task) => {
-                              const project = projects.find((p) => p.id === task.projectId);
-                              return (
-                                <label
-                                  key={task.id}
-                                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                    assignments.taskIds.includes(task.id)
-                                      ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                      : 'bg-white border-slate-200 hover:border-slate-300'
-                                  }`}
-                                >
-                                  <div className="relative flex items-center justify-center shrink-0">
-                                    <input
-                                      type="checkbox"
-                                      checked={assignments.taskIds.includes(task.id)}
-                                      onChange={() => toggleAssignment('task', task.id)}
-                                      className="sr-only peer"
-                                    />
-                                    <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                                      <div
-                                        className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                                      ></div>
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span
-                                      className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                                    >
-                                      {task.name}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400">
-                                      {project?.name || t('hr:workforce.unknownProject')}
-                                    </span>
-                                  </div>
-                                </label>
-                              );
-                            })}
-                            {tasks.length === 0 && (
-                              <p className="text-xs text-slate-400 italic">
-                                {t('hr:workforce.noTasksFound')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  </>
-                )}
-              </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
 
-              <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-                <button
-                  onClick={closeAssignments}
-                  className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={saveAssignments}
-                  disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-                  className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
-                >
-                  {t('hr:workforce.saveAssignments')}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+          <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+            <button
+              onClick={closeAssignments}
+              className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
+            >
+              {t('common:buttons.cancel')}
+            </button>
+            <button
+              onClick={saveAssignments}
+              disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
+              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
+            >
+              {t('hr:workforce.saveAssignments')}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

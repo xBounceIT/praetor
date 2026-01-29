@@ -6,6 +6,7 @@ import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import { roundToTwoDecimals } from '../utils/numbers';
 import StatusBadge, { StatusType } from './StatusBadge';
+import Modal from './Modal';
 
 interface InvoicesViewProps {
   invoices: Invoice[];
@@ -316,368 +317,356 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-                </div>
-                {editingInvoice ? t('invoices.editInvoice') : t('invoices.addInvoice')}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8 flex-1">
-              {/* Header Info */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('invoices.invoiceNumber')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.invoiceNumber}
-                    onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-bold"
-                    placeholder="INV-YYYY-XXXX"
-                  />
-                  {errors.invoiceNumber && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">
-                      {errors.invoiceNumber}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('invoices.issueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.issueDate}
-                    onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('invoices.dueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
-                  />
-                </div>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
+              {editingInvoice ? t('invoices.editInvoice') : t('invoices.addInvoice')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('invoices.client')}
-                  </label>
-                  <CustomSelect
-                    options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                    value={formData.clientId || ''}
-                    onChange={handleClientChange}
-                    placeholder={t('invoices.allClients')}
-                    searchable={true}
-                    className={errors.clientId ? 'border-red-300' : ''}
-                  />
-                  {errors.clientId && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('invoices.status')}
-                  </label>
-                  <CustomSelect
-                    options={statusOptions}
-                    value={formData.status || 'draft'}
-                    onChange={(val) =>
-                      setFormData({ ...formData, status: val as Invoice['status'] })
-                    }
-                    searchable={false}
-                  />
-                </div>
-              </div>
-
-              {/* Line Items */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                    {t('invoices.items')}
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={addItemRow}
-                    className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
-                  >
-                    <i className="fa-solid fa-plus"></i> {t('invoices.addItem')}
-                  </button>
-                </div>
-                {errors.items && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-                )}
-
-                {formData.items && formData.items.length > 0 && (
-                  <div className="grid grid-cols-12 gap-2 px-3 mb-1">
-                    <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                      {t('invoices.items')} / {t('common.labels.product')}
-                    </div>
-                    <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      {t('common.labels.quantity')}
-                    </div>
-                    <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      {t('common.labels.price')}
-                    </div>
-                    <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      {t('invoices.tax')}%
-                    </div>
-                    <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      {t('common.labels.discount')}%
-                    </div>
-                    <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">
-                      {t('invoices.total')}
-                    </div>
-                    <div className="hidden md:block md:col-span-1"></div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {formData.items?.map((item, index) => (
-                    <div
-                      key={item.id}
-                      className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl border border-slate-100"
-                    >
-                      <div className="flex-1 grid grid-cols-12 gap-2">
-                        <div className="col-span-4 space-y-2">
-                          <CustomSelect
-                            options={[
-                              { id: '', name: t('invoices.customItem') },
-                              ...activeProducts.map((p) => ({ id: p.id, name: p.name })),
-                            ]}
-                            value={item.productId || ''}
-                            onChange={(val) => updateItemRow(index, 'productId', val)}
-                            placeholder={t('invoices.selectProductPlaceholder')}
-                            searchable={true}
-                            buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                          />
-                          <input
-                            type="text"
-                            required
-                            placeholder={t('invoices.descriptionPlaceholder')}
-                            value={item.description}
-                            onChange={(e) => updateItemRow(index, 'description', e.target.value)}
-                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <ValidatedNumberInput
-                            min="0"
-                            step="0.01"
-                            required
-                            value={item.quantity}
-                            onValueChange={(value) => {
-                              const parsed = parseFloat(value);
-                              updateItemRow(
-                                index,
-                                'quantity',
-                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                              );
-                            }}
-                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <ValidatedNumberInput
-                            min="0"
-                            step="0.01"
-                            required
-                            value={item.unitPrice}
-                            onValueChange={(value) => {
-                              const parsed = parseFloat(value);
-                              updateItemRow(
-                                index,
-                                'unitPrice',
-                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                              );
-                            }}
-                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <ValidatedNumberInput
-                            min="0"
-                            max="100"
-                            value={item.taxRate}
-                            onValueChange={(value) => {
-                              const parsed = parseFloat(value);
-                              updateItemRow(
-                                index,
-                                'taxRate',
-                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                              );
-                            }}
-                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <ValidatedNumberInput
-                            min="0"
-                            max="100"
-                            value={item.discount || 0}
-                            onValueChange={(value) => {
-                              const parsed = parseFloat(value);
-                              updateItemRow(
-                                index,
-                                'discount',
-                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                              );
-                            }}
-                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
-                          />
-                        </div>
-                        <div className="col-span-2 flex items-center justify-end font-bold text-slate-600 text-sm">
-                          {(
-                            item.quantity *
-                            item.unitPrice *
-                            (1 - (item.discount || 0) / 100)
-                          ).toFixed(2)}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeItemRow(index)}
-                        className="col-span-1 p-2 text-slate-400 hover:text-red-600 rounded-lg"
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
-                    </div>
-                  ))}
-                  {(!formData.items || formData.items.length === 0) && (
-                    <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl">
-                      {t('invoices.noItems')}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="flex flex-col md:flex-row gap-8 justify-end border-t border-slate-100 pt-6">
-                <div className="w-full md:w-1/3 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('invoices.subtotal')}
-                    </span>
-                    <span className="text-sm font-bold text-slate-700">
-                      {subtotal.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                  {Object.entries(taxGroups).map(([rate, amount]) => (
-                    <div key={rate} className="flex justify-between text-xs">
-                      <span className="font-semibold text-slate-500">
-                        {t('invoices.vat')} {rate}%
-                      </span>
-                      <span className="font-semibold text-slate-700">
-                        {amount.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between pt-3 border-t border-slate-200">
-                    <span className="text-lg font-black text-slate-800">{t('invoices.total')}</span>
-                    <span className="text-lg font-black text-praetor">
-                      {total.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-slate-500">{t('invoices.amountPaid')}</span>
-                    <span className="font-bold text-emerald-600">
-                      {formData.amountPaid?.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-slate-500">{t('invoices.balanceDue')}</span>
-                    <span className="font-bold text-red-500">
-                      {(total - (formData.amountPaid || 0)).toFixed(2)} {currency}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6">
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8 flex-1">
+            {/* Header Info */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('payments.notes')}
+                  {t('invoices.invoiceNumber')}
                 </label>
-                <textarea
-                  rows={2}
-                  value={formData.notes || ''}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full text-sm px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none"
-                  placeholder={t('expenses.notesPlaceholder')}
+                <input
+                  type="text"
+                  required
+                  value={formData.invoiceNumber}
+                  onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
+                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-bold"
+                  placeholder="INV-YYYY-XXXX"
+                />
+                {errors.invoiceNumber && (
+                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.invoiceNumber}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('invoices.issueDate')}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.issueDate}
+                  onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
                 />
               </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('invoices.dueDate')}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
+                />
+              </div>
+            </div>
 
-              <div className="flex justify-end gap-3 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('invoices.client')}
+                </label>
+                <CustomSelect
+                  options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                  value={formData.clientId || ''}
+                  onChange={handleClientChange}
+                  placeholder={t('invoices.allClients')}
+                  searchable={true}
+                  className={errors.clientId ? 'border-red-300' : ''}
+                />
+                {errors.clientId && (
+                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('invoices.status')}
+                </label>
+                <CustomSelect
+                  options={statusOptions}
+                  value={formData.status || 'draft'}
+                  onChange={(val) => setFormData({ ...formData, status: val as Invoice['status'] })}
+                  searchable={false}
+                />
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                  {t('invoices.items')}
+                </h4>
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
+                  onClick={addItemRow}
+                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
                 >
-                  {t('common.buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
-                >
-                  {t('common.buttons.save')}
+                  <i className="fa-solid fa-plus"></i> {t('invoices.addItem')}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              {errors.items && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+              )}
 
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+              {formData.items && formData.items.length > 0 && (
+                <div className="grid grid-cols-12 gap-2 px-3 mb-1">
+                  <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                    {t('invoices.items')} / {t('common.labels.product')}
+                  </div>
+                  <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    {t('common.labels.quantity')}
+                  </div>
+                  <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    {t('common.labels.price')}
+                  </div>
+                  <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    {t('invoices.tax')}%
+                  </div>
+                  <div className="hidden md:block md:col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    {t('common.labels.discount')}%
+                  </div>
+                  <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right pr-2">
+                    {t('invoices.total')}
+                  </div>
+                  <div className="hidden md:block md:col-span-1"></div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {formData.items?.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl border border-slate-100"
+                  >
+                    <div className="flex-1 grid grid-cols-12 gap-2">
+                      <div className="col-span-4 space-y-2">
+                        <CustomSelect
+                          options={[
+                            { id: '', name: t('invoices.customItem') },
+                            ...activeProducts.map((p) => ({ id: p.id, name: p.name })),
+                          ]}
+                          value={item.productId || ''}
+                          onChange={(val) => updateItemRow(index, 'productId', val)}
+                          placeholder={t('invoices.selectProductPlaceholder')}
+                          searchable={true}
+                          buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder={t('invoices.descriptionPlaceholder')}
+                          value={item.description}
+                          onChange={(e) => updateItemRow(index, 'description', e.target.value)}
+                          className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <ValidatedNumberInput
+                          min="0"
+                          step="0.01"
+                          required
+                          value={item.quantity}
+                          onValueChange={(value) => {
+                            const parsed = parseFloat(value);
+                            updateItemRow(
+                              index,
+                              'quantity',
+                              value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                            );
+                          }}
+                          className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <ValidatedNumberInput
+                          min="0"
+                          step="0.01"
+                          required
+                          value={item.unitPrice}
+                          onValueChange={(value) => {
+                            const parsed = parseFloat(value);
+                            updateItemRow(
+                              index,
+                              'unitPrice',
+                              value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                            );
+                          }}
+                          className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <ValidatedNumberInput
+                          min="0"
+                          max="100"
+                          value={item.taxRate}
+                          onValueChange={(value) => {
+                            const parsed = parseFloat(value);
+                            updateItemRow(
+                              index,
+                              'taxRate',
+                              value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                            );
+                          }}
+                          className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <ValidatedNumberInput
+                          min="0"
+                          max="100"
+                          value={item.discount || 0}
+                          onValueChange={(value) => {
+                            const parsed = parseFloat(value);
+                            updateItemRow(
+                              index,
+                              'discount',
+                              value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                            );
+                          }}
+                          className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none"
+                        />
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end font-bold text-slate-600 text-sm">
+                        {(
+                          item.quantity *
+                          item.unitPrice *
+                          (1 - (item.discount || 0) / 100)
+                        ).toFixed(2)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItemRow(index)}
+                      className="col-span-1 p-2 text-slate-400 hover:text-red-600 rounded-lg"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                ))}
+                {(!formData.items || formData.items.length === 0) && (
+                  <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl">
+                    {t('invoices.noItems')}
+                  </div>
+                )}
+              </div>
             </div>
-            <h3 className="text-lg font-black text-slate-800">{t('invoices.deleteConfirm')}?</h3>
-            <p className="text-sm text-slate-500">
-              {t('invoices.deleteConfirm')} <b>{invoiceToDelete?.invoiceNumber}</b>?{' '}
-              {t('common.messages.unsavedChanges')}
-            </p>
-            <div className="flex gap-3 pt-2">
+
+            {/* Totals */}
+            <div className="flex flex-col md:flex-row gap-8 justify-end border-t border-slate-100 pt-6">
+              <div className="w-full md:w-1/3 space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">{t('invoices.subtotal')}</span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {subtotal.toFixed(2)} {currency}
+                  </span>
+                </div>
+                {Object.entries(taxGroups).map(([rate, amount]) => (
+                  <div key={rate} className="flex justify-between text-xs">
+                    <span className="font-semibold text-slate-500">
+                      {t('invoices.vat')} {rate}%
+                    </span>
+                    <span className="font-semibold text-slate-700">
+                      {amount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between pt-3 border-t border-slate-200">
+                  <span className="text-lg font-black text-slate-800">{t('invoices.total')}</span>
+                  <span className="text-lg font-black text-praetor">
+                    {total.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-slate-500">{t('invoices.amountPaid')}</span>
+                  <span className="font-bold text-emerald-600">
+                    {formData.amountPaid?.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-slate-500">{t('invoices.balanceDue')}</span>
+                  <span className="font-bold text-red-500">
+                    {(total - (formData.amountPaid || 0)).toFixed(2)} {currency}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-6">
+              <label className="text-xs font-bold text-slate-500 ml-1">{t('payments.notes')}</label>
+              <textarea
+                rows={2}
+                value={formData.notes || ''}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="w-full text-sm px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none"
+                placeholder={t('expenses.notesPlaceholder')}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
               <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
               >
                 {t('common.buttons.cancel')}
               </button>
               <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
+                type="submit"
+                className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
               >
-                {t('common.buttons.delete')}
+                {t('common.buttons.save')}
               </button>
             </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+          </div>
+          <h3 className="text-lg font-black text-slate-800">{t('invoices.deleteConfirm')}?</h3>
+          <p className="text-sm text-slate-500">
+            {t('invoices.deleteConfirm')} <b>{invoiceToDelete?.invoiceNumber}</b>?{' '}
+            {t('common.messages.unsavedChanges')}
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
+            >
+              {t('common.buttons.cancel')}
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
+            >
+              {t('common.buttons.delete')}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

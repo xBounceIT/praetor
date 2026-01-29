@@ -6,6 +6,7 @@ import StandardTable, { Column } from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import StatusBadge, { StatusType } from './StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
+import Modal from './Modal';
 
 interface QuotesViewProps {
   quotes: Quote[];
@@ -851,487 +852,481 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {isReadOnly
+                ? t('crm:quotes.viewQuote')
+                : editingQuote
+                  ? t('crm:quotes.editQuote')
+                  : t('crm:quotes.createNewQuote')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+            {isReadOnly && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+                <span className="text-amber-700 text-xs font-bold">
+                  {t('crm:quotes.readOnlyStatus', {
+                    status: getStatusLabel(editingQuote?.status || ''),
+                  })}
+                </span>
+              </div>
+            )}
+            {/* Client Selection */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('crm:quotes.clientInformation')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.client')}
+                  </label>
+                  <CustomSelect
+                    options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                    value={formData.clientId || ''}
+                    onChange={(val) => handleClientChange(val as string)}
+                    placeholder={t('crm:quotes.selectAClient')}
+                    searchable={true}
+                    disabled={isReadOnly}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                  />
+                  {errors.clientId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                  )}
                 </div>
-                {isReadOnly
-                  ? t('crm:quotes.viewQuote')
-                  : editingQuote
-                    ? t('crm:quotes.editQuote')
-                    : t('crm:quotes.createNewQuote')}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.quoteCode', { defaultValue: 'Quote Code' })}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.quoteCode || ''}
+                    onChange={(e) => {
+                      setFormData({ ...formData, quoteCode: e.target.value });
+                      if (errors.quoteCode) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.quoteCode;
+                          return next;
+                        });
+                      }
+                    }}
+                    placeholder="Q0000"
+                    disabled={isReadOnly}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border ${
+                      errors.quoteCode ? 'border-red-300' : 'border-slate-200'
+                    } rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                  />
+                  {errors.quoteCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.paymentTerms')}
+                  </label>
+                  <CustomSelect
+                    options={PAYMENT_TERMS_OPTIONS}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(val) =>
+                      setFormData({ ...formData, paymentTerms: val as Quote['paymentTerms'] })
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.globalDiscount')}
+                  </label>
+                  <ValidatedNumberInput
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={formData.discount}
+                    onValueChange={(value) => {
+                      const parsed = parseNumberInputValue(value);
+                      setFormData({ ...formData, discount: parsed });
+                      if (errors.total) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.total;
+                          return next;
+                        });
+                      }
+                    }}
+                    disabled={isReadOnly}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.expirationDateLabel')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.expirationDate}
+                    onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                    disabled={isReadOnly}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.notesLabel')}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder={t('crm:quotes.additionalNotesPlaceholder')}
+                    disabled={isReadOnly}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
-              {isReadOnly && (
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                  <span className="text-amber-700 text-xs font-bold">
-                    {t('crm:quotes.readOnlyStatus', {
-                      status: getStatusLabel(editingQuote?.status || ''),
-                    })}
-                  </span>
-                </div>
-              )}
-              {/* Client Selection */}
-              <div className="space-y-4">
+            {/* Products */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:quotes.clientInformation')}
+                  {t('crm:quotes.productsServices')}
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.client')}
-                    </label>
-                    <CustomSelect
-                      options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                      value={formData.clientId || ''}
-                      onChange={(val) => handleClientChange(val as string)}
-                      placeholder={t('crm:quotes.selectAClient')}
-                      searchable={true}
-                      disabled={isReadOnly}
-                      className={errors.clientId ? 'border-red-300' : ''}
-                    />
-                    {errors.clientId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.quoteCode', { defaultValue: 'Quote Code' })}
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.quoteCode || ''}
-                      onChange={(e) => {
-                        setFormData({ ...formData, quoteCode: e.target.value });
-                        if (errors.quoteCode) {
-                          setErrors((prev) => {
-                            const next = { ...prev };
-                            delete next.quoteCode;
-                            return next;
-                          });
-                        }
-                      }}
-                      placeholder="Q0000"
-                      disabled={isReadOnly}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border ${
-                        errors.quoteCode ? 'border-red-300' : 'border-slate-200'
-                      } rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
-                    />
-                    {errors.quoteCode && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.paymentTerms')}
-                    </label>
-                    <CustomSelect
-                      options={PAYMENT_TERMS_OPTIONS}
-                      value={formData.paymentTerms || 'immediate'}
-                      onChange={(val) =>
-                        setFormData({ ...formData, paymentTerms: val as Quote['paymentTerms'] })
-                      }
-                      searchable={false}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.globalDiscount')}
-                    </label>
-                    <ValidatedNumberInput
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.discount}
-                      onValueChange={(value) => {
-                        const parsed = parseNumberInputValue(value);
-                        setFormData({ ...formData, discount: parsed });
-                        if (errors.total) {
-                          setErrors((prev) => {
-                            const next = { ...prev };
-                            delete next.total;
-                            return next;
-                          });
-                        }
-                      }}
-                      disabled={isReadOnly}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.expirationDateLabel')}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.expirationDate}
-                      onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
-                      disabled={isReadOnly}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.notesLabel')}
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder={t('crm:quotes.additionalNotesPlaceholder')}
-                      disabled={isReadOnly}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={addProductRow}
+                  disabled={isReadOnly}
+                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
+                </button>
               </div>
+              {errors.items && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+              )}
 
-              {/* Products */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                    {t('crm:quotes.productsServices')}
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={addProductRow}
-                    disabled={isReadOnly}
-                    className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
-                  </button>
-                </div>
-                {errors.items && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-                )}
-
-                {formData.items && formData.items.length > 0 && (
-                  <div className="flex gap-3 px-3 mb-1 items-center">
-                    <div className="flex-1 grid grid-cols-12 gap-3">
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                        {t('crm:specialBids.title')}
-                      </div>
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('crm:quotes.productsServices')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:quotes.qty')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:products.cost')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        MOL (%)
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:quotes.marginLabel')}
-                      </div>
-                      <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:products.salePrice')}
-                      </div>
-                    </div>
-                    <div className="w-10 flex-shrink-0"></div>
-                  </div>
-                )}
-
-                {formData.items && formData.items.length > 0 ? (
-                  <div className="space-y-3">
-                    {formData.items.map((item, index) => {
-                      const selectedProduct = activeProducts.find((p) => p.id === item.productId);
-                      const selectedBid = item.specialBidId
-                        ? specialBids.find((b) => b.id === item.specialBidId)
-                        : undefined;
-
-                      // Cost is the bid price if selected, otherwise product cost
-                      const cost = item.specialBidId
-                        ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
-                        : (item.productCost ?? selectedProduct?.costo ?? 0);
-
-                      const molSource = item.specialBidId
-                        ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
-                        : (item.productMolPercentage ?? selectedProduct?.molPercentage);
-                      const molPercentage = molSource ? Number(molSource) : 0;
-                      const quantity = Number(item.quantity || 0);
-                      const lineCost = cost * quantity;
-                      const unitSalePrice = calcProductSalePrice(cost, molPercentage);
-                      const lineSalePrice = unitSalePrice * quantity;
-                      const lineMargin = lineSalePrice - lineCost;
-                      return (
-                        <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
-                          <div className="flex gap-3 items-center">
-                            <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                              <div className="col-span-3">
-                                <CustomSelect
-                                  options={[
-                                    { id: 'none', name: t('crm:quotes.noSpecialBidOption') },
-                                    ...clientSpecialBids.map((b) => ({
-                                      id: b.id,
-                                      name: `${b.clientName} · ${b.productName}`,
-                                    })),
-                                  ]}
-                                  value={item.specialBidId || 'none'}
-                                  onChange={(val) =>
-                                    updateProductRow(
-                                      index,
-                                      'specialBidId',
-                                      val === 'none' ? '' : (val as string),
-                                    )
-                                  }
-                                  placeholder={t('crm:quotes.selectBid')}
-                                  displayValue={getBidDisplayValue(item.specialBidId)}
-                                  searchable={true}
-                                  disabled={isReadOnly}
-                                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                />
-                              </div>
-                              <div className="col-span-3">
-                                <CustomSelect
-                                  options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                  value={item.productId}
-                                  onChange={(val) =>
-                                    updateProductRow(index, 'productId', val as string)
-                                  }
-                                  placeholder={t('crm:quotes.selectProduct')}
-                                  searchable={true}
-                                  disabled={isReadOnly}
-                                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                />
-                              </div>
-                              <div className="col-span-1">
-                                <ValidatedNumberInput
-                                  step="0.01"
-                                  min="0"
-                                  required
-                                  placeholder={t('crm:quotes.qty')}
-                                  value={item.quantity}
-                                  onValueChange={(value) => {
-                                    const parsed = parseFloat(value);
-                                    updateProductRow(
-                                      index,
-                                      'quantity',
-                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                    );
-                                  }}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                              </div>
-                              <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                                {selectedBid && (
-                                  <span className="px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
-                                    {t('crm:quotes.bidBadge')}
-                                  </span>
-                                )}
-                                <span className="text-xs font-bold text-slate-600">
-                                  {lineCost.toFixed(2)} {currency}
-                                </span>
-                              </div>
-                              <div className="col-span-1 flex items-center justify-center">
-                                <span className="text-xs font-bold text-slate-600">
-                                  {molPercentage.toFixed(1)}%
-                                </span>
-                              </div>
-                              <div className="col-span-1 flex items-center justify-center">
-                                <span className="text-xs font-bold text-emerald-600">
-                                  {lineMargin.toFixed(2)} {currency}
-                                </span>
-                              </div>
-                              <div className="col-span-2 flex items-center justify-center">
-                                <span
-                                  className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
-                                >
-                                  {lineSalePrice.toFixed(2)} {currency}
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeProductRow(index)}
-                              disabled={isReadOnly}
-                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
-                          </div>
-                          <div>
-                            <input
-                              type="text"
-                              placeholder={t('form:placeholderNotes')}
-                              value={item.note || ''}
-                              onChange={(e) => updateProductRow(index, 'note', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400 text-sm">
-                    {t('crm:quotes.noProductsAdded')}
-                  </div>
-                )}
-              </div>
-
-              {/* Totals Section - Right Aligned */}
               {formData.items && formData.items.length > 0 && (
-                <div className="mt-4 flex flex-col items-end space-y-2 px-3">
-                  {(() => {
-                    const discountValue = Number.isNaN(formData.discount ?? 0)
-                      ? 0
-                      : (formData.discount ?? 0);
-                    const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
-                      calculateTotals(formData.items, discountValue);
-                    return (
-                      <>
-                        {errors.total && (
-                          <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
-                        )}
-
-                        {/* Imponibile */}
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('crm:quotes.taxableAmount')}:
-                          </span>
-                          <span className="text-sm font-black text-slate-800">
-                            {subtotal.toFixed(2)} {currency}
-                          </span>
-                        </div>
-
-                        {/* Sconto */}
-                        {formData.discount! > 0 && (
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('crm:quotes.discountLabel', { defaultValue: 'Sconto' })} (
-                              {formData.discount}%):
-                            </span>
-                            <span className="text-sm font-black text-amber-600">
-                              -{discountAmount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* IVA */}
-                        {Object.entries(taxGroups).map(([rate, amount]) => (
-                          <div key={rate} className="flex items-center gap-4">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('crm:quotes.ivaTax', { rate })}:
-                            </span>
-                            <span className="text-sm font-black text-slate-800">
-                              {amount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        ))}
-
-                        {/* Margin */}
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-emerald-600">
-                            {t('crm:quotes.marginLabel')} ({(marginPercentage || 0).toFixed(1)}%):
-                          </span>
-                          <span className="text-sm font-black text-emerald-600">
-                            {margin.toFixed(2)} {currency}
-                          </span>
-                        </div>
-
-                        {/* Total */}
-                        <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
-                          <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
-                            {t('crm:quotes.totalLabel')}:
-                          </span>
-                          <span className="text-3xl font-black text-praetor">
-                            {total.toFixed(2)}{' '}
-                            <span className="text-lg text-slate-400 font-bold">{currency}</span>
-                          </span>
-                        </div>
-                      </>
-                    );
-                  })()}
+                <div className="flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 grid grid-cols-12 gap-3">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      {t('crm:specialBids.title')}
+                    </div>
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {t('crm:quotes.productsServices')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:quotes.qty')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:products.cost')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      MOL (%)
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:quotes.marginLabel')}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:products.salePrice')}
+                    </div>
+                  </div>
+                  <div className="w-10 flex-shrink-0"></div>
                 </div>
               )}
 
-              <div className="flex justify-between items-center pt-8 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isReadOnly}
-                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isReadOnly
-                    ? t('crm:quotes.statusQuote', {
-                        status: getStatusLabel(editingQuote?.status || ''),
-                      })
-                    : editingQuote
-                      ? t('crm:quotes.updateQuote')
-                      : t('crm:quotes.createQuote')}
-                </button>
+              {formData.items && formData.items.length > 0 ? (
+                <div className="space-y-3">
+                  {formData.items.map((item, index) => {
+                    const selectedProduct = activeProducts.find((p) => p.id === item.productId);
+                    const selectedBid = item.specialBidId
+                      ? specialBids.find((b) => b.id === item.specialBidId)
+                      : undefined;
+
+                    // Cost is the bid price if selected, otherwise product cost
+                    const cost = item.specialBidId
+                      ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
+                      : (item.productCost ?? selectedProduct?.costo ?? 0);
+
+                    const molSource = item.specialBidId
+                      ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
+                      : (item.productMolPercentage ?? selectedProduct?.molPercentage);
+                    const molPercentage = molSource ? Number(molSource) : 0;
+                    const quantity = Number(item.quantity || 0);
+                    const lineCost = cost * quantity;
+                    const unitSalePrice = calcProductSalePrice(cost, molPercentage);
+                    const lineSalePrice = unitSalePrice * quantity;
+                    const lineMargin = lineSalePrice - lineCost;
+                    return (
+                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
+                        <div className="flex gap-3 items-center">
+                          <div className="flex-1 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-3">
+                              <CustomSelect
+                                options={[
+                                  { id: 'none', name: t('crm:quotes.noSpecialBidOption') },
+                                  ...clientSpecialBids.map((b) => ({
+                                    id: b.id,
+                                    name: `${b.clientName} · ${b.productName}`,
+                                  })),
+                                ]}
+                                value={item.specialBidId || 'none'}
+                                onChange={(val) =>
+                                  updateProductRow(
+                                    index,
+                                    'specialBidId',
+                                    val === 'none' ? '' : (val as string),
+                                  )
+                                }
+                                placeholder={t('crm:quotes.selectBid')}
+                                displayValue={getBidDisplayValue(item.specialBidId)}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <CustomSelect
+                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                                value={item.productId}
+                                onChange={(val) =>
+                                  updateProductRow(index, 'productId', val as string)
+                                }
+                                placeholder={t('crm:quotes.selectProduct')}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <ValidatedNumberInput
+                                step="0.01"
+                                min="0"
+                                required
+                                placeholder={t('crm:quotes.qty')}
+                                value={item.quantity}
+                                onValueChange={(value) => {
+                                  const parsed = parseFloat(value);
+                                  updateProductRow(
+                                    index,
+                                    'quantity',
+                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                  );
+                                }}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                            <div className="col-span-1 flex flex-col items-center justify-center gap-1">
+                              {selectedBid && (
+                                <span className="px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
+                                  {t('crm:quotes.bidBadge')}
+                                </span>
+                              )}
+                              <span className="text-xs font-bold text-slate-600">
+                                {lineCost.toFixed(2)} {currency}
+                              </span>
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-xs font-bold text-slate-600">
+                                {molPercentage.toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-xs font-bold text-emerald-600">
+                                {lineMargin.toFixed(2)} {currency}
+                              </span>
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                              <span
+                                className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                              >
+                                {lineSalePrice.toFixed(2)} {currency}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeProductRow(index)}
+                            disabled={isReadOnly}
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            placeholder={t('form:placeholderNotes')}
+                            value={item.note || ''}
+                            onChange={(e) => updateProductRow(index, 'note', e.target.value)}
+                            disabled={isReadOnly}
+                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  {t('crm:quotes.noProductsAdded')}
+                </div>
+              )}
+            </div>
+
+            {/* Totals Section - Right Aligned */}
+            {formData.items && formData.items.length > 0 && (
+              <div className="mt-4 flex flex-col items-end space-y-2 px-3">
+                {(() => {
+                  const discountValue = Number.isNaN(formData.discount ?? 0)
+                    ? 0
+                    : (formData.discount ?? 0);
+                  const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
+                    calculateTotals(formData.items, discountValue);
+                  return (
+                    <>
+                      {errors.total && (
+                        <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
+                      )}
+
+                      {/* Imponibile */}
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-bold text-slate-500">
+                          {t('crm:quotes.taxableAmount')}:
+                        </span>
+                        <span className="text-sm font-black text-slate-800">
+                          {subtotal.toFixed(2)} {currency}
+                        </span>
+                      </div>
+
+                      {/* Sconto */}
+                      {formData.discount! > 0 && (
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('crm:quotes.discountLabel', { defaultValue: 'Sconto' })} (
+                            {formData.discount}%):
+                          </span>
+                          <span className="text-sm font-black text-amber-600">
+                            -{discountAmount.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* IVA */}
+                      {Object.entries(taxGroups).map(([rate, amount]) => (
+                        <div key={rate} className="flex items-center gap-4">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('crm:quotes.ivaTax', { rate })}:
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            {amount.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                      ))}
+
+                      {/* Margin */}
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-bold text-emerald-600">
+                          {t('crm:quotes.marginLabel')} ({(marginPercentage || 0).toFixed(1)}%):
+                        </span>
+                        <span className="text-sm font-black text-emerald-600">
+                          {margin.toFixed(2)} {currency}
+                        </span>
+                      </div>
+
+                      {/* Total */}
+                      <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
+                        <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
+                          {t('crm:quotes.totalLabel')}:
+                        </span>
+                        <span className="text-3xl font-black text-praetor">
+                          {total.toFixed(2)}{' '}
+                          <span className="text-lg text-slate-400 font-bold">{currency}</span>
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
-            </form>
-          </div>
+            )}
+
+            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={isReadOnly}
+                className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isReadOnly
+                  ? t('crm:quotes.statusQuote', {
+                      status: getStatusLabel(editingQuote?.status || ''),
+                    })
+                  : editingQuote
+                    ? t('crm:quotes.updateQuote')
+                    : t('crm:quotes.createQuote')}
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('crm:quotes.deleteQuote')}?
-                </h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  {t('crm:quotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('common:buttons.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('common:buttons.delete')}
-                </button>
-              </div>
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">{t('crm:quotes.deleteQuote')}?</h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('crm:quotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('common:buttons.delete')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

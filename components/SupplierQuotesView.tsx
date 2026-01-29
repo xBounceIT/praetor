@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import { roundToTwoDecimals } from '../utils/numbers';
+import Modal from './Modal';
 
 interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
@@ -349,426 +350,418 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {editingQuote ? t('quotes.editQuote') : t('quotes.addQuote')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('quotes.supplierInformation')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.supplier')}
+                  </label>
+                  <CustomSelect
+                    options={activeSuppliers.map((s) => ({ id: s.id, name: s.name }))}
+                    value={formData.supplierId || ''}
+                    onChange={(val) => handleSupplierChange(val as string)}
+                    placeholder={t('quotes.selectSupplier', {
+                      defaultValue: 'Select a supplier...',
+                    })}
+                    searchable={true}
+                    className={errors.supplierId ? 'border-red-300' : ''}
+                  />
+                  {errors.supplierId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.supplierId}</p>
+                  )}
                 </div>
-                {editingQuote ? t('quotes.editQuote') : t('quotes.addQuote')}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.purchaseOrderNumber')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.purchaseOrderNumber}
+                    onChange={(e) => {
+                      setFormData({ ...formData, purchaseOrderNumber: e.target.value });
+                      if (errors.purchaseOrderNumber)
+                        setErrors({ ...errors, purchaseOrderNumber: '' });
+                    }}
+                    placeholder={t('quotes.poPlaceholder', { defaultValue: 'PO-2026-001' })}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.purchaseOrderNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                  />
+                  {errors.purchaseOrderNumber && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">
+                      {errors.purchaseOrderNumber}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
-              <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('quotes.supplierInformation')}
+                  {t('quotes.items')}
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.supplier')}
-                    </label>
-                    <CustomSelect
-                      options={activeSuppliers.map((s) => ({ id: s.id, name: s.name }))}
-                      value={formData.supplierId || ''}
-                      onChange={(val) => handleSupplierChange(val as string)}
-                      placeholder={t('quotes.selectSupplier', {
-                        defaultValue: 'Select a supplier...',
-                      })}
-                      searchable={true}
-                      className={errors.supplierId ? 'border-red-300' : ''}
-                    />
-                    {errors.supplierId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.supplierId}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.purchaseOrderNumber')}
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.purchaseOrderNumber}
-                      onChange={(e) => {
-                        setFormData({ ...formData, purchaseOrderNumber: e.target.value });
-                        if (errors.purchaseOrderNumber)
-                          setErrors({ ...errors, purchaseOrderNumber: '' });
-                      }}
-                      placeholder={t('quotes.poPlaceholder', { defaultValue: 'PO-2026-001' })}
-                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.purchaseOrderNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
-                    />
-                    {errors.purchaseOrderNumber && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">
-                        {errors.purchaseOrderNumber}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={addProductRow}
+                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
+                >
+                  <i className="fa-solid fa-plus"></i> {t('quotes.addItem')}
+                </button>
               </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                    {t('quotes.items')}
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={addProductRow}
-                    className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
-                  >
-                    <i className="fa-solid fa-plus"></i> {t('quotes.addItem')}
-                  </button>
-                </div>
-                {errors.items && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-                )}
-
-                {formData.items && formData.items.length > 0 && (
-                  <div className="flex gap-2 px-3 mb-1 items-center">
-                    <div className="flex-1 grid grid-cols-12 gap-2">
-                      <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                        {t('quotes.productName', { defaultValue: 'Product / Service' })}
-                      </div>
-                      <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('quotes.quantity', { defaultValue: 'Qty' })}
-                      </div>
-                      <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('quotes.unit', { defaultValue: 'Unit' })} ({currency})
-                      </div>
-                      <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('quotes.discount')}
-                      </div>
-                      <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('quotes.notes')}
-                      </div>
-                    </div>
-                    <div className="w-10 flex-shrink-0"></div>
-                  </div>
-                )}
-
-                {formData.items && formData.items.length > 0 ? (
-                  <div className="space-y-3">
-                    {formData.items.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl"
-                      >
-                        <div className="flex-1 grid grid-cols-12 gap-2">
-                          <div className="col-span-12 md:col-span-4">
-                            <CustomSelect
-                              options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                              value={item.productId}
-                              onChange={(val) =>
-                                updateProductRow(index, 'productId', val as string)
-                              }
-                              placeholder={t('quotes.selectProduct', {
-                                defaultValue: 'Select product...',
-                              })}
-                              searchable={true}
-                              buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                            />
-                          </div>
-                          <div className="col-span-6 md:col-span-2">
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              required
-                              placeholder={t('quotes.qtyPlaceholder', { defaultValue: 'Qty' })}
-                              value={item.quantity}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateProductRow(
-                                  index,
-                                  'quantity',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                            />
-                          </div>
-                          <div className="col-span-6 md:col-span-2">
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              required
-                              placeholder={t('quotes.unitPlaceholder', { defaultValue: 'Unit' })}
-                              value={item.unitPrice}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateProductRow(
-                                  index,
-                                  'unitPrice',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold"
-                            />
-                          </div>
-                          <div className="col-span-6 md:col-span-2">
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              max="100"
-                              placeholder={t('quotes.percentPlaceholder', { defaultValue: '%' })}
-                              value={item.discount}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateProductRow(
-                                  index,
-                                  'discount',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                            />
-                          </div>
-                          <div className="col-span-12 md:col-span-2">
-                            <input
-                              type="text"
-                              placeholder={t('quotes.notePlaceholder', { defaultValue: 'Note' })}
-                              value={item.note || ''}
-                              onChange={(e) => updateProductRow(index, 'note', e.target.value)}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                            />
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeProductRow(index)}
-                          className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400 text-sm">
-                    {t('quotes.noItemsAdded')}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('quotes.quoteDetails')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.paymentTerms')}
-                    </label>
-                    <CustomSelect
-                      options={PAYMENT_TERMS_OPTIONS}
-                      value={formData.paymentTerms || 'immediate'}
-                      onChange={(val) =>
-                        setFormData({
-                          ...formData,
-                          paymentTerms: val as SupplierQuote['paymentTerms'],
-                        })
-                      }
-                      searchable={false}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.discount')}
-                    </label>
-                    <ValidatedNumberInput
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.discount}
-                      onValueChange={(value) => {
-                        const parsed = parseFloat(value);
-                        setFormData({
-                          ...formData,
-                          discount: value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                        });
-                      }}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.status')}
-                    </label>
-                    <CustomSelect
-                      options={STATUS_OPTIONS}
-                      value={formData.status || 'received'}
-                      onChange={(val) =>
-                        setFormData({ ...formData, status: val as SupplierQuote['status'] })
-                      }
-                      searchable={false}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.expirationDate')}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.expirationDate}
-                      onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                    />
-                  </div>
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('quotes.notes')}
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder={t('quotes.notesPlaceholder', {
-                        defaultValue: 'Additional notes or terms...',
-                      })}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                    />
-                  </div>
-                </div>
-              </div>
+              {errors.items && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+              )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="pt-8 border-t border-slate-100">
-                  {(() => {
-                    const { subtotal, discountAmount, total, taxGroups } = calculateTotals(
-                      formData.items,
-                      formData.discount || 0,
-                    );
-                    return (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-                        <div className="flex flex-col justify-center space-y-3 h-full">
-                          <div className="flex justify-between items-center px-2">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('quotes.subtotal', { defaultValue: 'Subtotal' })}:
-                            </span>
-                            <span className="text-sm font-black text-slate-800">
-                              {subtotal.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                          {formData.discount! > 0 && (
-                            <div className="flex justify-between items-center px-2">
-                              <span className="text-sm font-bold text-slate-500">
-                                {t('quotes.discount')} ({formData.discount}%):
-                              </span>
-                              <span className="text-sm font-black text-amber-600">
-                                -{discountAmount.toFixed(2)} {currency}
-                              </span>
-                            </div>
-                          )}
-                          {Object.entries(taxGroups).map(([rate, amount]) => (
-                            <div key={rate} className="flex justify-between items-center px-2">
-                              <span className="text-sm font-bold text-slate-500">
-                                {t('quotes.tax', { defaultValue: 'Tax' })} ({rate}%):
-                              </span>
-                              <span className="text-sm font-black text-slate-800">
-                                {amount.toFixed(2)} {currency}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex flex-col items-center justify-center py-4 bg-slate-50/50 rounded-2xl border border-slate-100/50">
-                          <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                            {t('quotes.total', { defaultValue: 'Total' })}:
-                          </span>
-                          <span className="text-4xl font-black text-praetor leading-none">
-                            {total.toFixed(2)}
-                            <span className="text-xl ml-1 opacity-60 text-slate-400">
-                              {currency}
-                            </span>
-                          </span>
-                        </div>
-                        <div className="bg-slate-50/40 rounded-2xl p-6 flex flex-col items-center justify-center border border-slate-100/50">
-                          <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                            {t('quotes.purchaseOrder', { defaultValue: 'Purchase Order' })}
-                          </span>
-                          <div className="text-center">
-                            <div className="text-2xl font-black text-slate-700 leading-none mb-1">
-                              {formData.purchaseOrderNumber || '—'}
-                            </div>
-                            <div className="text-xs font-black text-slate-400 opacity-60">
-                              {t('quotes.status')}:{' '}
-                              {STATUS_OPTIONS.find(
-                                (o) => o.id === formData.status,
-                              )?.name.toUpperCase()}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                <div className="flex gap-2 px-3 mb-1 items-center">
+                  <div className="flex-1 grid grid-cols-12 gap-2">
+                    <div className="col-span-12 md:col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      {t('quotes.productName', { defaultValue: 'Product / Service' })}
+                    </div>
+                    <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {t('quotes.quantity', { defaultValue: 'Qty' })}
+                    </div>
+                    <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {t('quotes.unit', { defaultValue: 'Unit' })} ({currency})
+                    </div>
+                    <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {t('quotes.discount')}
+                    </div>
+                    <div className="hidden md:block md:col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {t('quotes.notes')}
+                    </div>
+                  </div>
+                  <div className="w-10 flex-shrink-0"></div>
                 </div>
               )}
 
-              <div className="flex justify-between items-center pt-8 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  {editingQuote ? t('common.update') : t('common.save')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              {formData.items && formData.items.length > 0 ? (
+                <div className="space-y-3">
+                  {formData.items.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl"
+                    >
+                      <div className="flex-1 grid grid-cols-12 gap-2">
+                        <div className="col-span-12 md:col-span-4">
+                          <CustomSelect
+                            options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                            value={item.productId}
+                            onChange={(val) => updateProductRow(index, 'productId', val as string)}
+                            placeholder={t('quotes.selectProduct', {
+                              defaultValue: 'Select product...',
+                            })}
+                            searchable={true}
+                            buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <ValidatedNumberInput
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder={t('quotes.qtyPlaceholder', { defaultValue: 'Qty' })}
+                            value={item.quantity}
+                            onValueChange={(value) => {
+                              const parsed = parseFloat(value);
+                              updateProductRow(
+                                index,
+                                'quantity',
+                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                              );
+                            }}
+                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <ValidatedNumberInput
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder={t('quotes.unitPlaceholder', { defaultValue: 'Unit' })}
+                            value={item.unitPrice}
+                            onValueChange={(value) => {
+                              const parsed = parseFloat(value);
+                              updateProductRow(
+                                index,
+                                'unitPrice',
+                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                              );
+                            }}
+                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-semibold"
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <ValidatedNumberInput
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            placeholder={t('quotes.percentPlaceholder', { defaultValue: '%' })}
+                            value={item.discount}
+                            onValueChange={(value) => {
+                              const parsed = parseFloat(value);
+                              updateProductRow(
+                                index,
+                                'discount',
+                                value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                              );
+                            }}
+                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-2">
+                          <input
+                            type="text"
+                            placeholder={t('quotes.notePlaceholder', { defaultValue: 'Note' })}
+                            value={item.note || ''}
+                            onChange={(e) => updateProductRow(index, 'note', e.target.value)}
+                            className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeProductRow(index)}
+                        className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  {t('quotes.noItemsAdded')}
+                </div>
+              )}
+            </div>
 
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('quotes.quoteDetails')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.paymentTerms')}
+                  </label>
+                  <CustomSelect
+                    options={PAYMENT_TERMS_OPTIONS}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(val) =>
+                      setFormData({
+                        ...formData,
+                        paymentTerms: val as SupplierQuote['paymentTerms'],
+                      })
+                    }
+                    searchable={false}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.discount')}
+                  </label>
+                  <ValidatedNumberInput
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={formData.discount}
+                    onValueChange={(value) => {
+                      const parsed = parseFloat(value);
+                      setFormData({
+                        ...formData,
+                        discount: value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                      });
+                    }}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.status')}
+                  </label>
+                  <CustomSelect
+                    options={STATUS_OPTIONS}
+                    value={formData.status || 'received'}
+                    onChange={(val) =>
+                      setFormData({ ...formData, status: val as SupplierQuote['status'] })
+                    }
+                    searchable={false}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.expirationDate')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.expirationDate}
+                    onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  />
+                </div>
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('quotes.notes')}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder={t('quotes.notesPlaceholder', {
+                      defaultValue: 'Additional notes or terms...',
+                    })}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                  />
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('quotes.deleteConfirmTitle')}
-                </h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  {t('quotes.deleteConfirm', { po: quoteToDelete?.purchaseOrderNumber })}
-                  {t('suppliers.actionUndone', { defaultValue: ' This action cannot be undone.' })}
-                </p>
+            </div>
+
+            {formData.items && formData.items.length > 0 && (
+              <div className="pt-8 border-t border-slate-100">
+                {(() => {
+                  const { subtotal, discountAmount, total, taxGroups } = calculateTotals(
+                    formData.items,
+                    formData.discount || 0,
+                  );
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+                      <div className="flex flex-col justify-center space-y-3 h-full">
+                        <div className="flex justify-between items-center px-2">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('quotes.subtotal', { defaultValue: 'Subtotal' })}:
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            {subtotal.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                        {formData.discount! > 0 && (
+                          <div className="flex justify-between items-center px-2">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('quotes.discount')} ({formData.discount}%):
+                            </span>
+                            <span className="text-sm font-black text-amber-600">
+                              -{discountAmount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        )}
+                        {Object.entries(taxGroups).map(([rate, amount]) => (
+                          <div key={rate} className="flex justify-between items-center px-2">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('quotes.tax', { defaultValue: 'Tax' })} ({rate}%):
+                            </span>
+                            <span className="text-sm font-black text-slate-800">
+                              {amount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-col items-center justify-center py-4 bg-slate-50/50 rounded-2xl border border-slate-100/50">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                          {t('quotes.total', { defaultValue: 'Total' })}:
+                        </span>
+                        <span className="text-4xl font-black text-praetor leading-none">
+                          {total.toFixed(2)}
+                          <span className="text-xl ml-1 opacity-60 text-slate-400">{currency}</span>
+                        </span>
+                      </div>
+                      <div className="bg-slate-50/40 rounded-2xl p-6 flex flex-col items-center justify-center border border-slate-100/50">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                          {t('quotes.purchaseOrder', { defaultValue: 'Purchase Order' })}
+                        </span>
+                        <div className="text-center">
+                          <div className="text-2xl font-black text-slate-700 leading-none mb-1">
+                            {formData.purchaseOrderNumber || '—'}
+                          </div>
+                          <div className="text-xs font-black text-slate-400 opacity-60">
+                            {t('quotes.status')}:{' '}
+                            {STATUS_OPTIONS.find(
+                              (o) => o.id === formData.status,
+                            )?.name.toUpperCase()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('common.yesDelete')}
-                </button>
-              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+              >
+                {editingQuote ? t('common.update') : t('common.save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('quotes.deleteConfirmTitle')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('quotes.deleteConfirm', { po: quoteToDelete?.purchaseOrderNumber })}
+                {t('suppliers.actionUndone', { defaultValue: ' This action cannot be undone.' })}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('common.yesDelete')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

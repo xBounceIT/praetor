@@ -7,6 +7,7 @@ import ValidatedNumberInput from './ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
 import Calendar from './Calendar';
 import StatusBadge from './StatusBadge';
+import Modal from './Modal';
 
 interface SpecialBidsViewProps {
   bids: SpecialBid[];
@@ -378,280 +379,276 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i
-                    className={`fa-solid ${editingBid ? (isExpired(editingBid.endDate) ? 'fa-eye' : 'fa-pen-to-square') : 'fa-plus'}`}
-                  ></i>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i
+                  className={`fa-solid ${editingBid ? (isExpired(editingBid.endDate) ? 'fa-eye' : 'fa-pen-to-square') : 'fa-plus'}`}
+                ></i>
+              </div>
+              {editingBid
+                ? isExpired(editingBid.endDate)
+                  ? t('specialBids.viewSpecialBid')
+                  : t('specialBids.editSpecialBid')
+                : t('specialBids.createSpecialBid')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+            {editingBid && isExpired(editingBid.endDate) && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+                <i className="fa-solid fa-lock text-amber-600 text-sm"></i>
+                <span className="text-amber-700 text-xs font-bold">
+                  {t('crm:specialBids.readOnlyExpired')}
+                </span>
+              </div>
+            )}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('specialBids.specialBidDetails')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('specialBids.dedicatedClient')}
+                  </label>
+                  <CustomSelect
+                    options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                    value={formData.clientId || ''}
+                    onChange={(val) => handleClientChange(val as string)}
+                    placeholder={t('specialBids.selectClient')}
+                    searchable={true}
+                    disabled={editingBid ? isExpired(editingBid.endDate) : false}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                  />
+                  {errors.clientId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                  )}
                 </div>
-                {editingBid
-                  ? isExpired(editingBid.endDate)
-                    ? t('specialBids.viewSpecialBid')
-                    : t('specialBids.editSpecialBid')
-                  : t('specialBids.createSpecialBid')}
-              </h3>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('specialBids.productItem')}
+                  </label>
+                  <CustomSelect
+                    options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                    value={formData.productId || ''}
+                    onChange={(val) => handleProductChange(val as string)}
+                    placeholder={t('specialBids.selectProduct')}
+                    searchable={true}
+                    disabled={editingBid ? isExpired(editingBid.endDate) : false}
+                    className={errors.productId ? 'border-red-300' : ''}
+                  />
+                  {errors.productId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.productId}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 ml-1">
+                        {t('specialBids.labelOriginal')} {t('specialBids.unitPrice')} ({currency})
+                      </label>
+                      <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                        {originalPriceDisplay}
+                      </div>
+                    </div>
+                    <div className="hidden md:flex items-center justify-center self-end h-[42px]">
+                      <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 ml-1">
+                        {t('specialBids.labelNew')} {t('specialBids.unitPrice')} ({currency})
+                      </label>
+                      <ValidatedNumberInput
+                        step="0.01"
+                        min="0.01"
+                        required
+                        value={formData.unitPrice ?? ''}
+                        onValueChange={(value) => {
+                          const parsed = parseNumberInputValue(value);
+                          setFormData({ ...formData, unitPrice: parsed });
+                          if (errors.unitPrice) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.unitPrice;
+                              return next;
+                            });
+                          }
+                        }}
+                        disabled={editingBid ? isExpired(editingBid.endDate) : false}
+                        className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.unitPrice ? 'border-red-300' : 'border-slate-200'}`}
+                      />
+                    </div>
+                  </div>
+                  {errors.unitPrice && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.unitPrice}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 ml-1">
+                        {t('specialBids.labelOriginal')} {t('crm:products.mol')}
+                      </label>
+                      <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                        {originalMolDisplay}
+                      </div>
+                    </div>
+                    <div className="hidden md:flex items-center justify-center self-end h-[42px]">
+                      <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 ml-1">
+                        {t('specialBids.labelNew')} {t('crm:products.mol')}
+                      </label>
+                      <ValidatedNumberInput
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={formData.molPercentage ?? ''}
+                        onValueChange={(value) => {
+                          const parsed = parseNumberInputValue(value);
+                          setFormData({ ...formData, molPercentage: parsed });
+                        }}
+                        disabled={editingBid ? isExpired(editingBid.endDate) : false}
+                        className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                        placeholder="--"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.salePriceCalculated')}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
+                    {hasBidPricing
+                      ? `${calcSalePrice(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
+                      : '--'}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:products.marginCalculated')}
+                  </label>
+                  <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
+                    {hasBidPricing
+                      ? `${calcMargin(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
+                      : '--'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('specialBids.validityPeriod')}
+              </h4>
+              <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
+                <span className="font-bold">
+                  {formData.startDate
+                    ? new Date(formData.startDate).toLocaleDateString()
+                    : t('specialBids.selectStart')}
+                </span>
+                <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                <span className="font-bold">
+                  {formData.endDate
+                    ? new Date(formData.endDate).toLocaleDateString()
+                    : t('specialBids.selectEnd')}
+                </span>
+              </div>
+              <Calendar
+                selectionMode="range"
+                startDate={formData.startDate}
+                endDate={formData.endDate || undefined}
+                onRangeSelect={(start, end) => {
+                  if (!(editingBid && isExpired(editingBid.endDate))) {
+                    setFormData({
+                      ...formData,
+                      startDate: start,
+                      endDate: end ?? '',
+                    });
+                    if (errors.dates) {
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.dates;
+                        return next;
+                      });
+                    }
+                  }
+                }}
+              />
+              {errors.dates && (
+                <p className="text-red-500 text-[10px] font-bold ml-1">{errors.dates}</p>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-6 border-t border-slate-100">
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                <i className="fa-solid fa-xmark text-lg"></i>
+                {editingBid && isExpired(editingBid.endDate)
+                  ? t('specialBids.close')
+                  : t('specialBids.cancel')}
+              </button>
+              {!(editingBid && isExpired(editingBid.endDate)) && (
+                <button
+                  type="submit"
+                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                >
+                  {editingBid ? t('specialBids.updateBid') : t('specialBids.createBid')}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('specialBids.deleteConfirmTitle')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('specialBids.deleteConfirmMessage', { clientName: bidToDelete?.clientName })}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('specialBids.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('specialBids.yesDelete')}
               </button>
             </div>
-
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
-              {editingBid && isExpired(editingBid.endDate) && (
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                  <i className="fa-solid fa-lock text-amber-600 text-sm"></i>
-                  <span className="text-amber-700 text-xs font-bold">
-                    {t('crm:specialBids.readOnlyExpired')}
-                  </span>
-                </div>
-              )}
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('specialBids.specialBidDetails')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('specialBids.dedicatedClient')}
-                    </label>
-                    <CustomSelect
-                      options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                      value={formData.clientId || ''}
-                      onChange={(val) => handleClientChange(val as string)}
-                      placeholder={t('specialBids.selectClient')}
-                      searchable={true}
-                      disabled={editingBid ? isExpired(editingBid.endDate) : false}
-                      className={errors.clientId ? 'border-red-300' : ''}
-                    />
-                    {errors.clientId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('specialBids.productItem')}
-                    </label>
-                    <CustomSelect
-                      options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                      value={formData.productId || ''}
-                      onChange={(val) => handleProductChange(val as string)}
-                      placeholder={t('specialBids.selectProduct')}
-                      searchable={true}
-                      disabled={editingBid ? isExpired(editingBid.endDate) : false}
-                      className={errors.productId ? 'border-red-300' : ''}
-                    />
-                    {errors.productId && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.productId}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 ml-1">
-                          {t('specialBids.labelOriginal')} {t('specialBids.unitPrice')} ({currency})
-                        </label>
-                        <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
-                          {originalPriceDisplay}
-                        </div>
-                      </div>
-                      <div className="hidden md:flex items-center justify-center self-end h-[42px]">
-                        <i className="fa-solid fa-arrow-right text-slate-400"></i>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 ml-1">
-                          {t('specialBids.labelNew')} {t('specialBids.unitPrice')} ({currency})
-                        </label>
-                        <ValidatedNumberInput
-                          step="0.01"
-                          min="0.01"
-                          required
-                          value={formData.unitPrice ?? ''}
-                          onValueChange={(value) => {
-                            const parsed = parseNumberInputValue(value);
-                            setFormData({ ...formData, unitPrice: parsed });
-                            if (errors.unitPrice) {
-                              setErrors((prev) => {
-                                const next = { ...prev };
-                                delete next.unitPrice;
-                                return next;
-                              });
-                            }
-                          }}
-                          disabled={editingBid ? isExpired(editingBid.endDate) : false}
-                          className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.unitPrice ? 'border-red-300' : 'border-slate-200'}`}
-                        />
-                      </div>
-                    </div>
-                    {errors.unitPrice && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.unitPrice}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 ml-1">
-                          {t('specialBids.labelOriginal')} {t('crm:products.mol')}
-                        </label>
-                        <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
-                          {originalMolDisplay}
-                        </div>
-                      </div>
-                      <div className="hidden md:flex items-center justify-center self-end h-[42px]">
-                        <i className="fa-solid fa-arrow-right text-slate-400"></i>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 ml-1">
-                          {t('specialBids.labelNew')} {t('crm:products.mol')}
-                        </label>
-                        <ValidatedNumberInput
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={formData.molPercentage ?? ''}
-                          onValueChange={(value) => {
-                            const parsed = parseNumberInputValue(value);
-                            setFormData({ ...formData, molPercentage: parsed });
-                          }}
-                          disabled={editingBid ? isExpired(editingBid.endDate) : false}
-                          className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                          placeholder="--"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.salePriceCalculated')}
-                    </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
-                      {hasBidPricing
-                        ? `${calcSalePrice(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
-                        : '--'}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:products.marginCalculated')}
-                    </label>
-                    <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
-                      {hasBidPricing
-                        ? `${calcMargin(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
-                        : '--'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('specialBids.validityPeriod')}
-                </h4>
-                <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
-                  <span className="font-bold">
-                    {formData.startDate
-                      ? new Date(formData.startDate).toLocaleDateString()
-                      : t('specialBids.selectStart')}
-                  </span>
-                  <i className="fa-solid fa-arrow-right text-slate-400"></i>
-                  <span className="font-bold">
-                    {formData.endDate
-                      ? new Date(formData.endDate).toLocaleDateString()
-                      : t('specialBids.selectEnd')}
-                  </span>
-                </div>
-                <Calendar
-                  selectionMode="range"
-                  startDate={formData.startDate}
-                  endDate={formData.endDate || undefined}
-                  onRangeSelect={(start, end) => {
-                    if (!(editingBid && isExpired(editingBid.endDate))) {
-                      setFormData({
-                        ...formData,
-                        startDate: start,
-                        endDate: end ?? '',
-                      });
-                      if (errors.dates) {
-                        setErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.dates;
-                          return next;
-                        });
-                      }
-                    }
-                  }}
-                />
-                {errors.dates && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.dates}</p>
-                )}
-              </div>
-
-              <div className="flex justify-between items-center pt-6 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {editingBid && isExpired(editingBid.endDate)
-                    ? t('specialBids.close')
-                    : t('specialBids.cancel')}
-                </button>
-                {!(editingBid && isExpired(editingBid.endDate)) && (
-                  <button
-                    type="submit"
-                    className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                  >
-                    {editingBid ? t('specialBids.updateBid') : t('specialBids.createBid')}
-                  </button>
-                )}
-              </div>
-            </form>
           </div>
         </div>
-      )}
-
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('specialBids.deleteConfirmTitle')}
-                </h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  {t('specialBids.deleteConfirmMessage', { clientName: bidToDelete?.clientName })}
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('specialBids.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('specialBids.yesDelete')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

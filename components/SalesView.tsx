@@ -6,6 +6,7 @@ import StandardTable from './StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import StatusBadge, { StatusType } from './StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
+import Modal from './Modal';
 
 const getPaymentTermsOptions = (t: (key: string) => string) => [
   { id: 'immediate', name: t('crm:paymentTerms.immediate') },
@@ -584,480 +585,472 @@ const SalesView: React.FC<SalesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingSale ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-                </div>
-                {editingSale ? t('crm:sales.editSale') : t('crm:sales.addSale')}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingSale ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {editingSale ? t('crm:sales.editSale') : t('crm:sales.addSale')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
 
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
-              {editingSale && editingSale.status !== 'draft' && (
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                  <span className="text-amber-700 text-xs font-bold">
-                    {t('crm:quotes.readOnlyStatus', {
-                      status: getSaleStatusLabel(editingSale.status, t),
-                    })}
-                  </span>
-                </div>
-              )}
-              {/* Linked Quote Info */}
-              {formData.linkedQuoteId && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                      <i className="fa-solid fa-link"></i>
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+            {editingSale && editingSale.status !== 'draft' && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+                <span className="text-amber-700 text-xs font-bold">
+                  {t('crm:quotes.readOnlyStatus', {
+                    status: getSaleStatusLabel(editingSale.status, t),
+                  })}
+                </span>
+              </div>
+            )}
+            {/* Linked Quote Info */}
+            {formData.linkedQuoteId && (
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <i className="fa-solid fa-link"></i>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {t('crm:sales.linkedQuote')}
                     </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">
-                        {t('crm:sales.linkedQuote')}
-                      </div>
-                      <div className="text-xs text-praetor">
-                        {t('crm:sales.linkedQuoteInfo', { number: formData.linkedQuoteId })}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {t('crm:sales.quoteDetailsReadOnly')}
-                      </div>
+                    <div className="text-xs text-praetor">
+                      {t('crm:sales.linkedQuoteInfo', { number: formData.linkedQuoteId })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {t('crm:sales.quoteDetailsReadOnly')}
                     </div>
                   </div>
-                  {onViewQuote && (
-                    <button
-                      type="button"
-                      onClick={() => onViewQuote(formData.linkedQuoteId!)}
-                      className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
-                    >
-                      {t('crm:quotes.viewQuote')}
-                    </button>
-                  )}
                 </div>
-              )}
-
-              {/* Client Selection */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:quotes.clientInformation')}
-                </h4>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:sales.client')}
-                  </label>
-                  <CustomSelect
-                    options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                    value={formData.clientId || ''}
-                    onChange={(val) => handleClientChange(val as string)}
-                    placeholder={t('crm:quotes.selectAClient')}
-                    searchable={true}
-                    disabled={isReadOnly}
-                    className={errors.clientId ? 'border-red-300' : ''}
-                  />
-                  {errors.clientId && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Products */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                    {t('crm:quotes.productsServices')}
-                  </h4>
+                {onViewQuote && (
                   <button
                     type="button"
-                    onClick={addProductRow}
-                    disabled={isReadOnly}
-                    className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => onViewQuote(formData.linkedQuoteId!)}
+                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
-                    <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
+                    {t('crm:quotes.viewQuote')}
                   </button>
-                </div>
-                {errors.items && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-                )}
-
-                {formData.items && formData.items.length > 0 && (
-                  <div className="flex gap-3 px-3 mb-1 items-center">
-                    <div className="flex-1 grid grid-cols-12 gap-3">
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                        {t('crm:sales.specialBidLabel')}
-                      </div>
-                      <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        {t('crm:quotes.productsServices')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:quotes.qty')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:products.cost')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:products.molPercentage')}
-                      </div>
-                      <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:quotes.marginLabel')}
-                      </div>
-                      <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                        {t('crm:products.salePrice')}
-                      </div>
-                    </div>
-                    <div className="w-10 flex-shrink-0"></div>
-                  </div>
-                )}
-
-                {formData.items && formData.items.length > 0 ? (
-                  <div className="space-y-3">
-                    {formData.items.map((item, index) => {
-                      const selectedProduct = activeProducts.find((p) => p.id === item.productId);
-                      const selectedBid = item.specialBidId
-                        ? specialBids.find((b) => b.id === item.specialBidId)
-                        : undefined;
-
-                      // Use stored snapshot values to avoid retroactive changes
-                      const cost = item.specialBidId
-                        ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
-                        : (item.productCost ?? selectedProduct?.costo ?? 0);
-
-                      const molSource = item.specialBidId
-                        ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
-                        : (item.productMolPercentage ?? selectedProduct?.molPercentage);
-                      const molPercentage = molSource ? Number(molSource) : 0;
-                      const salePrice = Number(item.unitPrice || 0);
-                      const margin = salePrice - cost;
-
-                      return (
-                        <div key={item.id} className="bg-slate-50 p-3 rounded-xl">
-                          <div className="flex gap-3 items-center">
-                            <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                              <div className="col-span-3">
-                                <CustomSelect
-                                  options={[
-                                    { id: 'none', name: t('crm:quotes.noSpecialBid') },
-                                    ...clientSpecialBids.map((b) => ({
-                                      id: b.id,
-                                      name: `${b.clientName} · ${b.productName}`,
-                                    })),
-                                  ]}
-                                  value={item.specialBidId || 'none'}
-                                  onChange={(val) =>
-                                    updateProductRow(
-                                      index,
-                                      'specialBidId',
-                                      val === 'none' ? '' : (val as string),
-                                    )
-                                  }
-                                  placeholder={t('crm:quotes.selectBid')}
-                                  displayValue={getBidDisplayValue(item.specialBidId)}
-                                  searchable={true}
-                                  disabled={isReadOnly}
-                                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                />
-                              </div>
-                              <div className="col-span-3">
-                                <CustomSelect
-                                  options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                  value={item.productId}
-                                  onChange={(val) =>
-                                    updateProductRow(index, 'productId', val as string)
-                                  }
-                                  placeholder={t('crm:quotes.selectProduct')}
-                                  searchable={true}
-                                  disabled={isReadOnly}
-                                  buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                                />
-                              </div>
-                              <div className="col-span-1">
-                                <ValidatedNumberInput
-                                  step="0.01"
-                                  min="0"
-                                  required
-                                  placeholder="Qty"
-                                  value={item.quantity}
-                                  onValueChange={(value) => {
-                                    const parsed = parseFloat(value);
-                                    updateProductRow(
-                                      index,
-                                      'quantity',
-                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                    );
-                                  }}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
-                                />
-                              </div>
-                              <div className="col-span-1 flex flex-col items-center justify-center">
-                                <span className="text-xs font-bold text-slate-600">
-                                  {cost.toFixed(2)} {currency}
-                                </span>
-                                {selectedBid && (
-                                  <div className="text-[8px] font-black text-praetor uppercase tracking-wider">
-                                    Bid
-                                  </div>
-                                )}
-                              </div>
-                              <div className="col-span-1 flex items-center justify-center">
-                                <span className="text-xs font-bold text-slate-600">
-                                  {molPercentage.toFixed(1)}%
-                                </span>
-                              </div>
-                              <div className="col-span-1 flex items-center justify-center">
-                                <span className="text-xs font-bold text-emerald-600">
-                                  {margin.toFixed(2)} {currency}
-                                </span>
-                              </div>
-                              <div className="col-span-2 flex items-center justify-center">
-                                <span
-                                  className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
-                                >
-                                  {salePrice.toFixed(2)} {currency}
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeProductRow(index)}
-                              disabled={isReadOnly}
-                              className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400 text-sm">
-                    {t('crm:quotes.noProductsAdded')}
-                  </div>
                 )}
               </div>
+            )}
 
-              {/* Sale Details */}
-              <div className="space-y-4">
+            {/* Client Selection */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('crm:quotes.clientInformation')}
+              </h4>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('crm:sales.client')}
+                </label>
+                <CustomSelect
+                  options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                  value={formData.clientId || ''}
+                  onChange={(val) => handleClientChange(val as string)}
+                  placeholder={t('crm:quotes.selectAClient')}
+                  searchable={true}
+                  disabled={isReadOnly}
+                  className={errors.clientId ? 'border-red-300' : ''}
+                />
+                {errors.clientId && (
+                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Products */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:sales.saleDetails')}
+                  {t('crm:quotes.productsServices')}
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:sales.paymentTerms')}
-                    </label>
-                    <CustomSelect
-                      options={getPaymentTermsOptions(t)}
-                      value={formData.paymentTerms || 'immediate'}
-                      onChange={(val) =>
-                        setFormData({ ...formData, paymentTerms: val as Sale['paymentTerms'] })
-                      }
-                      searchable={false}
-                      disabled={isReadOnly}
-                    />
-                  </div>
+                <button
+                  type="button"
+                  onClick={addProductRow}
+                  disabled={isReadOnly}
+                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
+                </button>
+              </div>
+              {errors.items && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+              )}
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:quotes.globalDiscount')}
-                    </label>
-                    <div
-                      className={`flex items-center rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden bg-slate-50 border border-slate-200 ${isLinkedQuote ? 'opacity-50' : ''}`}
-                    >
-                      <div className="w-12 self-stretch flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 bg-slate-100/30">
-                        %
-                      </div>
-                      <ValidatedNumberInput
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        value={formData.discount}
-                        onValueChange={(value) => {
-                          const parsed = parseNumberInputValue(value);
-                          setFormData({ ...formData, discount: parsed });
-                        }}
-                        disabled={isReadOnly}
-                        className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold disabled:bg-transparent"
-                      />
+              {formData.items && formData.items.length > 0 && (
+                <div className="flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 grid grid-cols-12 gap-3">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      {t('crm:sales.specialBidLabel')}
+                    </div>
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {t('crm:quotes.productsServices')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:quotes.qty')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:products.cost')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:products.molPercentage')}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:quotes.marginLabel')}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('crm:products.salePrice')}
                     </div>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:sales.status')}
-                    </label>
-                    <CustomSelect
-                      options={getStatusOptions(t)}
-                      value={formData.status || 'pending'}
-                      onChange={(val) =>
-                        setFormData({ ...formData, status: val as Sale['status'] })
-                      }
-                      searchable={false}
-                    />
-                  </div>
-
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
-                      {t('crm:sales.notes')}
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder={t('crm:quotes.additionalNotesPlaceholder')}
-                      disabled={isReadOnly}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:bg-slate-50 disabled:text-slate-400"
-                    />
-                  </div>
+                  <div className="w-10 flex-shrink-0"></div>
                 </div>
-              </div>
+              )}
 
-              {/* Totals Section */}
-              {formData.items && formData.items.length > 0 && (
-                <div className="pt-8 border-t border-slate-100">
-                  {(() => {
-                    const {
-                      subtotal,
-                      discountAmount,
+              {formData.items && formData.items.length > 0 ? (
+                <div className="space-y-3">
+                  {formData.items.map((item, index) => {
+                    const selectedProduct = activeProducts.find((p) => p.id === item.productId);
+                    const selectedBid = item.specialBidId
+                      ? specialBids.find((b) => b.id === item.specialBidId)
+                      : undefined;
 
-                      total,
-                      margin,
-                      marginPercentage,
-                      taxGroups,
-                    } = calculateTotals(formData.items, formData.discount || 0);
+                    // Use stored snapshot values to avoid retroactive changes
+                    const cost = item.specialBidId
+                      ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
+                      : (item.productCost ?? selectedProduct?.costo ?? 0);
+
+                    const molSource = item.specialBidId
+                      ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
+                      : (item.productMolPercentage ?? selectedProduct?.molPercentage);
+                    const molPercentage = molSource ? Number(molSource) : 0;
+                    const salePrice = Number(item.unitPrice || 0);
+                    const margin = salePrice - cost;
+
                     return (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-                        {/* Left Column: Detailed Breakdown */}
-                        <div className="flex flex-col justify-center space-y-3 h-full">
-                          <div className="flex justify-between items-center px-2">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('crm:quotes.taxableAmount')}:
-                            </span>
-                            <span className="text-sm font-black text-slate-800">
-                              {subtotal.toFixed(2)} {currency}
-                            </span>
+                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl">
+                        <div className="flex gap-3 items-center">
+                          <div className="flex-1 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-3">
+                              <CustomSelect
+                                options={[
+                                  { id: 'none', name: t('crm:quotes.noSpecialBid') },
+                                  ...clientSpecialBids.map((b) => ({
+                                    id: b.id,
+                                    name: `${b.clientName} · ${b.productName}`,
+                                  })),
+                                ]}
+                                value={item.specialBidId || 'none'}
+                                onChange={(val) =>
+                                  updateProductRow(
+                                    index,
+                                    'specialBidId',
+                                    val === 'none' ? '' : (val as string),
+                                  )
+                                }
+                                placeholder={t('crm:quotes.selectBid')}
+                                displayValue={getBidDisplayValue(item.specialBidId)}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <CustomSelect
+                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                                value={item.productId}
+                                onChange={(val) =>
+                                  updateProductRow(index, 'productId', val as string)
+                                }
+                                placeholder={t('crm:quotes.selectProduct')}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <ValidatedNumberInput
+                                step="0.01"
+                                min="0"
+                                required
+                                placeholder="Qty"
+                                value={item.quantity}
+                                onValueChange={(value) => {
+                                  const parsed = parseFloat(value);
+                                  updateProductRow(
+                                    index,
+                                    'quantity',
+                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                  );
+                                }}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                              />
+                            </div>
+                            <div className="col-span-1 flex flex-col items-center justify-center">
+                              <span className="text-xs font-bold text-slate-600">
+                                {cost.toFixed(2)} {currency}
+                              </span>
+                              {selectedBid && (
+                                <div className="text-[8px] font-black text-praetor uppercase tracking-wider">
+                                  Bid
+                                </div>
+                              )}
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-xs font-bold text-slate-600">
+                                {molPercentage.toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-xs font-bold text-emerald-600">
+                                {margin.toFixed(2)} {currency}
+                              </span>
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                              <span
+                                className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                              >
+                                {salePrice.toFixed(2)} {currency}
+                              </span>
+                            </div>
                           </div>
-
-                          {formData.discount! > 0 && (
-                            <div className="flex justify-between items-center px-2">
-                              <span className="text-sm font-bold text-slate-500">
-                                {t('crm:quotes.discountAmount', { discount: formData.discount })}:
-                              </span>
-                              <span className="text-sm font-black text-amber-600">
-                                -{discountAmount.toFixed(2)} {currency}
-                              </span>
-                            </div>
-                          )}
-
-                          {Object.entries(taxGroups).map(([rate, amount]) => (
-                            <div key={rate} className="flex justify-between items-center px-2">
-                              <span className="text-sm font-bold text-slate-500">
-                                {t('crm:quotes.ivaTax', { rate })}:
-                              </span>
-                              <span className="text-sm font-black text-slate-800">
-                                {amount.toFixed(2)} {currency}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Middle Column: Final Total */}
-                        <div className="flex flex-col items-center justify-center py-4 bg-slate-50/50 rounded-2xl border border-slate-100/50">
-                          <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                            {t('crm:quotes.totalLabel')}:
-                          </span>
-                          <span className="text-4xl font-black text-praetor leading-none">
-                            {total.toFixed(2)}
-                            <span className="text-xl ml-1 opacity-60 text-slate-400">
-                              {currency}
-                            </span>
-                          </span>
-                        </div>
-
-                        {/* Right Column: Margin */}
-                        <div className="bg-emerald-50/40 rounded-2xl p-6 flex flex-col items-center justify-center border border-emerald-100/30">
-                          <span className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
-                            {t('crm:quotes.marginLabel')}:
-                          </span>
-                          <div className="text-center">
-                            <div className="text-2xl font-black text-emerald-700 leading-none mb-1">
-                              {margin.toFixed(2)} {currency}
-                            </div>
-                            <div className="text-xs font-black text-emerald-500 opacity-60">
-                              ({marginPercentage.toFixed(1)}%)
-                            </div>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeProductRow(index)}
+                            disabled={isReadOnly}
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
                         </div>
                       </div>
                     );
-                  })()}
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  {t('crm:quotes.noProductsAdded')}
                 </div>
               )}
+            </div>
 
-              <div className="flex justify-between items-center pt-8 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-                >
-                  {t('crm:products.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  {editingSale ? t('crm:sales.updateSale') : t('crm:sales.addSale')}
-                </button>
+            {/* Sale Details */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('crm:sales.saleDetails')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:sales.paymentTerms')}
+                  </label>
+                  <CustomSelect
+                    options={getPaymentTermsOptions(t)}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(val) =>
+                      setFormData({ ...formData, paymentTerms: val as Sale['paymentTerms'] })
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:quotes.globalDiscount')}
+                  </label>
+                  <div
+                    className={`flex items-center rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden bg-slate-50 border border-slate-200 ${isLinkedQuote ? 'opacity-50' : ''}`}
+                  >
+                    <div className="w-12 self-stretch flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 bg-slate-100/30">
+                      %
+                    </div>
+                    <ValidatedNumberInput
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={formData.discount}
+                      onValueChange={(value) => {
+                        const parsed = parseNumberInputValue(value);
+                        setFormData({ ...formData, discount: parsed });
+                      }}
+                      disabled={isReadOnly}
+                      className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold disabled:bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:sales.status')}
+                  </label>
+                  <CustomSelect
+                    options={getStatusOptions(t)}
+                    value={formData.status || 'pending'}
+                    onChange={(val) => setFormData({ ...formData, status: val as Sale['status'] })}
+                    searchable={false}
+                  />
+                </div>
+
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:sales.notes')}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder={t('crm:quotes.additionalNotesPlaceholder')}
+                    disabled={isReadOnly}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:bg-slate-50 disabled:text-slate-400"
+                  />
+                </div>
               </div>
-            </form>
-          </div>
+            </div>
+
+            {/* Totals Section */}
+            {formData.items && formData.items.length > 0 && (
+              <div className="pt-8 border-t border-slate-100">
+                {(() => {
+                  const {
+                    subtotal,
+                    discountAmount,
+
+                    total,
+                    margin,
+                    marginPercentage,
+                    taxGroups,
+                  } = calculateTotals(formData.items, formData.discount || 0);
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+                      {/* Left Column: Detailed Breakdown */}
+                      <div className="flex flex-col justify-center space-y-3 h-full">
+                        <div className="flex justify-between items-center px-2">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('crm:quotes.taxableAmount')}:
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            {subtotal.toFixed(2)} {currency}
+                          </span>
+                        </div>
+
+                        {formData.discount! > 0 && (
+                          <div className="flex justify-between items-center px-2">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('crm:quotes.discountAmount', { discount: formData.discount })}:
+                            </span>
+                            <span className="text-sm font-black text-amber-600">
+                              -{discountAmount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        )}
+
+                        {Object.entries(taxGroups).map(([rate, amount]) => (
+                          <div key={rate} className="flex justify-between items-center px-2">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('crm:quotes.ivaTax', { rate })}:
+                            </span>
+                            <span className="text-sm font-black text-slate-800">
+                              {amount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Middle Column: Final Total */}
+                      <div className="flex flex-col items-center justify-center py-4 bg-slate-50/50 rounded-2xl border border-slate-100/50">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                          {t('crm:quotes.totalLabel')}:
+                        </span>
+                        <span className="text-4xl font-black text-praetor leading-none">
+                          {total.toFixed(2)}
+                          <span className="text-xl ml-1 opacity-60 text-slate-400">{currency}</span>
+                        </span>
+                      </div>
+
+                      {/* Right Column: Margin */}
+                      <div className="bg-emerald-50/40 rounded-2xl p-6 flex flex-col items-center justify-center border border-emerald-100/30">
+                        <span className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
+                          {t('crm:quotes.marginLabel')}:
+                        </span>
+                        <div className="text-center">
+                          <div className="text-2xl font-black text-emerald-700 leading-none mb-1">
+                            {margin.toFixed(2)} {currency}
+                          </div>
+                          <div className="text-xs font-black text-emerald-500 opacity-60">
+                            ({marginPercentage.toFixed(1)}%)
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+              >
+                {t('crm:products.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+              >
+                {editingSale ? t('crm:sales.updateSale') : t('crm:sales.addSale')}
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">
-                  {t('crm:sales.deleteSaleTitle')}
-                </h3>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  {t('crm:sales.deleteSaleConfirm', { clientName: saleToDelete?.clientName })}
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  {t('crm:products.cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-                >
-                  {t('crm:specialBids.yesDelete')}
-                </button>
-              </div>
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('crm:sales.deleteSaleTitle')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('crm:sales.deleteSaleConfirm', { clientName: saleToDelete?.clientName })}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('crm:products.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('crm:specialBids.yesDelete')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
