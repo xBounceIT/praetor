@@ -311,10 +311,22 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         </div>
       </Modal>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('projects:projects.title')}</h2>
-          <p className="text-slate-500 text-sm">{t('projects:projects.subtitle')}</p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">{t('projects:projects.title')}</h2>
+            <p className="text-slate-500 text-sm">{t('projects:projects.subtitle')}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {isManagement && (
+              <button
+                onClick={openAddModal}
+                className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+              >
+                <i className="fa-solid fa-plus"></i> {t('projects:projects.addProject')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -322,16 +334,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         title={t('projects:projects.projectsDirectory')}
         defaultRowsPerPage={5}
         data={projects}
-        headerAction={
-          isManagement ? (
-            <button
-              onClick={openAddModal}
-              className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i> {t('projects:projects.addProject')}
-            </button>
-          ) : undefined
-        }
         onRowClick={isManagement ? openEditModal : undefined}
         rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
         columns={
