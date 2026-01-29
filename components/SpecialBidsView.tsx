@@ -166,7 +166,10 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     };
 
     if (editingBid) {
-      onUpdateBid(editingBid.id, payload);
+      const expired = isExpired(editingBid.endDate);
+      if (!expired) {
+        onUpdateBid(editingBid.id, payload);
+      }
     } else {
       onAddBid(payload);
     }
@@ -338,9 +341,13 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className={`fa-solid ${editingBid ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+                  <i className={`fa-solid ${editingBid ? (isExpired(editingBid.endDate) ? 'fa-eye' : 'fa-pen-to-square') : 'fa-plus'}`}></i>
                 </div>
-                {editingBid ? t('specialBids.editSpecialBid') : t('specialBids.createSpecialBid')}
+                {editingBid 
+                  ? isExpired(editingBid.endDate) 
+                    ? t('specialBids.viewSpecialBid') 
+                    : t('specialBids.editSpecialBid') 
+                  : t('specialBids.createSpecialBid')}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -367,6 +374,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                       onChange={(val) => handleClientChange(val as string)}
                       placeholder={t('specialBids.selectClient')}
                       searchable={true}
+                      disabled={editingBid ? isExpired(editingBid.endDate) : false}
                       className={errors.clientId ? 'border-red-300' : ''}
                     />
                     {errors.clientId && (
@@ -383,6 +391,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                       onChange={(val) => handleProductChange(val as string)}
                       placeholder={t('specialBids.selectProduct')}
                       searchable={true}
+                      disabled={editingBid ? isExpired(editingBid.endDate) : false}
                       className={errors.productId ? 'border-red-300' : ''}
                     />
                     {errors.productId && (
@@ -422,6 +431,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                               });
                             }
                           }}
+                          disabled={editingBid ? isExpired(editingBid.endDate) : false}
                           className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.unitPrice ? 'border-red-300' : 'border-slate-200'}`}
                         />
                       </div>
@@ -456,6 +466,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                             const parsed = parseNumberInputValue(value);
                             setFormData({ ...formData, molPercentage: parsed });
                           }}
+                          disabled={editingBid ? isExpired(editingBid.endDate) : false}
                           className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                           placeholder="--"
                         />
@@ -510,17 +521,19 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                   startDate={formData.startDate}
                   endDate={formData.endDate || undefined}
                   onRangeSelect={(start, end) => {
-                    setFormData({
-                      ...formData,
-                      startDate: start,
-                      endDate: end ?? '',
-                    });
-                    if (errors.dates) {
-                      setErrors((prev) => {
-                        const next = { ...prev };
-                        delete next.dates;
-                        return next;
+                    if (!(editingBid && isExpired(editingBid.endDate))) {
+                      setFormData({
+                        ...formData,
+                        startDate: start,
+                        endDate: end ?? '',
                       });
+                      if (errors.dates) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.dates;
+                          return next;
+                        });
+                      }
                     }
                   }}
                 />
@@ -535,14 +548,16 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                   onClick={() => setIsModalOpen(false)}
                   className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
                 >
-                  {t('specialBids.cancel')}
+                  {editingBid && isExpired(editingBid.endDate) ? t('specialBids.close') : t('specialBids.cancel')}
                 </button>
-                <button
-                  type="submit"
-                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  {editingBid ? t('specialBids.updateBid') : t('specialBids.createBid')}
-                </button>
+                {!(editingBid && isExpired(editingBid.endDate)) && (
+                  <button
+                    type="submit"
+                    className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                  >
+                    {editingBid ? t('specialBids.updateBid') : t('specialBids.createBid')}
+                  </button>
+                )}
               </div>
             </form>
           </div>
