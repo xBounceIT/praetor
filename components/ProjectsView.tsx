@@ -118,7 +118,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
