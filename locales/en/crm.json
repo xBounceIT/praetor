@@ -209,6 +209,7 @@
     "viewSpecialBid": "View Special Bid",
     "close": "Close",
     "cannotDeleteExpired": "Cannot delete expired bid",
+    "readOnlyExpired": "Expired bids are read-only",
     "cancel": "Cancel",
     "yesDelete": "Yes, Delete",
     "searchPlaceholder": "Search clients or products...",

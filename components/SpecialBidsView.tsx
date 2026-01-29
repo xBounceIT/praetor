@@ -360,6 +360,14 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+              {editingBid && isExpired(editingBid.endDate) && (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+                  <i className="fa-solid fa-lock text-amber-600 text-sm"></i>
+                  <span className="text-amber-700 text-xs font-bold">
+                    {t('crm:specialBids.readOnlyExpired')}
+                  </span>
+                </div>
+              )}
               <div className="space-y-4">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>

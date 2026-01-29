@@ -203,6 +203,7 @@
     "viewSpecialBid": "Visualizza Offerta Speciale",
     "close": "Chiudi",
     "cannotDeleteExpired": "Impossibile eliminare un'offerta scaduta",
+    "readOnlyExpired": "Le offerte scadute sono in sola lettura",
     "cancel": "Annulla",
     "yesDelete": "Sì, Elimina",
     "searchPlaceholder": "Cerca clienti o prodotti...",
