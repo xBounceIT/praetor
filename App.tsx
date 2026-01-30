@@ -26,7 +26,7 @@ import {
 import { COLORS } from './constants';
 import i18n from './i18n';
 import Layout from './components/Layout';
-import TimeEntryForm from './components/TimeEntryForm';
+import TimeEntryForm from './components/timesheet/TimeEntryForm';
 import Reports from './components/Reports';
 import Calendar from './components/Calendar';
 import Settings from './components/Settings';
@@ -39,7 +39,7 @@ import TasksView from './components/projects/TasksView';
 import AdminAuthentication from './components/AdminAuthentication';
 import GeneralSettings from './components/GeneralSettings';
 import CustomSelect from './components/CustomSelect';
-import WeeklyView from './components/WeeklyView';
+import WeeklyView from './components/timesheet/WeeklyView';
 import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';
 import api, { setAuthToken, getAuthToken } from './services/api';
