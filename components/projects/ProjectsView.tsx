@@ -112,7 +112,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   };
 
-  const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
+  const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -216,7 +216,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               {editingProject && (
                 <div className="space-y-1.5">
                   {(() => {
-                    const client = clients.find((c) => c.id === clientId);
+                    const client = clients.find((c: Client) => c.id === clientId);
                     const isClientDisabled = client?.isDisabled || false;
                     const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
 
@@ -344,7 +344,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               accessorFn: (row) =>
                 clients.find((c) => c.id === row.clientId)?.name || t('projects:projects.unknown'),
               cell: ({ row }) => {
-                const client = clients.find((c) => c.id === row.clientId);
+                const client = clients.find((c: Client) => c.id === row.clientId);
                 const isClientDisabled = client?.isDisabled || false;
                 return (
                   <span
@@ -404,13 +404,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               header: t('projects:projects.tableHeaders.status'),
               id: 'status',
               accessorFn: (row) => {
-                const client = clients.find((c) => c.id === row.clientId);
+                const client = clients.find((c: Client) => c.id === row.clientId);
                 if (row.isDisabled) return t('projects:projects.statusDisabled');
                 if (client?.isDisabled) return t('projects:projects.statusInheritedDisable');
                 return t('projects:projects.statusActive');
               },
               cell: ({ row }) => {
-                const client = clients.find((c) => c.id === row.clientId);
+                const client = clients.find((c: Client) => c.id === row.clientId);
                 const isClientDisabled = client?.isDisabled || false;
                 if (row.isDisabled) {
                   return (
