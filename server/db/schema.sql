@@ -19,6 +19,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS cost_per_hour DECIMAL(10, 2) DEFAULT 
 -- Ensure is_disabled column exists for existing installations
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 
+-- Employee type column (app_user = can login, internal/external = no login)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_type VARCHAR(20) DEFAULT 'app_user';
+
+-- Add check constraint for employee_type (safe for existing installations)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_employee_type_check'
+    ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_employee_type_check
+            CHECK (employee_type IN ('app_user', 'internal', 'external'));
+    END IF;
+END $$;
+
 -- Work Units table
 CREATE TABLE IF NOT EXISTS work_units (
     id VARCHAR(50) PRIMARY KEY,

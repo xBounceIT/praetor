@@ -34,7 +34,9 @@
     "authentication": "Autenticazione",
     "general": "Impostazioni Generali",
     "suppliers": "Fornitori",
-    "supplierQuotes": "Preventivi Fornitori"
+    "supplierQuotes": "Preventivi Fornitori",
+    "internalEmployees": "Dipendenti Interni",
+    "externalEmployees": "Dipendenti Esterni"
   },
   "menu": {
     "settings": "Impostazioni",
@@ -65,7 +67,9 @@
     "tasks": "Attività",
     "specialBids": "Special Bid",
     "suppliers": "Fornitori",
-    "supplierQuotes": "Preventivi Fornitore"
+    "supplierQuotes": "Preventivi Fornitore",
+    "internalEmployees": "Dipendenti Interni",
+    "externalEmployees": "Dipendenti Esterni"
   },
   "notifications": {
     "title": "Notifiche",

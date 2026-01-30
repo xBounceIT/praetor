@@ -34,7 +34,9 @@
     "authentication": "Authentication",
     "general": "General Settings",
     "suppliers": "Suppliers",
-    "supplierQuotes": "Supplier Quotes"
+    "supplierQuotes": "Supplier Quotes",
+    "internalEmployees": "Internal Employees",
+    "externalEmployees": "External Employees"
   },
   "menu": {
     "settings": "Settings",
@@ -65,7 +67,9 @@
     "tasks": "Tasks",
     "specialBids": "Special Bids",
     "suppliers": "Suppliers",
-    "supplierQuotes": "Supplier Quotes"
+    "supplierQuotes": "Supplier Quotes",
+    "internalEmployees": "Internal Employees",
+    "externalEmployees": "External Employees"
   },
   "notifications": {
     "title": "Notifications",

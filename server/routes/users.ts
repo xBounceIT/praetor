@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -50,24 +51,25 @@ export default async function (fastify, _opts) {
       if (request.user.role === 'admin') {
         // Admin sees all users
         result = await query(
-          'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled FROM users ORDER BY name',
+          'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
         );
       } else if (request.user.role === 'manager') {
-        // Manager sees themselves AND users in work units they manage
+        // Manager sees themselves AND users in work units they manage AND all internal/external employees
         result = await query(
-          `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled
+          `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
                  FROM users u
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE u.id = $1  -- The manager themselves
                     OR wum.user_id = $1 -- Users in work units managed by this user
+                    OR u.employee_type IN ('internal', 'external') -- All internal/external employees
                  ORDER BY u.name`,
           [request.user.id],
         );
       } else {
         // Regular users only see themselves
         result = await query(
-          'SELECT id, name, username, role, avatar_initials, is_disabled FROM users WHERE id = $1',
+          'SELECT id, name, username, role, avatar_initials, is_disabled, employee_type FROM users WHERE id = $1',
           [request.user.id],
         );
       }
@@ -80,41 +82,73 @@ export default async function (fastify, _opts) {
         avatarInitials: u.avatar_initials,
         costPerHour: parseFloat(u.cost_per_hour || 0),
         isDisabled: !!u.is_disabled,
+        employeeType: u.employee_type || 'app_user',
       }));
 
       return users;
     },
   );
 
-  // POST / - Create user (admin only)
+  // POST / - Create user (admin only for app_user, manager can create internal/external)
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requireRole('admin', 'manager')],
     },
     async (request, reply) => {
-      const { name, username, password, role, costPerHour } = request.body;
+      const { name, username, password, role, costPerHour, employeeType } = request.body;
+
+      // Validate employee type if provided
+      const employeeTypeResult = employeeType
+        ? validateEnum(employeeType, ['app_user', 'internal', 'external'], 'employeeType')
+        : { ok: true, value: 'app_user' };
+      if (!employeeTypeResult.ok) return badRequest(reply, employeeTypeResult.message);
+
+      const effectiveEmployeeType = employeeTypeResult.value;
+
+      // Managers can only create internal/external employees
+      if (request.user.role === 'manager' && effectiveEmployeeType === 'app_user') {
+        return reply
+          .code(403)
+          .send({ error: 'Managers can only create internal or external employees' });
+      }
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const usernameResult = requireNonEmptyString(username, 'username');
-      if (!usernameResult.ok) return badRequest(reply, usernameResult.message);
-
-      const passwordResult = requireNonEmptyString(password, 'password');
-      if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
-
-      const roleResult = validateEnum(role, ['admin', 'manager', 'user'], 'role');
-      if (!roleResult.ok) return badRequest(reply, roleResult.message);
-
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
 
-      const existingUser = await query('SELECT id FROM users WHERE username = $1', [
-        usernameResult.value,
-      ]);
-      if (existingUser.rows.length > 0) {
-        return badRequest(reply, 'Username already exists');
+      let usernameValue: string;
+      let passwordHash: string;
+      let roleValue: string;
+
+      if (effectiveEmployeeType === 'internal' || effectiveEmployeeType === 'external') {
+        // Internal/external employees: generate dummy username, placeholder password, user role
+        usernameValue = `emp-${randomUUID()}`;
+        passwordHash = await bcrypt.hash(randomUUID(), 12); // Random unguessable password
+        roleValue = 'user'; // Internal/external employees have user role but cannot login
+      } else {
+        // App users: require username, password, and role
+        const usernameResult = requireNonEmptyString(username, 'username');
+        if (!usernameResult.ok) return badRequest(reply, usernameResult.message);
+        usernameValue = usernameResult.value;
+
+        const passwordResult = requireNonEmptyString(password, 'password');
+        if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
+        passwordHash = await bcrypt.hash(passwordResult.value, 12);
+
+        const roleResult = validateEnum(role, ['admin', 'manager', 'user'], 'role');
+        if (!roleResult.ok) return badRequest(reply, roleResult.message);
+        roleValue = roleResult.value;
+
+        // Check username uniqueness for app users
+        const existingUser = await query('SELECT id FROM users WHERE username = $1', [
+          usernameValue,
+        ]);
+        if (existingUser.rows.length > 0) {
+          return badRequest(reply, 'Username already exists');
+        }
       }
 
       const avatarInitials = nameResult.value
@@ -123,36 +157,39 @@ export default async function (fastify, _opts) {
         .join('')
         .substring(0, 2)
         .toUpperCase();
-      const passwordHash = await bcrypt.hash(passwordResult.value, 12);
       const id = 'u-' + Date.now();
 
       try {
         await query(
-          `INSERT INTO users (id, name, username, password_hash, role, avatar_initials, cost_per_hour, is_disabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO users (id, name, username, password_hash, role, avatar_initials, cost_per_hour, is_disabled, employee_type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             id,
             nameResult.value,
-            usernameResult.value,
+            usernameValue,
             passwordHash,
-            roleResult.value,
+            roleValue,
             avatarInitials,
             costPerHourResult.value || 0,
             false,
+            effectiveEmployeeType,
           ],
         );
 
         // If the new user is a manager, auto-assign all items to them
-        if (roleResult.value === 'manager') {
+        if (roleValue === 'manager') {
           await assignAllItemsToManager(id);
         }
 
         return reply.code(201).send({
           id,
           name: nameResult.value,
-          username: usernameResult.value,
-          role: roleResult.value,
+          username: usernameValue,
+          role: roleValue,
           avatarInitials,
+          costPerHour: costPerHourResult.value || 0,
+          isDisabled: false,
+          employeeType: effectiveEmployeeType,
         });
       } catch (err) {
         if (err.code === '23505') {
@@ -164,17 +201,30 @@ export default async function (fastify, _opts) {
     },
   );
 
-  // DELETE /:id - Delete user (admin only)
+  // DELETE /:id - Delete user (admin can delete any, manager can delete internal/external only)
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requireRole('admin', 'manager')],
     },
     async (request, reply) => {
       const { id } = request.params;
 
       if (id === request.user.id) {
         return badRequest(reply, 'Cannot delete your own account');
+      }
+
+      // Check the user's employee type
+      const userCheck = await query('SELECT employee_type FROM users WHERE id = $1', [id]);
+      if (userCheck.rows.length === 0) {
+        return reply.code(404).send({ error: 'User not found' });
+      }
+
+      const employeeType = userCheck.rows[0].employee_type || 'app_user';
+
+      // Managers can only delete internal/external employees, not app_users
+      if (request.user.role === 'manager' && employeeType === 'app_user') {
+        return reply.code(403).send({ error: 'App users can only be deleted by administrators' });
       }
 
       const result = await query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
@@ -285,7 +335,7 @@ export default async function (fastify, _opts) {
 
       values.push(idResult.value);
       const result = await query(
-        `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled`,
+        `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
         values,
       );
 
@@ -308,6 +358,7 @@ export default async function (fastify, _opts) {
         avatarInitials: u.avatar_initials,
         costPerHour: parseFloat(u.cost_per_hour || 0),
         isDisabled: !!u.is_disabled,
+        employeeType: u.employee_type || 'app_user',
       };
     },
   );

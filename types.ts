@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'manager' | 'user';
+export type EmployeeType = 'app_user' | 'internal' | 'external';
 
 export interface User {
   id: string;
@@ -9,6 +10,7 @@ export interface User {
   password?: string;
   costPerHour?: number;
   isDisabled?: boolean;
+  employeeType?: EmployeeType;
 }
 
 export interface UserSettings {
@@ -267,6 +269,9 @@ export type View =
   // Suppliers module
   | 'suppliers/manage'
   | 'suppliers/quotes'
+  // HR module
+  | 'hr/internal-employees'
+  | 'hr/external-employees'
   // Standalone
   | 'settings';
 

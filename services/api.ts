@@ -74,12 +74,14 @@ import type {
   SupplierQuoteItem,
   SpecialBid,
   Notification,
+  EmployeeType,
 } from '../types';
 
 // Normalization Helpers
 const normalizeUser = (u: User): User => ({
   ...u,
   costPerHour: u.costPerHour ? Number(u.costPerHour) : 0,
+  employeeType: u.employeeType || 'app_user',
 });
 
 const normalizeProduct = (p: Product): Product => ({
@@ -242,6 +244,27 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify(updates),
     }).then(normalizeUser),
+};
+
+// Employees API (for internal/external employees)
+export const employeesApi = {
+  create: (data: {
+    name: string;
+    employeeType: EmployeeType;
+    costPerHour?: number;
+  }): Promise<User> =>
+    fetchApi<User>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }).then(normalizeUser),
+
+  update: (id: string, updates: Partial<User>): Promise<User> =>
+    fetchApi<User>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    }).then(normalizeUser),
+
+  delete: (id: string): Promise<void> => fetchApi(`/users/${id}`, { method: 'DELETE' }),
 };
 
 // Clients API
@@ -618,6 +641,7 @@ export const notificationsApi = {
 export default {
   auth: authApi,
   users: usersApi,
+  employees: employeesApi,
   clients: clientsApi,
   projects: projectsApi,
   tasks: tasksApi,

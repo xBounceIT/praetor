@@ -18,6 +18,7 @@ const moduleDefaultRoutes: Record<string, View> = {
   projects: 'projects/manage',
   finances: 'finances/invoices',
   suppliers: 'suppliers/manage',
+  hr: 'hr/internal-employees',
   configuration: 'configuration/authentication',
 };
 
@@ -26,8 +27,7 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('timesheets/')) return 'timesheets';
   if (route.startsWith('crm/')) return 'crm';
   if (route.startsWith('catalog/')) return 'catalog';
-  if (route.startsWith('catalog/')) return 'catalog';
-  if (route.startsWith('hr/')) return 'configuration'; // Remap old HR routes to configuration/administration
+  if (route.startsWith('hr/')) return 'hr';
   if (route.startsWith('projects/')) return 'projects';
   if (route.startsWith('finances/')) return 'finances';
   if (route.startsWith('suppliers/')) return 'suppliers';
@@ -78,6 +78,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
       { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
       { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
+      { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
       { id: 'configuration', name: t('modules.administration'), icon: 'fa-gears', active: false },
     ],
     [t],
@@ -98,6 +99,9 @@ const Layout: React.FC<LayoutProps> = ({
     if (m.id === 'crm' || m.id === 'catalog' || m.id === 'finances' || m.id === 'suppliers') {
       return currentUser.role === 'manager';
     }
+
+    // HR module: manager only access
+    if (m.id === 'hr') return currentUser.role === 'manager';
 
     // Projects module: accessible to manager and user (read-only for user)
     if (m.id === 'projects') {
@@ -249,6 +253,30 @@ const Layout: React.FC<LayoutProps> = ({
           </>
         );
       case 'hr':
+        return (
+          <>
+            <NavItem
+              icon="fa-user-tie"
+              label={t('routes.internalEmployees')}
+              active={activeView === 'hr/internal-employees'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('hr/internal-employees');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-user-clock"
+              label={t('routes.externalEmployees')}
+              active={activeView === 'hr/external-employees'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('hr/external-employees');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
       case 'projects':
         return (
           <>
@@ -529,16 +557,21 @@ const Layout: React.FC<LayoutProps> = ({
                           ? t('titles.suppliers')
                           : activeView === 'suppliers/quotes'
                             ? t('titles.supplierQuotes')
-                            : t(
-                                `routes.${activeView
-                                  .split('/')
-                                  .pop()
-                                  ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
-                                {
-                                  defaultValue:
-                                    activeView.split('/').pop()?.replace('-', ' ') || activeView,
-                                },
-                              )}
+                            : activeView === 'hr/internal-employees'
+                              ? t('titles.internalEmployees')
+                              : activeView === 'hr/external-employees'
+                                ? t('titles.externalEmployees')
+                                : t(
+                                    `routes.${activeView
+                                      .split('/')
+                                      .pop()
+                                      ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
+                                    {
+                                      defaultValue:
+                                        activeView.split('/').pop()?.replace('-', ' ') ||
+                                        activeView,
+                                    },
+                                  )}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">

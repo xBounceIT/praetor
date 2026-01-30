@@ -56,6 +56,8 @@ import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
 import SpecialBidsView from './components/SpecialBidsView';
+import InternalEmployeesView from './components/InternalEmployeesView';
+import ExternalEmployeesView from './components/ExternalEmployeesView';
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -75,8 +77,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('timesheets/')) return 'timesheets';
   if (view.startsWith('crm/')) return 'crm';
   if (view.startsWith('catalog/')) return 'catalog';
-  if (view.startsWith('catalog/')) return 'catalog';
-  if (view.startsWith('hr/')) return 'configuration'; // Remap old HR routes
+  if (view.startsWith('hr/')) return 'hr';
   if (view.startsWith('projects/')) return 'projects';
   if (view.startsWith('finances/')) return 'finances';
   if (view.startsWith('suppliers/')) return 'suppliers';
@@ -610,6 +611,8 @@ const App: React.FC = () => {
       'projects/tasks',
       'suppliers/manage',
       'suppliers/quotes',
+      'hr/internal-employees',
+      'hr/external-employees',
       'settings',
     ],
     [],
@@ -641,6 +644,8 @@ const App: React.FC = () => {
       'projects/tasks',
       'suppliers/manage',
       'suppliers/quotes',
+      'hr/internal-employees',
+      'hr/external-employees',
       'settings',
     ];
     return validViews.includes(hash)
@@ -703,6 +708,9 @@ const App: React.FC = () => {
       // Suppliers module - manager
       'suppliers/manage': ['manager'],
       'suppliers/quotes': ['manager'],
+      // HR module - manager only
+      'hr/internal-employees': ['manager'],
+      'hr/external-employees': ['manager'],
       // Standalone
       settings: ['admin', 'manager', 'user'],
     };
@@ -851,20 +859,9 @@ const App: React.FC = () => {
             break;
           }
           case 'hr': {
-            if (currentUser.role !== 'admin' && currentUser.role !== 'manager') return;
-            const [usersData, workUnitsData, clientsData, projectsData, tasksData] =
-              await Promise.all([
-                api.users.list(),
-                api.workUnits.list(),
-                api.clients.list(),
-                api.projects.list(),
-                api.tasks.list(),
-              ]);
+            if (currentUser.role !== 'manager') return;
+            const [usersData] = await Promise.all([api.users.list()]);
             setUsers(usersData);
-            setWorkUnits(workUnitsData);
-            setClients(clientsData);
-            setProjects(projectsData);
-            setProjectTasks(tasksData);
             await loadGeneralSettings();
             break;
           }
@@ -1790,6 +1787,67 @@ const App: React.FC = () => {
     }
   };
 
+  // Employee handlers for HR module
+  const addInternalEmployee = async (
+    name: string,
+    costPerHour?: number,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const employee = await api.employees.create({
+        name,
+        employeeType: 'internal',
+        costPerHour,
+      });
+      setUsers([...users, employee]);
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to add internal employee:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to create employee',
+      };
+    }
+  };
+
+  const addExternalEmployee = async (
+    name: string,
+    costPerHour?: number,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const employee = await api.employees.create({
+        name,
+        employeeType: 'external',
+        costPerHour,
+      });
+      setUsers([...users, employee]);
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to add external employee:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to create employee',
+      };
+    }
+  };
+
+  const handleUpdateEmployee = async (id: string, updates: Partial<User>) => {
+    try {
+      const updated = await api.employees.update(id, updates);
+      setUsers(users.map((u) => (u.id === id ? updated : u)));
+    } catch (err) {
+      console.error('Failed to update employee:', err);
+    }
+  };
+
+  const handleDeleteEmployee = async (id: string) => {
+    try {
+      await api.employees.delete(id);
+      setUsers(users.filter((u) => u.id !== id));
+    } catch (err) {
+      console.error('Failed to delete employee:', err);
+    }
+  };
+
   const addProject = async (name: string, clientId: string, description?: string) => {
     try {
       const usedColors = projects.map((p) => p.color);
@@ -2228,6 +2286,26 @@ const App: React.FC = () => {
                   currency={generalSettings.currency}
                 />
               )}
+
+            {activeView === 'hr/internal-employees' && currentUser.role === 'manager' && (
+              <InternalEmployeesView
+                users={users}
+                onAddEmployee={addInternalEmployee}
+                onUpdateEmployee={handleUpdateEmployee}
+                onDeleteEmployee={handleDeleteEmployee}
+                currency={generalSettings.currency}
+              />
+            )}
+
+            {activeView === 'hr/external-employees' && currentUser.role === 'manager' && (
+              <ExternalEmployeesView
+                users={users}
+                onAddEmployee={addExternalEmployee}
+                onUpdateEmployee={handleUpdateEmployee}
+                onDeleteEmployee={handleDeleteEmployee}
+                currency={generalSettings.currency}
+              />
+            )}
 
             {activeView === 'projects/manage' && (
               <ProjectsView
