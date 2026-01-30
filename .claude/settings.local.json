@@ -5,7 +5,13 @@
       "Bash(findstr:*)",
       "mcp__context7__resolve-library-id",
       "mcp__context7__query-docs",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(npm run lint:fix:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run format:*)"
     ]
   }
 }

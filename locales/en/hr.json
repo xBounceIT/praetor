@@ -117,12 +117,13 @@
     "editEmployee": "Edit Employee",
     "appUsers": "App Users",
     "internalStaff": "Internal Staff",
+    "allEmployees": "All Employees",
     "name": "Name",
     "type": "Type",
     "costPerHour": "Cost Per Hour",
     "status": "Status",
     "actions": "Actions",
-    "noEmployees": "No internal employees found",
+    "noEmployees": "No employees found",
     "noAppUsers": "No app users found",
     "searchEmployees": "Search employees...",
     "cannotDeleteAppUser": "App users can only be managed in Configuration",
@@ -135,7 +136,7 @@
     "active": "Active",
     "disabled": "Disabled",
     "noInternalStaff": "No internal staff found",
-    "createFirst": "Add your first internal employee"
+    "createFirst": "Create your first employee to get started"
   },
   "externalEmployees": {
     "title": "External Employees",

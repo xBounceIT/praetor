@@ -31,6 +31,7 @@ type StandardTableProps<T = any> = {
   footer?: ReactNode;
   footerClassName?: string;
   children?: ReactNode;
+  emptyState?: ReactNode;
   // Data-driven props
   data?: T[];
   columns?: Column<T>[];
@@ -51,6 +52,7 @@ const StandardTable = <T extends Record<string, any>>({
   footer: externalFooter,
   footerClassName,
   children,
+  emptyState,
   data,
   columns,
   defaultRowsPerPage = 10,
@@ -412,7 +414,7 @@ const StandardTable = <T extends Record<string, any>>({
                     colSpan={columns.length}
                     className="p-12 text-center text-slate-400 text-sm font-bold"
                   >
-                    {t('table.noResults')}
+                    {emptyState ?? t('table.noResults')}
                   </td>
                 </tr>
               )}

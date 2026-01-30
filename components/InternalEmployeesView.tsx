@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User } from '../types';
 import Modal from './Modal';
+import StandardTable, { Column } from './StandardTable';
+import StatusBadge from './StatusBadge';
 
 interface InternalEmployeesViewProps {
   users: User[];
@@ -29,26 +31,26 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
+  // Helper to extract surname from full name for sorting
+  const getSurname = (name: string): string => {
+    const parts = name.trim().split(' ');
+    return parts.length > 1 ? parts[parts.length - 1] : name;
+  };
 
-  // Filter users into app users and internal employees
-  const appUsers = useMemo(() => {
-    return users.filter(
+  // Combine and sort all employees by surname ascending
+  const allEmployees = useMemo(() => {
+    const filtered = users.filter(
       (u) =>
-        (u.employeeType === 'app_user' || !u.employeeType) &&
         !u.isDisabled &&
-        (searchTerm === '' || u.name.toLowerCase().includes(searchTerm.toLowerCase())),
+        (u.employeeType === 'internal' || u.employeeType === 'app_user' || !u.employeeType),
     );
-  }, [users, searchTerm]);
 
-  const internalEmployees = useMemo(() => {
-    return users.filter(
-      (u) =>
-        u.employeeType === 'internal' &&
-        !u.isDisabled &&
-        (searchTerm === '' || u.name.toLowerCase().includes(searchTerm.toLowerCase())),
-    );
-  }, [users, searchTerm]);
+    return filtered.sort((a, b) => {
+      const surnameA = getSurname(a.name).toLowerCase();
+      const surnameB = getSurname(b.name).toLowerCase();
+      return surnameA.localeCompare(surnameB);
+    });
+  }, [users]);
 
   const [formData, setFormData] = useState<{ name: string; costPerHour: string }>({
     name: '',
@@ -126,56 +128,79 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     }
   };
 
-  const renderEmployeeRow = (employee: User, isAppUser: boolean) => (
-    <tr
-      key={employee.id}
-      className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
-    >
-      <td className="px-6 py-4">
+  // Define columns for StandardTable
+  const columns: Column<User>[] = [
+    {
+      header: t('internalEmployees.name'),
+      accessorKey: 'name',
+      cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
-            {employee.avatarInitials}
+            {row.avatarInitials}
           </div>
-          <span className="font-semibold text-slate-800">{employee.name}</span>
+          <span className="font-semibold text-slate-800">{row.name}</span>
         </div>
-      </td>
-      <td className="px-6 py-4">
+      ),
+    },
+    {
+      header: t('internalEmployees.type'),
+      accessorFn: (row) =>
+        row.employeeType === 'internal'
+          ? t('internalEmployees.internalBadge')
+          : t('internalEmployees.appUserBadge'),
+      cell: ({ row }) => (
         <span
           className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-            isAppUser ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+            row.employeeType === 'internal'
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-blue-100 text-blue-700'
           }`}
         >
-          {isAppUser ? t('internalEmployees.appUserBadge') : t('internalEmployees.internalBadge')}
+          {row.employeeType === 'internal'
+            ? t('internalEmployees.internalBadge')
+            : t('internalEmployees.appUserBadge')}
         </span>
-      </td>
-      <td className="px-6 py-4 font-medium text-slate-600">
-        {currency}
-        {(employee.costPerHour || 0).toFixed(2)}
-      </td>
-      <td className="px-6 py-4">
-        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
-          {t('internalEmployees.active')}
+      ),
+    },
+    {
+      header: t('internalEmployees.costPerHour'),
+      accessorKey: 'costPerHour',
+      align: 'right',
+      cell: ({ value }) => (
+        <span className="font-medium text-slate-600">
+          {currency}
+          {(value || 0).toFixed(2)}
         </span>
-      </td>
-      <td className="px-6 py-4">
+      ),
+    },
+    {
+      header: t('internalEmployees.status'),
+      accessorFn: () => 'active',
+      cell: () => <StatusBadge type="active" label={t('internalEmployees.active')} />,
+      disableSorting: true,
+      disableFiltering: true,
+    },
+    {
+      header: t('internalEmployees.actions'),
+      id: 'actions',
+      cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <button
-            onClick={() => openEditModal(employee)}
+            onClick={() => openEditModal(row)}
             className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
             title={t('internalEmployees.editEmployee')}
           >
             <i className="fa-solid fa-pen-to-square"></i>
           </button>
-          {!isAppUser && (
+          {row.employeeType === 'internal' ? (
             <button
-              onClick={() => confirmDelete(employee)}
+              onClick={() => confirmDelete(row)}
               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               title={t('common:delete')}
             >
               <i className="fa-solid fa-trash"></i>
             </button>
-          )}
-          {isAppUser && (
+          ) : (
             <span
               className="p-2 text-slate-300 cursor-not-allowed"
               title={t('internalEmployees.cannotDeleteAppUser')}
@@ -184,8 +209,19 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             </span>
           )}
         </div>
-      </td>
-    </tr>
+      ),
+      disableSorting: true,
+      disableFiltering: true,
+    },
+  ];
+
+  // Custom empty state component
+  const EmptyState = () => (
+    <div className="p-8 text-center">
+      <i className="fa-solid fa-users text-4xl mb-3 text-slate-300"></i>
+      <p className="text-slate-500 font-medium">{t('internalEmployees.noEmployees')}</p>
+      <p className="text-sm text-slate-400 mt-1">{t('internalEmployees.createFirst')}</p>
+    </div>
   );
 
   return (
@@ -308,119 +344,22 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         </div>
       </Modal>
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('internalEmployees.title')}</h2>
-          <p className="text-slate-500">{t('internalEmployees.subtitle')}</p>
-        </div>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
-        >
-          <i className="fa-solid fa-plus"></i>
-          {t('internalEmployees.addEmployee')}
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={t('internalEmployees.searchEmployees')}
-            className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all"
-          />
-        </div>
-      </div>
-
-      {/* App Users Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            <i className="fa-solid fa-user text-praetor"></i>
-            {t('internalEmployees.appUsers')}
-            <span className="ml-2 px-2 py-0.5 bg-slate-200 rounded-full text-xs font-bold text-slate-600">
-              {appUsers.length}
-            </span>
-          </h3>
-        </div>
-        {appUsers.length === 0 ? (
-          <div className="p-8 text-center text-slate-400">
-            <i className="fa-solid fa-users text-4xl mb-3 opacity-50"></i>
-            <p>{t('internalEmployees.noAppUsers')}</p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.name')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.type')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.costPerHour')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.status')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>{appUsers.map((user) => renderEmployeeRow(user, true))}</tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Internal Staff Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            <i className="fa-solid fa-user-tie text-emerald-600"></i>
-            {t('internalEmployees.internalStaff')}
-            <span className="ml-2 px-2 py-0.5 bg-slate-200 rounded-full text-xs font-bold text-slate-600">
-              {internalEmployees.length}
-            </span>
-          </h3>
-        </div>
-        {internalEmployees.length === 0 ? (
-          <div className="p-8 text-center text-slate-400">
-            <i className="fa-solid fa-user-plus text-4xl mb-3 opacity-50"></i>
-            <p>{t('internalEmployees.noInternalStaff')}</p>
-            <p className="text-sm mt-1">{t('internalEmployees.createFirst')}</p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.name')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.type')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.costPerHour')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.status')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('internalEmployees.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>{internalEmployees.map((employee) => renderEmployeeRow(employee, false))}</tbody>
-          </table>
-        )}
-      </div>
+      {/* Employees Table */}
+      <StandardTable
+        title={t('internalEmployees.allEmployees')}
+        data={allEmployees}
+        columns={columns}
+        emptyState={<EmptyState />}
+        headerAction={
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
+          >
+            <i className="fa-solid fa-plus"></i>
+            {t('internalEmployees.addEmployee')}
+          </button>
+        }
+      />
     </div>
   );
 };
