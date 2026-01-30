@@ -319,43 +319,48 @@ const StandardTable = <T extends Record<string, any>>({
                   return (
                     <th
                       key={colId}
-                      className={`relative px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
+                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.headerClassName || ''}`}
                     >
-                      {/* Header text - aligned with cell content */}
-                      <span>{col.header}</span>
+                      {/* Full-width wrapper for proper positioning context */}
+                      <div
+                        className={`relative w-full flex items-center ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}
+                      >
+                        {/* Header text - with padding to avoid filter button overlap */}
+                        <span className={col.align === 'right' ? 'pr-6' : ''}>{col.header}</span>
 
-                      {/* Filter button - absolutely positioned, doesn't affect text alignment */}
-                      {!col.disableFiltering && (
-                        <div
-                          ref={activeFilterCol === colId ? filterRef : undefined}
-                          className="absolute right-1 top-1/2 -translate-y-1/2"
-                        >
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (activeFilterCol === colId) {
-                                setActiveFilterCol(null);
-                              } else {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setFilterPos({
-                                  top: rect.bottom + window.scrollY + 4,
-                                  left: rect.left + window.scrollX,
-                                });
-                                setActiveFilterCol(colId);
-                              }
-                            }}
-                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                              isFiltered || isSorted || activeFilterCol === colId
-                                ? 'text-praetor'
-                                : 'text-slate-400'
-                            }`}
+                        {/* Filter button - absolutely positioned within the full-width wrapper */}
+                        {!col.disableFiltering && (
+                          <div
+                            ref={activeFilterCol === colId ? filterRef : undefined}
+                            className={`absolute ${col.align === 'right' ? 'left-0' : 'right-0'} top-1/2 -translate-y-1/2`}
                           >
-                            <i className="fa-solid fa-filter"></i>
-                          </button>
-                        </div>
-                      )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (activeFilterCol === colId) {
+                                  setActiveFilterCol(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setFilterPos({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.left + window.scrollX,
+                                  });
+                                  setActiveFilterCol(colId);
+                                }
+                              }}
+                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                                isFiltered || isSorted || activeFilterCol === colId
+                                  ? 'text-praetor'
+                                  : 'text-slate-400'
+                              }`}
+                            >
+                              <i className="fa-solid fa-filter"></i>
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
-                      {/* Portal for filter popup */}
+                      {/* Portal for filter popup - outside the wrapper */}
                       {activeFilterCol === colId &&
                         filterPos &&
                         createPortal(
