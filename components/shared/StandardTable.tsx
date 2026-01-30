@@ -1,7 +1,7 @@
 import { ReactNode, useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import TableFilter from '../TableFilter';
+import TableFilter from './TableFilter';
 import CustomSelect from './CustomSelect';
 
 export type Column<T> = {

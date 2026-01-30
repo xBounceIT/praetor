@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Supplier } from '../../types';
 import StandardTable, { Column } from '../StandardTable';
-import StatusBadge from '../StatusBadge';
+import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 
 interface SuppliersViewProps {

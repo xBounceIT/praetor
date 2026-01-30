@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { SupplierQuote, SupplierQuoteItem, Supplier, Product } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import StandardTable from './shared/StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
 import { roundToTwoDecimals } from '../utils/numbers';
 import Modal from './Modal';
 

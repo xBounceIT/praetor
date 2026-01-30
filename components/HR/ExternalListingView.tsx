@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Client, Product, SpecialBid } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable from '../StandardTable';
-import ValidatedNumberInput from '../ValidatedNumberInput';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
-import Calendar from '../Calendar';
-import StatusBadge from '../StatusBadge';
+import Calendar from '../shared/Calendar';
+import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 
 interface ExternalListingViewProps {

@@ -4,7 +4,7 @@ import { Client, Project, ProjectTask, TimeEntry, UserRole } from '../../types';
 import { parseSmartEntry } from '../../services/geminiService';
 import CustomSelect from '../shared/CustomSelect';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
-import ValidatedNumberInput from '../ValidatedNumberInput';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface TimeEntryFormProps {
   clients: Client[];

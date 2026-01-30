@@ -28,7 +28,7 @@ import i18n from './i18n';
 import Layout from './components/Layout';
 import TimeEntryForm from './components/timesheet/TimeEntryForm';
 import Reports from './components/Reports';
-import Calendar from './components/Calendar';
+import Calendar from './components/shared/Calendar';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import UserManagement from './components/UserManagement';

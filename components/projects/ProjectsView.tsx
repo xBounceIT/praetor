@@ -4,7 +4,7 @@ import { Project, Client, UserRole } from '../types';
 import { COLORS } from '../constants';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable, { Column } from '../StandardTable';
-import StatusBadge from '../StatusBadge';
+import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 
 interface ProjectsViewProps {

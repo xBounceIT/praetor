@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Invoice, Expense, Payment } from '../types';
 import CustomSelect from './shared/CustomSelect';
-import Calendar from './Calendar';
+import Calendar from './shared/Calendar';
 
 interface FinancialReportsViewProps {
   invoices: Invoice[];

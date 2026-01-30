@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Quote, QuoteItem, Client, Product, SpecialBid, Sale } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import StandardTable, { Column } from './shared/StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
-import StatusBadge, { StatusType } from './StatusBadge';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
+import StatusBadge, { StatusType } from './shared/StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
 import Modal from './Modal';
 

@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Invoice, InvoiceItem, Client, Product, ClientsOrder } from '../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable from '../StandardTable';
-import ValidatedNumberInput from '../ValidatedNumberInput';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { roundToTwoDecimals } from '../../utils/numbers';
-import StatusBadge, { StatusType } from '../StatusBadge';
+import StatusBadge, { StatusType } from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 
 interface ClientsInvoicesViewProps {

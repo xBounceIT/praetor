@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, User, Notification } from '../types';
-import NotificationBell from './NotificationBell';
+import NotificationBell from './shared/NotificationBell';
 
 interface Module {
   id: string;

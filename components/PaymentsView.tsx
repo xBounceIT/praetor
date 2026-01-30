@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Payment, Client, Invoice } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import StandardTable from './shared/StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
-import StatusBadge, { StatusType } from './StatusBadge';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
+import StatusBadge, { StatusType } from './shared/StatusBadge';
 import Modal from './Modal';
 
 interface PaymentsViewProps {

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask, TimeEntry, UserRole, User } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
-import ValidatedNumberInput from '../ValidatedNumberInput';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { isItalianHoliday } from '../../utils/holidays';
 
 interface WeeklyViewProps {

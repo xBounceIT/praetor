@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GeneralSettings as IGeneralSettings } from '../types';
 import CustomSelect, { Option } from './shared/CustomSelect';
-import ValidatedNumberInput from './ValidatedNumberInput';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
 interface GeneralSettingsProps {
   settings: IGeneralSettings;
