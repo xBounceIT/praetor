@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Product, SpecialBid } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
-import StandardTable from '../StandardTable';
+import StandardTable from '../shared/StandardTable';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Calendar from '../shared/Calendar';
