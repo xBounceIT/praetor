@@ -1,17 +1,13 @@
-# STAGE 1: Build
-# Switched to slim to avoid Alpine compilation hangs
-FROM node:lts-slim AS builder
+# STAGE 1: Install dependencies
+FROM oven/bun:1 AS install
+WORKDIR /temp
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
-# Set memory limit for Node (helps prevent crashes during heavy builds)
-ENV NODE_OPTIONS="--max-old-space-size=4096"
-
+# STAGE 2: Build
+FROM oven/bun:1 AS builder
 WORKDIR /app
-
-COPY package.json package-lock.json* ./
-
-# Use 'ci' instead of 'install' and disable logs for speed
-RUN npm ci --no-audit --progress=false
-
+COPY --from=install /temp/node_modules node_modules
 COPY . .
 
 ARG VITE_API_URL=http://localhost:3001/api
@@ -20,9 +16,10 @@ ENV VITE_API_URL=$VITE_API_URL
 ARG APP_VERSION
 ENV VITE_APP_VERSION=$APP_VERSION
 
-RUN npm run build
+ENV NODE_ENV=production
+RUN bun run build
 
-# STAGE 2: Production with Caddy
+# STAGE 3: Production with Caddy
 FROM caddy:alpine
 
 COPY Caddyfile /etc/caddy/Caddyfile

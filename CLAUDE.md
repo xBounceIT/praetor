@@ -10,19 +10,19 @@ Praetor is an AI-enhanced ERP application for time tracking, project management,
 
 ### Frontend (root directory)
 ```bash
-npm run dev          # Start dev server (port 3000)
-npm run build        # Production build
-npm run lint         # ESLint check
-npm run lint:fix     # Auto-fix lint issues
-npm run format       # Prettier formatting
+bun run dev          # Start dev server (port 3000)
+bun run build        # Production build
+bun run lint         # ESLint check
+bun run lint:fix     # Auto-fix lint issues
+bun run format       # Prettier formatting
 ```
 
 ### Backend (server directory)
 ```bash
 cd server
-npm run dev          # Dev server with hot reload (port 3001)
-npm run build        # TypeScript compilation
-npm run start        # Run compiled server
+bun run dev          # Dev server with hot reload (port 3001)
+bun run build        # TypeScript compilation
+bun run start        # Run compiled server
 ```
 
 ### Docker (full stack)
@@ -81,7 +81,7 @@ Backend routes in `/server/routes/` with prefix-based registration:
 
 - **Environment**: Windows - avoid Linux-specific commands
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
-- **CDN dependencies**: React, Recharts, Tailwind loaded via CDN in production
+- **CDN dependencies**: React, Recharts
 - **Test accounts**: admin/password, manager/password, user/password
 - **No automated tests**: Manual testing only
 - **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
