@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Invoice, Expense, Payment } from '../types';
-import CustomSelect from './CustomSelect';
+import CustomSelect from './shared/CustomSelect';
 import Calendar from './Calendar';
 
 interface FinancialReportsViewProps {

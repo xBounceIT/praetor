@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { TimeEntry, Project, Client, User } from '../types';
 import { COLORS } from '../constants';
-import CustomSelect, { Option } from './CustomSelect';
+import CustomSelect, { Option } from './shared/CustomSelect';
 
 interface ReportsProps {
   entries: TimeEntry[];

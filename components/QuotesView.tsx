@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Quote, QuoteItem, Client, Product, SpecialBid, Sale } from '../types';
-import CustomSelect from './CustomSelect';
+import CustomSelect from './shared/CustomSelect';
 import StandardTable, { Column } from './shared/StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import StatusBadge, { StatusType } from './StatusBadge';

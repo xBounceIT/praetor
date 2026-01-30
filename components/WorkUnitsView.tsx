@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, WorkUnit } from '../types';
-import CustomSelect from './CustomSelect';
+import CustomSelect from './shared/CustomSelect';
 import { workUnitsApi } from '../services/api';
 import Modal from './Modal';
 

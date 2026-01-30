@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LdapConfig, UserRole } from '../types';
-import CustomSelect from './CustomSelect';
+import CustomSelect from './shared/CustomSelect';
 
 interface AdminAuthenticationProps {
   config: LdapConfig;

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask, TimeEntry, UserRole, User } from '../../types';
-import CustomSelect from '../CustomSelect';
+import CustomSelect from '../shared/CustomSelect';
 import ValidatedNumberInput from '../ValidatedNumberInput';
 import { isItalianHoliday } from '../../utils/holidays';
 

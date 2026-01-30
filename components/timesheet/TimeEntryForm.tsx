@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask, TimeEntry, UserRole } from '../../types';
 import { parseSmartEntry } from '../../services/geminiService';
-import CustomSelect from '../CustomSelect';
-import CustomRepeatModal from '../CustomRepeatModal';
+import CustomSelect from '../shared/CustomSelect';
+import CustomRepeatModal from '../shared/CustomRepeatModal';
 import ValidatedNumberInput from '../ValidatedNumberInput';
 
 interface TimeEntryFormProps {

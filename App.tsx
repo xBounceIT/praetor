@@ -38,7 +38,7 @@ import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import AdminAuthentication from './components/AdminAuthentication';
 import GeneralSettings from './components/GeneralSettings';
-import CustomSelect from './components/CustomSelect';
+import CustomSelect from './components/shared/CustomSelect';
 import WeeklyView from './components/timesheet/WeeklyView';
 import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';

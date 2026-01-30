@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Invoice, InvoiceItem, Client, Product, ClientsOrder } from '../types';
-import CustomSelect from '../CustomSelect';
+import CustomSelect from '../shared/CustomSelect';
 import StandardTable from '../StandardTable';
 import ValidatedNumberInput from '../ValidatedNumberInput';
 import { roundToTwoDecimals } from '../../utils/numbers';
