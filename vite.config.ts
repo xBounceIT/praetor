@@ -7,8 +7,8 @@ import pkg from './package.json';
 // Generate build date in yyyymmdd format
 const getBuildDate = () => {
   const year = '2026';
-  const month = '01';
-  const day = '27';
+  const month = '02';
+  const day = '02';
   return `${year}${month}${day}`;
 };
 
