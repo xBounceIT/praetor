@@ -329,44 +329,37 @@ const StandardTable = <T extends Record<string, any>>({
                       key={colId}
                       className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.headerClassName || ''}`}
                     >
-                      {/* Full-width wrapper for proper positioning context */}
+                      {/* Inline wrapper for button beside text */}
                       <div
-                        className={`relative w-full flex items-center ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : ''}`}
+                        className={`inline-flex items-center gap-1 ${effectiveAlign === 'right' ? 'flex-row-reverse' : ''}`}
                       >
-                        {/* Header text - with padding to avoid filter button overlap */}
-                        <span className={effectiveAlign === 'right' ? 'pr-6' : ''}>
-                          {col.header}
-                        </span>
+                        <span>{col.header}</span>
 
-                        {/* Filter button - absolutely positioned within the full-width wrapper */}
+                        {/* Filter button - inline with header text */}
                         {!col.disableFiltering && (
-                          <div
+                          <button
                             ref={activeFilterCol === colId ? filterRef : undefined}
-                            className={`absolute ${effectiveAlign === 'right' ? 'left-0' : 'right-0'} top-1/2 -translate-y-1/2`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeFilterCol === colId) {
+                                setActiveFilterCol(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setFilterPos({
+                                  top: rect.bottom + window.scrollY + 4,
+                                  left: rect.left + window.scrollX,
+                                });
+                                setActiveFilterCol(colId);
+                              }
+                            }}
+                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                              isFiltered || isSorted || activeFilterCol === colId
+                                ? 'text-praetor'
+                                : 'text-slate-400'
+                            }`}
                           >
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (activeFilterCol === colId) {
-                                  setActiveFilterCol(null);
-                                } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setFilterPos({
-                                    top: rect.bottom + window.scrollY + 4,
-                                    left: rect.left + window.scrollX,
-                                  });
-                                  setActiveFilterCol(colId);
-                                }
-                              }}
-                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                                isFiltered || isSorted || activeFilterCol === colId
-                                  ? 'text-praetor'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              <i className="fa-solid fa-filter"></i>
-                            </button>
-                          </div>
+                            <i className="fa-solid fa-filter"></i>
+                          </button>
                         )}
                       </div>
 
