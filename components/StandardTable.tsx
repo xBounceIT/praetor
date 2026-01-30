@@ -325,7 +325,7 @@ const StandardTable = <T extends Record<string, any>>({
                         className={`flex items-center gap-2 group ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}
                       >
                         <span>{col.header}</span>
-                        {!col.disableFiltering && !col.disableSorting && (
+                        {!col.disableFiltering && (
                           <div
                             ref={activeFilterCol === colId ? filterRef : undefined}
                             className="inline-block"

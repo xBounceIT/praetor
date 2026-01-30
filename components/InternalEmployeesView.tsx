@@ -341,21 +341,27 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         </div>
       </Modal>
 
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">{t('internalEmployees.title')}</h2>
+          <p className="text-slate-500">{t('internalEmployees.subtitle')}</p>
+        </div>
+        <button
+          onClick={openAddModal}
+          className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
+        >
+          <i className="fa-solid fa-plus"></i>
+          {t('internalEmployees.addEmployee')}
+        </button>
+      </div>
+
       {/* Employees Table */}
       <StandardTable
         title={t('internalEmployees.allEmployees')}
         data={allEmployees}
         columns={columns}
         emptyState={<EmptyState />}
-        headerAction={
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
-          >
-            <i className="fa-solid fa-plus"></i>
-            {t('internalEmployees.addEmployee')}
-          </button>
-        }
       />
     </div>
   );
