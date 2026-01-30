@@ -145,7 +145,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
             </h3>
             <p className="text-sm text-slate-500 mt-1">
               {t('entry.howHandleEntries')}{' '}
-              <strong className="text-slate-800">{selectedTask.name}</strong>?
+              <strong className="text-slate-800">{selectedTask?.name}</strong>?
             </p>
           </div>
 
