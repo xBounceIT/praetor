@@ -37,7 +37,7 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
 
 2. **Install dependencies**
    ```bash
-   npm install
+   bun install
    ```
 
 3. **Environment Configuration**
@@ -52,7 +52,7 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
 
 4. **Run Locally**
    ```bash
-   npm run dev
+   bun run dev
    ```
 
 ## Deployment
