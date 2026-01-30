@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User } from '../types';
 import Modal from './Modal';
-import StandardTable, { Column } from './StandardTable';
+import StandardTable, { Column } from './shared/StandardTable';
 import StatusBadge from './StatusBadge';
 
 interface InternalEmployeesViewProps {

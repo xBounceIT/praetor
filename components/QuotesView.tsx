@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Quote, QuoteItem, Client, Product, SpecialBid, Sale } from '../types';
 import CustomSelect from './CustomSelect';
-import StandardTable, { Column } from './StandardTable';
+import StandardTable, { Column } from './shared/StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import StatusBadge, { StatusType } from './StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';

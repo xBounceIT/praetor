@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, UserRole, Client, Project, ProjectTask } from '../types';
 import CustomSelect from './CustomSelect';
-import StandardTable from './StandardTable';
+import StandardTable from './shared/StandardTable';
 
 import ValidatedNumberInput from './ValidatedNumberInput';
 import { usersApi } from '../services/api';

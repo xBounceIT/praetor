@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Payment, Client, Invoice } from '../types';
 import CustomSelect from './CustomSelect';
-import StandardTable from './StandardTable';
+import StandardTable from './shared/StandardTable';
 import ValidatedNumberInput from './ValidatedNumberInput';
 import StatusBadge, { StatusType } from './StatusBadge';
 import Modal from './Modal';
