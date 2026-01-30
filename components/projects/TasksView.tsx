@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProjectTask, Project, Client, UserRole, User } from '../types';
-import CustomSelect from './CustomSelect';
-import StandardTable, { Column } from './StandardTable';
-import StatusBadge from './StatusBadge';
-import { tasksApi } from '../services/api';
-import Modal from './Modal';
+import CustomSelect from '../CustomSelect';
+import StandardTable, { Column } from '../StandardTable';
+import StatusBadge from '../StatusBadge';
+import { tasksApi } from '../../services/api';
+import Modal from '../Modal';
 
 interface TasksViewProps {
   tasks: ProjectTask[];

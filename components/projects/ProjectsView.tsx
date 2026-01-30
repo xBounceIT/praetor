@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Project, Client, UserRole } from '../types';
 import { COLORS } from '../constants';
-import CustomSelect from './CustomSelect';
-import StandardTable, { Column } from './StandardTable';
-import StatusBadge from './StatusBadge';
-import Modal from './Modal';
+import CustomSelect from '../CustomSelect';
+import StandardTable, { Column } from '../StandardTable';
+import StatusBadge from '../StatusBadge';
+import Modal from '../Modal';
 
 interface ProjectsViewProps {
   projects: Project[];
