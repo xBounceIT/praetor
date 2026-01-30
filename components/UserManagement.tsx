@@ -335,8 +335,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
       if (
         currentUserRole === 'admin' &&
-        editingUser.id !== currentUserId &&
-        editRole !== editingUser.role
+        editingUser?.id !== currentUserId &&
+        editRole !== editingUser?.role
       ) {
         updates.role = editRole;
       }
@@ -345,7 +345,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         updates.costPerHour = parseFloat(editCostPerHour) || 0;
       }
 
-      onUpdateUser(editingUser.id, updates);
+      onUpdateUser(editingUser!.id, updates);
       setEditingUser(null);
     }
   };
@@ -608,7 +608,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
               )}
 
-              {editingUser.id !== currentUserId && (
+              {editingUser?.id !== currentUserId && (
                 <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <div>
                     <p className="text-sm font-bold text-slate-700">{t('hr:workforce.disabled')}</p>
