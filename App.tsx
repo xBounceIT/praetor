@@ -13,7 +13,7 @@ import {
   GeneralSettings as IGeneralSettings,
   Product,
   Quote,
-  Sale,
+  ClientsOrder,
   WorkUnit,
   Invoice,
   Payment,
@@ -46,9 +46,9 @@ import api, { setAuthToken, getAuthToken } from './services/api';
 import NotFound from './components/NotFound';
 import ProductsView from './components/ProductsView';
 import QuotesView from './components/QuotesView';
-import SalesView from './components/SalesView';
 import WorkUnitsView from './components/WorkUnitsView';
-import InvoicesView from './components/InvoicesView';
+import ClientsOrdersView from './components/accounting/ClientsOrdersView';
+import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import PaymentsView from './components/PaymentsView';
 import ExpensesView from './components/ExpensesView';
 import FinancialReportsView from './components/FinancialReportsView';
@@ -545,7 +545,7 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [specialBids, setSpecialBids] = useState<SpecialBid[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -600,10 +600,13 @@ const App: React.FC = () => {
       'configuration/general',
       'crm/clients',
       'crm/quotes',
-      'crm/sales',
+      // Accounting module
+      'accounting/clients-orders',
+      'accounting/clients-invoices',
+      // Catalog module
       'catalog/products',
       'catalog/special-bids',
-      'finances/invoices',
+      // Finances module
       'finances/payments',
       'finances/expenses',
       'finances/reports',
@@ -633,10 +636,13 @@ const App: React.FC = () => {
       'configuration/general',
       'crm/clients',
       'crm/quotes',
-      'crm/sales',
+      // Accounting module
+      'accounting/clients-orders',
+      'accounting/clients-invoices',
+      // Catalog module
       'catalog/products',
       'catalog/special-bids',
-      'finances/invoices',
+      // Finances module
       'finances/payments',
       'finances/expenses',
       'finances/reports',
@@ -656,25 +662,25 @@ const App: React.FC = () => {
   });
   const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
 
-  const quoteIdsWithSales = useMemo(() => {
+  const quoteIdsWithOrders = useMemo(() => {
     const ids = new Set<string>();
-    sales.forEach((sale) => {
-      if (sale.linkedQuoteId) {
-        ids.add(sale.linkedQuoteId);
+    clientsOrders.forEach((order) => {
+      if (order.linkedQuoteId) {
+        ids.add(order.linkedQuoteId);
       }
     });
     return ids;
-  }, [sales]);
+  }, [clientsOrders]);
 
-  const quoteSaleStatuses = useMemo(() => {
-    const map: Record<string, Sale['status']> = {};
-    sales.forEach((sale) => {
-      if (sale.linkedQuoteId) {
-        map[sale.linkedQuoteId] = sale.status;
+  const quoteOrderStatuses = useMemo(() => {
+    const map: Record<string, ClientsOrder['status']> = {};
+    clientsOrders.forEach((order) => {
+      if (order.linkedQuoteId) {
+        map[order.linkedQuoteId] = order.status;
       }
     });
     return map;
-  }, [sales]);
+  }, [clientsOrders]);
 
   const isRouteAccessible = useMemo(() => {
     if (!currentUser) return false;
@@ -693,12 +699,13 @@ const App: React.FC = () => {
       // CRM module - manager
       'crm/clients': ['manager'],
       'crm/quotes': ['manager'],
-      'crm/sales': ['manager'],
+      // Accounting module - manager
+      'accounting/clients-orders': ['manager'],
+      'accounting/clients-invoices': ['manager'],
       // Catalog module - manager
       'catalog/products': ['manager'],
       'catalog/special-bids': ['manager'],
       // Finances module - manager
-      'finances/invoices': ['manager'],
       'finances/payments': ['manager'],
       'finances/expenses': ['manager'],
       'finances/reports': ['manager'],
@@ -885,19 +892,34 @@ const App: React.FC = () => {
           }
           case 'crm': {
             if (currentUser.role !== 'manager') return;
-            const [clientsData, quotesData, salesData, productsData, specialBidsData] =
-              await Promise.all([
-                api.clients.list(),
-                api.quotes.list(),
-                api.sales.list(),
-                api.products.list(),
-                api.specialBids.list(),
-              ]);
+            const [clientsData, quotesData, productsData, specialBidsData] = await Promise.all([
+              api.clients.list(),
+              api.quotes.list(),
+              api.products.list(),
+              api.specialBids.list(),
+            ]);
             setClients(clientsData);
             setQuotes(quotesData);
-            setSales(salesData);
             setProducts(productsData);
             setSpecialBids(specialBidsData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'accounting': {
+            if (currentUser.role !== 'manager') return;
+            const [ordersData, invoicesData, paymentsData, expensesData, clientsData] =
+              await Promise.all([
+                api.clientsOrders.list(),
+                api.invoices.list(),
+                api.payments.list(),
+                api.expenses.list(),
+                api.clients.list(),
+              ]);
+            setClientsOrders(ordersData);
+            setInvoices(invoicesData);
+            setPayments(paymentsData);
+            setExpenses(expensesData);
+            setClients(clientsData);
             await loadGeneralSettings();
             break;
           }
@@ -918,13 +940,11 @@ const App: React.FC = () => {
           }
           case 'finances': {
             if (currentUser.role !== 'manager') return;
-            const [invoicesData, paymentsData, expensesData, clientsData] = await Promise.all([
-              api.invoices.list(),
+            const [paymentsData, expensesData, clientsData] = await Promise.all([
               api.payments.list(),
               api.expenses.list(),
               api.clients.list(),
             ]);
-            setInvoices(invoicesData);
             setPayments(paymentsData);
             setExpenses(expensesData);
             setClients(clientsData);
@@ -1567,43 +1587,43 @@ const App: React.FC = () => {
     }
   };
 
-  const addSale = async (saleData: Partial<Sale>) => {
+  const addClientsOrder = async (orderData: Partial<ClientsOrder>) => {
     try {
-      const sale = await api.sales.create(saleData);
-      setSales([...sales, sale]);
+      const order = await api.clientsOrders.create(orderData);
+      setClientsOrders([...clientsOrders, order]);
     } catch (err) {
-      console.error('Failed to add sale:', err);
+      console.error('Failed to add order:', err);
     }
   };
 
-  const handleUpdateSale = async (id: string, updates: Partial<Sale>) => {
+  const handleUpdateClientsOrder = async (id: string, updates: Partial<ClientsOrder>) => {
     try {
-      const updated = await api.sales.update(id, updates);
-      setSales(sales.map((s) => (s.id === id ? updated : s)));
+      const updated = await api.clientsOrders.update(id, updates);
+      setClientsOrders(clientsOrders.map((o) => (o.id === id ? updated : o)));
 
-      // When a sale is confirmed, projects are auto-created on the backend
+      // When an order is confirmed, projects are auto-created on the backend
       // Refresh the projects list to reflect the new projects
       if (updates.status === 'confirmed') {
         const projectsData = await api.projects.list();
         setProjects(projectsData);
       }
     } catch (err) {
-      console.error('Failed to update sale:', err);
+      console.error('Failed to update order:', err);
     }
   };
 
-  const handleDeleteSale = async (id: string) => {
+  const handleDeleteClientsOrder = async (id: string) => {
     try {
-      await api.sales.delete(id);
-      setSales(sales.filter((s) => s.id !== id));
+      await api.clientsOrders.delete(id);
+      setClientsOrders(clientsOrders.filter((o) => o.id !== id));
     } catch (err) {
-      console.error('Failed to delete sale:', err);
+      console.error('Failed to delete order:', err);
     }
   };
 
-  const handleCreateSaleFromQuote = async (quote: Quote) => {
+  const handleCreateClientsOrderFromQuote = async (quote: Quote) => {
     try {
-      const saleData: Partial<Sale> = {
+      const orderData: Partial<ClientsOrder> = {
         clientId: quote.clientId,
         clientName: quote.clientName,
         status: 'draft',
@@ -1618,18 +1638,18 @@ const App: React.FC = () => {
           discount: item.discount,
           note: item.note,
           id: 'temp-' + Math.random().toString(36).substr(2, 9),
-          saleId: '',
+          orderId: '',
         })),
         discount: quote.discount,
         notes: quote.notes,
       };
 
-      const sale = await api.sales.create(saleData);
-      setSales([...sales, sale]);
-      setActiveView('crm/sales');
+      const order = await api.clientsOrders.create(orderData);
+      setClientsOrders([...clientsOrders, order]);
+      setActiveView('accounting/clients-orders');
     } catch (err) {
-      console.error('Failed to create sale from quote:', err);
-      alert('Failed to create sale from quote');
+      console.error('Failed to create order from quote:', err);
+      alert('Failed to create order from quote');
     }
   };
 
@@ -2190,24 +2210,24 @@ const App: React.FC = () => {
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}
-                  onCreateSale={handleCreateSaleFromQuote}
+                  onCreateClientsOrder={handleCreateClientsOrderFromQuote}
                   quoteFilterId={quoteFilterId}
-                  quoteIdsWithSales={quoteIdsWithSales}
-                  quoteSaleStatuses={quoteSaleStatuses}
+                  quoteIdsWithOrders={quoteIdsWithOrders}
+                  quoteOrderStatuses={quoteOrderStatuses}
                   currency={generalSettings.currency}
                 />
               )}
 
-            {activeView === 'crm/sales' &&
+            {activeView === 'accounting/clients-orders' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <SalesView
-                  sales={sales}
+                <ClientsOrdersView
+                  orders={clientsOrders}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
-                  onAddSale={addSale}
-                  onUpdateSale={handleUpdateSale}
-                  onDeleteSale={handleDeleteSale}
+                  onAddClientsOrder={addClientsOrder}
+                  onUpdateClientsOrder={handleUpdateClientsOrder}
+                  onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}
                   onViewQuote={(quoteId) => {
                     setQuoteFilterId(quoteId);
@@ -2216,13 +2236,13 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'finances/invoices' &&
+            {activeView === 'accounting/clients-invoices' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <InvoicesView
+                <ClientsInvoicesView
                   invoices={invoices}
                   clients={clients}
                   products={products}
-                  sales={sales}
+                  clientsOrders={clientsOrders}
                   onAddInvoice={addInvoice}
                   onUpdateInvoice={handleUpdateInvoice}
                   onDeleteInvoice={handleDeleteInvoice}

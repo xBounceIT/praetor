@@ -16,7 +16,8 @@ const moduleDefaultRoutes: Record<string, View> = {
   crm: 'crm/clients',
   catalog: 'catalog/products',
   projects: 'projects/manage',
-  finances: 'finances/invoices',
+  accounting: 'accounting/clients-orders',
+  finances: 'finances/payments',
   suppliers: 'suppliers/manage',
   hr: 'hr/internal-employees',
   configuration: 'configuration/authentication',
@@ -29,6 +30,7 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('catalog/')) return 'catalog';
   if (route.startsWith('hr/')) return 'hr';
   if (route.startsWith('projects/')) return 'projects';
+  if (route.startsWith('accounting/')) return 'accounting';
   if (route.startsWith('finances/')) return 'finances';
   if (route.startsWith('suppliers/')) return 'suppliers';
   if (route.startsWith('configuration/')) return 'configuration';
@@ -76,6 +78,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
       { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
       { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
+      { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
       { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
       { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
       { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
@@ -96,7 +99,13 @@ const Layout: React.FC<LayoutProps> = ({
     if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
 
     // Manager only access (Admin and users excluded as requested)
-    if (m.id === 'crm' || m.id === 'catalog' || m.id === 'finances' || m.id === 'suppliers') {
+    if (
+      m.id === 'crm' ||
+      m.id === 'catalog' ||
+      m.id === 'accounting' ||
+      m.id === 'finances' ||
+      m.id === 'suppliers'
+    ) {
       return currentUser.role === 'manager';
     }
 
@@ -215,13 +224,28 @@ const Layout: React.FC<LayoutProps> = ({
                 setIsMobileMenuOpen(false);
               }}
             />
+          </>
+        );
+      case 'accounting':
+        return (
+          <>
             <NavItem
               icon="fa-cart-shopping"
-              label={t('routes.sales')}
-              active={activeView === 'crm/sales'}
+              label={t('routes.clientsOrders')}
+              active={activeView === 'accounting/clients-orders'}
               isCollapsed={isCollapsed}
               onClick={() => {
-                onViewChange('crm/sales');
+                onViewChange('accounting/clients-orders');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-file-invoice-dollar"
+              label={t('routes.clientsInvoices')}
+              active={activeView === 'accounting/clients-invoices'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('accounting/clients-invoices');
                 setIsMobileMenuOpen(false);
               }}
             />
@@ -306,16 +330,6 @@ const Layout: React.FC<LayoutProps> = ({
       case 'finances':
         return (
           <>
-            <NavItem
-              icon="fa-file-invoice-dollar"
-              label={t('routes.invoices')}
-              active={activeView === 'finances/invoices'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('finances/invoices');
-                setIsMobileMenuOpen(false);
-              }}
-            />
             <NavItem
               icon="fa-money-bill-wave"
               label={t('routes.payments')}

@@ -27,7 +27,7 @@ export interface Notification {
   message?: string;
   data?: {
     projectNames?: string[];
-    saleId?: string;
+    orderId?: string;
     clientName?: string;
     [key: string]: unknown;
   };
@@ -197,9 +197,9 @@ export interface Quote {
   updatedAt: number;
 }
 
-export interface SaleItem {
+export interface ClientsOrderItem {
   id: string;
-  saleId: string;
+  orderId: string;
   productId: string;
   productName: string;
   specialBidId?: string;
@@ -213,12 +213,12 @@ export interface SaleItem {
   note?: string;
 }
 
-export interface Sale {
+export interface ClientsOrder {
   id: string;
   linkedQuoteId?: string; // Reference to source quote
   clientId: string;
   clientName: string;
-  items: SaleItem[];
+  items: ClientsOrderItem[];
   paymentTerms:
     | 'immediate'
     | '15gg'
@@ -251,12 +251,13 @@ export type View =
   // CRM module
   | 'crm/clients'
   | 'crm/quotes'
-  | 'crm/sales'
   // Catalog module
   | 'catalog/products'
   | 'catalog/special-bids'
+  // Accounting module
+  | 'accounting/clients-orders'
+  | 'accounting/clients-invoices'
   // Finances module
-  | 'finances/invoices'
   | 'finances/payments'
   | 'finances/expenses'
   | 'finances/reports'
@@ -297,7 +298,7 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
-  linkedSaleId?: string;
+  linkedOrderId?: string;
   clientId: string;
   clientName: string;
   invoiceNumber: string;

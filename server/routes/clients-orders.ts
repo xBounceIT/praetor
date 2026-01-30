@@ -26,14 +26,14 @@ const PROJECT_COLORS = [
 const getRandomColor = () => PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
 
 export default async function (fastify, _opts) {
-  // All sales routes require manager role
+  // All clients_orders routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
-  // GET / - List all sales with their items
+  // GET / - List all clients_orders with their items
   fastify.get('/', async (_request, _reply) => {
-    // Get all sales
-    const salesResult = await query(
+    // Get all clients_orders
+    const clients_ordersResult = await query(
       `SELECT
                 id,
                 linked_quote_id as "linkedQuoteId",
@@ -45,15 +45,15 @@ export default async function (fastify, _opts) {
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM sales
+            FROM clients_orders
             ORDER BY created_at DESC`,
     );
 
-    // Get all sale items
+    // Get all order items
     const itemsResult = await query(
       `SELECT
                 id,
-                sale_id as "saleId",
+                order_id as "orderId",
                 product_id as "productId",
                 product_name as "productName",
                 special_bid_id as "specialBidId",
@@ -65,29 +65,29 @@ export default async function (fastify, _opts) {
                 special_bid_mol_percentage as "specialBidMolPercentage",
                 note,
                 discount
-            FROM sale_items
+            FROM clients_order_items
             ORDER BY created_at ASC`,
     );
 
-    // Group items by sale
-    const itemsBySale = {};
+    // Group items by order
+    const itemsByOrder = {};
     itemsResult.rows.forEach((item) => {
-      if (!itemsBySale[item.saleId]) {
-        itemsBySale[item.saleId] = [];
+      if (!itemsByOrder[item.orderId]) {
+        itemsByOrder[item.orderId] = [];
       }
-      itemsBySale[item.saleId].push(item);
+      itemsByOrder[item.orderId].push(item);
     });
 
-    // Attach items to sales
-    const sales = salesResult.rows.map((sale) => ({
-      ...sale,
-      items: itemsBySale[sale.id] || [],
+    // Attach items to clients_orders
+    const clients_orders = clients_ordersResult.rows.map((order) => ({
+      ...order,
+      items: itemsByOrder[order.id] || [],
     }));
 
-    return sales;
+    return clients_orders;
   });
 
-  // POST / - Create sale with items
+  // POST / - Create order with items
   fastify.post('/', async (request, reply) => {
     const { linkedQuoteId, clientId, clientName, items, paymentTerms, discount, status, notes } =
       request.body;
@@ -144,11 +144,11 @@ export default async function (fastify, _opts) {
     const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
     if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
-    const saleId = 's-' + Date.now();
+    const orderId = 's-' + Date.now();
 
-    // Insert sale
-    const saleResult = await query(
-      `INSERT INTO sales (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
+    // Insert order
+    const orderResult = await query(
+      `INSERT INTO clients_orders (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING
                 id,
@@ -162,7 +162,7 @@ export default async function (fastify, _opts) {
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
       [
-        saleId,
+        orderId,
         linkedQuoteId || null,
         clientIdResult.value,
         clientNameResult.value,
@@ -173,16 +173,16 @@ export default async function (fastify, _opts) {
       ],
     );
 
-    // Insert sale items
+    // Insert order items
     const createdItems = [];
     for (const item of normalizedItems) {
       const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
       const itemResult = await query(
-        `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+        `INSERT INTO clients_order_items (id, order_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                  RETURNING
                     id,
-                    sale_id as "saleId",
+                    order_id as "orderId",
                     product_id as "productId",
                     product_name as "productName",
                     special_bid_id as "specialBidId",
@@ -196,7 +196,7 @@ export default async function (fastify, _opts) {
                     note`,
         [
           itemId,
-          saleId,
+          orderId,
           item.productId,
           item.productName,
           item.specialBidId || null,
@@ -214,12 +214,12 @@ export default async function (fastify, _opts) {
     }
 
     return reply.code(201).send({
-      ...saleResult.rows[0],
+      ...orderResult.rows[0],
       items: createdItems,
     });
   });
 
-  // PUT /:id - Update sale
+  // PUT /:id - Update order
   fastify.put('/:id', async (request, reply) => {
     const { id } = request.params;
     const { clientId, clientName, items, paymentTerms, discount, status, notes } = request.body;
@@ -365,7 +365,7 @@ export default async function (fastify, _opts) {
       if (!normalizedItems) return;
     }
 
-    const existingSaleResult = await query(
+    const existingOrderResult = await query(
       `SELECT
                     id,
                     linked_quote_id as "linkedQuoteId",
@@ -375,20 +375,20 @@ export default async function (fastify, _opts) {
                     discount,
                     status,
                     notes
-                FROM sales
+                FROM clients_orders
                 WHERE id = $1`,
       [idResult.value],
     );
 
-    if (existingSaleResult.rows.length === 0) {
-      return reply.code(404).send({ error: 'Sale not found' });
+    if (existingOrderResult.rows.length === 0) {
+      return reply.code(404).send({ error: 'Order not found' });
     }
 
-    const existingSale = existingSaleResult.rows[0];
+    const existingOrder = existingOrderResult.rows[0];
     let existingItems: (typeof items)[number][] | null = null;
 
-    // Check if sale is read-only (non-draft status)
-    // Status changes are always allowed, but other field changes are blocked for non-draft sales
+    // Check if order is read-only (non-draft status)
+    // Status changes are always allowed, but other field changes are blocked for non-draft clients_orders
     const isStatusChangeOnly =
       status !== undefined &&
       clientIdValue === undefined &&
@@ -398,20 +398,20 @@ export default async function (fastify, _opts) {
       notes === undefined &&
       items === undefined;
 
-    if (existingSale.status !== 'draft' && !isStatusChangeOnly) {
+    if (existingOrder.status !== 'draft' && !isStatusChangeOnly) {
       return reply.code(409).send({
-        error: 'Non-draft sales are read-only',
-        currentStatus: existingSale.status,
+        error: 'Non-draft clients_orders are read-only',
+        currentStatus: existingOrder.status,
       });
     }
 
-    if (existingSale.linkedQuoteId) {
+    if (existingOrder.linkedQuoteId) {
       const lockedFields: string[] = [];
 
       if (
         clientIdValue !== undefined &&
         clientIdValue !== null &&
-        clientIdValue !== existingSale.clientId
+        clientIdValue !== existingOrder.clientId
       ) {
         lockedFields.push('clientId');
       }
@@ -419,7 +419,7 @@ export default async function (fastify, _opts) {
       if (
         clientNameValue !== undefined &&
         clientNameValue !== null &&
-        clientNameValue !== existingSale.clientName
+        clientNameValue !== existingOrder.clientName
       ) {
         lockedFields.push('clientName');
       }
@@ -427,7 +427,7 @@ export default async function (fastify, _opts) {
       if (
         paymentTerms !== undefined &&
         paymentTerms !== null &&
-        paymentTerms !== existingSale.paymentTerms
+        paymentTerms !== existingOrder.paymentTerms
       ) {
         lockedFields.push('paymentTerms');
       }
@@ -435,14 +435,14 @@ export default async function (fastify, _opts) {
       if (
         discountValue !== undefined &&
         discountValue !== null &&
-        Number(discountValue) !== Number(existingSale.discount)
+        Number(discountValue) !== Number(existingOrder.discount)
       ) {
         lockedFields.push('discount');
       }
 
       if (
         notes !== undefined &&
-        normalizeNotesValue(notes) !== normalizeNotesValue(existingSale.notes)
+        normalizeNotesValue(notes) !== normalizeNotesValue(existingOrder.notes)
       ) {
         lockedFields.push('notes');
       }
@@ -451,15 +451,15 @@ export default async function (fastify, _opts) {
         const itemsResult = await query(
           `SELECT
                             id,
-                            sale_id as "saleId",
+                            order_id as "orderId",
                             product_id as "productId",
                             product_name as "productName",
                             special_bid_id as "specialBidId",
                             quantity,
                             unit_price as "unitPrice",
                             discount
-                        FROM sale_items
-                        WHERE sale_id = $1`,
+                        FROM clients_order_items
+                        WHERE order_id = $1`,
           [idResult.value],
         );
         existingItems = itemsResult.rows;
@@ -473,15 +473,15 @@ export default async function (fastify, _opts) {
 
       if (lockedFields.length > 0) {
         return reply.code(409).send({
-          error: 'Quote-linked sale details are read-only',
+          error: 'Quote-linked order details are read-only',
           fields: lockedFields,
         });
       }
     }
 
-    // Update sale
-    const saleResult = await query(
-      `UPDATE sales
+    // Update order
+    const orderResult = await query(
+      `UPDATE clients_orders
              SET client_id = COALESCE($1, client_id),
                  client_name = COALESCE($2, client_name),
                  payment_terms = COALESCE($3, payment_terms),
@@ -504,20 +504,20 @@ export default async function (fastify, _opts) {
       [clientIdValue, clientNameValue, paymentTerms, discountValue, status, notes, idResult.value],
     );
 
-    if (saleResult.rows.length === 0) {
-      return reply.code(404).send({ error: 'Sale not found' });
+    if (orderResult.rows.length === 0) {
+      return reply.code(404).send({ error: 'Order not found' });
     }
 
     // If items are provided, update them
     let updatedItems = [];
-    if (existingSale.linkedQuoteId) {
+    if (existingOrder.linkedQuoteId) {
       if (existingItems) {
         updatedItems = existingItems;
       } else {
         const itemsResult = await query(
           `SELECT
                         id,
-                        sale_id as "saleId",
+                        order_id as "orderId",
                         product_id as "productId",
                         product_name as "productName",
                         special_bid_id as "specialBidId",
@@ -525,8 +525,8 @@ export default async function (fastify, _opts) {
                         unit_price as "unitPrice",
                         discount,
                         note
-                    FROM sale_items
-                    WHERE sale_id = $1`,
+                    FROM clients_order_items
+                    WHERE order_id = $1`,
           [idResult.value],
         );
         updatedItems = itemsResult.rows;
@@ -534,17 +534,17 @@ export default async function (fastify, _opts) {
     } else if (items !== undefined) {
       if (!normalizedItems) return;
       // Delete existing items
-      await query('DELETE FROM sale_items WHERE sale_id = $1', [idResult.value]);
+      await query('DELETE FROM clients_order_items WHERE order_id = $1', [idResult.value]);
 
       // Insert new items
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+          `INSERT INTO clients_order_items (id, order_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                      RETURNING
                         id,
-                        sale_id as "saleId",
+                        order_id as "orderId",
                         product_id as "productId",
                         product_name as "productName",
                         special_bid_id as "specialBidId",
@@ -579,7 +579,7 @@ export default async function (fastify, _opts) {
       const itemsResult = await query(
         `SELECT
                     id,
-                    sale_id as "saleId",
+                    order_id as "orderId",
                     product_id as "productId",
                     product_name as "productName",
                     special_bid_id as "specialBidId",
@@ -591,42 +591,42 @@ export default async function (fastify, _opts) {
                     special_bid_mol_percentage as "specialBidMolPercentage",
                     discount,
                     note
-                FROM sale_items
-                WHERE sale_id = $1`,
+                FROM clients_order_items
+                WHERE order_id = $1`,
         [idResult.value],
       );
       updatedItems = itemsResult.rows;
     }
 
-    // Auto-create projects when sale is confirmed for the first time
-    if (status === 'confirmed' && existingSale.status !== 'confirmed') {
-      // Fetch sale items with notes and product codes for project creation
-      const saleItemsResult = await query(
+    // Auto-create projects when order is confirmed for the first time
+    if (status === 'confirmed' && existingOrder.status !== 'confirmed') {
+      // Fetch order items with notes and product codes for project creation
+      const orderItemsResult = await query(
         `SELECT si.product_id, si.product_name, si.note, p.product_code
-         FROM sale_items si
+         FROM clients_order_items si
          LEFT JOIN products p ON si.product_id = p.id
-         WHERE si.sale_id = $1`,
+         WHERE si.order_id = $1`,
         [idResult.value],
       );
 
       // Get the client code for project naming
       const clientResult = await query(`SELECT client_code FROM clients WHERE id = $1`, [
-        saleResult.rows[0].clientId,
+        orderResult.rows[0].clientId,
       ]);
-      const clientCode = clientResult.rows[0]?.client_code || saleResult.rows[0].clientId;
+      const clientCode = clientResult.rows[0]?.client_code || orderResult.rows[0].clientId;
 
-      // Get the sale year from created_at (createdAt is returned as a numeric string from EXTRACT)
-      const saleYear = new Date(Number(saleResult.rows[0].createdAt)).getFullYear();
+      // Get the order year from created_at (createdAt is returned as a numeric string from EXTRACT)
+      const orderYear = new Date(Number(orderResult.rows[0].createdAt)).getFullYear();
 
-      // Create a project for each sale item
-      for (const saleItem of saleItemsResult.rows) {
-        const productCode = saleItem.product_code || saleItem.product_id;
-        const projectName = `${clientCode}_${productCode}_${saleYear}`;
+      // Create a project for each order item
+      for (const orderItem of orderItemsResult.rows) {
+        const productCode = orderItem.product_code || orderItem.product_id;
+        const projectName = `${clientCode}_${productCode}_${orderYear}`;
 
         // Check if project with this exact name already exists for this client
         const existingProject = await query(
           `SELECT id FROM projects WHERE name = $1 AND client_id = $2`,
-          [projectName, saleResult.rows[0].clientId],
+          [projectName, orderResult.rows[0].clientId],
         );
 
         if (existingProject.rows.length === 0) {
@@ -637,18 +637,18 @@ export default async function (fastify, _opts) {
             [
               projectId,
               projectName,
-              saleResult.rows[0].clientId,
+              orderResult.rows[0].clientId,
               getRandomColor(),
-              saleItem.note || null,
+              orderItem.note || null,
               false,
             ],
           );
         }
       }
 
-      // Create notifications for all managers except the one who confirmed the sale
-      const projectNames = saleItemsResult.rows.map(
-        (item) => `${clientCode}_${item.product_code || item.product_id}_${saleYear}`,
+      // Create notifications for all managers except the one who confirmed the order
+      const projectNames = orderItemsResult.rows.map(
+        (item) => `${clientCode}_${item.product_code || item.product_id}_${orderYear}`,
       );
 
       // Get all managers except the current user
@@ -668,11 +668,11 @@ export default async function (fastify, _opts) {
             manager.id,
             'new_projects',
             `${projectNames.length} new project${projectNames.length > 1 ? 's' : ''} available`,
-            `New projects created from sale confirmation`,
+            `New projects created from order confirmation`,
             JSON.stringify({
               projectNames,
-              saleId: idResult.value,
-              clientName: saleResult.rows[0].clientName,
+              orderId: idResult.value,
+              clientName: orderResult.rows[0].clientName,
             }),
           ],
         );
@@ -680,34 +680,36 @@ export default async function (fastify, _opts) {
     }
 
     return {
-      ...saleResult.rows[0],
+      ...orderResult.rows[0],
       items: updatedItems,
     };
   });
 
-  // DELETE /:id - Delete sale (only allowed for draft status)
+  // DELETE /:id - Delete order (only allowed for draft status)
   fastify.delete('/:id', async (request, reply) => {
     const { id } = request.params;
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
-    // Check if sale exists and is in draft status
-    const saleResult = await query('SELECT id, status FROM sales WHERE id = $1', [idResult.value]);
+    // Check if order exists and is in draft status
+    const orderResult = await query('SELECT id, status FROM clients_orders WHERE id = $1', [
+      idResult.value,
+    ]);
 
-    if (saleResult.rows.length === 0) {
-      return reply.code(404).send({ error: 'Sale not found' });
+    if (orderResult.rows.length === 0) {
+      return reply.code(404).send({ error: 'Order not found' });
     }
 
-    const sale = saleResult.rows[0];
-    if (sale.status !== 'draft') {
+    const order = orderResult.rows[0];
+    if (order.status !== 'draft') {
       return reply.code(409).send({
-        error: 'Only draft sales can be deleted',
-        currentStatus: sale.status,
+        error: 'Only draft clients_orders can be deleted',
+        currentStatus: order.status,
       });
     }
 
     // Items will be deleted automatically via CASCADE
-    await query('DELETE FROM sales WHERE id = $1', [idResult.value]);
+    await query('DELETE FROM clients_orders WHERE id = $1', [idResult.value]);
 
     return reply.code(204).send();
   });

@@ -14,7 +14,7 @@ import generalSettingsRoutes from './routes/general-settings.ts';
 import productsRoutes from './routes/products.ts';
 import quotesRoutes from './routes/quotes.ts';
 import workUnitsRoutes from './routes/work-units.ts';
-import salesRoutes from './routes/sales.ts';
+import clientsOrdersRoutes from './routes/clients-orders.ts';
 import invoicesRoutes from './routes/invoices.ts';
 import paymentsRoutes from './routes/payments.ts';
 import expensesRoutes from './routes/expenses.ts';
@@ -52,7 +52,7 @@ await fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' 
 await fastify.register(productsRoutes, { prefix: '/api/products' });
 await fastify.register(quotesRoutes, { prefix: '/api/quotes' });
 await fastify.register(workUnitsRoutes, { prefix: '/api/work-units' });
-await fastify.register(salesRoutes, { prefix: '/api/sales' });
+await fastify.register(clientsOrdersRoutes, { prefix: '/api/clients-orders' });
 await fastify.register(invoicesRoutes, { prefix: '/api/invoices' });
 await fastify.register(paymentsRoutes, { prefix: '/api/payments' });
 await fastify.register(expensesRoutes, { prefix: '/api/expenses' });

@@ -63,8 +63,8 @@ import type {
   Quote,
   QuoteItem,
   WorkUnit,
-  Sale,
-  SaleItem,
+  ClientsOrder,
+  ClientsOrderItem,
   Invoice,
   InvoiceItem,
   Payment,
@@ -106,17 +106,17 @@ const normalizeQuote = (q: Quote): Quote => ({
   items: (q.items || []).map(normalizeQuoteItem),
 });
 
-const normalizeSaleItem = (item: SaleItem): SaleItem => ({
+const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderItem => ({
   ...item,
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
   discount: Number(item.discount || 0),
 });
 
-const normalizeSale = (s: Sale): Sale => ({
-  ...s,
-  discount: Number(s.discount || 0),
-  items: (s.items || []).map(normalizeSaleItem),
+const normalizeClientsOrder = (o: ClientsOrder): ClientsOrder => ({
+  ...o,
+  discount: Number(o.discount || 0),
+  items: (o.items || []).map(normalizeClientsOrderItem),
 });
 
 const normalizeTimeEntry = (e: TimeEntry): TimeEntry => ({
@@ -484,23 +484,24 @@ export const quotesApi = {
   delete: (id: string): Promise<void> => fetchApi(`/quotes/${id}`, { method: 'DELETE' }),
 };
 
-// Sales API
-export const salesApi = {
-  list: (): Promise<Sale[]> => fetchApi<Sale[]>('/sales').then((sales) => sales.map(normalizeSale)),
+// Clients Orders API
+export const clientsOrdersApi = {
+  list: (): Promise<ClientsOrder[]> =>
+    fetchApi<ClientsOrder[]>('/clients-orders').then((orders) => orders.map(normalizeClientsOrder)),
 
-  create: (saleData: Partial<Sale>): Promise<Sale> =>
-    fetchApi<Sale>('/sales', {
+  create: (orderData: Partial<ClientsOrder>): Promise<ClientsOrder> =>
+    fetchApi<ClientsOrder>('/clients-orders', {
       method: 'POST',
-      body: JSON.stringify(saleData),
-    }).then(normalizeSale),
+      body: JSON.stringify(orderData),
+    }).then(normalizeClientsOrder),
 
-  update: (id: string, updates: Partial<Sale>): Promise<Sale> =>
-    fetchApi<Sale>(`/sales/${id}`, {
+  update: (id: string, updates: Partial<ClientsOrder>): Promise<ClientsOrder> =>
+    fetchApi<ClientsOrder>(`/clients-orders/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
-    }).then(normalizeSale),
+    }).then(normalizeClientsOrder),
 
-  delete: (id: string): Promise<void> => fetchApi(`/sales/${id}`, { method: 'DELETE' }),
+  delete: (id: string): Promise<void> => fetchApi(`/clients-orders/${id}`, { method: 'DELETE' }),
 };
 
 // Invoices API
@@ -648,7 +649,7 @@ export default {
   entries: entriesApi,
   products: productsApi,
   quotes: quotesApi,
-  sales: salesApi,
+  clientsOrders: clientsOrdersApi,
   invoices: invoicesApi,
   payments: paymentsApi,
   expenses: expensesApi,
