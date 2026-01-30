@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User } from '../types';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 import StandardTable, { Column } from './shared/StandardTable';
 import StatusBadge from './shared/StatusBadge';
 
