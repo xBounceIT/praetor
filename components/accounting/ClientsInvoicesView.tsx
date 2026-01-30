@@ -52,57 +52,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     [t],
   );
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_invoices_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 10;
-  });
-
-  const handleRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setRowsPerPage(value);
-    localStorage.setItem('praetor_invoices_rowsPerPage', value.toString());
-    setCurrentPage(1);
-  };
-
-  // Filter State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-
-  // Filter Logic
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const matchesSearch =
-        searchTerm === '' ||
-        invoice.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.items.some((item) =>
-          item.description.toLowerCase().includes(searchTerm.toLowerCase()),
-        );
-
-      const matchesClient = filterClientId === 'all' || invoice.clientId === filterClientId;
-      const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
-
-      return matchesSearch && matchesClient && matchesStatus;
-    });
-  }, [invoices, searchTerm, filterClientId, filterStatus]);
-
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterClientId, filterStatus]);
-
-  const hasActiveFilters =
-    searchTerm.trim() !== '' || filterClientId !== 'all' || filterStatus !== 'all';
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setFilterClientId('all');
-    setFilterStatus('all');
-    setCurrentPage(1);
-  };
-
   // Form State
   const defaultInvoice = useMemo(() => {
     const now = new Date();
@@ -312,10 +261,107 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   // Form Calculation for display
   const { subtotal, total, taxGroups } = calculateTotals(formData.items || []);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredInvoices.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedInvoices = filteredInvoices.slice(startIndex, startIndex + rowsPerPage);
+  // Table columns definition with TableFilter support
+  const columns = useMemo(
+    () => [
+      {
+        header: t('accounting:clientsInvoices.invoiceNumber'),
+        accessorFn: (row: Invoice) => row.invoiceNumber,
+        cell: ({ row }: { row: Invoice }) => (
+          <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
+        ),
+      },
+      {
+        header: t('accounting:clientsInvoices.client'),
+        accessorFn: (row: Invoice) => row.clientName,
+        cell: ({ row }: { row: Invoice }) => (
+          <span className="font-bold text-slate-800">{row.clientName}</span>
+        ),
+      },
+      {
+        header: t('common:labels.date'),
+        accessorFn: (row: Invoice) => new Date(row.issueDate).toLocaleDateString(),
+        cell: ({ row }: { row: Invoice }) => (
+          <span className="text-sm text-slate-600">
+            {new Date(row.issueDate).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        header: t('accounting:clientsInvoices.dueDate'),
+        accessorFn: (row: Invoice) => new Date(row.dueDate).toLocaleDateString(),
+        cell: ({ row }: { row: Invoice }) => (
+          <span className="text-sm text-slate-600">
+            {new Date(row.dueDate).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        header: t('common:labels.amount'),
+        accessorFn: (row: Invoice) => row.total,
+        cell: ({ row }: { row: Invoice }) => (
+          <span className="font-bold text-slate-700">
+            {(row.total ?? 0).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (val: unknown) => (val as number).toFixed(2),
+      },
+      {
+        header: t('accounting:clientsInvoices.balance'),
+        accessorFn: (row: Invoice) => row.total - row.amountPaid,
+        cell: ({ row }: { row: Invoice }) => {
+          const balance = row.total - row.amountPaid;
+          return (
+            <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {balance.toFixed(2)} {currency}
+            </span>
+          );
+        },
+        filterFormat: (val: unknown) => (val as number).toFixed(2),
+      },
+      {
+        header: t('accounting:clientsInvoices.status'),
+        accessorFn: (row: Invoice) =>
+          statusOptions.find((opt) => opt.id === row.status)?.name || row.status,
+        cell: ({ row }: { row: Invoice }) => (
+          <StatusBadge
+            type={row.status as StatusType}
+            label={statusOptions.find((opt) => opt.id === row.status)?.name || row.status}
+          />
+        ),
+      },
+      {
+        header: t('common:common.more'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        align: 'right' as const,
+        cell: ({ row }: { row: Invoice }) => (
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openEditModal(row);
+              }}
+              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+            >
+              <i className="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                confirmDelete(row);
+              }}
+              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+            >
+              <i className="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [currency, statusOptions, t],
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -685,213 +731,32 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         </div>
       </Modal>
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">
-            {t('accounting:clientsInvoices.title')}
-          </h2>
-          <p className="text-slate-500 text-sm">{t('accounting:clientsInvoices.subtitle')}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="md:col-span-2 relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            placeholder={t('accounting:clientsInvoices.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={[
-              { id: 'all', name: t('accounting:clientsInvoices.allClients') },
-              ...activeClients.map((c) => ({ id: c.id, name: c.name })),
-            ]}
-            value={filterClientId}
-            onChange={setFilterClientId}
-            placeholder={t('accounting:clientsInvoices.filterClient')}
-            searchable={true}
-          />
-        </div>
-        <div>
-          <CustomSelect
-            options={[
-              { id: 'all', name: t('accounting:clientsInvoices.statusAll') },
-              ...statusOptions,
-            ]}
-            value={filterStatus}
-            onChange={setFilterStatus}
-            placeholder={t('accounting:clientsInvoices.filterStatus')}
-            searchable={false}
-          />
-        </div>
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i className="fa-solid fa-rotate-left"></i>
-            {t('common:labels.clearFilters')}
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <StandardTable
-        title={t('accounting:clientsInvoices.allInvoices')}
-        totalCount={filteredInvoices.length}
-        containerClassName="overflow-visible"
-        headerAction={
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">
+              {t('accounting:clientsInvoices.title')}
+            </h2>
+            <p className="text-slate-500 text-sm">{t('accounting:clientsInvoices.subtitle')}</p>
+          </div>
           <button
             onClick={openAddModal}
-            className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 hover:bg-slate-700 flex items-center gap-2"
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
           >
             <i className="fa-solid fa-plus"></i> {t('accounting:clientsInvoices.addInvoice')}
           </button>
-        }
-        footer={
-          <>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                {t('common:pagination.rowsPerPage')}:
-              </span>
-              <CustomSelect
-                options={[
-                  { id: '10', name: '10' },
-                  { id: '20', name: '20' },
-                  { id: '50', name: '50' },
-                ]}
-                value={rowsPerPage.toString()}
-                onChange={handleRowsPerPageChange}
-                className="w-20"
-                searchable={false}
-                buttonClassName="text-xs py-1"
-              />
-              <span className="text-xs font-bold text-slate-400 ml-2">
-                {t('common:pagination.showing', {
-                  start: paginatedInvoices.length > 0 ? startIndex + 1 : 0,
-                  end: Math.min(startIndex + rowsPerPage, filteredInvoices.length),
-                  total: filteredInvoices.length,
-                })}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 rounded-lg text-xs font-bold ${currentPage === page ? 'bg-praetor text-white' : 'hover:bg-slate-100 text-slate-500'}`}
-                >
-                  {page}
-                </button>
-              ))}
-            </div>
-          </>
-        }
-      >
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('accounting:clientsInvoices.invoiceNumber')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('accounting:clientsInvoices.client')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('common:labels.date')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('accounting:clientsInvoices.dueDate')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('common:labels.amount')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('accounting:clientsInvoices.balance')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {t('accounting:clientsInvoices.status')}
-              </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                {t('common:common.more')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {paginatedInvoices.map((invoice) => {
-              const balance = invoice.total - invoice.amountPaid;
-              return (
-                <tr
-                  key={invoice.id}
-                  onClick={() => openEditModal(invoice)}
-                  className="hover:bg-slate-50/50 cursor-pointer transition-colors"
-                >
-                  <td className="px-6 py-4 font-bold text-slate-700">{invoice.invoiceNumber}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800">{invoice.clientName}</td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {new Date(invoice.issueDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {new Date(invoice.dueDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 font-bold text-slate-700">
-                    {(invoice.total ?? 0).toFixed(2)} {currency}
-                  </td>
-                  <td
-                    className={`px-6 py-4 font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}
-                  >
-                    {balance.toFixed(2)} {currency}
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge
-                      type={invoice.status as StatusType}
-                      label={
-                        statusOptions.find((opt) => opt.id === invoice.status)?.name ||
-                        invoice.status
-                      }
-                    />
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditModal(invoice);
-                      }}
-                      className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                    >
-                      <i className="fa-solid fa-pen-to-square"></i>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        confirmDelete(invoice);
-                      }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {paginatedInvoices.length === 0 && (
-              <tr>
-                <td colSpan={8} className="p-12 text-center text-slate-400 text-sm font-bold">
-                  {t('common:emptyStates.noResults')}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </StandardTable>
+        </div>
+      </div>
+
+      {/* Main Table with all invoices and TableFilter */}
+      <StandardTable
+        title={t('accounting:clientsInvoices.allInvoices')}
+        data={invoices}
+        columns={columns}
+        defaultRowsPerPage={10}
+        containerClassName="overflow-visible"
+        onRowClick={(row: Invoice) => openEditModal(row)}
+      />
     </div>
   );
 };
