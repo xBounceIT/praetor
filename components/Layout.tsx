@@ -256,7 +256,7 @@ const Layout: React.FC<LayoutProps> = ({
           <>
             <NavItem
               icon="fa-box"
-              label={t('routes.products')}
+              label={t('routes.internalListing')}
               active={activeView === 'catalog/products'}
               isCollapsed={isCollapsed}
               onClick={() => {
