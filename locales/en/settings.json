@@ -41,6 +41,8 @@
   },
   "general": {
     "title": "General Settings",
+    "pageTitle": "General Administration",
+    "pageSubtitle": "Configure global application settings",
     "currency": "Currency",
     "dailyLimit": "Daily Limit",
     "startOfWeek": "Start of Week",
@@ -52,8 +54,33 @@
     "trackingPreferences": "Tracking Preferences",
     "aiCapabilities": "AI Capabilities",
     "saveChanges": "Save Changes",
+    "saveConfiguration": "Save Configuration",
     "changesSaved": "Changes Saved",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "tabs": {
+      "localization": "Localization",
+      "tracking": "Tracking Preferences",
+      "ai": "AI Capabilities"
+    },
+    "currencyLabel": "Application Currency",
+    "currencyDescription": "This currency symbol will be used globally in reports and user management.",
+    "globalTrackingPreferences": "Global Tracking Preferences",
+    "dailyHourLimit": "Daily Hour Limit",
+    "hoursPerDay": "hrs / day",
+    "dailyLimitDescription": "Threshold for visual highlights in the tracker.",
+    "startOfWeekDescription": "Default start day for calendar and reports.",
+    "treatSaturdayAsHolidayLabel": "Treat Saturday as Holiday",
+    "treatSaturdayAsHolidayDescription": "Disables Saturday selection in the calendar for all users.",
+    "allowWeekendSelectionLabel": "Allow Weekend Selection",
+    "allowWeekendSelectionDescription": "Enables Saturday and Sunday for time entry in both daily and weekly views.",
+    "enableAiCoachLabel": "Enable AI Coach for all users",
+    "enableAiCoachDescription": "When enabled, Gemini will analyze user logs to provide personalized productivity insights and coaching.",
+    "apiKeyPlaceholder": "Enter your Google Gemini API Key",
+    "apiKeyRequired": "API Key is required when AI Coach is enabled",
+    "apiKeyDescription": "Required for AI features. Your key is stored securely. Get one at",
+    "googleAiStudio": "Google AI Studio",
+    "monday": "Monday",
+    "sunday": "Sunday"
   },
   "messages": {
     "loading": "Loading settings...",

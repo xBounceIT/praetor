@@ -41,6 +41,8 @@
   },
   "general": {
     "title": "Impostazioni Generali",
+    "pageTitle": "Amministrazione Generale",
+    "pageSubtitle": "Configura le impostazioni globali dell'applicazione",
     "currency": "Valuta",
     "dailyLimit": "Limite Giornaliero",
     "startOfWeek": "Inizio Settimana",
@@ -52,8 +54,33 @@
     "trackingPreferences": "Preferenze di Tracciamento",
     "aiCapabilities": "Capacità AI",
     "saveChanges": "Salva Modifiche",
+    "saveConfiguration": "Salva Configurazione",
     "changesSaved": "Modifiche Salvate",
-    "saving": "Salvataggio..."
+    "saving": "Salvataggio...",
+    "tabs": {
+      "localization": "Localizzazione",
+      "tracking": "Preferenze di Tracciamento",
+      "ai": "Capacità AI"
+    },
+    "currencyLabel": "Valuta dell'Applicazione",
+    "currencyDescription": "Questo simbolo di valuta verrà utilizzato globalmente nei report e nella gestione utenti.",
+    "globalTrackingPreferences": "Preferenze di Tracciamento Globali",
+    "dailyHourLimit": "Limite Ore Giornaliero",
+    "hoursPerDay": "ore / giorno",
+    "dailyLimitDescription": "Soglia per gli avvisi visivi nel tracker.",
+    "startOfWeekDescription": "Giorno di inizio predefinito per calendario e report.",
+    "treatSaturdayAsHolidayLabel": "Tratta Sabato come Festività",
+    "treatSaturdayAsHolidayDescription": "Disabilita la selezione del sabato nel calendario per tutti gli utenti.",
+    "allowWeekendSelectionLabel": "Permetti Selezione Weekend",
+    "allowWeekendSelectionDescription": "Abilita sabato e domenica per l'inserimento del tempo sia nelle viste giornaliere che settimanali.",
+    "enableAiCoachLabel": "Abilita AI Coach per tutti gli utenti",
+    "enableAiCoachDescription": "Quando abilitato, Gemini analizzerà i log degli utenti per fornire insight personalizzati sulla produttività e coaching.",
+    "apiKeyPlaceholder": "Inserisci la tua Chiave API Google Gemini",
+    "apiKeyRequired": "La Chiave API è richiesta quando AI Coach è abilitato",
+    "apiKeyDescription": "Richiesta per le funzionalità AI. La tua chiave è archiviata in modo sicuro. Ottienine una su",
+    "googleAiStudio": "Google AI Studio",
+    "monday": "Lunedì",
+    "sunday": "Domenica"
   },
   "messages": {
     "loading": "Caricamento impostazioni...",

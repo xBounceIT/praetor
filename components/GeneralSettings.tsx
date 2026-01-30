@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GeneralSettings as IGeneralSettings } from '../types';
 import CustomSelect, { Option } from './CustomSelect';
 import ValidatedNumberInput from './ValidatedNumberInput';
@@ -32,6 +33,7 @@ const CURRENCY_OPTIONS: Option[] = [
 ];
 
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate }) => {
+  const { t } = useTranslation('settings');
   const [currency, setCurrency] = useState(settings.currency);
   const [dailyLimit, setDailyLimit] = useState(settings.dailyLimit);
   const [startOfWeek, setStartOfWeek] = useState(settings.startOfWeek);
@@ -95,8 +97,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">General Administration</h2>
-          <p className="text-sm text-slate-500 mt-1">Configure global application settings</p>
+          <h2 className="text-2xl font-bold text-slate-800">{t('general.pageTitle')}</h2>
+          <p className="text-sm text-slate-500 mt-1">{t('general.pageSubtitle')}</p>
         </div>
       </div>
 
@@ -106,7 +108,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           onClick={() => setActiveTab('localization')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'localization' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          Localization
+          {t('general.tabs.localization')}
           {activeTab === 'localization' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
           )}
@@ -115,7 +117,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           onClick={() => setActiveTab('tracking')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'tracking' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          Tracking Preferences
+          {t('general.tabs.tracking')}
           {activeTab === 'tracking' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
           )}
@@ -124,7 +126,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           onClick={() => setActiveTab('ai')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ai' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          AI Capabilities
+          {t('general.tabs.ai')}
           {activeTab === 'ai' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
           )}
@@ -136,23 +138,23 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-300">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
               <i className="fa-solid fa-globe text-praetor"></i>
-              <h3 className="font-bold text-slate-800">Localization & Display</h3>
+              <h3 className="font-bold text-slate-800">{t('general.localizationDisplay')}</h3>
             </div>
 
             <div className="p-6 space-y-6">
               <div className="max-w-xs">
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Application Currency
+                  {t('general.currencyLabel')}
                 </label>
                 <CustomSelect
                   options={CURRENCY_OPTIONS}
                   value={currency}
-                  onChange={setCurrency}
+                  onChange={(val) => setCurrency(val as string)}
                   searchable={true}
-                  placeholder="Select currency..."
+                  placeholder={t('general.currencyLabel')}
                 />
                 <p className="mt-2 text-xs text-slate-500 italic">
-                  This currency symbol will be used globally in reports and user management.
+                  {t('general.currencyDescription')}
                 </p>
               </div>
             </div>
@@ -163,14 +165,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
               <i className="fa-solid fa-clock text-praetor"></i>
-              <h3 className="font-bold text-slate-800">Global Tracking Preferences</h3>
+              <h3 className="font-bold text-slate-800">{t('general.globalTrackingPreferences')}</h3>
             </div>
 
             <div className="p-6 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Daily Hour Limit
+                    {t('general.dailyHourLimit')}
                   </label>
                   <div className="flex items-center gap-3">
                     <ValidatedNumberInput
@@ -183,37 +185,39 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                       className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-bold"
                     />
                     <span className="text-xs font-bold text-slate-400 uppercase whitespace-nowrap">
-                      hrs / day
+                      {t('general.hoursPerDay')}
                     </span>
                   </div>
                   <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
-                    Threshold for visual highlights in the tracker.
+                    {t('general.dailyLimitDescription')}
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Start of Week
+                    {t('general.startOfWeek')}
                   </label>
                   <CustomSelect
                     options={[
-                      { id: 'Monday', name: 'Monday' },
-                      { id: 'Sunday', name: 'Sunday' },
+                      { id: 'Monday', name: t('general.monday') },
+                      { id: 'Sunday', name: t('general.sunday') },
                     ]}
                     value={startOfWeek}
                     onChange={(val) => setStartOfWeek(val as 'Monday' | 'Sunday')}
                   />
                   <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
-                    Default start day for calendar and reports.
+                    {t('general.startOfWeekDescription')}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Treat Saturday as Holiday</p>
+                  <p className="text-sm font-bold text-slate-800">
+                    {t('general.treatSaturdayAsHolidayLabel')}
+                  </p>
                   <p className="text-xs text-slate-500 italic">
-                    Disables Saturday selection in the calendar for all users.
+                    {t('general.treatSaturdayAsHolidayDescription')}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -229,9 +233,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Allow Weekend Selection</p>
+                  <p className="text-sm font-bold text-slate-800">
+                    {t('general.allowWeekendSelectionLabel')}
+                  </p>
                   <p className="text-xs text-slate-500 italic">
-                    Enables Saturday and Sunday for time entry in both daily and weekly views.
+                    {t('general.allowWeekendSelectionDescription')}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -252,16 +258,17 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
               <i className="fa-solid fa-wand-magic-sparkles text-praetor"></i>
-              <h3 className="font-bold text-slate-800">AI Capabilities</h3>
+              <h3 className="font-bold text-slate-800">{t('general.aiCapabilities')}</h3>
             </div>
 
             <div className="p-6 space-y-6">
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="max-w-md">
-                  <p className="text-sm font-bold text-slate-800">Enable AI Coach for all users</p>
+                  <p className="text-sm font-bold text-slate-800">
+                    {t('general.enableAiCoachLabel')}
+                  </p>
                   <p className="text-xs text-slate-500 italic leading-relaxed">
-                    When enabled, Gemini will analyze user logs to provide personalized productivity
-                    insights and coaching.
+                    {t('general.enableAiCoachDescription')}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -278,14 +285,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
               {enableAiInsights && (
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Gemini API Key
+                    {t('general.geminiApiKey')}
                   </label>
                   <div className="relative">
                     <input
                       type="password"
                       value={geminiApiKey}
                       onChange={(e) => setGeminiApiKey(e.target.value)}
-                      placeholder="Enter your Google Gemini API Key"
+                      placeholder={t('general.apiKeyPlaceholder')}
                       className={`w-full px-4 py-2 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-sm font-semibold pr-10 ${isApiKeyMissing() ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                     />
                     <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
@@ -294,13 +301,13 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   </div>
                   {isApiKeyMissing() && (
                     <p className="text-red-500 text-[10px] font-bold mt-1">
-                      API Key is required when AI Coach is enabled
+                      {t('general.apiKeyRequired')}
                     </p>
                   )}
                   <p
                     className={`mt-2 text-[10px] italic leading-relaxed ${isApiKeyMissing() ? 'text-red-400' : 'text-slate-500'}`}
                   >
-                    Required for AI features. Your key is stored securely. Get one at{' '}
+                    {t('general.apiKeyDescription')}{' '}
                     <a
                       href="https://makersuite.google.com/app/apikey"
                       target="_blank"
@@ -311,7 +318,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                           : 'text-praetor hover:underline'
                       }
                     >
-                      Google AI Studio
+                      {t('general.googleAiStudio')}
                     </a>
                     .
                   </p>
@@ -340,7 +347,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
             ) : (
               <i className="fa-solid fa-save"></i>
             )}
-            {isSaving ? 'Saving...' : isSaved ? 'Changes Saved' : 'Save Configuration'}
+            {isSaving
+              ? t('general.saving')
+              : isSaved
+                ? t('general.changesSaved')
+                : t('general.saveConfiguration')}
           </button>
         </div>
       </form>
