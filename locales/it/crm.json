@@ -56,8 +56,8 @@
     "manageBusinessContacts": "Gestisci contatti aziendali e informazioni di fatturazione"
   },
   "internalListing": {
-    "title": "Prodotti",
-    "subtitle": "Gestisci prodotti e servizi per la fatturazione",
+    "title": "Listino Interno",
+    "subtitle": "Gestisci gli articoli del listino interno",
     "addProduct": "Aggiungi Nuovo Prodotto",
     "editProduct": "Modifica Prodotto",
     "productName": "Nome Prodotto",

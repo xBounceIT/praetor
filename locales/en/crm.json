@@ -56,8 +56,8 @@
     "manageBusinessContacts": "Manage business contacts and billing info"
   },
   "internalListing": {
-    "title": "Products",
-    "subtitle": "Manage products and services for billing",
+    "title": "Internal Listing",
+    "subtitle": "Manage internal catalog items",
     "addProduct": "Add New Product",
     "editProduct": "Edit Product",
     "productName": "Product Name",
