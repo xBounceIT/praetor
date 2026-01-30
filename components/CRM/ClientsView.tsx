@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client } from '../types';
-import StandardTable, { Column } from './shared/StandardTable';
+import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from './shared/StatusBadge';
 import Modal from './shared/Modal';
 
