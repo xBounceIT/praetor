@@ -321,65 +321,65 @@ const StandardTable = <T extends Record<string, any>>({
                       key={colId}
                       className={`relative px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
                     >
-                      <div
-                        className={`flex items-center gap-2 group ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}
-                      >
-                        <span>{col.header}</span>
-                        {!col.disableFiltering && (
-                          <div
-                            ref={activeFilterCol === colId ? filterRef : undefined}
-                            className="inline-block"
-                          >
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (activeFilterCol === colId) {
-                                  setActiveFilterCol(null);
-                                } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setFilterPos({
-                                    top: rect.bottom + window.scrollY + 4,
-                                    left: rect.left + window.scrollX,
-                                  });
-                                  setActiveFilterCol(colId);
-                                }
-                              }}
-                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                                isFiltered || isSorted || activeFilterCol === colId
-                                  ? 'text-praetor'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              <i className="fa-solid fa-filter"></i>
-                            </button>
-                          </div>
-                        )}
+                      {/* Header text - aligned with cell content */}
+                      <span>{col.header}</span>
 
-                        {activeFilterCol === colId &&
-                          filterPos &&
-                          createPortal(
-                            <div
-                              ref={popupRef}
-                              style={{
-                                top: filterPos.top,
-                                left: filterPos.left,
-                                position: 'absolute',
-                                zIndex: 9999,
-                              }}
-                            >
-                              <TableFilter
-                                title={col.header}
-                                options={getFilterOptions(colId)}
-                                selectedValues={filterState[colId] || []}
-                                onFilterChange={(selected) => handleFilter(colId, selected)}
-                                sortDirection={sortState?.colId === colId ? sortState.px : null}
-                                onSortChange={(dir) => handleSort(colId, dir)}
-                                onClose={() => setActiveFilterCol(null)}
-                              />
-                            </div>,
-                            document.body,
-                          )}
-                      </div>
+                      {/* Filter button - absolutely positioned, doesn't affect text alignment */}
+                      {!col.disableFiltering && (
+                        <div
+                          ref={activeFilterCol === colId ? filterRef : undefined}
+                          className="absolute right-1 top-1/2 -translate-y-1/2"
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeFilterCol === colId) {
+                                setActiveFilterCol(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setFilterPos({
+                                  top: rect.bottom + window.scrollY + 4,
+                                  left: rect.left + window.scrollX,
+                                });
+                                setActiveFilterCol(colId);
+                              }
+                            }}
+                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                              isFiltered || isSorted || activeFilterCol === colId
+                                ? 'text-praetor'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            <i className="fa-solid fa-filter"></i>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Portal for filter popup */}
+                      {activeFilterCol === colId &&
+                        filterPos &&
+                        createPortal(
+                          <div
+                            ref={popupRef}
+                            style={{
+                              top: filterPos.top,
+                              left: filterPos.left,
+                              position: 'absolute',
+                              zIndex: 9999,
+                            }}
+                          >
+                            <TableFilter
+                              title={col.header}
+                              options={getFilterOptions(colId)}
+                              selectedValues={filterState[colId] || []}
+                              onFilterChange={(selected) => handleFilter(colId, selected)}
+                              sortDirection={sortState?.colId === colId ? sortState.px : null}
+                              onSortChange={(dir) => handleSort(colId, dir)}
+                              onClose={() => setActiveFilterCol(null)}
+                            />
+                          </div>,
+                          document.body,
+                        )}
                     </th>
                   );
                 })}
@@ -398,7 +398,7 @@ const StandardTable = <T extends Record<string, any>>({
                       return (
                         <td
                           key={getColId(col)}
-                          className={`${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.className || 'px-6 py-5'}`}
+                          className={`px-6 py-5 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
