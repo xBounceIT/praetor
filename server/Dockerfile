@@ -1,9 +1,8 @@
-# STAGE 1: Install production dependencies
+# STAGE 1: Install dependencies
 FROM oven/bun:1 AS install
 WORKDIR /temp
 COPY package.json bun.lock ./
-ENV BUN_FROZEN_LOCKFILE=0
-RUN bun install --production
+RUN bun install --frozen-lockfile
 
 # STAGE 2: Production
 FROM oven/bun:1-slim AS release
