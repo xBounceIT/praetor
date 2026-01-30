@@ -436,9 +436,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 {row.clientName}
               </div>
               <div
-                className={`text-[10px] font-black uppercase ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
+                className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
               >
-                {row.items.length} item{row.items.length !== 1 ? 's' : ''}
+                {t('crm:quotes.itemsCount', { count: row.items.length })}
               </div>
             </div>
           </div>

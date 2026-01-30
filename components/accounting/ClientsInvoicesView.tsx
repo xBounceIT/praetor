@@ -174,7 +174,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     if (!formData.dueDate)
       newErrors.dueDate = t('accounting:clientsInvoices.dueDate') + ' is required';
     if (!formData.items || formData.items.length === 0)
-      newErrors.items = 'At least one item is required';
+      newErrors.items = t('crm:quotes.errors.itemsRequired');
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
