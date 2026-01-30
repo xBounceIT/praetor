@@ -1030,7 +1030,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 <div className="flex gap-3 px-3 mb-1 items-center">
                   <div className="flex-1 grid grid-cols-12 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                      {t('crm:specialBids.title')}
+                      {t('crm:externalListing.title')}
                     </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                       {t('crm:quotes.productsServices')}
@@ -1039,7 +1039,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {t('crm:quotes.qty')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:products.cost')}
+                      {t('crm:internalListing.cost')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       MOL (%)
@@ -1048,7 +1048,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {t('crm:quotes.marginLabel')}
                     </div>
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:products.salePrice')}
+                      {t('crm:internalListing.salePrice')}
                     </div>
                   </div>
                   <div className="w-10 flex-shrink-0"></div>

@@ -713,16 +713,16 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       {t('crm:quotes.qty')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:products.cost')}
+                      {t('crm:internalListing.cost')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:products.molPercentage')}
+                      {t('crm:internalListing.molPercentage')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('crm:quotes.marginLabel')}
                     </div>
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:products.salePrice')}
+                      {t('crm:internalListing.salePrice')}
                     </div>
                   </div>
                   <div className="w-10 flex-shrink-0"></div>
@@ -1023,7 +1023,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('crm:products.cancel')}
+                {t('crm:internalListing.cancel')}
               </button>
               <button
                 type="submit"
@@ -1060,13 +1060,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 onClick={() => setIsDeleteConfirmOpen(false)}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('crm:products.cancel')}
+                {t('crm:internalListing.cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('crm:specialBids.yesDelete')}
+                {t('crm:externalListing.yesDelete')}
               </button>
             </div>
           </div>

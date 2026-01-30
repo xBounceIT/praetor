@@ -55,7 +55,7 @@
     "deleteClient": "Delete Client?",
     "manageBusinessContacts": "Manage business contacts and billing info"
   },
-  "products": {
+  "internalListing": {
     "title": "Products",
     "subtitle": "Manage products and services for billing",
     "addProduct": "Add New Product",
@@ -164,7 +164,7 @@
     "selectCategoryFirst": "Select category first",
     "add": "Add"
   },
-  "specialBids": {
+  "externalListing": {
     "title": "Special Bids",
     "subtitle": "Define special prices for dedicated clients",
     "addSpecialBid": "Add Special Bid",

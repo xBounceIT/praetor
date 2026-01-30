@@ -55,7 +55,7 @@
     "deleteClient": "Elimina Cliente?",
     "manageBusinessContacts": "Gestisci contatti aziendali e informazioni di fatturazione"
   },
-  "products": {
+  "internalListing": {
     "title": "Prodotti",
     "subtitle": "Gestisci prodotti e servizi per la fatturazione",
     "addProduct": "Aggiungi Nuovo Prodotto",
@@ -158,7 +158,7 @@
     "selectCategoryFirst": "Seleziona prima una categoria",
     "add": "Aggiungi"
   },
-  "specialBids": {
+  "externalListing": {
     "title": "Offerte Speciali",
     "subtitle": "Definisci prezzi speciali per clienti dedicati",
     "addSpecialBid": "Aggiungi Offerta Speciale",

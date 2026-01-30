@@ -99,10 +99,10 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
 
     const newErrors: Record<string, string> = {};
     if (!formData.clientId) {
-      newErrors.clientId = t('specialBids.errors.clientRequired');
+      newErrors.clientId = t('externalListing.errors.clientRequired');
     }
     if (!formData.productId) {
-      newErrors.productId = t('specialBids.errors.productRequired');
+      newErrors.productId = t('externalListing.errors.productRequired');
     }
     const selectedProduct = formData.productId
       ? products.find((p) => p.id === formData.productId)
@@ -118,16 +118,16 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       normalizedOriginalPrice === undefined ||
       formData.unitPrice >= normalizedOriginalPrice
     ) {
-      newErrors.unitPrice = t('specialBids.errors.invalidPrice');
+      newErrors.unitPrice = t('externalListing.errors.invalidPrice');
     }
     if (!formData.startDate) {
-      newErrors.dates = t('specialBids.errors.startDateRequired');
+      newErrors.dates = t('externalListing.errors.startDateRequired');
     }
     if (!formData.endDate) {
-      newErrors.dates = t('specialBids.errors.endDateRequired');
+      newErrors.dates = t('externalListing.errors.endDateRequired');
     }
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
-      newErrors.dates = t('specialBids.errors.startDateBeforeEndDate');
+      newErrors.dates = t('externalListing.errors.startDateBeforeEndDate');
     }
 
     if (formData.clientId && formData.productId) {
@@ -139,7 +139,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
           isActiveBid(b),
       );
       if (existingBid) {
-        newErrors.productId = t('specialBids.errors.existingBid');
+        newErrors.productId = t('externalListing.errors.existingBid');
       }
     }
 
@@ -261,21 +261,21 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
   const columns = useMemo(
     () => [
       {
-        header: t('specialBids.client'),
+        header: t('externalListing.client'),
         accessorFn: (row: SpecialBid) => row.clientName,
         cell: ({ row }: { row: SpecialBid }) => (
           <div className="font-bold text-slate-800">{row.clientName}</div>
         ),
       },
       {
-        header: t('specialBids.product'),
+        header: t('externalListing.product'),
         accessorFn: (row: SpecialBid) => row.productName,
         cell: ({ row }: { row: SpecialBid }) => (
           <span className="text-sm font-bold text-slate-700">{row.productName}</span>
         ),
       },
       {
-        header: t('specialBids.unitPrice'),
+        header: t('externalListing.unitPrice'),
         accessorFn: (row: SpecialBid) => row.unitPrice,
         cell: ({ row }: { row: SpecialBid }) => (
           <span className="text-sm font-bold text-slate-700">
@@ -285,7 +285,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         filterFormat: (val: unknown) => Number(val).toFixed(2),
       },
       {
-        header: t('specialBids.mol'),
+        header: t('externalListing.mol'),
         accessorFn: (row: SpecialBid) =>
           row.molPercentage !== undefined && row.molPercentage !== null
             ? `${Number(row.molPercentage).toFixed(2)} %`
@@ -299,7 +299,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         ),
       },
       {
-        header: t('specialBids.validityPeriod'),
+        header: t('externalListing.validityPeriod'),
         accessorFn: (row: SpecialBid) => {
           const start = new Date(row.startDate).toLocaleDateString();
           const end = new Date(row.endDate).toLocaleDateString();
@@ -322,9 +322,9 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         header: t('common:labels.status'),
         accessorFn: (row: SpecialBid) => {
           const status = getBidStatus(row);
-          if (status === 'expired') return t('specialBids.expired');
-          if (status === 'notStarted') return t('specialBids.notStarted');
-          return t('specialBids.active');
+          if (status === 'expired') return t('externalListing.expired');
+          if (status === 'notStarted') return t('externalListing.notStarted');
+          return t('externalListing.active');
         },
         cell: ({ row }: { row: SpecialBid }) => {
           const expired = isExpired(row.endDate);
@@ -332,11 +332,11 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
           return (
             <div className={expired || notStarted ? 'opacity-60' : ''}>
               {expired ? (
-                <StatusBadge type="expired" label={t('specialBids.expired')} />
+                <StatusBadge type="expired" label={t('externalListing.expired')} />
               ) : notStarted ? (
-                <StatusBadge type="pending" label={t('specialBids.notStarted')} />
+                <StatusBadge type="pending" label={t('externalListing.notStarted')} />
               ) : (
-                <StatusBadge type="active" label={t('specialBids.active')} />
+                <StatusBadge type="active" label={t('externalListing.active')} />
               )}
             </div>
           );
@@ -363,8 +363,8 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                 className={`p-2 rounded-lg transition-all ${expired ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
                 title={
                   expired
-                    ? t('specialBids.cannotDeleteExpired')
-                    : t('specialBids.deleteSpecialBidTooltip')
+                    ? t('externalListing.cannotDeleteExpired')
+                    : t('externalListing.deleteSpecialBidTooltip')
                 }
               >
                 <i className="fa-solid fa-trash-can"></i>
@@ -390,9 +390,9 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
               </div>
               {editingBid
                 ? isExpired(editingBid.endDate)
-                  ? t('specialBids.viewSpecialBid')
-                  : t('specialBids.editSpecialBid')
-                : t('specialBids.createSpecialBid')}
+                  ? t('externalListing.viewSpecialBid')
+                  : t('externalListing.editSpecialBid')
+                : t('externalListing.createSpecialBid')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -407,25 +407,25 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <i className="fa-solid fa-lock text-amber-600 text-sm"></i>
                 <span className="text-amber-700 text-xs font-bold">
-                  {t('crm:specialBids.readOnlyExpired')}
+                  {t('crm:externalListing.readOnlyExpired')}
                 </span>
               </div>
             )}
             <div className="space-y-4">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('specialBids.specialBidDetails')}
+                {t('externalListing.specialBidDetails')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('specialBids.dedicatedClient')}
+                    {t('externalListing.dedicatedClient')}
                   </label>
                   <CustomSelect
                     options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                     value={formData.clientId || ''}
                     onChange={(val) => handleClientChange(val as string)}
-                    placeholder={t('specialBids.selectClient')}
+                    placeholder={t('externalListing.selectClient')}
                     searchable={true}
                     disabled={editingBid ? isExpired(editingBid.endDate) : false}
                     className={errors.clientId ? 'border-red-300' : ''}
@@ -436,13 +436,13 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('specialBids.productItem')}
+                    {t('externalListing.productItem')}
                   </label>
                   <CustomSelect
                     options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
                     value={formData.productId || ''}
                     onChange={(val) => handleProductChange(val as string)}
-                    placeholder={t('specialBids.selectProduct')}
+                    placeholder={t('externalListing.selectProduct')}
                     searchable={true}
                     disabled={editingBid ? isExpired(editingBid.endDate) : false}
                     className={errors.productId ? 'border-red-300' : ''}
@@ -455,7 +455,8 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 ml-1">
-                        {t('specialBids.labelOriginal')} {t('specialBids.unitPrice')} ({currency})
+                        {t('externalListing.labelOriginal')} {t('externalListing.unitPrice')} (
+                        {currency})
                       </label>
                       <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
                         {originalPriceDisplay}
@@ -466,7 +467,8 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 ml-1">
-                        {t('specialBids.labelNew')} {t('specialBids.unitPrice')} ({currency})
+                        {t('externalListing.labelNew')} {t('externalListing.unitPrice')} ({currency}
+                        )
                       </label>
                       <ValidatedNumberInput
                         step="0.01"
@@ -497,7 +499,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 ml-1">
-                        {t('specialBids.labelOriginal')} {t('crm:products.mol')}
+                        {t('externalListing.labelOriginal')} {t('crm:internalListing.mol')}
                       </label>
                       <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
                         {originalMolDisplay}
@@ -508,7 +510,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 ml-1">
-                        {t('specialBids.labelNew')} {t('crm:products.mol')}
+                        {t('externalListing.labelNew')} {t('crm:internalListing.mol')}
                       </label>
                       <ValidatedNumberInput
                         step="0.01"
@@ -529,7 +531,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.salePriceCalculated')}
+                    {t('crm:internalListing.salePriceCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
                     {hasBidPricing
@@ -540,7 +542,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.marginCalculated')}
+                    {t('crm:internalListing.marginCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
                     {hasBidPricing
@@ -554,19 +556,19 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
             <div className="space-y-4">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('specialBids.validityPeriod')}
+                {t('externalListing.validityPeriod')}
               </h4>
               <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
                 <span className="font-bold">
                   {formData.startDate
                     ? new Date(formData.startDate).toLocaleDateString()
-                    : t('specialBids.selectStart')}
+                    : t('externalListing.selectStart')}
                 </span>
                 <i className="fa-solid fa-arrow-right text-slate-400"></i>
                 <span className="font-bold">
                   {formData.endDate
                     ? new Date(formData.endDate).toLocaleDateString()
-                    : t('specialBids.selectEnd')}
+                    : t('externalListing.selectEnd')}
                 </span>
               </div>
               <Calendar
@@ -602,15 +604,15 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                 className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
                 {editingBid && isExpired(editingBid.endDate)
-                  ? t('specialBids.close')
-                  : t('specialBids.cancel')}
+                  ? t('externalListing.close')
+                  : t('externalListing.cancel')}
               </button>
               {!(editingBid && isExpired(editingBid.endDate)) && (
                 <button
                   type="submit"
                   className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                 >
-                  {editingBid ? t('specialBids.updateBid') : t('specialBids.createBid')}
+                  {editingBid ? t('externalListing.updateBid') : t('externalListing.createBid')}
                 </button>
               )}
             </div>
@@ -626,10 +628,10 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('specialBids.deleteConfirmTitle')}
+                {t('externalListing.deleteConfirmTitle')}
               </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('specialBids.deleteConfirmMessage', { clientName: bidToDelete?.clientName })}
+                {t('externalListing.deleteConfirmMessage', { clientName: bidToDelete?.clientName })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
@@ -637,13 +639,13 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                 onClick={() => setIsDeleteConfirmOpen(false)}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('specialBids.cancel')}
+                {t('externalListing.cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('specialBids.yesDelete')}
+                {t('externalListing.yesDelete')}
               </button>
             </div>
           </div>
@@ -652,13 +654,13 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('specialBids.title')}</h2>
-          <p className="text-slate-500 text-sm">{t('specialBids.subtitle')}</p>
+          <h2 className="text-2xl font-black text-slate-800">{t('externalListing.title')}</h2>
+          <p className="text-slate-500 text-sm">{t('externalListing.subtitle')}</p>
         </div>
       </div>
 
       <StandardTable
-        title={t('specialBids.title')}
+        title={t('externalListing.title')}
         data={bids}
         columns={columns}
         defaultRowsPerPage={5}
@@ -668,7 +670,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
             onClick={openAddModal}
             className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
           >
-            <i className="fa-solid fa-plus"></i> {t('specialBids.createSpecialBid')}
+            <i className="fa-solid fa-plus"></i> {t('externalListing.createSpecialBid')}
           </button>
         }
         rowClassName={(row: SpecialBid) => {

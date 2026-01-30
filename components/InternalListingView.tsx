@@ -42,19 +42,19 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   // Default categories per type
   const defaultCategoriesMap: Record<string, string[]> = {
     supply: [
-      t('crm:products.defaultCategories.hardware'),
-      t('crm:products.defaultCategories.license'),
-      t('crm:products.defaultCategories.subscription'),
+      t('crm:internalListing.defaultCategories.hardware'),
+      t('crm:internalListing.defaultCategories.license'),
+      t('crm:internalListing.defaultCategories.subscription'),
     ],
     consulting: [
-      t('crm:products.defaultCategories.specialistic'),
-      t('crm:products.defaultCategories.technical'),
-      t('crm:products.defaultCategories.governance'),
+      t('crm:internalListing.defaultCategories.specialistic'),
+      t('crm:internalListing.defaultCategories.technical'),
+      t('crm:internalListing.defaultCategories.governance'),
     ],
     service: [
-      t('crm:products.defaultCategories.reports'),
-      t('crm:products.defaultCategories.monitoring'),
-      t('crm:products.defaultCategories.maintenance'),
+      t('crm:internalListing.defaultCategories.reports'),
+      t('crm:internalListing.defaultCategories.monitoring'),
+      t('crm:internalListing.defaultCategories.maintenance'),
     ],
   };
 
@@ -300,14 +300,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const subcategoryOptions: Option[] = availableSubcategories.map((s) => ({ id: s, name: s }));
 
   const typeOptions: Option[] = [
-    { id: 'supply', name: t('crm:products.typeSupply') },
-    { id: 'service', name: t('crm:products.typeService') },
-    { id: 'consulting', name: t('crm:products.typeConsulting') },
+    { id: 'supply', name: t('crm:internalListing.typeSupply') },
+    { id: 'service', name: t('crm:internalListing.typeService') },
+    { id: 'consulting', name: t('crm:internalListing.typeConsulting') },
   ];
 
   const activeSuppliers = suppliers.filter((s) => !s.isDisabled);
   const supplierOptions: Option[] = [
-    { id: '', name: t('crm:products.noSupplier') },
+    { id: '', name: t('crm:internalListing.noSupplier') },
     ...activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
   ];
 
@@ -315,13 +315,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const getLocalizedTypeName = (type: string) => {
     switch (type) {
       case 'supply':
-        return t('crm:products.typeSupply');
+        return t('crm:internalListing.typeSupply');
       case 'service':
-        return t('crm:products.typeService');
+        return t('crm:internalListing.typeService');
       case 'consulting':
-        return t('crm:products.typeConsulting');
+        return t('crm:internalListing.typeConsulting');
       case 'item':
-        return t('crm:products.typeItem');
+        return t('crm:internalListing.typeItem');
       default:
         return type.charAt(0).toUpperCase() + type.slice(1);
     }
@@ -375,7 +375,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
                 <i className="fa-solid fa-plus"></i>
               </div>
-              {t('crm:products.addCategoryModalTitle')}
+              {t('crm:internalListing.addCategoryModalTitle')}
             </h3>
             <button
               onClick={() => setIsAddCategoryModalOpen(false)}
@@ -387,7 +387,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           <div className="p-6 space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('crm:products.categoryName')}
+                {t('crm:internalListing.categoryName')}
               </label>
               <input
                 type="text"
@@ -395,7 +395,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                placeholder={t('crm:products.categoryNamePlaceholder')}
+                placeholder={t('crm:internalListing.categoryNamePlaceholder')}
                 className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
               />
             </div>
@@ -404,13 +404,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 onClick={() => setIsAddCategoryModalOpen(false)}
                 className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('crm:products.cancel')}
+                {t('crm:internalListing.cancel')}
               </button>
               <button
                 onClick={handleAddCategory}
                 className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
               >
-                {t('crm:products.addCategory')}
+                {t('crm:internalListing.addCategory')}
               </button>
             </div>
           </div>
@@ -426,7 +426,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              {t('crm:products.addSubcategoryModalTitle')}
+              {t('crm:internalListing.addSubcategoryModalTitle')}
             </h3>
             <button
               onClick={() => setIsAddSubcategoryModalOpen(false)}
@@ -438,7 +438,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           <div className="p-6 space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('crm:products.subcategoryName')}
+                {t('crm:internalListing.subcategoryName')}
               </label>
               <input
                 type="text"
@@ -446,7 +446,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 value={newSubcategoryName}
                 onChange={(e) => setNewSubcategoryName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSubcategory()}
-                placeholder={t('crm:products.subcategoryNamePlaceholder')}
+                placeholder={t('crm:internalListing.subcategoryNamePlaceholder')}
                 className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
               />
             </div>
@@ -455,13 +455,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 onClick={() => setIsAddSubcategoryModalOpen(false)}
                 className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('crm:products.cancel')}
+                {t('crm:internalListing.cancel')}
               </button>
               <button
                 onClick={handleAddSubcategory}
                 className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
               >
-                {t('crm:products.add')}
+                {t('crm:internalListing.add')}
               </button>
             </div>
           </div>
@@ -477,8 +477,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <i className={`fa-solid ${editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingProduct
-                ? t('crm:products.editProductTitle')
-                : t('crm:products.addProductTitle')}
+                ? t('crm:internalListing.editProductTitle')
+                : t('crm:internalListing.addProductTitle')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -499,12 +499,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             <div className="space-y-4">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:products.productDetails')}
+                {t('crm:internalListing.productDetails')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.productName')}
+                    {t('crm:internalListing.productName')}
                   </label>
                   <input
                     type="text"
@@ -513,7 +513,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       setFormData({ ...formData, name: e.target.value });
                       if (errors.name) setErrors({ ...errors, name: '' });
                     }}
-                    placeholder={t('crm:products.productNamePlaceholder')}
+                    placeholder={t('crm:internalListing.productNamePlaceholder')}
                     className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
                   />
                   {errors.name && (
@@ -523,7 +523,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.productCode')}
+                    {t('crm:internalListing.productCode')}
                   </label>
                   <input
                     type="text"
@@ -541,18 +541,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     </p>
                   )}
                   <p className="text-[10px] text-slate-400 ml-1">
-                    {t('crm:products.productCodeHint')}
+                    {t('crm:internalListing.productCodeHint')}
                   </p>
                 </div>
 
                 <div className="col-span-full space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.description')}
+                    {t('crm:internalListing.description')}
                   </label>
                   <textarea
                     value={formData.description || ''}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder={t('crm:products.productDescriptionPlaceholder')}
+                    placeholder={t('crm:internalListing.productDescriptionPlaceholder')}
                     rows={2}
                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                   />
@@ -561,7 +561,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-[20px]">
                     <label className="text-xs font-bold text-slate-500">
-                      {t('crm:products.type')}
+                      {t('crm:internalListing.type')}
                     </label>
                   </div>
                   <CustomSelect
@@ -583,14 +583,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-[20px]">
                     <label className="text-xs font-bold text-slate-500">
-                      {t('crm:products.category')}
+                      {t('crm:internalListing.category')}
                     </label>
                     <button
                       type="button"
                       onClick={() => setIsAddCategoryModalOpen(true)}
                       className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
                     >
-                      <i className="fa-solid fa-plus"></i> {t('crm:products.addCategory')}
+                      <i className="fa-solid fa-plus"></i> {t('crm:internalListing.addCategory')}
                     </button>
                   </div>
                   <CustomSelect
@@ -599,7 +599,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     onChange={(val) =>
                       setFormData({ ...formData, category: val as string, subcategory: '' })
                     }
-                    placeholder={t('crm:products.selectOption')}
+                    placeholder={t('crm:internalListing.selectOption')}
                     searchable={true}
                   />
                 </div>
@@ -607,7 +607,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-[20px]">
                     <label className="text-xs font-bold text-slate-500">
-                      {t('crm:products.subcategory')}
+                      {t('crm:internalListing.subcategory')}
                     </label>
                     <button
                       type="button"
@@ -615,7 +615,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       disabled={!formData.category} // Disable if no category selected
                       className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-slate-300 cursor-not-allowed' : 'text-praetor hover:text-slate-700'}`}
                     >
-                      <i className="fa-solid fa-plus"></i> {t('crm:products.addSubcategory')}
+                      <i className="fa-solid fa-plus"></i> {t('crm:internalListing.addSubcategory')}
                     </button>
                   </div>
                   <CustomSelect
@@ -624,8 +624,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     onChange={(val) => setFormData({ ...formData, subcategory: val as string })}
                     placeholder={
                       !formData.category
-                        ? t('crm:products.selectCategoryFirst')
-                        : t('crm:products.selectOption')
+                        ? t('crm:internalListing.selectCategoryFirst')
+                        : t('crm:internalListing.selectOption')
                     }
                     searchable={true}
                     disabled={!formData.category}
@@ -637,11 +637,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     <div className="flex flex-col">
                       {showTaxRateWarning && (
                         <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
-                          {t('crm:products.unusualTaxRate')}
+                          {t('crm:internalListing.unusualTaxRate')}
                         </p>
                       )}
                       <label className="text-xs font-bold text-slate-500">
-                        {t('crm:products.taxRate')}
+                        {t('crm:internalListing.taxRate')}
                       </label>
                     </div>
                   </div>
@@ -658,19 +658,19 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-[20px]">
                     <label className="text-xs font-bold text-slate-500 font-black">
-                      {t('crm:products.unitOfMeasure')}
+                      {t('crm:internalListing.unitOfMeasure')}
                     </label>
                   </div>
                   <CustomSelect
                     options={[
-                      { id: 'unit', name: t('crm:products.unit') },
-                      { id: 'hours', name: t('crm:products.hour') },
+                      { id: 'unit', name: t('crm:internalListing.unit') },
+                      { id: 'hours', name: t('crm:internalListing.hour') },
                     ]}
                     value={formData.costUnit || 'unit'}
                     onChange={(val) =>
                       setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })
                     }
-                    placeholder={t('crm:products.selectOption')}
+                    placeholder={t('crm:internalListing.selectOption')}
                     searchable={false}
                     buttonClassName={
                       errors.costUnit
@@ -688,14 +688,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <div className="space-y-1.5">
                   <div className="flex items-end justify-between ml-1 min-h-[20px]">
                     <label className="text-xs font-bold text-slate-500">
-                      {t('crm:products.supplier')}
+                      {t('crm:internalListing.supplier')}
                     </label>
                   </div>
                   <CustomSelect
                     options={supplierOptions}
                     value={formData.supplierId || ''}
                     onChange={(val) => setFormData({ ...formData, supplierId: val as string })}
-                    placeholder={t('crm:products.selectOption')}
+                    placeholder={t('crm:internalListing.selectOption')}
                     searchable={true}
                   />
                 </div>
@@ -705,12 +705,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             <div className="space-y-4">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:products.pricingAndUnit')}
+                {t('crm:internalListing.pricingAndUnit')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.cost')}
+                    {t('crm:internalListing.cost')}
                   </label>
                   <div className="flex gap-2">
                     <ValidatedNumberInput
@@ -731,7 +731,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.mol')}
+                    {t('crm:internalListing.mol')}
                   </label>
                   <div className="flex gap-2">
                     <ValidatedNumberInput
@@ -749,7 +749,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.salePriceCalculated')}
+                    {t('crm:internalListing.salePriceCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
                     {hasPricing
@@ -760,7 +760,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:products.marginCalculated')}
+                    {t('crm:internalListing.marginCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
                     {hasPricing
@@ -783,7 +783,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 type="submit"
                 className="px-12 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
               >
-                {editingProduct ? t('crm:products.updateProduct') : t('crm:products.saveProduct')}
+                {editingProduct
+                  ? t('crm:internalListing.updateProduct')
+                  : t('crm:internalListing.saveProduct')}
               </button>
             </div>
           </form>
@@ -799,10 +801,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('crm:products.deleteProductTitle')}
+                {t('crm:internalListing.deleteProductTitle')}
               </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('crm:products.deleteConfirm', { productName: productToDelete?.name })}
+                {t('crm:internalListing.deleteConfirm', { productName: productToDelete?.name })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
@@ -816,7 +818,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 onClick={handleDelete}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('crm:products.yesDelete')}
+                {t('crm:internalListing.yesDelete')}
               </button>
             </div>
           </div>
@@ -825,13 +827,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('crm:products.title')}</h2>
-          <p className="text-slate-500 text-sm">{t('crm:products.subtitle')}</p>
+          <h2 className="text-2xl font-black text-slate-800">{t('crm:internalListing.title')}</h2>
+          <p className="text-slate-500 text-sm">{t('crm:internalListing.subtitle')}</p>
         </div>
       </div>
 
       <StandardTable
-        title={t('crm:products.title')}
+        title={t('crm:internalListing.title')}
         defaultRowsPerPage={5}
         data={products}
         headerAction={
@@ -839,7 +841,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             onClick={openAddModal}
             className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
           >
-            <i className="fa-solid fa-plus"></i> {t('crm:products.addProduct')}
+            <i className="fa-solid fa-plus"></i> {t('crm:internalListing.addProduct')}
           </button>
         }
         rowClassName={(p) =>
@@ -856,7 +858,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p }) => <div className="font-bold text-slate-800">{p.name}</div>,
           },
           {
-            header: t('crm:products.productCode'),
+            header: t('crm:internalListing.productCode'),
             accessorKey: 'productCode',
             cell: ({ row: p }) =>
               p.productCode ? (
@@ -868,7 +870,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               ),
           },
           {
-            header: t('crm:products.category'),
+            header: t('crm:internalListing.category'),
             accessorKey: 'category',
             cell: ({ row: p }) => (
               <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight whitespace-nowrap">
@@ -877,7 +879,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             ),
           },
           {
-            header: t('crm:products.subcategory'),
+            header: t('crm:internalListing.subcategory'),
             accessorKey: 'subcategory',
             cell: ({ row: p }) => (
               <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
@@ -886,7 +888,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             ),
           },
           {
-            header: t('crm:products.supplier'),
+            header: t('crm:internalListing.supplier'),
             accessorKey: 'supplierName',
             className: 'px-6 py-5 whitespace-nowrap',
             cell: ({ row: p }) => (
@@ -896,13 +898,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   className="text-xs font-semibold text-slate-600 truncate max-w-[150px]"
                   title={p.supplierName}
                 >
-                  {p.supplierName || t('crm:products.noSupplier')}
+                  {p.supplierName || t('crm:internalListing.noSupplier')}
                 </span>
               </div>
             ),
           },
           {
-            header: t('crm:products.type'),
+            header: t('crm:internalListing.type'),
             accessorKey: 'type',
             cell: ({ row: p }) => (
               <StatusBadge type={p.type as StatusType} label={getLocalizedTypeName(p.type)} />
@@ -910,7 +912,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             accessorFn: (row) => getLocalizedTypeName(row.type),
           },
           {
-            header: t('crm:products.cost'),
+            header: t('crm:internalListing.cost'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorFn: (row) => Number(row.costo), // Numeric for sorting
@@ -918,12 +920,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p }) => (
               <span className="text-sm font-semibold text-slate-500">
                 {Number(p.costo).toFixed(2)} {currency} /{' '}
-                {p.costUnit === 'hours' ? t('crm:products.hour') : t('crm:products.unit')}
+                {p.costUnit === 'hours'
+                  ? t('crm:internalListing.hour')
+                  : t('crm:internalListing.unit')}
               </span>
             ),
           },
           {
-            header: t('crm:products.mol'),
+            header: t('crm:internalListing.mol'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorKey: 'molPercentage',
@@ -935,7 +939,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             ),
           },
           {
-            header: t('crm:products.salePrice'),
+            header: t('crm:internalListing.salePrice'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             id: 'salePrice', // calculated
@@ -944,12 +948,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p, value }) => (
               <span className="text-sm font-semibold text-slate-700">
                 {Number(value).toFixed(2)} {currency} /{' '}
-                {p.costUnit === 'hours' ? t('crm:products.hour') : t('crm:products.unit')}
+                {p.costUnit === 'hours'
+                  ? t('crm:internalListing.hour')
+                  : t('crm:internalListing.unit')}
               </span>
             ),
           },
           {
-            header: t('crm:products.margin'),
+            header: t('crm:internalListing.margin'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             id: 'margin',
@@ -962,7 +968,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             ),
           },
           {
-            header: t('crm:products.taxRate'),
+            header: t('crm:internalListing.taxRate'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorKey: 'taxRate',
@@ -977,13 +983,15 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p }) => (
               <StatusBadge
                 type={p.isDisabled ? 'disabled' : 'active'}
-                label={p.isDisabled ? t('crm:products.disabled') : t('crm:products.active')}
+                label={
+                  p.isDisabled ? t('crm:internalListing.disabled') : t('crm:internalListing.active')
+                }
               />
             ),
             // We might want to customize filter options for boolean, but string logic 'true'/'false' works basic.
             // Ideally we map true->Disabled, false->Active for filtering value.
             accessorFn: (row) =>
-              row.isDisabled ? t('crm:products.disabled') : t('crm:products.active'),
+              row.isDisabled ? t('crm:internalListing.disabled') : t('crm:internalListing.active'),
           },
           {
             header: t('common:labels.actions'),
@@ -1008,8 +1016,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   }`}
                   title={
                     p.isDisabled
-                      ? t('crm:products.enableProduct')
-                      : t('crm:products.disableProduct')
+                      ? t('crm:internalListing.enableProduct')
+                      : t('crm:internalListing.disableProduct')
                   }
                 >
                   <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
@@ -1020,7 +1028,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     confirmDelete(p);
                   }}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title={t('crm:products.deleteProductTooltip')}
+                  title={t('crm:internalListing.deleteProductTooltip')}
                 >
                   <i className="fa-solid fa-trash-can"></i>
                 </button>

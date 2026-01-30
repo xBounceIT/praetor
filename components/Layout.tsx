@@ -266,7 +266,7 @@ const Layout: React.FC<LayoutProps> = ({
             />
             <NavItem
               icon="fa-tags"
-              label={t('routes.specialBids')}
+              label={t('routes.externalListing')}
               active={activeView === 'catalog/special-bids'}
               isCollapsed={isCollapsed}
               onClick={() => {
@@ -566,7 +566,7 @@ const Layout: React.FC<LayoutProps> = ({
                     : activeView === 'projects/tasks'
                       ? t('titles.tasks')
                       : activeView === 'catalog/special-bids'
-                        ? t('titles.specialBids')
+                        ? t('titles.externalListing')
                         : activeView === 'suppliers/manage'
                           ? t('titles.suppliers')
                           : activeView === 'suppliers/quotes'
