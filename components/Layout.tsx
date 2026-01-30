@@ -14,7 +14,7 @@ interface Module {
 const moduleDefaultRoutes: Record<string, View> = {
   timesheets: 'timesheets/tracker',
   crm: 'crm/clients',
-  catalog: 'catalog/products',
+  catalog: 'catalog/internal-listing',
   projects: 'projects/manage',
   accounting: 'accounting/clients-orders',
   finances: 'finances/payments',
@@ -257,20 +257,20 @@ const Layout: React.FC<LayoutProps> = ({
             <NavItem
               icon="fa-box"
               label={t('routes.internalListing')}
-              active={activeView === 'catalog/products'}
+              active={activeView === 'catalog/internal-listing'}
               isCollapsed={isCollapsed}
               onClick={() => {
-                onViewChange('catalog/products');
+                onViewChange('catalog/internal-listing');
                 setIsMobileMenuOpen(false);
               }}
             />
             <NavItem
               icon="fa-tags"
               label={t('routes.externalListing')}
-              active={activeView === 'catalog/special-bids'}
+              active={activeView === 'catalog/external-listing'}
               isCollapsed={isCollapsed}
               onClick={() => {
-                onViewChange('catalog/special-bids');
+                onViewChange('catalog/external-listing');
                 setIsMobileMenuOpen(false);
               }}
             />
@@ -565,7 +565,7 @@ const Layout: React.FC<LayoutProps> = ({
                     ? t('titles.projects')
                     : activeView === 'projects/tasks'
                       ? t('titles.tasks')
-                      : activeView === 'catalog/special-bids'
+                      : activeView === 'catalog/external-listing'
                         ? t('titles.externalListing')
                         : activeView === 'suppliers/manage'
                           ? t('titles.suppliers')
@@ -666,7 +666,7 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
         <div
-          className={`p-4 md:p-8 mx-auto ${activeView === 'catalog/products' ? 'max-w-[96%]' : 'max-w-7xl'}`}
+          className={`p-4 md:p-8 mx-auto ${activeView === 'catalog/internal-listing' ? 'max-w-[96%]' : 'max-w-7xl'}`}
         >
           {children}
         </div>

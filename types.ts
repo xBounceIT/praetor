@@ -252,8 +252,8 @@ export type View =
   | 'crm/clients'
   | 'crm/quotes'
   // Catalog module
-  | 'catalog/products'
-  | 'catalog/special-bids'
+  | 'catalog/internal-listing'
+  | 'catalog/external-listing'
   // Accounting module
   | 'accounting/clients-orders'
   | 'accounting/clients-invoices'

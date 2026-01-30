@@ -604,8 +604,8 @@ const App: React.FC = () => {
       'accounting/clients-orders',
       'accounting/clients-invoices',
       // Catalog module
-      'catalog/products',
-      'catalog/special-bids',
+      'catalog/internal-listing',
+      'catalog/external-listing',
       // Finances module
       'finances/payments',
       'finances/expenses',
@@ -640,8 +640,8 @@ const App: React.FC = () => {
       'accounting/clients-orders',
       'accounting/clients-invoices',
       // Catalog module
-      'catalog/products',
-      'catalog/special-bids',
+      'catalog/internal-listing',
+      'catalog/external-listing',
       // Finances module
       'finances/payments',
       'finances/expenses',
@@ -703,8 +703,8 @@ const App: React.FC = () => {
       'accounting/clients-orders': ['manager'],
       'accounting/clients-invoices': ['manager'],
       // Catalog module - manager
-      'catalog/products': ['manager'],
-      'catalog/special-bids': ['manager'],
+      'catalog/internal-listing': ['manager'],
+      'catalog/external-listing': ['manager'],
       // Finances module - manager
       'finances/payments': ['manager'],
       'finances/expenses': ['manager'],
@@ -2175,7 +2175,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'catalog/products' &&
+            {activeView === 'catalog/internal-listing' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <InternalListingView
                   products={products}
@@ -2187,7 +2187,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'catalog/special-bids' &&
+            {activeView === 'catalog/external-listing' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <ExternalListingView
                   bids={specialBids}
