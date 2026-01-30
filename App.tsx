@@ -53,7 +53,7 @@ import PaymentsView from './components/PaymentsView';
 import ExpensesView from './components/ExpensesView';
 import FinancialReportsView from './components/FinancialReportsView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
-import SuppliersView from './components/SuppliersView';
+import SuppliersView from './components/CRM/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
 import ExternalListingView from './components/ExternalListingView';
 import InternalEmployeesView from './components/InternalEmployeesView';
@@ -2291,6 +2291,7 @@ const App: React.FC = () => {
                   onAddSupplier={addSupplier}
                   onUpdateSupplier={handleUpdateSupplier}
                   onDeleteSupplier={handleDeleteSupplier}
+                  userRole={currentUser.role}
                 />
               )}
 
