@@ -311,48 +311,66 @@ const StandardTable = <T extends Record<string, any>>({
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                {columns.map((col) => {
+                {columns.map((col, colIdx) => {
                   const colId = getColId(col);
                   const isFiltered = filterState[colId] && filterState[colId].length > 0;
                   const isSorted = sortState?.colId === colId;
+                  const isFirstColumn = colIdx === 0;
+                  const isLastColumn = colIdx === columns.length - 1;
+                  // Force alignment: first column left, last column right, otherwise use col.align
+                  const effectiveAlign = isFirstColumn
+                    ? 'left'
+                    : isLastColumn
+                      ? 'right'
+                      : col.align;
 
                   return (
                     <th
                       key={colId}
-                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
+                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.headerClassName || ''}`}
                     >
-                      <span
-                        className={`inline-flex items-center gap-1 ${col.align === 'right' ? 'flex-row-reverse' : ''}`}
+                      {/* Full-width wrapper for proper positioning context */}
+                      <div
+                        className={`relative w-full flex items-center ${effectiveAlign === 'right' ? 'justify-end' : effectiveAlign === 'center' ? 'justify-center' : ''}`}
                       >
-                        <span>{col.header}</span>
-                        {!col.disableFiltering && (
-                          <button
-                            ref={activeFilterCol === colId ? filterRef : undefined}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (activeFilterCol === colId) {
-                                setActiveFilterCol(null);
-                              } else {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setFilterPos({
-                                  top: rect.bottom + window.scrollY + 4,
-                                  left: rect.left + window.scrollX,
-                                });
-                                setActiveFilterCol(colId);
-                              }
-                            }}
-                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                              isFiltered || isSorted || activeFilterCol === colId
-                                ? 'text-praetor'
-                                : 'text-slate-400'
-                            }`}
-                          >
-                            <i className="fa-solid fa-filter"></i>
-                          </button>
-                        )}
-                      </span>
+                        {/* Header text - with padding to avoid filter button overlap */}
+                        <span className={effectiveAlign === 'right' ? 'pr-6' : ''}>
+                          {col.header}
+                        </span>
 
-                      {/* Portal for filter popup */}
+                        {/* Filter button - absolutely positioned within the full-width wrapper */}
+                        {!col.disableFiltering && (
+                          <div
+                            ref={activeFilterCol === colId ? filterRef : undefined}
+                            className={`absolute ${effectiveAlign === 'right' ? 'left-0' : 'right-0'} top-1/2 -translate-y-1/2`}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (activeFilterCol === colId) {
+                                  setActiveFilterCol(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setFilterPos({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.left + window.scrollX,
+                                  });
+                                  setActiveFilterCol(colId);
+                                }
+                              }}
+                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                                isFiltered || isSorted || activeFilterCol === colId
+                                  ? 'text-praetor'
+                                  : 'text-slate-400'
+                              }`}
+                            >
+                              <i className="fa-solid fa-filter"></i>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Portal for filter popup - outside the wrapper */}
                       {activeFilterCol === colId &&
                         filterPos &&
                         createPortal(
@@ -390,12 +408,20 @@ const StandardTable = <T extends Record<string, any>>({
                     onClick={() => onRowClick && onRowClick(row)}
                     className={`transition-colors text-sm ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
                   >
-                    {columns.map((col) => {
+                    {columns.map((col, colIdx) => {
                       const val = getValue(row, col);
+                      const isFirstColumn = colIdx === 0;
+                      const isLastColumn = colIdx === columns.length - 1;
+                      // Force alignment: first column left, last column right, otherwise use col.align
+                      const effectiveAlign = isFirstColumn
+                        ? 'left'
+                        : isLastColumn
+                          ? 'right'
+                          : col.align;
                       return (
                         <td
                           key={getColId(col)}
-                          className={`px-6 py-5 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.className || ''}`}
+                          className={`px-6 py-5 ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
