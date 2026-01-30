@@ -8,7 +8,7 @@ import ValidatedNumberInput from './ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
 import Modal from './Modal';
 
-interface ProductsViewProps {
+interface InternalListingViewProps {
   products: Product[];
   suppliers: Supplier[];
   onAddProduct: (productData: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
@@ -17,7 +17,7 @@ interface ProductsViewProps {
   currency: string;
 }
 
-const ProductsView: React.FC<ProductsViewProps> = ({
+const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
   suppliers,
   onAddProduct,
@@ -1034,4 +1034,4 @@ const ProductsView: React.FC<ProductsViewProps> = ({
   );
 };
 
-export default ProductsView;
+export default InternalListingView;

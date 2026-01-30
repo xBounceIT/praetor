@@ -44,7 +44,7 @@ import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';
 import api, { setAuthToken, getAuthToken } from './services/api';
 import NotFound from './components/NotFound';
-import ProductsView from './components/ProductsView';
+import InternalListingView from './components/InternalListingView';
 import QuotesView from './components/QuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -55,7 +55,7 @@ import FinancialReportsView from './components/FinancialReportsView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
-import SpecialBidsView from './components/SpecialBidsView';
+import ExternalListingView from './components/ExternalListingView';
 import InternalEmployeesView from './components/InternalEmployeesView';
 import ExternalEmployeesView from './components/ExternalEmployeesView';
 
@@ -2177,7 +2177,7 @@ const App: React.FC = () => {
 
             {activeView === 'catalog/products' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <ProductsView
+                <InternalListingView
                   products={products}
                   suppliers={suppliers}
                   onAddProduct={addProduct}
@@ -2189,7 +2189,7 @@ const App: React.FC = () => {
 
             {activeView === 'catalog/special-bids' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <SpecialBidsView
+                <ExternalListingView
                   bids={specialBids}
                   clients={clients}
                   products={products}

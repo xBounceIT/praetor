@@ -9,7 +9,7 @@ import Calendar from './Calendar';
 import StatusBadge from './StatusBadge';
 import Modal from './Modal';
 
-interface SpecialBidsViewProps {
+interface ExternalListingViewProps {
   bids: SpecialBid[];
   clients: Client[];
   products: Product[];
@@ -27,7 +27,7 @@ const getBidStatus = (bid: SpecialBid) => {
   return 'active';
 };
 
-const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
+const ExternalListingView: React.FC<ExternalListingViewProps> = ({
   bids,
   clients,
   products,
@@ -682,4 +682,4 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   );
 };
 
-export default SpecialBidsView;
+export default ExternalListingView;

@@ -250,7 +250,7 @@ const StandardTable = <T extends Record<string, any>>({
           <i className="fa-solid fa-chevron-left text-xs"></i>
         </button>
         <div className="flex items-center gap-1">
-          {/* Simple pagination logic: show all pages logic might be too big, limiting to 5 mostly used in ProductsView */}
+          {/* Simple pagination logic: show all pages logic might be too big, limiting to 5 mostly used in InternalListingView */}
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .filter(
               (p) => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1),
