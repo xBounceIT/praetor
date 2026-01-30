@@ -11,7 +11,13 @@
       "Bash(git commit:*)",
       "Bash(find:*)",
       "Bash(npm run lint:*)",
-      "Bash(npm run format:*)"
+      "Bash(npm run format:*)",
+      "Bash(bun install:*)",
+      "Bash(bun run lint:*)",
+      "Bash(bun run build:*)",
+      "WebSearch",
+      "Bash(bun run lint:fix:*)",
+      "Bash(git push)"
     ]
   }
 }
