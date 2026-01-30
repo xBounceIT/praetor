@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import CustomSelect from './CustomSelect';
-import Modal from './Modal';
+import Modal from '../shared/Modal';
 
 interface CustomRepeatModalProps {
   isOpen: boolean;

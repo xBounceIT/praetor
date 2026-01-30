@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { useTranslation } from 'react-i18next';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 
 interface SessionTimeoutHandlerProps {
   onLogout: () => void;

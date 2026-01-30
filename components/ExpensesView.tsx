@@ -4,7 +4,7 @@ import { Expense } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import StandardTable from './shared/StandardTable';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 
 interface ExpensesViewProps {
   expenses: Expense[];

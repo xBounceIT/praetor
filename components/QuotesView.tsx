@@ -6,7 +6,7 @@ import StandardTable, { Column } from './shared/StandardTable';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 import StatusBadge, { StatusType } from './shared/StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 
 interface QuotesViewProps {
   quotes: Quote[];

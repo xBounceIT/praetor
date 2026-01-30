@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { User, WorkUnit } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import { workUnitsApi } from '../services/api';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 
 interface WorkUnitPayload {
   name: string;

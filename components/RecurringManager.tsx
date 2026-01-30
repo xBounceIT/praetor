@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask } from '../types';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 
 interface RecurringManagerProps {
   tasks: ProjectTask[];

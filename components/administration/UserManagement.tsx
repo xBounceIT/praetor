@@ -6,7 +6,7 @@ import StandardTable from './shared/StandardTable';
 
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 import { usersApi } from '../services/api';
-import Modal from './Modal';
+import Modal from './shared/Modal';
 
 interface UserManagementProps {
   users: User[];
