@@ -869,9 +869,21 @@ const App: React.FC = () => {
             break;
           }
           case 'configuration': {
-            if (currentUser.role !== 'admin') return;
+            if (currentUser.role !== 'admin' && currentUser.role !== 'manager') return;
+            const [usersData, clientsData, projectsData, tasksData] = await Promise.all([
+              api.users.list(),
+              api.clients.list(),
+              api.projects.list(),
+              api.tasks.list(),
+            ]);
+            setUsers(usersData);
+            setClients(clientsData);
+            setProjects(projectsData);
+            setProjectTasks(tasksData);
             await loadGeneralSettings();
-            await loadLdapConfig();
+            if (currentUser.role === 'admin') {
+              await loadLdapConfig();
+            }
             break;
           }
           case 'crm': {
