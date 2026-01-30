@@ -9,6 +9,7 @@ import {
   optionalNonEmptyString,
   badRequest,
   parseQueryBoolean,
+  isWeekendDate,
 } from '../utils/validation.ts';
 
 export default async function (fastify, _opts) {
@@ -118,6 +119,18 @@ export default async function (fastify, _opts) {
 
       const dateResult = parseDateString(date, 'date');
       if (!dateResult.ok) return badRequest(reply, dateResult.message);
+
+      // Weekend validation
+      if (isWeekendDate(dateResult.value)) {
+        const settingsResult = await query(
+          'SELECT allow_weekend_selection FROM general_settings WHERE id = 1',
+        );
+        const allowWeekendSelection = settingsResult.rows[0]?.allow_weekend_selection ?? true;
+
+        if (!allowWeekendSelection) {
+          return badRequest(reply, 'Time entries on weekends are not allowed');
+        }
+      }
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);

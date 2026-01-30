@@ -508,3 +508,15 @@ export function validateClientIdentifier(
 
   return result;
 }
+
+/**
+ * Check if a date string (YYYY-MM-DD format) falls on a weekend
+ * @param dateString - Date in YYYY-MM-DD format
+ * @returns true if Saturday (6) or Sunday (0)
+ */
+export function isWeekendDate(dateString: string): boolean {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const dayOfWeek = date.getUTCDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
