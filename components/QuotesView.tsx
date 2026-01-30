@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Quote, QuoteItem, Client, Product, SpecialBid, Sale } from '../types';
+import { Quote, QuoteItem, Client, Product, SpecialBid, ClientsOrder } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import StandardTable, { Column } from './shared/StandardTable';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
@@ -16,10 +16,10 @@ interface QuotesViewProps {
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
-  onCreateSale?: (quote: Quote) => void;
+  onCreateClientsOrder?: (quote: Quote) => void;
   quoteFilterId?: string | null;
-  quoteIdsWithSales?: Set<string>;
-  quoteSaleStatuses?: Record<string, Sale['status']>;
+  quoteIdsWithOrders?: Set<string>;
+  quoteOrderStatuses?: Record<string, ClientsOrder['status']>;
   currency: string;
 }
 
@@ -36,9 +36,9 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   onAddQuote,
   onUpdateQuote,
   onDeleteQuote,
-  onCreateSale,
-  quoteIdsWithSales,
-  quoteSaleStatuses,
+  onCreateClientsOrder,
+  quoteIdsWithOrders,
+  quoteOrderStatuses,
   currency,
 }) => {
   const { t } = useTranslation(['crm', 'common', 'form']);
@@ -106,23 +106,23 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     [isExpired],
   );
 
-  const hasSaleForQuote = useCallback(
-    (quote: Quote) => Boolean(quoteIdsWithSales?.has(quote.id)),
-    [quoteIdsWithSales],
+  const hasOrderForQuote = useCallback(
+    (quote: Quote) => Boolean(quoteIdsWithOrders?.has(quote.id)),
+    [quoteIdsWithOrders],
   );
 
-  const getSaleStatusForQuote = useCallback(
-    (quote: Quote) => quoteSaleStatuses?.[quote.id],
-    [quoteSaleStatuses],
+  const getOrderStatusForQuote = useCallback(
+    (quote: Quote) => quoteOrderStatuses?.[quote.id],
+    [quoteOrderStatuses],
   );
 
   const isHistoryRow = useCallback(
     (quote: Quote) => {
       const expired = isQuoteExpired(quote);
-      const hasSale = hasSaleForQuote(quote);
-      return quote.status === 'denied' || expired || hasSale;
+      const hasOrder = hasOrderForQuote(quote);
+      return quote.status === 'denied' || expired || hasOrder;
     },
-    [isQuoteExpired, hasSaleForQuote],
+    [isQuoteExpired, hasOrderForQuote],
   );
 
   // Calculate totals for a quote
@@ -674,8 +674,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
-          const hasSale = hasSaleForQuote(row);
-          const saleStatus = getSaleStatusForQuote(row);
+          const hasOrder = hasOrderForQuote(row);
+          const orderStatus = getOrderStatusForQuote(row);
           const history = isHistoryRow(row);
 
           const isDeleteDisabled = expired || row.status !== 'draft' || history;
@@ -687,22 +687,21 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               ? t('crm:quotes.errors.expiredCannotDelete')
               : t('crm:quotes.deleteQuote');
 
-          const isCreateSaleDisabled = history || hasSale;
-          const createSaleTitle = hasSale
-            ? t('crm:quotes.saleAlreadyExists', {
-                defaultValue: 'A sale order for this quote already exists.',
+          const isCreateSaleDisabled = history || hasOrder;
+          const createSaleTitle = hasOrder
+            ? t('crm:quotes.orderAlreadyExists', {
+                defaultValue: 'An order for this quote already exists.',
               })
             : history
               ? t('crm:quotes.historyActionsDisabled', {
                   defaultValue: 'History entries cannot be modified.',
                 })
-              : t('crm:quotes.convertToSale');
+              : t('crm:quotes.convertToOrder');
 
-          const canRestore = !hasSale || saleStatus === 'draft';
+          const canRestore = !hasOrder || orderStatus === 'draft';
           const restoreTitle = !canRestore
-            ? t('crm:quotes.restoreDisabledSaleStatus', {
-                defaultValue:
-                  'Restore is only possible when the linked sale order is in draft status.',
+            ? t('crm:quotes.restoreDisabledOrderStatus', {
+                defaultValue: 'Restore is only possible when the linked order is in draft status.',
               })
             : t('crm:quotes.restoreQuote', { defaultValue: 'Restore quote' });
 
@@ -726,12 +725,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               >
                 <i className="fa-solid fa-pen-to-square"></i>
               </button>
-              {row.status === 'accepted' && onCreateSale && (
+              {row.status === 'accepted' && onCreateClientsOrder && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     if (isCreateSaleDisabled) return;
-                    onCreateSale(row);
+                    onCreateClientsOrder(row);
                   }}
                   disabled={isCreateSaleDisabled}
                   className={`p-2 rounded-lg transition-all ${isCreateSaleDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
@@ -838,11 +837,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       currency,
       isHistoryRow,
       isQuoteExpired,
-      hasSaleForQuote,
-      getSaleStatusForQuote,
+      hasOrderForQuote,
+      getOrderStatusForQuote,
       calculateQuoteTotals,
       getStatusLabel,
-      onCreateSale,
+      onCreateClientsOrder,
       onUpdateQuote,
       confirmDelete,
       openEditModal,

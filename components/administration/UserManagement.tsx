@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, UserRole, Client, Project, ProjectTask } from '../types';
+import { User, UserRole, Client, Project, ProjectTask } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable from '../shared/StandardTable';
 
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import { usersApi } from '../services/api';
+import { usersApi } from '../../services/api';
 import Modal from '../shared/Modal';
 
 interface UserManagementProps {

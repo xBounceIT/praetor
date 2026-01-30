@@ -336,7 +336,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           <CustomSelect
             options={[{ id: 'all', name: t('expenses.allCategories') }, ...categoryOptions]}
             value={filterCategory}
-            onChange={setFilterCategory}
+            onChange={(val) => setFilterCategory(val as string)}
             placeholder={t('expenses.filterCategory')}
             searchable={false}
           />
@@ -381,7 +381,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 ]}
                 value={rowsPerPage.toString()}
                 onChange={(val) => {
-                  setRowsPerPage(parseInt(val));
+                  setRowsPerPage(parseInt(val as string));
                   setCurrentPage(1);
                 }}
                 className="w-20"

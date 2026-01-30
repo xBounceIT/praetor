@@ -86,8 +86,7 @@ const normalizeUser = (u: User): User => ({
 
 const normalizeProduct = (p: Product): Product => ({
   ...p,
-  salePrice: Number(p.salePrice || 0),
-  cost: Number(p.cost || 0),
+  costo: Number(p.costo || 0),
   taxRate: Number(p.taxRate || 0),
 });
 

@@ -201,7 +201,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <CustomSelect
                   options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                   value={formData.clientId || ''}
-                  onChange={handleClientChange}
+                  onChange={(val) => handleClientChange(val as string)}
                   placeholder={t('invoices.allClients')}
                   searchable={true}
                   className={errors.clientId ? 'border-red-300' : ''}
@@ -225,7 +225,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                     })),
                   ]}
                   value={formData.invoiceId || ''}
-                  onChange={handleInvoiceChange}
+                  onChange={(val) => handleInvoiceChange(val as string)}
                   placeholder={t('payments.linkToInvoice')}
                   searchable={true}
                   disabled={!formData.clientId} // Disable if no client selected
@@ -380,7 +380,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
               ...activeClients.map((c) => ({ id: c.id, name: c.name })),
             ]}
             value={filterClientId}
-            onChange={setFilterClientId}
+            onChange={(val) => setFilterClientId(val as string)}
             placeholder={t('invoices.filterClient')}
             searchable={true}
           />
@@ -425,7 +425,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                 ]}
                 value={rowsPerPage.toString()}
                 onChange={(val) => {
-                  setRowsPerPage(parseInt(val));
+                  setRowsPerPage(parseInt(val as string));
                   setCurrentPage(1);
                 }}
                 className="w-20"

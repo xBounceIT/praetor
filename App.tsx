@@ -91,7 +91,7 @@ const TrackerView: React.FC<{
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
-  onAddEntry: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>) => void;
+  onAddEntry: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => void;
   onDeleteEntry: (id: string) => void;
   insights: string;
   isInsightLoading: boolean;
@@ -102,9 +102,11 @@ const TrackerView: React.FC<{
   allowWeekendSelection: boolean;
   onMakeRecurring: (
     taskId: string,
-    pattern: 'daily' | 'weekly' | 'monthly',
+    pattern: 'daily' | 'weekly' | 'monthly' | string,
+    startDate?: string,
     endDate?: string,
-  ) => void;
+    duration?: number,
+  ) => void | Promise<void>;
   userRole: UserRole;
   viewingUserId: string;
   onViewUserChange: (id: string) => void;
@@ -258,7 +260,7 @@ const TrackerView: React.FC<{
                   <CustomSelect
                     options={userOptions}
                     value={viewingUserId}
-                    onChange={onViewUserChange}
+                    onChange={(val) => onViewUserChange(val as string)}
                     label={t('tracker.switchUserView')}
                     searchable={true}
                   />
@@ -832,7 +834,10 @@ const App: React.FC = () => {
       if (genSettings.currency === 'USD') {
         genSettings.currency = '$';
       }
-      setGeneralSettings(genSettings);
+      setGeneralSettings({
+        ...genSettings,
+        geminiApiKey: genSettings.geminiApiKey || '',
+      });
       setHasLoadedGeneralSettings(true);
     };
 
@@ -1306,7 +1311,9 @@ const App: React.FC = () => {
 
   // ... (handlers)
 
-  const handleAddEntry = async (newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>) => {
+  const handleAddEntry = async (
+    newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>,
+  ) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
@@ -1373,7 +1380,7 @@ const App: React.FC = () => {
 
   const handleMakeRecurring = async (
     taskId: string,
-    pattern: 'daily' | 'weekly' | 'monthly',
+    pattern: 'daily' | 'weekly' | 'monthly' | string,
     startDate?: string,
     endDate?: string,
     duration?: number,
@@ -1559,11 +1566,7 @@ const App: React.FC = () => {
         (currentQuote.status !== 'draft' || currentQuote.isExpired),
       );
       if (isRestore) {
-        const linkedSales = sales.filter((sale) => sale.linkedQuoteId === id);
-        if (linkedSales.length > 0) {
-          await Promise.all(linkedSales.map((sale) => api.sales.delete(sale.id)));
-          setSales((prev) => prev.filter((sale) => sale.linkedQuoteId !== id));
-        }
+        // Sales functionality removed - linked sales cleanup handled by backend
       }
 
       const updatesWithRestore = isRestore
@@ -1938,7 +1941,10 @@ const App: React.FC = () => {
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
       const updated = await api.generalSettings.update(updates);
-      setGeneralSettings(updated);
+      setGeneralSettings({
+        ...updated,
+        geminiApiKey: updated.geminiApiKey || '',
+      });
     } catch (err) {
       console.error('Failed to update general settings:', err);
       alert('Failed to update settings');
@@ -2102,7 +2108,7 @@ const App: React.FC = () => {
     <>
       <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />
       <Layout
-        activeView={!isRouteAccessible ? 'tracker' : (activeView as View)}
+        activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}
         onViewChange={setActiveView}
         currentUser={currentUser}
         onLogout={handleLogout}
@@ -2178,7 +2184,6 @@ const App: React.FC = () => {
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <InternalListingView
                   products={products}
-                  suppliers={suppliers}
                   onAddProduct={addProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}

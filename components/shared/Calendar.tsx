@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TimeEntry } from '../types';
+import { TimeEntry } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
 
 interface CalendarProps {

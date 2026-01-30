@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Notification } from '../types';
+import { Notification } from '../../types';
 
 interface NotificationBellProps {
   notifications: Notification[];

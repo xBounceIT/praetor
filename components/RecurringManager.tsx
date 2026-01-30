@@ -152,6 +152,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
           <div className="p-4 space-y-3">
             <button
               onClick={() => {
+                if (!selectedTask) return;
                 onAction(selectedTask.id, 'stop');
                 closeModal();
               }}
@@ -170,6 +171,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
 
             <button
               onClick={() => {
+                if (!selectedTask) return;
                 onAction(selectedTask.id, 'delete_future');
                 closeModal();
               }}
@@ -188,6 +190,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
 
             <button
               onClick={() => {
+                if (!selectedTask) return;
                 onAction(selectedTask.id, 'delete_all');
                 closeModal();
               }}

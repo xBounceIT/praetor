@@ -480,7 +480,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 {t('hr:workUnits.manageMembers')}
               </h3>
               <p className="text-sm text-slate-500 font-medium">
-                {t('hr:workUnits.addRemoveUsers', { name: targetUnit.name })}
+                {t('hr:workUnits.addRemoveUsers', { name: targetUnit?.name })}
               </p>
             </div>
             <button
@@ -580,7 +580,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 {t('hr:workUnits.deleteWorkUnit')}
               </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('hr:workUnits.deleteConfirmMessage', { name: targetUnit.name })}
+                {t('hr:workUnits.deleteConfirmMessage', { name: targetUnit?.name })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">

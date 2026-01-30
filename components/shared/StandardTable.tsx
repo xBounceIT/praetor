@@ -60,7 +60,7 @@ const StandardTable = <T extends Record<string, any>>({
   onRowClick,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
-  const filterRef = useRef<HTMLDivElement>(null); // Ref for the filter logic/container in the table
+  const filterRef = useRef<HTMLButtonElement>(null); // Ref for the filter button
   const popupRef = useRef<HTMLDivElement>(null); // Ref for the Portal popup
 
   // Internal State for Data Mode

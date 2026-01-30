@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Invoice, InvoiceItem, Client, Product, ClientsOrder } from '../types';
+import { Invoice, InvoiceItem, Client, Product, ClientsOrder } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable from '../shared/StandardTable';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -438,7 +438,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                 <CustomSelect
                   options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                   value={formData.clientId || ''}
-                  onChange={handleClientChange}
+                  onChange={(val) => handleClientChange(val as string)}
                   placeholder={t('accounting:clientsInvoices.allClients')}
                   searchable={true}
                   className={errors.clientId ? 'border-red-300' : ''}
@@ -517,7 +517,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             ...activeProducts.map((p) => ({ id: p.id, name: p.name })),
                           ]}
                           value={item.productId || ''}
-                          onChange={(val) => updateItemRow(index, 'productId', val)}
+                          onChange={(val) => updateItemRow(index, 'productId', val as string)}
                           placeholder={t('accounting:clientsInvoices.selectProductPlaceholder')}
                           searchable={true}
                           buttonClassName="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"

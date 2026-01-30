@@ -68,7 +68,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
               label="Day of Week"
               options={days}
               value={dayOfWeek.toString()}
-              onChange={(val) => setDayOfWeek(parseInt(val))}
+              onChange={(val) => setDayOfWeek(parseInt(val as string))}
               className="w-full"
             />
           </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Project, Client, UserRole } from '../types';
+import { Project, Client, UserRole } from '../../types';
 import { COLORS } from '../../constants';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable, { Column } from '../shared/StandardTable';

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProjectTask, Project, Client, UserRole, User } from '../types';
+import { ProjectTask, Project, Client, UserRole, User } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';

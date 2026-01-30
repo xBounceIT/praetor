@@ -44,7 +44,8 @@ export const parseSmartEntry = async (
     });
 
     // Directly access .text property from GenerateContentResponse
-    const text = response.text.trim();
+    const text = response.text?.trim();
+    if (!text) return null;
     return JSON.parse(text) as ParsedTimeEntry;
   } catch (error) {
     console.error('Gemini Parsing Error:', error);
@@ -68,7 +69,10 @@ export const getInsights = async (entries: TimeEntry[], apiKey?: string): Promis
       },
     });
     // Directly access .text property from GenerateContentResponse
-    return response.text;
+    return (
+      response.text ||
+      'Keep up the great work! Consistent tracking is the first step to optimization.'
+    );
   } catch {
     return 'Keep up the great work! Consistent tracking is the first step to optimization.';
   }

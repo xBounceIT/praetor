@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LdapConfig, UserRole } from '../types';
+import { LdapConfig, UserRole, LdapRoleMapping } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 
 interface AdminAuthenticationProps {
@@ -60,7 +60,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
     }
 
     if (formData.roleMappings) {
-      formData.roleMappings.forEach((mapping, idx) => {
+      formData.roleMappings.forEach((mapping: LdapRoleMapping, idx: number) => {
         if (!mapping.ldapGroup?.trim()) {
           newErrors[`roleMapping_${idx}`] = 'LDAP Group is required';
         }
@@ -352,7 +352,7 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                     if not specified.
                   </p>
                 ) : (
-                  formData.roleMappings.map((mapping, idx) => (
+                  formData.roleMappings.map((mapping: LdapRoleMapping, idx: number) => (
                     <div key={idx} className="flex gap-4 items-center">
                       <div className="flex-1">
                         <input
@@ -487,19 +487,24 @@ const AdminAuthentication: React.FC<AdminAuthenticationProps> = ({ config, onSav
                       -- Provisioning Details --
                     </div>
                     <div className="text-slate-400">
-                      DN: <span className="text-slate-200">{testResult.details.dn}</span>
+                      DN:{' '}
+                      <span className="text-slate-200">
+                        {(testResult.details as { dn: string }).dn}
+                      </span>
                     </div>
                     <div className="text-slate-400">
                       Role:{' '}
                       <span className="text-slate-400 uppercase font-bold">
-                        {testResult.details.mappedRole}
+                        {(testResult.details as { mappedRole: string }).mappedRole}
                       </span>
                     </div>
                     <div className="text-slate-400 mt-2">Groups Found:</div>
                     <ul className="list-disc pl-4 text-slate-500">
-                      {testResult.details.groups.map((g: string, i: number) => (
-                        <li key={i}>{g}</li>
-                      ))}
+                      {(testResult.details as { groups: string[] }).groups.map(
+                        (g: string, i: number) => (
+                          <li key={i}>{g}</li>
+                        ),
+                      )}
                     </ul>
                   </>
                 )}

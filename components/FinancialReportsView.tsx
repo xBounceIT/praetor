@@ -187,7 +187,7 @@ const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({
           <CustomSelect
             options={timeFrameOptions}
             value={timePeriod}
-            onChange={handlePeriodChange}
+            onChange={(val) => handlePeriodChange(val as string)}
             dropdownPosition="bottom"
             displayValue={displayValue}
           />
