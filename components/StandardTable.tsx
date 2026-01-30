@@ -327,12 +327,10 @@ const StandardTable = <T extends Record<string, any>>({
                   return (
                     <th
                       key={colId}
-                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.headerClassName || ''}`}
+                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
                     >
                       {/* Inline wrapper for button beside text */}
-                      <div
-                        className={`inline-flex items-center gap-1 ${effectiveAlign === 'right' ? 'flex-row-reverse' : ''}`}
-                      >
+                      <span className="inline-flex items-center gap-1">
                         <span>{col.header}</span>
 
                         {/* Filter button - inline with header text */}
@@ -361,7 +359,7 @@ const StandardTable = <T extends Record<string, any>>({
                             <i className="fa-solid fa-filter"></i>
                           </button>
                         )}
-                      </div>
+                      </span>
 
                       {/* Portal for filter popup - outside the wrapper */}
                       {activeFilterCol === colId &&
