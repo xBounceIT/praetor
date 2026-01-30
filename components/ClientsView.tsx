@@ -548,21 +548,28 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         </div>
       </Modal>
 
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">{t('crm:clients.title')}</h2>
+            <p className="text-slate-500 text-sm">{t('crm:clients.subtitle')}</p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
+          </button>
+        </div>
+      </div>
+
       <StandardTable<Client>
-        title={t('crm:clients.title')}
+        title={t('crm:clients.clientsDirectory')}
         data={clients}
         columns={columns}
         defaultRowsPerPage={10}
         onRowClick={openEditModal}
         rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
-        headerAction={
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
-          </button>
-        }
       />
     </div>
   );

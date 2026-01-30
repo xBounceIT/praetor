@@ -13,6 +13,7 @@
     },
     "title": "Clienti",
     "subtitle": "Gestisci la tua directory clienti",
+    "clientsDirectory": "Elenco Clienti",
     "addClient": "Aggiungi Nuovo Cliente",
     "editClient": "Modifica Cliente",
     "clientDetails": "Dettagli Cliente",
