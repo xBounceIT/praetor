@@ -44,7 +44,7 @@ import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';
 import api, { setAuthToken, getAuthToken } from './services/api';
 import NotFound from './components/NotFound';
-import InternalListingView from './components/InternalListingView';
+import InternalListingView from './components/HR/InternalListingView';
 import QuotesView from './components/QuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -55,7 +55,7 @@ import FinancialReportsView from './components/FinancialReportsView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/CRM/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
-import ExternalListingView from './components/ExternalListingView';
+import ExternalListingView from './components/HR/ExternalListingView';
 import InternalEmployeesView from './components/InternalEmployeesView';
 import ExternalEmployeesView from './components/ExternalEmployeesView';
 

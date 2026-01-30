@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Product } from '../types';
-import CustomSelect, { Option } from './CustomSelect';
-import StandardTable from './StandardTable';
-import StatusBadge, { StatusType } from './StatusBadge';
-import ValidatedNumberInput from './ValidatedNumberInput';
-import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
-import Modal from './Modal';
+import { Product } from '../../types';
+import CustomSelect, { Option } from '../CustomSelect';
+import StandardTable from '../StandardTable';
+import StatusBadge, { StatusType } from '../StatusBadge';
+import ValidatedNumberInput from '../ValidatedNumberInput';
+import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import Modal from '../Modal';
 
 interface InternalListingViewProps {
   products: Product[];

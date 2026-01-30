@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Product, SpecialBid } from '../types';
-import CustomSelect from './CustomSelect';
-import StandardTable from './StandardTable';
-import ValidatedNumberInput from './ValidatedNumberInput';
-import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
-import Calendar from './Calendar';
-import StatusBadge from './StatusBadge';
-import Modal from './Modal';
+import { Client, Product, SpecialBid } from '../../types';
+import CustomSelect from '../CustomSelect';
+import StandardTable from '../StandardTable';
+import ValidatedNumberInput from '../ValidatedNumberInput';
+import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import Calendar from '../Calendar';
+import StatusBadge from '../StatusBadge';
+import Modal from '../Modal';
 
 interface ExternalListingViewProps {
   bids: SpecialBid[];
