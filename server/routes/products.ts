@@ -32,7 +32,6 @@ export default async function (fastify, _opts) {
       description,
       costo,
       molPercentage,
-      costUnit,
       category,
       subcategory,
       taxRate,
@@ -95,18 +94,27 @@ export default async function (fastify, _opts) {
       return badRequest(reply, 'taxRate must be between 0 and 100');
     }
 
-    if (costUnit === undefined || costUnit === null || costUnit === '') {
-      return badRequest(reply, 'costUnit is required');
-    }
-    const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
-    if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-
     if (type === undefined || type === null || type === '') {
       return badRequest(reply, 'type is required');
     }
     // Updated types: supply, service, consulting. (item is legacy, strictly we expect new types)
     const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
     if (!typeResult.ok) return badRequest(reply, typeResult.message);
+
+    // Auto-derive costUnit from type (frontend should not send costUnit)
+    const expectedCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
+
+    // If costUnit is provided, validate it matches the expected value for the type
+    if (costUnit !== undefined && costUnit !== null && costUnit !== '') {
+      const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
+      if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+      if (costUnitResult.value !== expectedCostUnit) {
+        return badRequest(
+          reply,
+          `costUnit must be '${expectedCostUnit}' for type '${typeResult.value}'`,
+        );
+      }
+    }
 
     const id = 'p-' + Date.now();
     const result = await query(
@@ -120,7 +128,7 @@ export default async function (fastify, _opts) {
         description || null,
         costoResult.value,
         molPercentageResult.value,
-        costUnitResult.value,
+        expectedCostUnit,
         category,
         subcategory,
         taxRateResult.value,
@@ -221,14 +229,6 @@ export default async function (fastify, _opts) {
       values.push(molPercentageResult.value);
     }
 
-    // Cost Unit
-    if (body.costUnit !== undefined) {
-      const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
-      if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-      fields.push(`cost_unit = $${paramIndex++}`);
-      values.push(costUnitResult.value);
-    }
-
     // Category (nullable)
     if (body.category !== undefined) {
       fields.push(`category = $${paramIndex++}`);
@@ -252,12 +252,39 @@ export default async function (fastify, _opts) {
       values.push(taxRateResult.value);
     }
 
-    // Type
+    // Type - when type changes, auto-update costUnit to match
+    let currentProductType = null;
     if (body.type !== undefined) {
       const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
       fields.push(`type = $${paramIndex++}`);
       values.push(typeResult.value);
+
+      // Auto-set costUnit based on new type
+      const autoCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
+      fields.push(`cost_unit = $${paramIndex++}`);
+      values.push(autoCostUnit);
+      currentProductType = typeResult.value;
+    }
+
+    // Cost Unit - validate against current product type, auto-correct if mismatch
+    if (body.costUnit !== undefined && currentProductType === null) {
+      // Need to fetch current product to validate costUnit against its type
+      const currentProduct = await query('SELECT type FROM products WHERE id = $1', [
+        idResult.value,
+      ]);
+      if (currentProduct.rows.length === 0) {
+        return reply.code(404).send({ error: 'Product not found' });
+      }
+      currentProductType = currentProduct.rows[0].type;
+
+      const expectedCostUnit = currentProductType === 'supply' ? 'unit' : 'hours';
+      const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
+      if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+
+      // Auto-correct: always use expected value based on type
+      fields.push(`cost_unit = $${paramIndex++}`);
+      values.push(expectedCostUnit);
     }
 
     // Is Disabled

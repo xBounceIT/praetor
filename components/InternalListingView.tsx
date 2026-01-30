@@ -318,20 +318,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const handleTypeChange = (val: string) => {
     const type = val as Product['type'];
-    let unit = 'unit';
-    if (type === 'service' || type === 'consulting') {
-      unit = 'hours';
-    }
+    // costUnit is auto-derived from type on backend:
+    // supply -> 'unit', service/consulting -> 'hours'
 
     setFormData({
       ...formData,
       type,
-      costUnit: unit as Product['costUnit'],
       category: '', // Reset category as it depends on type
       subcategory: '', // Reset subcategory as it depends on category
     });
-    if (errors.type || errors.costUnit) {
-      setErrors({ ...errors, type: '', costUnit: '' });
+    if (errors.type) {
+      setErrors({ ...errors, type: '' });
     }
   };
 
@@ -641,36 +638,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   />
                   {errors.taxRate && (
                     <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.taxRate}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                    <label className="text-xs font-bold text-slate-500 font-black">
-                      {t('crm:internalListing.unitOfMeasure')}
-                    </label>
-                  </div>
-                  <CustomSelect
-                    options={[
-                      { id: 'unit', name: t('crm:internalListing.unit') },
-                      { id: 'hours', name: t('crm:internalListing.hour') },
-                    ]}
-                    value={formData.costUnit || 'unit'}
-                    onChange={(val) =>
-                      setFormData({ ...formData, costUnit: val as 'unit' | 'hours' })
-                    }
-                    placeholder={t('crm:internalListing.selectOption')}
-                    searchable={false}
-                    buttonClassName={
-                      errors.costUnit
-                        ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
-                        : 'py-2.5 text-sm'
-                    }
-                  />
-                  {errors.costUnit && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                      {errors.costUnit}
-                    </p>
                   )}
                 </div>
               </div>
