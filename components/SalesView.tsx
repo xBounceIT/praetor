@@ -1052,10 +1052,18 @@ const SalesView: React.FC<SalesViewProps> = ({
         </div>
       </Modal>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('crm:sales.title')}</h2>
-          <p className="text-slate-500 text-sm">{t('crm:sales.subtitle')}</p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">{t('crm:sales.title')}</h2>
+            <p className="text-slate-500 text-sm">{t('crm:sales.subtitle')}</p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i> {t('crm:sales.createNewSale')}
+          </button>
         </div>
       </div>
 
@@ -1066,14 +1074,6 @@ const SalesView: React.FC<SalesViewProps> = ({
         columns={columns}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
-        headerAction={
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('crm:sales.createNewSale')}
-          </button>
-        }
         rowClassName={(row: Sale) =>
           row.status === 'confirmed' || row.status === 'denied'
             ? 'bg-slate-50 text-slate-400'

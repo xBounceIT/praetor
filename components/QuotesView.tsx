@@ -1328,10 +1328,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({
         </div>
       </Modal>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">{t('crm:quotes.quotesTitle')}</h2>
-          <p className="text-slate-500 text-sm">{t('crm:quotes.quotesSubtitle')}</p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">{t('crm:quotes.quotesTitle')}</h2>
+            <p className="text-slate-500 text-sm">{t('crm:quotes.quotesSubtitle')}</p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i> {t('crm:quotes.createNewQuote')}
+          </button>
         </div>
       </div>
 
@@ -1363,14 +1371,6 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               ? `hover:bg-slate-50/50 ${cursorClass} bg-red-50/30`
               : `hover:bg-slate-50/50 ${cursorClass}`;
         }}
-        headerAction={
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('crm:quotes.createNewQuote')}
-          </button>
-        }
       />
     </div>
   );
