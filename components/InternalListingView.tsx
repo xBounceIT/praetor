@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Product, Supplier } from '../types';
+import { Product } from '../types';
 import CustomSelect, { Option } from './CustomSelect';
 import StandardTable from './StandardTable';
 import StatusBadge, { StatusType } from './StatusBadge';
@@ -10,7 +10,6 @@ import Modal from './Modal';
 
 interface InternalListingViewProps {
   products: Product[];
-  suppliers: Supplier[];
   onAddProduct: (productData: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
   onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
   onDeleteProduct: (id: string) => void;
@@ -19,7 +18,6 @@ interface InternalListingViewProps {
 
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
-  suppliers,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
@@ -70,7 +68,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     subcategory: '',
     taxRate: 22,
     type: 'supply',
-    supplierId: '',
   });
 
   // Calculated values
@@ -107,7 +104,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       subcategory: '',
       taxRate: 22,
       type: 'supply',
-      supplierId: '',
     });
     setErrors({});
     setServerError(null);
@@ -127,7 +123,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       subcategory: product.subcategory || '',
       taxRate: product.taxRate || 0,
       type: product.type || 'supply',
-      supplierId: product.supplierId || '',
     });
     setErrors({});
     setServerError(null);
@@ -303,12 +298,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     { id: 'supply', name: t('crm:internalListing.typeSupply') },
     { id: 'service', name: t('crm:internalListing.typeService') },
     { id: 'consulting', name: t('crm:internalListing.typeConsulting') },
-  ];
-
-  const activeSuppliers = suppliers.filter((s) => !s.isDisabled);
-  const supplierOptions: Option[] = [
-    { id: '', name: t('crm:internalListing.noSupplier') },
-    ...activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
   ];
 
   // Helper to get localized name for product types
@@ -684,21 +673,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     </p>
                   )}
                 </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
-                    <label className="text-xs font-bold text-slate-500">
-                      {t('crm:internalListing.supplier')}
-                    </label>
-                  </div>
-                  <CustomSelect
-                    options={supplierOptions}
-                    value={formData.supplierId || ''}
-                    onChange={(val) => setFormData({ ...formData, supplierId: val as string })}
-                    placeholder={t('crm:internalListing.selectOption')}
-                    searchable={true}
-                  />
-                </div>
               </div>
             </div>
 
@@ -887,22 +861,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               </span>
             ),
           },
-          {
-            header: t('crm:internalListing.supplier'),
-            accessorKey: 'supplierName',
-            className: 'px-6 py-5 whitespace-nowrap',
-            cell: ({ row: p }) => (
-              <div className="flex items-center gap-2">
-                <i className="fa-solid fa-truck text-slate-300 text-xs"></i>
-                <span
-                  className="text-xs font-semibold text-slate-600 truncate max-w-[150px]"
-                  title={p.supplierName}
-                >
-                  {p.supplierName || t('crm:internalListing.noSupplier')}
-                </span>
-              </div>
-            ),
-          },
+
           {
             header: t('crm:internalListing.type'),
             accessorKey: 'type',
