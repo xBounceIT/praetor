@@ -42,6 +42,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const ROLE_OPTIONS = [
     { id: 'user', name: t('hr:roles.user') },
+    { id: 'manager', name: t('hr:roles.manager') },
     { id: 'admin', name: t('hr:roles.admin') },
   ];
 
