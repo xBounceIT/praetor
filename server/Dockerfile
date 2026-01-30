@@ -2,7 +2,8 @@
 FROM oven/bun:1 AS install
 WORKDIR /temp
 COPY package.json bun.lock ./
-RUN bun install --no-frozen-lockfile --production
+ENV BUN_FROZEN_LOCKFILE=0
+RUN bun install --production
 
 # STAGE 2: Production
 FROM oven/bun:1-slim AS release
