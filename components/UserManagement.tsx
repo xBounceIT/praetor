@@ -42,7 +42,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const ROLE_OPTIONS = [
     { id: 'user', name: t('hr:roles.user') },
-    { id: 'manager', name: t('hr:roles.manager') },
     { id: 'admin', name: t('hr:roles.admin') },
   ];
 
@@ -99,7 +98,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
     return saved ? parseInt(saved, 10) : 5;
   });
 
-  const canManageAssignments = currentUserRole === 'manager';
+  const canManageAssignments = currentUserRole === 'admin';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -837,10 +836,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {activeUsers.map((user) => {
-              const canEdit =
-                currentUserRole === 'admin' ||
-                (currentUserRole === 'manager' &&
-                  (user.role === 'user' || user.id === currentUserId));
+              const canEdit = currentUserRole === 'admin';
               return (
                 <tr
                   key={user.id}
@@ -932,32 +928,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                             <i className="fa-solid fa-trash-can"></i>
                           </button>
                         </>
-                      )}
-                      {currentUserRole === 'manager' &&
-                        (user.role === 'user' || user.id === currentUserId) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(user);
-                            }}
-                            className="text-slate-400 hover:text-praetor transition-colors p-2"
-                            title={t('hr:workforce.editUser')}
-                          >
-                            <i className="fa-solid fa-user-pen"></i>
-                          </button>
-                        )}
-                      {currentUserRole === 'manager' && user.role === 'user' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateUser(user.id, { isDisabled: true });
-                          }}
-                          disabled={user.id === currentUserId}
-                          className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
-                          title={t('hr:workforce.disableUser')}
-                        >
-                          <i className="fa-solid fa-ban"></i>
-                        </button>
                       )}
                     </div>
                   </td>
@@ -1080,10 +1050,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {disabledUsers.map((user) => {
-                const canEdit =
-                  currentUserRole === 'admin' ||
-                  (currentUserRole === 'manager' &&
-                    (user.role === 'user' || user.id === currentUserId));
+                const canEdit = currentUserRole === 'admin';
                 return (
                   <tr
                     key={user.id}
@@ -1175,31 +1142,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                             </button>
                           </>
                         )}
-                        {currentUserRole === 'manager' &&
-                          (user.role === 'user' || user.id === currentUserId) && (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(user);
-                                }}
-                                className="text-slate-400 hover:text-praetor transition-colors p-2"
-                                title={t('hr:workforce.editUser')}
-                              >
-                                <i className="fa-solid fa-user-pen"></i>
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateUser(user.id, { isDisabled: false });
-                                }}
-                                className="text-slate-400 hover:text-praetor transition-colors p-2"
-                                title={t('hr:workforce.reEnableUser')}
-                              >
-                                <i className="fa-solid fa-rotate-left"></i>
-                              </button>
-                            </>
-                          )}
                       </div>
                     </td>
                   </tr>
