@@ -151,7 +151,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     );
   };
 
-  /* 
+  /*
   const toggleManagerSelection = (userId: string) => {
     setSelectedManagerIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
@@ -367,7 +367,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-slate-600 min-h-[100px]"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-slate-600 min-h-25"
               />
             </div>
             <div className="flex gap-3 pt-4">
@@ -446,7 +446,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-slate-600 min-h-[100px]"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-slate-600 min-h-25"
               />
             </div>
             <div className="flex gap-3 pt-4">

@@ -301,7 +301,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           >
             <i className="fa-solid fa-chevron-left"></i>
           </button>
-          <div className="text-center min-w-[200px]">
+          <div className="text-center min-w-50">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
               {currentWeekStart.toLocaleDateString(i18n.language, {
                 month: 'short',
@@ -357,7 +357,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         className={`bg-white rounded-2xl shadow-sm border border-slate-200 ${activeDropdownRow !== null ? '' : 'overflow-hidden'}`}
       >
         <div className={`${activeDropdownRow !== null ? 'overflow-visible' : 'overflow-x-auto'}`}>
-          <table className="w-full text-left border-collapse min-w-[800px] isolate">
+          <table className="w-full text-left border-collapse min-w-200 isolate">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">
@@ -410,7 +410,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         options={clients.map((c) => ({ id: c.id, name: c.name }))}
                         value={row.clientId}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val as string)}
-                        className="!bg-transparent"
+                        className="bg-transparent!"
                         onOpen={() => setActiveDropdownRow(rowIndex)}
                         onClose={() => setActiveDropdownRow(null)}
                         searchable={true}
@@ -428,7 +428,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         onChange={(val) =>
                           handleRowInfoChange(rowIndex, 'projectId', val as string)
                         }
-                        className="!bg-transparent"
+                        className="bg-transparent!"
                         placeholder={t('weekly.selectProject')}
                         onOpen={() => setActiveDropdownRow(rowIndex)}
                         onClose={() => setActiveDropdownRow(null)}
@@ -445,7 +445,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           .map((t) => ({ id: t.name, name: t.name }))}
                         value={row.taskName}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'taskName', val as string)}
-                        className="!bg-transparent"
+                        className="bg-transparent!"
                         placeholder={t('weekly.selectTask')}
                         onOpen={() => setActiveDropdownRow(rowIndex)}
                         onClose={() => setActiveDropdownRow(null)}

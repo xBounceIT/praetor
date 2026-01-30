@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Product } from '../../types';
 import CustomSelect, { Option } from '../shared/CustomSelect';
-import StandardTable from '../StandardTable';
+import StandardTable from '../shared/StandardTable';
 import StatusBadge, { StatusType } from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
@@ -545,7 +545,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                  <div className="flex items-end justify-between ml-1 min-h-5">
                     <label className="text-xs font-bold text-slate-500">
                       {t('crm:internalListing.type')}
                     </label>
@@ -567,7 +567,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                  <div className="flex items-end justify-between ml-1 min-h-5">
                     <label className="text-xs font-bold text-slate-500">
                       {t('crm:internalListing.category')}
                     </label>
@@ -591,7 +591,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                  <div className="flex items-end justify-between ml-1 min-h-5">
                     <label className="text-xs font-bold text-slate-500">
                       {t('crm:internalListing.subcategory')}
                     </label>
@@ -619,7 +619,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-[20px]">
+                  <div className="flex items-end justify-between ml-1 min-h-5">
                     <div className="flex flex-col">
                       {showTaxRateWarning && (
                         <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
@@ -803,7 +803,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             accessorKey: 'productCode',
             cell: ({ row: p }) =>
               p.productCode ? (
-                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase flex-shrink-0 whitespace-nowrap">
+                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase shrink-0 whitespace-nowrap">
                   {p.productCode}
                 </span>
               ) : (

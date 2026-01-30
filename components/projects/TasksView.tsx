@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProjectTask, Project, Client, UserRole, User } from '../types';
 import CustomSelect from '../shared/CustomSelect';
-import StandardTable, { Column } from '../StandardTable';
+import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { tasksApi } from '../../services/api';
 import Modal from '../shared/Modal';
@@ -142,7 +142,7 @@ const TasksView: React.FC<TasksViewProps> = ({
           return (
             <div className="flex items-center gap-2">
               <div
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></div>
               <span
@@ -165,7 +165,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         header: t('tasks.description'),
         accessorFn: (task) => task.description || '',
         cell: ({ value }) => (
-          <p className="text-xs text-slate-500 truncate max-w-[200px]">
+          <p className="text-xs text-slate-500 truncate max-w-50">
             {value || (
               <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
             )}
@@ -286,7 +286,7 @@ const TasksView: React.FC<TasksViewProps> = ({
           return (
             <div className="flex items-center gap-2">
               <div
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: project?.color || '#ccc' }}
               ></div>
               <span
@@ -315,7 +315,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         header: t('tasks.description'),
         accessorFn: (task) => task.description || '',
         cell: ({ value }) => (
-          <p className="text-xs text-slate-400 truncate max-w-[200px] italic">
+          <p className="text-xs text-slate-400 truncate max-w-50 italic">
             {value || (
               <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
             )}

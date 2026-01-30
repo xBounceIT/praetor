@@ -196,7 +196,7 @@ const TrackerView: React.FC<{
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {/* Top Middle Toggle */}
       <div className="flex justify-center">
-        <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-full w-full max-w-[240px]">
+        <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-full w-full max-w-60">
           <div
             className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
               trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
@@ -223,7 +223,6 @@ const TrackerView: React.FC<{
           clients={clients}
           projects={projects}
           projectTasks={projectTasks}
-          onAddEntry={onAddEntry}
           onDeleteEntry={onDeleteEntry}
           onUpdateEntry={onUpdateEntry}
           userRole={userRole}

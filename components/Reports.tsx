@@ -347,7 +347,7 @@ const Reports: React.FC<ReportsProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Tab Switcher */}
-      <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-xl w-full max-w-[340px]">
+      <div className="relative grid grid-cols-2 bg-slate-200/50 p-1 rounded-xl w-full max-w-85">
         <div
           className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
             activeTab === 'dashboard' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
@@ -402,11 +402,11 @@ const Reports: React.FC<ReportsProps> = ({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden max-w-85">
               <h3 className="text-lg font-bold text-slate-800 mb-6">
                 {t('reports.weeklyActivity', { start: startOfWeek })}
               </h3>
-              <div className="h-[300px] w-full" style={{ minWidth: '0px' }}>
+              <div className="h-75 w-full" style={{ minWidth: '0px' }}>
                 {chartsVisible && (
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart data={weeklyActivityData}>
@@ -456,11 +456,11 @@ const Reports: React.FC<ReportsProps> = ({
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden max-w-100">
               <h3 className="text-lg font-bold text-slate-800 mb-6">
                 {t('reports.hoursByProject')}
               </h3>
-              <div className="h-[300px] w-full" style={{ minWidth: '0px' }}>
+              <div className="h-75 w-full" style={{ minWidth: '0px' }}>
                 {chartsVisible && (
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <PieChart>

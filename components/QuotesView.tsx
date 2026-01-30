@@ -1051,7 +1051,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {t('crm:internalListing.salePrice')}
                     </div>
                   </div>
-                  <div className="w-10 flex-shrink-0"></div>
+                  <div className="w-10 shrink-0"></div>
                 </div>
               )}
 
@@ -1169,7 +1169,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                             type="button"
                             onClick={() => removeProductRow(index)}
                             disabled={isReadOnly}
-                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <i className="fa-solid fa-trash-can"></i>
                           </button>

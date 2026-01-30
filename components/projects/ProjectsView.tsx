@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Project, Client, UserRole } from '../types';
 import { COLORS } from '../constants';
 import CustomSelect from '../shared/CustomSelect';
-import StandardTable, { Column } from '../StandardTable';
+import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 
