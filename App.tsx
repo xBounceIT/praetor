@@ -33,7 +33,7 @@ import Settings from './components/Settings';
 import Login from './components/Login';
 import UserManagement from './components/UserManagement';
 import RecurringManager from './components/RecurringManager';
-import ClientsView from './components/ClientsView';
+import ClientsView from './components/CRM/ClientsView';
 import ProjectsView from './components/ProjectsView';
 import TasksView from './components/TasksView';
 import AdminAuthentication from './components/AdminAuthentication';
