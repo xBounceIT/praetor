@@ -4,21 +4,21 @@ import { getTheme, applyTheme, Theme } from '../utils/theme';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 
-export interface UserSettings {
+export interface UserSettingsData {
   fullName: string;
   email: string;
   language?: 'en' | 'it' | 'auto';
 }
 
-const Settings: React.FC = () => {
+const UserSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
 
-  const [settings, setSettings] = useState<UserSettings>({
+  const [settings, setSettings] = useState<UserSettingsData>({
     fullName: '',
     email: '',
     language: 'auto',
   });
-  const [initialSettings, setInitialSettings] = useState<UserSettings | null>(null);
+  const [initialSettings, setInitialSettings] = useState<UserSettingsData | null>(null);
 
   const [isSaved, setIsSaved] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -409,4 +409,4 @@ const Settings: React.FC = () => {
   );
 };
 
-export default Settings;
+export default UserSettings;

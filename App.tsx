@@ -29,7 +29,7 @@ import Layout from './components/Layout';
 import TimeEntryForm from './components/timesheet/TimeEntryForm';
 import Reports from './components/Reports';
 import Calendar from './components/shared/Calendar';
-import Settings from './components/Settings';
+import UserSettings from './components/UserSettings';
 import Login from './components/Login';
 import UserManagement from './components/administration/UserManagement';
 import RecurringManager from './components/RecurringManager';
@@ -2405,7 +2405,7 @@ const App: React.FC = () => {
                 onAction={handleRecurringAction}
               />
             )}
-            {activeView === 'settings' && <Settings />}
+            {activeView === 'settings' && <UserSettings />}
           </>
         )}
       </Layout>
