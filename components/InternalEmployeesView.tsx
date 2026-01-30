@@ -144,22 +144,20 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     },
     {
       header: t('internalEmployees.type'),
-      accessorFn: (row) =>
-        row.employeeType === 'internal'
+      accessorKey: 'employeeType',
+      filterFormat: (value) =>
+        value === 'internal'
           ? t('internalEmployees.internalBadge')
           : t('internalEmployees.appUserBadge'),
       cell: ({ row }) => (
-        <span
-          className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+        <StatusBadge
+          type={row.employeeType === 'internal' ? 'internal' : 'app_user'}
+          label={
             row.employeeType === 'internal'
-              ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-blue-100 text-blue-700'
-          }`}
-        >
-          {row.employeeType === 'internal'
-            ? t('internalEmployees.internalBadge')
-            : t('internalEmployees.appUserBadge')}
-        </span>
+              ? t('internalEmployees.internalBadge')
+              : t('internalEmployees.appUserBadge')
+          }
+        />
       ),
     },
     {
@@ -178,7 +176,6 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       accessorFn: () => 'active',
       cell: () => <StatusBadge type="active" label={t('internalEmployees.active')} />,
       disableSorting: true,
-      disableFiltering: true,
     },
     {
       header: t('internalEmployees.actions'),

@@ -17,7 +17,9 @@ export type StatusType =
   | 'supply'
   | 'service'
   | 'consulting'
-  | 'item';
+  | 'item'
+  | 'internal'
+  | 'app_user';
 
 interface StatusBadgeProps {
   type: StatusType;
@@ -94,6 +96,14 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
     item: {
       container: 'bg-amber-50 text-amber-600 border-amber-100',
       icon: 'fa-cube',
+    },
+    internal: {
+      container: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      icon: 'fa-user-tie',
+    },
+    app_user: {
+      container: 'bg-blue-50 text-blue-700 border-blue-100',
+      icon: 'fa-user',
     },
   };
 
