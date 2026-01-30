@@ -5,7 +5,7 @@ import CustomSelect from '../CustomSelect';
 import StandardTable, { Column } from '../StandardTable';
 import StatusBadge from '../StatusBadge';
 import { tasksApi } from '../../services/api';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 interface TasksViewProps {
   tasks: ProjectTask[];

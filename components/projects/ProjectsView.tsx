@@ -5,7 +5,7 @@ import { COLORS } from '../constants';
 import CustomSelect from '../CustomSelect';
 import StandardTable, { Column } from '../StandardTable';
 import StatusBadge from '../StatusBadge';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 interface ProjectsViewProps {
   projects: Project[];

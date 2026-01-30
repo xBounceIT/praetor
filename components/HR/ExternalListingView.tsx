@@ -7,7 +7,7 @@ import ValidatedNumberInput from '../ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Calendar from '../Calendar';
 import StatusBadge from '../StatusBadge';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 interface ExternalListingViewProps {
   bids: SpecialBid[];

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Supplier } from '../../types';
 import StandardTable, { Column } from '../StandardTable';
 import StatusBadge from '../StatusBadge';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 interface SuppliersViewProps {
   suppliers: Supplier[];

@@ -6,7 +6,7 @@ import StandardTable from '../StandardTable';
 import ValidatedNumberInput from '../ValidatedNumberInput';
 import StatusBadge, { StatusType } from '../StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 const getPaymentTermsOptions = (t: (key: string) => string) => [
   { id: 'immediate', name: t('crm:paymentTerms.immediate') },

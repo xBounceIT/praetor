@@ -6,7 +6,7 @@ import StandardTable from '../StandardTable';
 import StatusBadge, { StatusType } from '../StatusBadge';
 import ValidatedNumberInput from '../ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 interface InternalListingViewProps {
   products: Product[];

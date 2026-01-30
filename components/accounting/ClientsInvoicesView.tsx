@@ -6,7 +6,7 @@ import StandardTable from '../StandardTable';
 import ValidatedNumberInput from '../ValidatedNumberInput';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import StatusBadge, { StatusType } from '../StatusBadge';
-import Modal from '../Modal';
+import Modal from '../shared/Modal';
 
 interface ClientsInvoicesViewProps {
   invoices: Invoice[];
