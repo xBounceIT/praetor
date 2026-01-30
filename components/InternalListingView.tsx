@@ -996,6 +996,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           {
             header: t('common:labels.actions'),
             id: 'actions',
+            align: 'right',
             disableSorting: true,
             disableFiltering: true,
             cell: ({ row: p }) => (

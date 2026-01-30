@@ -319,18 +319,15 @@ const StandardTable = <T extends Record<string, any>>({
                   return (
                     <th
                       key={colId}
-                      className={`relative px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
+                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
                     >
-                      {/* Header text - aligned with cell content */}
-                      <span>{col.header}</span>
-
-                      {/* Filter button - absolutely positioned, doesn't affect text alignment */}
-                      {!col.disableFiltering && (
-                        <div
-                          ref={activeFilterCol === colId ? filterRef : undefined}
-                          className="absolute right-1 top-1/2 -translate-y-1/2"
-                        >
+                      <span
+                        className={`inline-flex items-center gap-1 ${col.align === 'right' ? 'flex-row-reverse' : ''}`}
+                      >
+                        <span>{col.header}</span>
+                        {!col.disableFiltering && (
                           <button
+                            ref={activeFilterCol === colId ? filterRef : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (activeFilterCol === colId) {
@@ -352,8 +349,8 @@ const StandardTable = <T extends Record<string, any>>({
                           >
                             <i className="fa-solid fa-filter"></i>
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </span>
 
                       {/* Portal for filter popup */}
                       {activeFilterCol === colId &&
