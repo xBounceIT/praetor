@@ -3,7 +3,7 @@
 }
 
 # Caddyfile for Praetor
-# Serves static frontend files and proxies API requests to backend via h2c
+# Serves static frontend files and proxies API requests to backend over HTTP
 
 :80 {
     # Serve static files from the SPA build
@@ -12,14 +12,9 @@
     # Enable gzip compression
     encode gzip
     
-    # API proxy with HTTPS to backend
+    # API proxy to backend over HTTP
     handle /api/* {
-        reverse_proxy backend:3001 {
-            transport http {
-                tls
-                tls_insecure_skip_verify
-            }
-        }
+        reverse_proxy backend:3001
     }
     
     # SPA routing - try files, fallback to index.html
