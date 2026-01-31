@@ -80,7 +80,6 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
       { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
       { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
-      { id: 'suppliers', name: t('modules.suppliers'), icon: 'fa-truck', active: false },
       { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
       { id: 'configuration', name: t('modules.administration'), icon: 'fa-gears', active: false },
     ],
@@ -99,13 +98,7 @@ const Layout: React.FC<LayoutProps> = ({
     if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
 
     // Manager only access (Admin and users excluded as requested)
-    if (
-      m.id === 'crm' ||
-      m.id === 'catalog' ||
-      m.id === 'accounting' ||
-      m.id === 'finances' ||
-      m.id === 'suppliers'
-    ) {
+    if (m.id === 'crm' || m.id === 'catalog' || m.id === 'accounting' || m.id === 'finances') {
       return currentUser.role === 'manager';
     }
 
@@ -210,6 +203,16 @@ const Layout: React.FC<LayoutProps> = ({
               isCollapsed={isCollapsed}
               onClick={() => {
                 onViewChange('crm/quotes');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+            <NavItem
+              icon="fa-truck"
+              label={t('routes.suppliers')}
+              active={activeView === 'crm/suppliers'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('crm/suppliers');
                 setIsMobileMenuOpen(false);
               }}
             />

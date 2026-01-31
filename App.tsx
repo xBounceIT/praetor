@@ -45,7 +45,7 @@ import { isItalianHoliday } from './utils/holidays';
 import api, { setAuthToken, getAuthToken } from './services/api';
 import NotFound from './components/NotFound';
 import InternalListingView from './components/HR/InternalListingView';
-import QuotesView from './components/QuotesView';
+import ClientQuotesView from './components/Sales/ClientQuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
@@ -76,6 +76,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view === '404') return null;
   if (view.startsWith('timesheets/')) return 'timesheets';
   if (view.startsWith('crm/')) return 'crm';
+  if (view.startsWith('sales/')) return 'sales';
   if (view.startsWith('catalog/')) return 'catalog';
   if (view.startsWith('hr/')) return 'hr';
   if (view.startsWith('projects/')) return 'projects';
@@ -599,8 +600,9 @@ const App: React.FC = () => {
       'configuration/authentication',
       'configuration/general',
       'crm/clients',
-      'crm/quotes',
       'crm/suppliers',
+      // Sales module
+      'sales/client-quotes',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
@@ -634,7 +636,9 @@ const App: React.FC = () => {
       'configuration/authentication',
       'configuration/general',
       'crm/clients',
-      'crm/quotes',
+      'crm/suppliers',
+      // Sales module
+      'sales/client-quotes',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
@@ -647,7 +651,6 @@ const App: React.FC = () => {
       'finances/reports',
       'projects/manage',
       'projects/tasks',
-      'suppliers/manage',
       'suppliers/quotes',
       'hr/internal-employees',
       'hr/external-employees',
@@ -696,8 +699,9 @@ const App: React.FC = () => {
       'configuration/work-units': ['admin', 'manager'],
       // CRM module - manager
       'crm/clients': ['manager'],
-      'crm/quotes': ['manager'],
       'crm/suppliers': ['manager'],
+      // Sales module - manager
+      'sales/client-quotes': ['manager'],
       // Accounting module - manager
       'accounting/clients-orders': ['manager'],
       'accounting/clients-invoices': ['manager'],
@@ -745,7 +749,7 @@ const App: React.FC = () => {
   }, [activeView, currentUser, isLoading]);
 
   useEffect(() => {
-    if (activeView !== 'crm/quotes' && quoteFilterId) {
+    if (activeView !== 'sales/client-quotes' && quoteFilterId) {
       React.startTransition(() => setQuoteFilterId(null));
     }
   }, [activeView, quoteFilterId]);
@@ -758,6 +762,11 @@ const App: React.FC = () => {
         if (currentUser) {
           setActiveView('timesheets/tracker');
         }
+        return;
+      }
+      // Redirect old suppliers/manage to new crm/suppliers
+      if (rawHash === 'suppliers/manage') {
+        window.location.hash = '/crm/suppliers';
         return;
       }
       const hash = rawHash as View;
@@ -2186,7 +2195,7 @@ const App: React.FC = () => {
 
             {activeView === 'crm/quotes' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <QuotesView
+                <ClientQuotesView
                   quotes={quotes}
                   clients={clients}
                   products={products}
@@ -2268,7 +2277,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'suppliers/manage' &&
+            {activeView === 'crm/suppliers' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <SuppliersView
                   suppliers={suppliers}

@@ -249,8 +249,9 @@ export type View =
   | 'configuration/work-units'
   // CRM module
   | 'crm/clients'
-  | 'crm/quotes'
   | 'crm/suppliers'
+  // Sales module
+  | 'sales/client-quotes'
   // Catalog module
   | 'catalog/internal-listing'
   | 'catalog/external-listing'
