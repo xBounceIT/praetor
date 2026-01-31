@@ -14,6 +14,7 @@ interface Module {
 const moduleDefaultRoutes: Record<string, View> = {
   timesheets: 'timesheets/tracker',
   crm: 'crm/clients',
+  sales: 'sales/client-quotes',
   catalog: 'catalog/internal-listing',
   projects: 'projects/manage',
   accounting: 'accounting/clients-orders',
@@ -27,6 +28,7 @@ const moduleDefaultRoutes: Record<string, View> = {
 const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('timesheets/')) return 'timesheets';
   if (route.startsWith('crm/')) return 'crm';
+  if (route.startsWith('sales/')) return 'sales';
   if (route.startsWith('catalog/')) return 'catalog';
   if (route.startsWith('hr/')) return 'hr';
   if (route.startsWith('projects/')) return 'projects';
@@ -76,6 +78,7 @@ const Layout: React.FC<LayoutProps> = ({
     () => [
       { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
       { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
+      { id: 'sales', name: t('modules.sales'), icon: 'fa-file-invoice-dollar', active: false },
       { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
       { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
       { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
@@ -98,7 +101,13 @@ const Layout: React.FC<LayoutProps> = ({
     if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
 
     // Manager only access (Admin and users excluded as requested)
-    if (m.id === 'crm' || m.id === 'catalog' || m.id === 'accounting' || m.id === 'finances') {
+    if (
+      m.id === 'crm' ||
+      m.id === 'sales' ||
+      m.id === 'catalog' ||
+      m.id === 'accounting' ||
+      m.id === 'finances'
+    ) {
       return currentUser.role === 'manager';
     }
 
@@ -197,22 +206,27 @@ const Layout: React.FC<LayoutProps> = ({
               }}
             />
             <NavItem
-              icon="fa-file-invoice"
-              label={t('routes.quotes')}
-              active={activeView === 'crm/quotes'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('crm/quotes');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
               icon="fa-truck"
               label={t('routes.suppliers')}
               active={activeView === 'crm/suppliers'}
               isCollapsed={isCollapsed}
               onClick={() => {
                 onViewChange('crm/suppliers');
+                setIsMobileMenuOpen(false);
+              }}
+            />
+          </>
+        );
+      case 'sales':
+        return (
+          <>
+            <NavItem
+              icon="fa-file-invoice"
+              label={t('routes.clientQuotes')}
+              active={activeView === 'sales/client-quotes'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('sales/client-quotes');
                 setIsMobileMenuOpen(false);
               }}
             />

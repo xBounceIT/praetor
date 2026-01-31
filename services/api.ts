@@ -463,24 +463,25 @@ export const generalSettingsApi = {
     }).then(normalizeGeneralSettings),
 };
 
-// Quotes API
-export const quotesApi = {
+// Client Quotes API (Sales module)
+export const clientQuotesApi = {
   list: (): Promise<Quote[]> =>
-    fetchApi<Quote[]>('/quotes').then((quotes) => quotes.map(normalizeQuote)),
+    fetchApi<Quote[]>('/sales/client-quotes').then((quotes) => quotes.map(normalizeQuote)),
 
   create: (quoteData: Partial<Quote>): Promise<Quote> =>
-    fetchApi<Quote>('/quotes', {
+    fetchApi<Quote>('/sales/client-quotes', {
       method: 'POST',
       body: JSON.stringify(quoteData),
     }).then(normalizeQuote),
 
   update: (id: string, updates: Partial<Quote>): Promise<Quote> =>
-    fetchApi<Quote>(`/quotes/${id}`, {
+    fetchApi<Quote>(`/sales/client-quotes/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     }).then(normalizeQuote),
 
-  delete: (id: string): Promise<void> => fetchApi(`/quotes/${id}`, { method: 'DELETE' }),
+  delete: (id: string): Promise<void> =>
+    fetchApi(`/sales/client-quotes/${id}`, { method: 'DELETE' }),
 };
 
 // Clients Orders API
@@ -647,7 +648,7 @@ export default {
   tasks: tasksApi,
   entries: entriesApi,
   products: productsApi,
-  quotes: quotesApi,
+  quotes: clientQuotesApi,
   clientsOrders: clientsOrdersApi,
   invoices: invoicesApi,
   payments: paymentsApi,

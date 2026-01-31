@@ -2,6 +2,7 @@
   "modules": {
     "timesheets": "Presenze",
     "crm": "CRM",
+    "sales": "Vendite",
     "catalog": "Catalogo",
     "hr": "HR",
     "projects": "Progetti",
@@ -23,6 +24,7 @@
     "internalListing": "Listino Interno",
     "externalListing": "Listino Esterno",
     "quotes": "Preventivi",
+    "clientQuotes": "Preventivi Clienti",
     "clientsOrders": "Ordini Clienti",
     "clientsInvoices": "Fatture Clienti",
     "workforce": "Personale",

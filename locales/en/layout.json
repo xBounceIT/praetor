@@ -2,6 +2,7 @@
   "modules": {
     "timesheets": "Timesheets",
     "crm": "CRM",
+    "sales": "Sales",
     "catalog": "Catalog",
     "hr": "HR",
     "projects": "Projects",
@@ -23,6 +24,7 @@
     "internalListing": "Internal Listing",
     "externalListing": "External Listing",
     "quotes": "Quotes",
+    "clientQuotes": "Client Quotes",
     "clientsOrders": "Client's Orders",
     "clientsInvoices": "Client's Invoices",
     "workforce": "Workforce",

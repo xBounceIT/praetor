@@ -13,6 +13,7 @@ import enSuppliers from './locales/en/suppliers.json';
 import enSettings from './locales/en/settings.json';
 import enNotifications from './locales/en/notifications.json';
 import enAccounting from './locales/en/accounting.json';
+import enSales from './locales/en/sales.json';
 import itCommon from './locales/it/common.json';
 import itLayout from './locales/it/layout.json';
 import itAuth from './locales/it/auth.json';
@@ -25,6 +26,7 @@ import itSuppliers from './locales/it/suppliers.json';
 import itSettings from './locales/it/settings.json';
 import itNotifications from './locales/it/notifications.json';
 import itAccounting from './locales/it/accounting.json';
+import itSales from './locales/it/sales.json';
 
 const resources = {
   en: {
@@ -41,6 +43,7 @@ const resources = {
     settings: enSettings,
     notifications: enNotifications,
     accounting: enAccounting,
+    sales: enSales,
   },
   it: {
     common: itCommon,
@@ -56,6 +59,7 @@ const resources = {
     settings: itSettings,
     notifications: itNotifications,
     accounting: itAccounting,
+    sales: itSales,
   },
 };
 
@@ -79,6 +83,7 @@ i18n
       'settings',
       'notifications',
       'accounting',
+      'sales',
     ],
     resources,
     detection: {

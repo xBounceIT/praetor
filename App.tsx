@@ -2193,7 +2193,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'crm/quotes' &&
+            {activeView === 'sales/client-quotes' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <ClientQuotesView
                   quotes={quotes}
@@ -2224,7 +2224,7 @@ const App: React.FC = () => {
                   currency={generalSettings.currency}
                   onViewQuote={(quoteId) => {
                     setQuoteFilterId(quoteId);
-                    setActiveView('crm/quotes');
+                    setActiveView('sales/client-quotes');
                   }}
                 />
               )}

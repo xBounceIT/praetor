@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Quote, QuoteItem, Client, Product, SpecialBid, ClientsOrder } from '../types';
-import CustomSelect from './shared/CustomSelect';
-import StandardTable, { Column } from './shared/StandardTable';
-import ValidatedNumberInput from './shared/ValidatedNumberInput';
-import StatusBadge, { StatusType } from './shared/StatusBadge';
-import { parseNumberInputValue, roundToTwoDecimals } from '../utils/numbers';
-import Modal from './shared/Modal';
+import { Quote, QuoteItem, Client, Product, SpecialBid, ClientsOrder } from '../../types';
+import CustomSelect from '../shared/CustomSelect';
+import StandardTable, { Column } from '../shared/StandardTable';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import StatusBadge, { StatusType } from '../shared/StatusBadge';
+import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import Modal from '../shared/Modal';
 
-interface QuotesViewProps {
+interface ClientQuotesViewProps {
   quotes: Quote[];
   clients: Client[];
   products: Product[];
@@ -28,7 +28,7 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
   return costo / (1 - molPercentage / 100);
 };
 
-const QuotesView: React.FC<QuotesViewProps> = ({
+const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
   clients,
   products,
@@ -41,7 +41,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   quoteOrderStatuses,
   currency,
 }) => {
-  const { t } = useTranslation(['crm', 'common', 'form']);
+  const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
 
   const PAYMENT_TERMS_OPTIONS = useMemo(
     () => [
@@ -62,10 +62,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
 
   const STATUS_OPTIONS = useMemo(
     () => [
-      { id: 'draft', name: t('crm:quotes.statusQuoted') },
-      { id: 'sent', name: t('crm:quotes.statusConfirmed') },
-      { id: 'accepted', name: t('crm:quotes.statusAccepted') },
-      { id: 'denied', name: t('crm:quotes.statusDenied') },
+      { id: 'draft', name: t('sales:clientQuotes.statusQuoted') },
+      { id: 'sent', name: t('sales:clientQuotes.statusConfirmed') },
+      { id: 'accepted', name: t('sales:clientQuotes.statusAccepted') },
+      { id: 'denied', name: t('sales:clientQuotes.statusDenied') },
     ],
     [t],
   );
@@ -242,17 +242,17 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
 
     if (!formData.clientId) {
-      newErrors.clientId = t('crm:quotes.errors.clientRequired');
+      newErrors.clientId = t('sales:clientQuotes.errors.clientRequired');
     }
 
     if (!formData.quoteCode?.trim()) {
-      newErrors.quoteCode = t('crm:quotes.errors.quoteCodeRequired', {
+      newErrors.quoteCode = t('sales:clientQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
     }
 
     if (!formData.items || formData.items.length === 0) {
-      newErrors.items = t('crm:quotes.errors.itemsRequired');
+      newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
     } else {
       const invalidItem = formData.items.find((item) => !item.productId);
       if (invalidItem) {
@@ -266,12 +266,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({
           item.quantity <= 0,
       );
       if (!newErrors.items && invalidQuantity) {
-        newErrors.items = t('crm:quotes.errors.quantityGreaterThanZero');
+        newErrors.items = t('sales:clientQuotes.errors.quantityGreaterThanZero');
       }
       if (!newErrors.items) {
         const { total } = calculateTotals(formData.items, discountValue);
         if (!Number.isFinite(total) || total <= 0) {
-          newErrors.total = t('crm:quotes.errors.totalGreaterThanZero');
+          newErrors.total = t('sales:clientQuotes.errors.totalGreaterThanZero');
         }
       }
     }
@@ -569,10 +569,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
     : activeSpecialBids;
 
   const getBidDisplayValue = (bidId?: string) => {
-    if (!bidId) return t('crm:quotes.noSpecialBid');
+    if (!bidId) return t('sales:clientQuotes.noSpecialBid');
     const bid =
       activeSpecialBids.find((b) => b.id === bidId) || specialBids.find((b) => b.id === bidId);
-    return bid ? `${bid.clientName} · ${bid.productName}` : t('crm:quotes.noSpecialBid');
+    return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
   };
 
   // Helper functions are now defined above with useCallback
@@ -581,7 +581,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   const columns = useMemo<Column<Quote>[]>(
     () => [
       {
-        header: t('crm:quotes.clientColumn'),
+        header: t('sales:clientQuotes.clientColumn'),
         accessorKey: 'clientName',
         cell: ({ row }) => {
           const history = isHistoryRow(row);
@@ -593,14 +593,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({
         },
       },
       {
-        header: t('crm:quotes.quoteCodeColumn'),
+        header: t('sales:clientQuotes.quoteCodeColumn'),
         accessorKey: 'quoteCode',
         cell: ({ row }) => (
           <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
         ),
       },
       {
-        header: t('crm:quotes.totalColumn'),
+        header: t('sales:clientQuotes.totalColumn'),
         id: 'total',
         accessorFn: (row) => calculateQuoteTotals(row.items, row.discount).total,
         disableFiltering: true,
@@ -615,7 +615,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
         },
       },
       {
-        header: t('crm:quotes.paymentTermsColumn'),
+        header: t('sales:clientQuotes.paymentTermsColumn'),
         accessorKey: 'paymentTerms',
         cell: ({ row }) => {
           const history = isHistoryRow(row);
@@ -624,14 +624,14 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
             >
               {row.paymentTerms === 'immediate'
-                ? t('crm:quotes.immediatePayment')
+                ? t('sales:clientQuotes.immediatePayment')
                 : row.paymentTerms}
             </span>
           );
         },
       },
       {
-        header: t('crm:quotes.expirationColumn'),
+        header: t('sales:clientQuotes.expirationColumn'),
         accessorKey: 'expirationDate',
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
@@ -644,14 +644,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({
             >
               {new Date(row.expirationDate).toLocaleDateString()}
               {expired && !history && (
-                <span className="ml-2 text-[10px] font-black">{t('crm:quotes.expiredLabel')}</span>
+                <span className="ml-2 text-[10px] font-black">
+                  {t('sales:clientQuotes.expiredLabel')}
+                </span>
               )}
             </div>
           );
         },
       },
       {
-        header: t('crm:quotes.statusColumn'),
+        header: t('sales:clientQuotes.statusColumn'),
         accessorKey: 'status',
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
@@ -667,7 +669,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
         },
       },
       {
-        header: t('crm:quotes.actionsColumn'),
+        header: t('sales:clientQuotes.actionsColumn'),
         id: 'actions',
         align: 'right',
         disableSorting: true,
@@ -680,30 +682,30 @@ const QuotesView: React.FC<QuotesViewProps> = ({
 
           const isDeleteDisabled = expired || row.status !== 'draft' || history;
           const deleteTitle = history
-            ? t('crm:quotes.historyActionsDisabled', {
+            ? t('sales:clientQuotes.historyActionsDisabled', {
                 defaultValue: 'History entries cannot be modified.',
               })
             : expired
-              ? t('crm:quotes.errors.expiredCannotDelete')
-              : t('crm:quotes.deleteQuote');
+              ? t('sales:clientQuotes.errors.expiredCannotDelete')
+              : t('sales:clientQuotes.deleteQuote');
 
           const isCreateSaleDisabled = history || hasOrder;
           const createSaleTitle = hasOrder
-            ? t('crm:quotes.orderAlreadyExists', {
+            ? t('sales:clientQuotes.orderAlreadyExists', {
                 defaultValue: 'An order for this quote already exists.',
               })
             : history
-              ? t('crm:quotes.historyActionsDisabled', {
+              ? t('sales:clientQuotes.historyActionsDisabled', {
                   defaultValue: 'History entries cannot be modified.',
                 })
-              : t('crm:quotes.convertToOrder');
+              : t('sales:clientQuotes.convertToOrder');
 
           const canRestore = !hasOrder || orderStatus === 'draft';
           const restoreTitle = !canRestore
-            ? t('crm:quotes.restoreDisabledOrderStatus', {
+            ? t('sales:clientQuotes.restoreDisabledOrderStatus', {
                 defaultValue: 'Restore is only possible when the linked order is in draft status.',
               })
-            : t('crm:quotes.restoreQuote', { defaultValue: 'Restore quote' });
+            : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
 
           return (
             <div className="flex justify-end gap-2">
@@ -717,10 +719,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
                 title={
                   history
-                    ? t('crm:quotes.historyActionsDisabled', {
+                    ? t('sales:clientQuotes.historyActionsDisabled', {
                         defaultValue: 'History entries cannot be modified.',
                       })
-                    : t('crm:quotes.editQuote')
+                    : t('sales:clientQuotes.editQuote')
                 }
               >
                 <i className="fa-solid fa-pen-to-square"></i>
@@ -750,10 +752,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                   className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                   title={
                     history
-                      ? t('crm:quotes.historyActionsDisabled', {
+                      ? t('sales:clientQuotes.historyActionsDisabled', {
                           defaultValue: 'History entries cannot be modified.',
                         })
-                      : t('crm:quotes.markAsSent')
+                      : t('sales:clientQuotes.markAsSent')
                   }
                 >
                   <i className="fa-solid fa-paper-plane"></i>
@@ -771,10 +773,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                     className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
                     title={
                       history
-                        ? t('crm:quotes.historyActionsDisabled', {
+                        ? t('sales:clientQuotes.historyActionsDisabled', {
                             defaultValue: 'History entries cannot be modified.',
                           })
-                        : t('crm:quotes.markAsConfirmed')
+                        : t('sales:clientQuotes.markAsConfirmed')
                     }
                   >
                     <i className="fa-solid fa-check"></i>
@@ -789,10 +791,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                     className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
                     title={
                       history
-                        ? t('crm:quotes.historyActionsDisabled', {
+                        ? t('sales:clientQuotes.historyActionsDisabled', {
                             defaultValue: 'History entries cannot be modified.',
                           })
-                        : t('crm:quotes.markAsDenied')
+                        : t('sales:clientQuotes.markAsDenied')
                     }
                   >
                     <i className="fa-solid fa-xmark"></i>
@@ -859,10 +861,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 <i className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {isReadOnly
-                ? t('crm:quotes.viewQuote')
+                ? t('sales:clientQuotes.viewQuote')
                 : editingQuote
-                  ? t('crm:quotes.editQuote')
-                  : t('crm:quotes.createNewQuote')}
+                  ? t('sales:clientQuotes.editQuote')
+                  : t('sales:clientQuotes.createNewQuote')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -876,7 +878,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
-                  {t('crm:quotes.readOnlyStatus', {
+                  {t('sales:clientQuotes.readOnlyStatus', {
                     status: getStatusLabel(editingQuote?.status || ''),
                   })}
                 </span>
@@ -886,18 +888,18 @@ const QuotesView: React.FC<QuotesViewProps> = ({
             <div className="space-y-4">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:quotes.clientInformation')}
+                {t('sales:clientQuotes.clientInformation')}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:quotes.client')}
+                    {t('sales:clientQuotes.client')}
                   </label>
                   <CustomSelect
                     options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                     value={formData.clientId || ''}
                     onChange={(val) => handleClientChange(val as string)}
-                    placeholder={t('crm:quotes.selectAClient')}
+                    placeholder={t('sales:clientQuotes.selectAClient')}
                     searchable={true}
                     disabled={isReadOnly}
                     className={errors.clientId ? 'border-red-300' : ''}
@@ -908,7 +910,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:quotes.quoteCode', { defaultValue: 'Quote Code' })}
+                    {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                   </label>
                   <input
                     type="text"
@@ -937,7 +939,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:quotes.paymentTerms')}
+                    {t('sales:clientQuotes.paymentTerms')}
                   </label>
                   <CustomSelect
                     options={PAYMENT_TERMS_OPTIONS}
@@ -952,7 +954,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:quotes.globalDiscount')}
+                    {t('sales:clientQuotes.globalDiscount')}
                   </label>
                   <ValidatedNumberInput
                     step="0.01"
@@ -977,7 +979,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:quotes.expirationDateLabel')}
+                    {t('sales:clientQuotes.expirationDateLabel')}
                   </label>
                   <input
                     type="date"
@@ -991,13 +993,13 @@ const QuotesView: React.FC<QuotesViewProps> = ({
 
                 <div className="col-span-full space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:quotes.notesLabel')}
+                    {t('sales:clientQuotes.notesLabel')}
                   </label>
                   <textarea
                     rows={3}
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder={t('crm:quotes.additionalNotesPlaceholder')}
+                    placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
                     disabled={isReadOnly}
                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                   />
@@ -1010,7 +1012,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:quotes.productsServices')}
+                  {t('sales:clientQuotes.productsServices')}
                 </h4>
                 <button
                   type="button"
@@ -1018,7 +1020,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                   disabled={isReadOnly}
                   className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
+                  <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
                 </button>
               </div>
               {errors.items && (
@@ -1032,10 +1034,10 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {t('crm:externalListing.title')}
                     </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      {t('crm:quotes.productsServices')}
+                      {t('sales:clientQuotes.productsServices')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:quotes.qty')}
+                      {t('sales:clientQuotes.qty')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('crm:internalListing.cost')}
@@ -1044,7 +1046,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       MOL (%)
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:quotes.marginLabel')}
+                      {t('sales:clientQuotes.marginLabel')}
                     </div>
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('crm:internalListing.salePrice')}
@@ -1083,7 +1085,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                             <div className="col-span-3">
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('crm:quotes.noSpecialBidOption') },
+                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
                                   ...clientSpecialBids.map((b) => ({
                                     id: b.id,
                                     name: `${b.clientName} · ${b.productName}`,
@@ -1097,7 +1099,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                                     val === 'none' ? '' : (val as string),
                                   )
                                 }
-                                placeholder={t('crm:quotes.selectBid')}
+                                placeholder={t('sales:clientQuotes.selectBid')}
                                 displayValue={getBidDisplayValue(item.specialBidId)}
                                 searchable={true}
                                 disabled={isReadOnly}
@@ -1111,7 +1113,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                                 onChange={(val) =>
                                   updateProductRow(index, 'productId', val as string)
                                 }
-                                placeholder={t('crm:quotes.selectProduct')}
+                                placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
                                 disabled={isReadOnly}
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
@@ -1122,7 +1124,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                                 step="0.01"
                                 min="0"
                                 required
-                                placeholder={t('crm:quotes.qty')}
+                                placeholder={t('sales:clientQuotes.qty')}
                                 value={item.quantity}
                                 onValueChange={(value) => {
                                   const parsed = parseFloat(value);
@@ -1139,7 +1141,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                             <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                               {selectedBid && (
                                 <span className="px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
-                                  {t('crm:quotes.bidBadge')}
+                                  {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
                               <span className="text-xs font-bold text-slate-600">
@@ -1189,7 +1191,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 </div>
               ) : (
                 <div className="text-center py-8 text-slate-400 text-sm">
-                  {t('crm:quotes.noProductsAdded')}
+                  {t('sales:clientQuotes.noProductsAdded')}
                 </div>
               )}
             </div>
@@ -1212,7 +1214,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {/* Imponibile */}
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-bold text-slate-500">
-                          {t('crm:quotes.taxableAmount')}:
+                          {t('sales:clientQuotes.taxableAmount')}:
                         </span>
                         <span className="text-sm font-black text-slate-800">
                           {subtotal.toFixed(2)} {currency}
@@ -1223,7 +1225,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {formData.discount! > 0 && (
                         <div className="flex items-center gap-4">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('crm:quotes.discountLabel', { defaultValue: 'Sconto' })} (
+                            {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
                             {formData.discount}%):
                           </span>
                           <span className="text-sm font-black text-amber-600">
@@ -1236,7 +1238,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {Object.entries(taxGroups).map(([rate, amount]) => (
                         <div key={rate} className="flex items-center gap-4">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('crm:quotes.ivaTax', { rate })}:
+                            {t('sales:clientQuotes.ivaTax', { rate })}:
                           </span>
                           <span className="text-sm font-black text-slate-800">
                             {amount.toFixed(2)} {currency}
@@ -1247,7 +1249,8 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {/* Margin */}
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-bold text-emerald-600">
-                          {t('crm:quotes.marginLabel')} ({(marginPercentage || 0).toFixed(1)}%):
+                          {t('sales:clientQuotes.marginLabel')} (
+                          {(marginPercentage || 0).toFixed(1)}%):
                         </span>
                         <span className="text-sm font-black text-emerald-600">
                           {margin.toFixed(2)} {currency}
@@ -1257,7 +1260,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                       {/* Total */}
                       <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
                         <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
-                          {t('crm:quotes.totalLabel')}:
+                          {t('sales:clientQuotes.totalLabel')}:
                         </span>
                         <span className="text-3xl font-black text-praetor">
                           {total.toFixed(2)}{' '}
@@ -1284,12 +1287,12 @@ const QuotesView: React.FC<QuotesViewProps> = ({
                 className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isReadOnly
-                  ? t('crm:quotes.statusQuote', {
+                  ? t('sales:clientQuotes.statusQuote', {
                       status: getStatusLabel(editingQuote?.status || ''),
                     })
                   : editingQuote
-                    ? t('crm:quotes.updateQuote')
-                    : t('crm:quotes.createQuote')}
+                    ? t('sales:clientQuotes.updateQuote')
+                    : t('sales:clientQuotes.createQuote')}
               </button>
             </div>
           </form>
@@ -1304,9 +1307,11 @@ const QuotesView: React.FC<QuotesViewProps> = ({
               <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">{t('crm:quotes.deleteQuote')}?</h3>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('sales:clientQuotes.deleteQuote')}?
+              </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('crm:quotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
+                {t('sales:clientQuotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
@@ -1330,14 +1335,16 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800">{t('crm:quotes.quotesTitle')}</h2>
-            <p className="text-slate-500 text-sm">{t('crm:quotes.quotesSubtitle')}</p>
+            <h2 className="text-2xl font-black text-slate-800">
+              {t('sales:clientQuotes.quotesTitle')}
+            </h2>
+            <p className="text-slate-500 text-sm">{t('sales:clientQuotes.quotesSubtitle')}</p>
           </div>
           <button
             onClick={openAddModal}
             className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
           >
-            <i className="fa-solid fa-plus"></i> {t('crm:quotes.createNewQuote')}
+            <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.createNewQuote')}
           </button>
         </div>
       </div>
@@ -1345,7 +1352,7 @@ const QuotesView: React.FC<QuotesViewProps> = ({
       {/* Search and Filters */}
 
       <StandardTable<Quote>
-        title={t('crm:quotes.activeQuotes')}
+        title={t('sales:clientQuotes.activeQuotes')}
         data={quotes}
         columns={columns}
         defaultRowsPerPage={5}
@@ -1375,4 +1382,4 @@ const QuotesView: React.FC<QuotesViewProps> = ({
   );
 };
 
-export default QuotesView;
+export default ClientQuotesView;
