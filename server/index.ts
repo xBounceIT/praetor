@@ -28,7 +28,7 @@ import notificationsRoutes from './routes/notifications.ts';
 dotenv.config();
 
 const PORT = Number(process.env.PORT ?? 3001);
-const SSL_ENABLED = process.env.SSL_ENABLED === 'true';
+const SSL_ENABLED = true;
 const SSL_DOMAIN = 'praetor-backend';
 
 // Build Fastify config

@@ -29,7 +29,6 @@ services:
     container_name: praetor-backend
     environment:
       PORT: 3001
-      SSL_ENABLED: 'true'
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-praetor}
