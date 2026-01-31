@@ -86,6 +86,16 @@ fastify.get('/api/health', async (_request, _reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
 });
 
+// Strip HTTP/1.1 hop-by-hop headers that are invalid in HTTP/2
+fastify.addHook('onSend', async (_request, reply, payload) => {
+  reply.raw.removeHeader('connection');
+  reply.raw.removeHeader('keep-alive');
+  reply.raw.removeHeader('proxy-connection');
+  reply.raw.removeHeader('transfer-encoding');
+  reply.raw.removeHeader('upgrade');
+  return payload;
+});
+
 // Error handling
 fastify.setErrorHandler((error, request, reply) => {
   console.error('Error:', error);
