@@ -241,7 +241,6 @@ export interface ClientsOrder {
 export type View =
   // Timesheets module
   | 'timesheets/tracker'
-  | 'timesheets/reports'
   | 'timesheets/recurring'
   // Configuration module (admin/manager)
   | 'configuration/authentication'
@@ -251,6 +250,7 @@ export type View =
   // CRM module
   | 'crm/clients'
   | 'crm/quotes'
+  | 'crm/suppliers'
   // Catalog module
   | 'catalog/internal-listing'
   | 'catalog/external-listing'

@@ -14,7 +14,7 @@
   "routes": {
     "timeTracker": "Time Tracker",
     "tracker": "Tracker",
-    "reports": "Reports",
+
     "recurring": "Recurring",
     "recurringTasks": "Recurring Tasks",
     "tasks": "Tasks",

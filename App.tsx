@@ -27,7 +27,7 @@ import { COLORS } from './constants';
 import i18n from './i18n';
 import Layout from './components/Layout';
 import TimeEntryForm from './components/timesheet/TimeEntryForm';
-import Reports from './components/Reports';
+
 import Calendar from './components/shared/Calendar';
 import UserSettings from './components/UserSettings';
 import Login from './components/Login';
@@ -593,7 +593,6 @@ const App: React.FC = () => {
   const VALID_VIEWS: View[] = useMemo(
     () => [
       'timesheets/tracker',
-      'timesheets/reports',
       'timesheets/recurring',
       'configuration/user-management',
       'configuration/work-units',
@@ -601,6 +600,7 @@ const App: React.FC = () => {
       'configuration/general',
       'crm/clients',
       'crm/quotes',
+      'crm/suppliers',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
@@ -613,7 +613,6 @@ const App: React.FC = () => {
       'finances/reports',
       'projects/manage',
       'projects/tasks',
-      'suppliers/manage',
       'suppliers/quotes',
       'hr/internal-employees',
       'hr/external-employees',
@@ -629,7 +628,6 @@ const App: React.FC = () => {
     // So we define the list once for initialization
     const validViews: View[] = [
       'timesheets/tracker',
-      'timesheets/reports',
       'timesheets/recurring',
       'configuration/user-management',
       'configuration/work-units',
@@ -690,7 +688,6 @@ const App: React.FC = () => {
     const permissions: Record<View, UserRole[]> = {
       // Timesheets module - manager and user
       'timesheets/tracker': ['manager', 'user'],
-      'timesheets/reports': ['manager', 'user'],
       'timesheets/recurring': ['manager', 'user'],
       // Configuration module - admin/manager
       'configuration/authentication': ['admin'],
@@ -700,6 +697,7 @@ const App: React.FC = () => {
       // CRM module - manager
       'crm/clients': ['manager'],
       'crm/quotes': ['manager'],
+      'crm/suppliers': ['manager'],
       // Accounting module - manager
       'accounting/clients-orders': ['manager'],
       'accounting/clients-invoices': ['manager'],
@@ -2151,24 +2149,6 @@ const App: React.FC = () => {
                 geminiApiKey={generalSettings.geminiApiKey}
               />
             )}
-            {activeView === 'timesheets/reports' && (
-              <Reports
-                entries={
-                  currentUser.role === 'manager'
-                    ? entries
-                    : entries.filter((e) => e.userId === currentUser.id)
-                }
-                projects={projects}
-                clients={clients}
-                users={users}
-                currentUser={currentUser}
-                startOfWeek={generalSettings.startOfWeek}
-                treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-                dailyGoal={generalSettings.dailyLimit}
-                currency={generalSettings.currency}
-              />
-            )}
-
             {activeView === 'crm/clients' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <ClientsView

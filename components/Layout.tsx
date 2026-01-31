@@ -179,17 +179,6 @@ const Layout: React.FC<LayoutProps> = ({
             />
 
             <NavItem
-              icon="fa-chart-pie"
-              label={t('routes.reports')}
-              active={activeView === 'timesheets/reports'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('timesheets/reports');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-
-            <NavItem
               icon="fa-repeat"
               label={t('routes.recurringTasks')}
               active={activeView === 'timesheets/recurring'}
