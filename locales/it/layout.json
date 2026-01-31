@@ -37,6 +37,7 @@
     "financialReports": "Report Finanziari",
     "authentication": "Autenticazione",
     "general": "Impostazioni Generali",
+    "email": "Impostazioni Email",
     "suppliers": "Fornitori",
     "supplierQuotes": "Preventivi Fornitori",
     "internalEmployees": "Dipendenti Interni",
@@ -73,7 +74,8 @@
     "suppliers": "Fornitori",
     "supplierQuotes": "Preventivi Fornitore",
     "internalEmployees": "Dipendenti Interni",
-    "externalEmployees": "Dipendenti Esterni"
+    "externalEmployees": "Dipendenti Esterni",
+    "emailSettings": "Impostazioni Email"
   },
   "notifications": {
     "title": "Notifiche",

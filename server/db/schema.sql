@@ -682,6 +682,22 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
+
+-- Email configuration table (single row)
+CREATE TABLE IF NOT EXISTS email_config (
+    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    enabled BOOLEAN DEFAULT FALSE,
+    smtp_host VARCHAR(255) DEFAULT '',
+    smtp_port INTEGER DEFAULT 587,
+    smtp_encryption VARCHAR(20) DEFAULT 'tls',
+    smtp_reject_unauthorized BOOLEAN DEFAULT TRUE,
+    smtp_user VARCHAR(255) DEFAULT '',
+    smtp_password VARCHAR(255) DEFAULT '',
+    from_email VARCHAR(255) DEFAULT '',
+    from_name VARCHAR(255) DEFAULT 'Praetor',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert default email config row
+INSERT INTO email_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 

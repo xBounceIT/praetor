@@ -21,6 +21,7 @@ import suppliersRoutes from './routes/suppliers.ts';
 import supplierQuotesRoutes from './routes/supplier-quotes.ts';
 import specialBidsRoutes from './routes/special-bids.ts';
 import notificationsRoutes from './routes/notifications.ts';
+import emailRoutes from './routes/email.ts';
 
 dotenv.config();
 
@@ -56,6 +57,7 @@ await fastify.register(suppliersRoutes, { prefix: '/api/suppliers' });
 await fastify.register(supplierQuotesRoutes, { prefix: '/api/supplier-quotes' });
 await fastify.register(specialBidsRoutes, { prefix: '/api/special-bids' });
 await fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
+await fastify.register(emailRoutes, { prefix: '/api/email' });
 
 // Health check
 fastify.get('/api/health', async (_request, _reply) => {

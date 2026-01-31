@@ -88,5 +88,48 @@
     "settingsFailed": "Impossibile salvare le impostazioni",
     "passwordUpdated": "Password aggiornata con successo",
     "passwordFailed": "Impossibile aggiornare la password"
+  },
+  "email": {
+    "title": "Impostazioni Email",
+    "subtitle": "Configura le impostazioni SMTP per le notifiche email",
+    "enabled": "Abilitato",
+    "smtpServer": "Configurazione Server SMTP",
+    "host": "Host SMTP",
+    "port": "Porta",
+    "encryption": "Crittografia",
+    "username": "Nome Utente",
+    "password": "Password",
+    "rejectUnauthorized": "Rifiuta certificati non autorizzati",
+    "rejectUnauthorizedHint": "Disabilita per certificati autofirmati",
+    "sender": "Impostazioni Mittente",
+    "fromEmail": "Email Mittente",
+    "fromName": "Nome Mittente",
+    "testEmail": "Email di Test",
+    "testDescription": "Invia un'email di test per verificare che la configurazione SMTP funzioni correttamente.",
+    "recipientEmail": "Email Destinatario",
+    "sendTest": "Invia Email di Test",
+    "sending": "Invio email di test...",
+    "checkInbox": "Controlla la tua casella di posta per l'email di test.",
+    "waitingForTest": "In attesa dell'esecuzione del test...",
+    "logOutput": "I risultati del test appariranno qui.",
+    "encryption": {
+      "tls": "TLS/STARTTLS",
+      "ssl": "SSL",
+      "insecure": "Nessuna (Non sicuro)"
+    },
+    "encryptionHint": {
+      "ssl": "SSL implicito, tipicamente porta 465",
+      "tls": "STARTTLS, tipicamente porta 587",
+      "insecure": "Nessuna crittografia (per proxy locale)"
+    },
+    "errors": {
+      "hostRequired": "L'host SMTP è obbligatorio",
+      "portInvalid": "La porta deve essere tra 1 e 65535",
+      "fromEmailRequired": "L'email mittente è obbligatoria",
+      "fromEmailInvalid": "Indirizzo email non valido",
+      "recipientRequired": "L'email destinatario è obbligatoria",
+      "recipientInvalid": "Indirizzo email non valido",
+      "mustBeEnabled": "L'email deve essere abilitata per inviare il test"
+    }
   }
 }

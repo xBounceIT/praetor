@@ -75,6 +75,7 @@ import type {
   SpecialBid,
   Notification,
   EmployeeType,
+  EmailConfig,
 } from '../types';
 
 // Normalization Helpers
@@ -639,6 +640,28 @@ export const notificationsApi = {
   delete: (id: string): Promise<void> => fetchApi(`/notifications/${id}`, { method: 'DELETE' }),
 };
 
+// Email API
+export const emailApi = {
+  getConfig: (): Promise<EmailConfig> => fetchApi('/email/config'),
+
+  updateConfig: (config: Partial<EmailConfig>): Promise<EmailConfig> =>
+    fetchApi('/email/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    }),
+
+  sendTestEmail: (
+    recipientEmail: string,
+  ): Promise<{ success: boolean; message: string; messageId?: string }> =>
+    fetchApi('/email/test', {
+      method: 'POST',
+      body: JSON.stringify({ recipientEmail }),
+    }),
+
+  testConnection: (): Promise<{ success: boolean; message: string }> =>
+    fetchApi('/email/test-connection', { method: 'POST' }),
+};
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -661,6 +684,7 @@ export default {
   settings: settingsApi,
   ldap: ldapApi,
   generalSettings: generalSettingsApi,
+  email: emailApi,
   setAuthToken,
   getAuthToken,
 };

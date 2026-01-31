@@ -115,6 +115,20 @@ export interface LdapConfig {
   roleMappings: LdapRoleMapping[];
 }
 
+export type SmtpEncryption = 'insecure' | 'ssl' | 'tls';
+
+export interface EmailConfig {
+  enabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpEncryption: SmtpEncryption;
+  smtpRejectUnauthorized: boolean;
+  smtpUser: string;
+  smtpPassword: string;
+  fromEmail: string;
+  fromName: string;
+}
+
 export type TrackerViewMode = 'daily' | 'weekly';
 
 export interface Product {
@@ -247,6 +261,7 @@ export type View =
   | 'configuration/general'
   | 'configuration/user-management'
   | 'configuration/work-units'
+  | 'configuration/email'
   // CRM module
   | 'crm/clients'
   | 'crm/suppliers'

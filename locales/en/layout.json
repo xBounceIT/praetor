@@ -37,6 +37,7 @@
     "financialReports": "Financial Reports",
     "authentication": "Authentication",
     "general": "General Settings",
+    "email": "Email Settings",
     "suppliers": "Suppliers",
     "supplierQuotes": "Supplier Quotes",
     "internalEmployees": "Internal Employees",
@@ -73,7 +74,8 @@
     "suppliers": "Suppliers",
     "supplierQuotes": "Supplier Quotes",
     "internalEmployees": "Internal Employees",
-    "externalEmployees": "External Employees"
+    "externalEmployees": "External Employees",
+    "emailSettings": "Email Settings"
   },
   "notifications": {
     "title": "Notifications",

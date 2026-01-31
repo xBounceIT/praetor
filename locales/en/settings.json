@@ -88,5 +88,48 @@
     "settingsFailed": "Failed to save settings",
     "passwordUpdated": "Password updated successfully",
     "passwordFailed": "Failed to update password"
+  },
+  "email": {
+    "title": "Email Settings",
+    "subtitle": "Configure SMTP settings for email notifications",
+    "enabled": "Enabled",
+    "smtpServer": "SMTP Server Configuration",
+    "host": "SMTP Host",
+    "port": "Port",
+    "encryption": "Encryption",
+    "username": "Username",
+    "password": "Password",
+    "rejectUnauthorized": "Reject unauthorized certificates",
+    "rejectUnauthorizedHint": "Disable for self-signed certificates",
+    "sender": "Sender Settings",
+    "fromEmail": "From Email",
+    "fromName": "From Name",
+    "testEmail": "Test Email",
+    "testDescription": "Send a test email to verify your SMTP configuration is working correctly.",
+    "recipientEmail": "Recipient Email",
+    "sendTest": "Send Test Email",
+    "sending": "Sending test email...",
+    "checkInbox": "Check your inbox for the test email.",
+    "waitingForTest": "Waiting for test execution...",
+    "logOutput": "Test results will appear here.",
+    "encryption": {
+      "tls": "TLS/STARTTLS",
+      "ssl": "SSL",
+      "insecure": "None (Insecure)"
+    },
+    "encryptionHint": {
+      "ssl": "Implicit SSL, typically port 465",
+      "tls": "STARTTLS, typically port 587",
+      "insecure": "No encryption (for local proxy)"
+    },
+    "errors": {
+      "hostRequired": "SMTP host is required",
+      "portInvalid": "Port must be between 1 and 65535",
+      "fromEmailRequired": "From email is required",
+      "fromEmailInvalid": "Invalid email address",
+      "recipientRequired": "Recipient email is required",
+      "recipientInvalid": "Invalid email address",
+      "mustBeEnabled": "Email must be enabled to send test"
+    }
   }
 }

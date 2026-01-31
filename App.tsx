@@ -22,6 +22,7 @@ import {
   SupplierQuote,
   SpecialBid,
   Notification,
+  EmailConfig,
 } from './types';
 import { COLORS } from './constants';
 import i18n from './i18n';
@@ -58,6 +59,7 @@ import SupplierQuotesView from './components/SupplierQuotesView';
 import ExternalListingView from './components/HR/ExternalListingView';
 import InternalEmployeesView from './components/InternalEmployeesView';
 import ExternalEmployeesView from './components/ExternalEmployeesView';
+import EmailSettings from './components/administration/EmailSettings';
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -577,6 +579,18 @@ const App: React.FC = () => {
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
+  const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
+  const [emailConfig, setEmailConfig] = useState<EmailConfig>({
+    enabled: false,
+    smtpHost: '',
+    smtpPort: 587,
+    smtpEncryption: 'tls',
+    smtpRejectUnauthorized: true,
+    smtpUser: '',
+    smtpPassword: '',
+    fromEmail: '',
+    fromName: 'Praetor',
+  });
 
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
   const [managedUserIds, setManagedUserIds] = useState<string[]>([]);
@@ -599,6 +613,7 @@ const App: React.FC = () => {
       'configuration/work-units',
       'configuration/authentication',
       'configuration/general',
+      'configuration/email',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -635,6 +650,7 @@ const App: React.FC = () => {
       'configuration/work-units',
       'configuration/authentication',
       'configuration/general',
+      'configuration/email',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -695,6 +711,7 @@ const App: React.FC = () => {
       // Configuration module - admin/manager
       'configuration/authentication': ['admin'],
       'configuration/general': ['admin'],
+      'configuration/email': ['admin'],
       'configuration/user-management': ['admin', 'manager'],
       'configuration/work-units': ['admin', 'manager'],
       // CRM module - manager
@@ -855,6 +872,13 @@ const App: React.FC = () => {
       setHasLoadedLdapConfig(true);
     };
 
+    const loadEmailConfig = async () => {
+      if (hasLoadedEmailConfig) return;
+      const email = await api.email.getConfig();
+      setEmailConfig(email);
+      setHasLoadedEmailConfig(true);
+    };
+
     const loadModuleData = async () => {
       try {
         switch (module) {
@@ -898,6 +922,7 @@ const App: React.FC = () => {
             await loadGeneralSettings();
             if (currentUser.role === 'admin') {
               await loadLdapConfig();
+              await loadEmailConfig();
             }
             break;
           }
@@ -1977,6 +2002,7 @@ const App: React.FC = () => {
     setLoadedModules(new Set());
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
+    setHasLoadedEmailConfig(false);
     setCurrentUser(user);
     setViewingUserId(user.id);
 
@@ -1986,6 +2012,7 @@ const App: React.FC = () => {
         'configuration/work-units',
         'configuration/authentication',
         'configuration/general',
+        'configuration/email',
         'settings',
       ]);
       if (activeView === '404' || !adminAllowed.has(activeView as View)) {
@@ -2001,6 +2028,7 @@ const App: React.FC = () => {
     setLoadedModules(new Set());
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
+    setHasLoadedEmailConfig(false);
     setUsers([]);
     setClients([]);
     setProjects([]);
@@ -2020,6 +2048,31 @@ const App: React.FC = () => {
       setLdapConfig(updated);
     } catch (err) {
       console.error('Failed to save LDAP config:', err);
+    }
+  };
+
+  const handleSaveEmailConfig = async (config: EmailConfig) => {
+    try {
+      const updated = await api.email.updateConfig(config);
+      setEmailConfig(updated);
+    } catch (err) {
+      console.error('Failed to save email config:', err);
+      throw err;
+    }
+  };
+
+  const handleTestEmail = async (
+    recipientEmail: string,
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const result = await api.email.sendTestEmail(recipientEmail);
+      return result;
+    } catch (err) {
+      console.error('Failed to send test email:', err);
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to send test email',
+      };
     }
   };
 
@@ -2388,6 +2441,14 @@ const App: React.FC = () => {
 
             {currentUser.role === 'admin' && activeView === 'configuration/authentication' && (
               <AdminAuthentication config={ldapConfig} onSave={handleSaveLdapConfig} />
+            )}
+
+            {currentUser.role === 'admin' && activeView === 'configuration/email' && (
+              <EmailSettings
+                config={emailConfig}
+                onSave={handleSaveEmailConfig}
+                onTestEmail={handleTestEmail}
+              />
             )}
 
             {activeView === 'timesheets/recurring' && (

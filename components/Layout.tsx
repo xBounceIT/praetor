@@ -441,6 +441,17 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
               />
             )}
+
+            <NavItem
+              icon="fa-envelope"
+              label={t('routes.email')}
+              active={activeView === 'configuration/email'}
+              isCollapsed={isCollapsed}
+              onClick={() => {
+                onViewChange('configuration/email');
+                setIsMobileMenuOpen(false);
+              }}
+            />
           </>
         );
       default:
