@@ -29,6 +29,8 @@ services:
     container_name: praetor-backend
     environment:
       PORT: 3001
+      SSL_ENABLED: 'true'
+      SSL_DOMAIN: ${SSL_DOMAIN:-praetor-backend}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-praetor}
@@ -36,6 +38,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
       JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
       FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
+    volumes:
+      - ssl_certs:/app/certs
     expose:
       - '3001'
     depends_on:
@@ -59,3 +63,4 @@ services:
 
 volumes:
   postgres_data:
+  ssl_certs:

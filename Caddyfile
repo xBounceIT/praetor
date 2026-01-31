@@ -12,15 +12,12 @@
     # Enable gzip compression
     encode gzip
     
-    # API proxy with HTTP/2 cleartext (h2c) to backend
+    # API proxy with HTTPS to backend
     handle /api/* {
         reverse_proxy backend:3001 {
-            header_up -Connection
-            header_up -Upgrade
-            header_up -Keep-Alive
-            header_up -Proxy-Connection
             transport http {
-                versions h2c
+                tls
+                tls_insecure_skip_verify
             }
         }
     }

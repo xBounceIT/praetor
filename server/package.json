@@ -17,7 +17,8 @@
     "jsonwebtoken": "^9.0.2",
     "ldapjs": "^3.0.7",
     "pg": "^8.13.0",
-    "uuid": "^11.0.0"
+    "uuid": "^11.0.0",
+    "selfsigned": "^2.4.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",

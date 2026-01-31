@@ -1,7 +1,9 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyHttpsOptions } from 'fastify';
 import cors from '@fastify/cors';
 import dotenv from 'dotenv';
+import type { Http2SecureServer } from 'http2';
 
+import { getSSLConfig } from './utils/ssl.ts';
 import authRoutes from './routes/auth.ts';
 import usersRoutes from './routes/users.ts';
 import clientsRoutes from './routes/clients.ts';
@@ -26,12 +28,30 @@ import notificationsRoutes from './routes/notifications.ts';
 dotenv.config();
 
 const PORT = Number(process.env.PORT ?? 3001);
+const SSL_ENABLED = process.env.SSL_ENABLED === 'true';
+const SSL_DOMAIN = process.env.SSL_DOMAIN || 'localhost';
 
-// Create Fastify instance with HTTP/2 support
-const fastify = Fastify({
+// Build Fastify config
+let fastifyConfig: FastifyHttpsOptions<Http2SecureServer> = {
   logger: false,
   http2: true,
-});
+};
+
+if (SSL_ENABLED) {
+  const ssl = await getSSLConfig(SSL_DOMAIN);
+  fastifyConfig = {
+    ...fastifyConfig,
+    https: {
+      allowHTTP1: true,
+      key: ssl.key,
+      cert: ssl.cert,
+    },
+  };
+  console.log(`SSL enabled for domain: ${SSL_DOMAIN}`);
+}
+
+// Create Fastify instance with HTTP/2 support
+const fastify = Fastify(fastifyConfig);
 
 // Register CORS
 await fastify.register(cors, {
@@ -196,7 +216,8 @@ try {
     console.warn('Schema file not found at:', schemaPath);
   }
 
-  console.log(`Praetor API server running on port ${PORT} with HTTP/2`);
+  const protocol = SSL_ENABLED ? 'HTTPS' : 'HTTP';
+  console.log(`Praetor API server running on port ${PORT} with HTTP/2 over ${protocol}`);
 
   // Periodic LDAP Sync Task (every hour)
   try {
