@@ -1,9 +1,6 @@
-import Fastify, { type FastifyHttpsOptions } from 'fastify';
+import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import dotenv from 'dotenv';
-import type { Http2SecureServer } from 'http2';
-
-import { getSSLConfig } from './utils/ssl.ts';
 import authRoutes from './routes/auth.ts';
 import usersRoutes from './routes/users.ts';
 import clientsRoutes from './routes/clients.ts';
@@ -28,30 +25,9 @@ import notificationsRoutes from './routes/notifications.ts';
 dotenv.config();
 
 const PORT = Number(process.env.PORT ?? 3001);
-const SSL_ENABLED = true;
-const SSL_DOMAIN = 'praetor-backend';
 
-// Build Fastify config
-let fastifyConfig: FastifyHttpsOptions<Http2SecureServer> = {
-  logger: false,
-  http2: true,
-};
-
-if (SSL_ENABLED) {
-  const ssl = await getSSLConfig(SSL_DOMAIN);
-  fastifyConfig = {
-    ...fastifyConfig,
-    https: {
-      allowHTTP1: true,
-      key: ssl.key,
-      cert: ssl.cert,
-    },
-  };
-  console.log(`SSL enabled for domain: ${SSL_DOMAIN}`);
-}
-
-// Create Fastify instance with HTTP/2 support
-const fastify = Fastify(fastifyConfig);
+// Create Fastify instance with HTTP/1.1 over HTTP
+const fastify = Fastify({ logger: false });
 
 // Register CORS
 await fastify.register(cors, {
@@ -84,16 +60,6 @@ await fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
 // Health check
 fastify.get('/api/health', async (_request, _reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
-});
-
-// Strip HTTP/1.1 hop-by-hop headers that are invalid in HTTP/2
-fastify.addHook('onSend', async (_request, reply, payload) => {
-  reply.raw.removeHeader('connection');
-  reply.raw.removeHeader('keep-alive');
-  reply.raw.removeHeader('proxy-connection');
-  reply.raw.removeHeader('transfer-encoding');
-  reply.raw.removeHeader('upgrade');
-  return payload;
 });
 
 // Error handling
@@ -226,8 +192,7 @@ try {
     console.warn('Schema file not found at:', schemaPath);
   }
 
-  const protocol = SSL_ENABLED ? 'HTTPS' : 'HTTP';
-  console.log(`Praetor API server running on port ${PORT} with HTTP/2 over ${protocol}`);
+  console.log(`Praetor API server running on port ${PORT} with HTTP/1.1 over HTTP`);
 
   // Periodic LDAP Sync Task (every hour)
   try {
