@@ -35,6 +35,7 @@ services:
       DB_USER: ${POSTGRES_USER:-praetor}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
       JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-praetor-encryption-key-change-in-production}
       FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
     volumes:
       - ssl_certs:/app/certs
