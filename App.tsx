@@ -400,7 +400,9 @@ const TrackerView: React.FC<{
                           <td className="px-6 py-4 text-sm align-top">
                             {entry.location ? (
                               <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                {t(`entry.locationTypes.${entry.location}`)}
+                                {t(
+                                  `entry.locationTypes.${entry.location.replace(/_([a-z])/g, (_, c) => c.toUpperCase())}`,
+                                )}
                               </span>
                             ) : (
                               <span className="text-slate-300 text-xs">-</span>
