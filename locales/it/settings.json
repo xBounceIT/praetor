@@ -112,6 +112,8 @@
     "checkInbox": "Controlla la tua casella di posta per l'email di test.",
     "waitingForTest": "In attesa dell'esecuzione del test...",
     "logOutput": "I risultati del test appariranno qui.",
+    "testSuccess": "SUCCESSO",
+    "testFailure": "FALLIMENTO",
     "encryption": {
       "tls": "TLS/STARTTLS",
       "ssl": "SSL",

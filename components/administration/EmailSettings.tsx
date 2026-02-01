@@ -411,7 +411,11 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                 <div
                   className={`font-bold ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}
                 >
-                  [{testResult.success ? 'SUCCESS' : 'FAILURE'}] {testResult.message}
+                  [
+                  {testResult.success
+                    ? t('email.testSuccess', 'SUCCESS')
+                    : t('email.testFailure', 'FAILURE')}
+                  ] {testResult.message}
                 </div>
                 {testResult.success && (
                   <div className="text-slate-400 mt-2">
