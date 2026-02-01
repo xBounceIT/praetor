@@ -164,11 +164,6 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             {t('email.subtitle', 'Configure SMTP settings for email notifications')}
           </p>
         </div>
-        {isSaved && (
-          <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md animate-in fade-in slide-in-from-right-4 flex items-center gap-2">
-            <i className="fa-solid fa-check"></i> {t('general.changesSaved', 'Changes Saved')}
-          </div>
-        )}
       </div>
 
       <form onSubmit={handleSave} className="space-y-8">
@@ -353,10 +348,19 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
           <button
             type="submit"
             disabled={isSaving || !hasChanges}
-            className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50"
+            className={`px-8 py-3 rounded-xl font-bold shadow-lg transition-all active:scale-95 disabled:opacity-50 ${
+              isSaved
+                ? 'bg-emerald-500 text-white shadow-emerald-200'
+                : 'bg-praetor text-white shadow-slate-200 hover:bg-slate-800'
+            }`}
           >
             {isSaving ? (
               <i className="fa-solid fa-circle-notch fa-spin"></i>
+            ) : isSaved ? (
+              <span className="flex items-center gap-2">
+                <i className="fa-solid fa-check"></i>
+                {t('general.saved', 'Saved!')}
+              </span>
             ) : (
               t('general.saveConfiguration', 'Save Configuration')
             )}

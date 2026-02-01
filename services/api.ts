@@ -652,7 +652,12 @@ export const emailApi = {
 
   sendTestEmail: (
     recipientEmail: string,
-  ): Promise<{ success: boolean; message: string; messageId?: string }> =>
+  ): Promise<{
+    success: boolean;
+    code: string;
+    params?: Record<string, string>;
+    messageId?: string;
+  }> =>
     fetchApi('/email/test', {
       method: 'POST',
       body: JSON.stringify({ recipientEmail }),

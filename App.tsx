@@ -1050,6 +1050,7 @@ const App: React.FC = () => {
     loadedModules,
     hasLoadedGeneralSettings,
     hasLoadedLdapConfig,
+    hasLoadedEmailConfig,
   ]);
 
   // Load entries and assignments when viewing user changes
@@ -2063,7 +2064,7 @@ const App: React.FC = () => {
 
   const handleTestEmail = async (
     recipientEmail: string,
-  ): Promise<{ success: boolean; message: string }> => {
+  ): Promise<{ success: boolean; code: string; params?: Record<string, string> }> => {
     try {
       const result = await api.email.sendTestEmail(recipientEmail);
       return result;
@@ -2071,7 +2072,8 @@ const App: React.FC = () => {
       console.error('Failed to send test email:', err);
       return {
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to send test email',
+        code: 'TEST_EMAIL_ERROR',
+        params: { error: err instanceof Error ? err.message : 'Failed to send test email' },
       };
     }
   };
