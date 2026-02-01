@@ -682,11 +682,7 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
           </div>
         </header>
-        <div
-          className={`p-4 md:p-8 mx-auto ${activeView === 'catalog/internal-listing' ? 'max-w-[96%]' : 'max-w-7xl'}`}
-        >
-          {children}
-        </div>
+        <div className="p-4 md:p-8 mx-auto max-w-7xl">{children}</div>
       </main>
     </div>
   );
