@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask, TimeEntry, UserRole, TimeEntryLocation } from '../../types';
+import { getLocalDateString } from '../../utils/date';
 import { parseSmartEntry } from '../../services/geminiService';
 import CustomSelect from '../shared/CustomSelect';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
@@ -78,7 +79,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [enableAiInsights]);
 
   // Manual fields
-  const [date, setDate] = useState(selectedDate || new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(selectedDate || getLocalDateString());
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id || '');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedTaskName, setSelectedTaskName] = useState('');

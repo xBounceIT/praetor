@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TimeEntry } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
+import { getLocalDateString } from '../../utils/date';
 
 interface CalendarProps {
   // Original props
@@ -60,7 +61,7 @@ const Calendar: React.FC<CalendarProps> = ({
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
-  const today = currentDate.toISOString().split('T')[0];
+  const today = getLocalDateString(currentDate);
 
   const days = [];
   const totalDays = daysInMonth(year, month);
@@ -213,7 +214,7 @@ const Calendar: React.FC<CalendarProps> = ({
   const handleTodayClick = () => {
     const now = new Date();
     setViewDate(now);
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getLocalDateString(now);
     if (selectionMode === 'single' && onDateSelect) {
       onDateSelect(todayStr);
     }

@@ -44,7 +44,9 @@ import CustomSelect from './components/shared/CustomSelect';
 import WeeklyView from './components/timesheet/WeeklyView';
 import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';
+import { getLocalDateString } from './utils/date';
 import api, { setAuthToken, getAuthToken, Settings } from './services/api';
+
 import NotFound from './components/NotFound';
 import InternalListingView from './components/HR/InternalListingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
@@ -149,7 +151,7 @@ const TrackerView: React.FC<{
   defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
   const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
     const saved = localStorage.getItem('trackerMode');
     return saved === 'daily' || saved === 'weekly' ? saved : 'daily';
@@ -1252,7 +1254,8 @@ const App: React.FC = () => {
           isSunday || (generalSettings.treatSaturdayAsHoliday && isSaturday) || !!holidayName;
         if (isDisabledDay) continue;
 
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(d);
+
         let matches = false;
         if (task.recurrencePattern === 'daily') matches = true;
         if (task.recurrencePattern === 'weekly' && d.getDay() === startDate.getDay())
@@ -1446,7 +1449,8 @@ const App: React.FC = () => {
       const updated = await api.tasks.update(taskId, {
         isRecurring: true,
         recurrencePattern: pattern,
-        recurrenceStart: startDate || new Date().toISOString().split('T')[0],
+        recurrenceStart: startDate || getLocalDateString(),
+
         recurrenceEnd: endDate,
         recurrenceDuration: duration,
       });
@@ -1494,7 +1498,8 @@ const App: React.FC = () => {
         );
       } else if (action === 'delete_future') {
         await api.entries.bulkDelete(task.projectId, task.name, { futureOnly: true });
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateString();
+
         setEntries((prev) =>
           prev.filter(
             (e) => !(e.projectId === task.projectId && e.task === task.name && e.date >= today),
@@ -1627,7 +1632,7 @@ const App: React.FC = () => {
       }
 
       const updatesWithRestore = isRestore
-        ? { ...updates, expirationDate: new Date().toISOString().split('T')[0] }
+        ? { ...updates, expirationDate: getLocalDateString() }
         : updates;
 
       const updated = await api.quotes.update(id, updatesWithRestore);
