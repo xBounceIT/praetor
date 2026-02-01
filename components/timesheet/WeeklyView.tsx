@@ -613,7 +613,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-3 text-right sticky right-0 bg-white group-hover:bg-slate-50/30 transition-all duration-500 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
+                  <td className="px-4 py-3 text-right sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-end gap-2">
                       <span className="text-sm font-black text-slate-800">
                         {Object.values(row.days)
