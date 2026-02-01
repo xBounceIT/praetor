@@ -44,7 +44,7 @@ import CustomSelect from './components/shared/CustomSelect';
 import WeeklyView from './components/timesheet/WeeklyView';
 import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';
-import api, { setAuthToken, getAuthToken } from './services/api';
+import api, { setAuthToken, getAuthToken, Settings } from './services/api';
 import NotFound from './components/NotFound';
 import InternalListingView from './components/HR/InternalListingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
@@ -596,6 +596,11 @@ const App: React.FC = () => {
     geminiApiKey: '',
     defaultLocation: 'remote' as TimeEntryLocation,
   });
+  const [userSettings, setUserSettings] = useState<Settings>({
+    fullName: '',
+    email: '',
+    language: 'auto',
+  });
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
@@ -837,9 +842,10 @@ const App: React.FC = () => {
           setCurrentUser(user);
           setViewingUserId(user.id);
 
-          // Load user's language preference
+          // Load user's settings and language preference
           try {
             const settings = await api.settings.get();
+            setUserSettings(settings);
             if (settings.language) {
               if (settings.language === 'auto') {
                 // Clear stored language, let i18n detect from browser
@@ -2006,6 +2012,29 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateUserSettings = async (updates: Partial<Settings>) => {
+    try {
+      const updated = await api.settings.update(updates);
+      setUserSettings({
+        ...userSettings,
+        ...updated,
+      });
+    } catch (err) {
+      console.error('Failed to update user settings:', err);
+      alert('Failed to update settings');
+      throw err;
+    }
+  };
+
+  const handleUpdateUserPassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      await api.settings.updatePassword(currentPassword, newPassword);
+    } catch (err) {
+      console.error('Failed to update password:', err);
+      throw err;
+    }
+  };
+
   const generateInsights = async () => {
     if (entries.length < 3) return;
     setIsInsightLoading(true);
@@ -2028,6 +2057,25 @@ const App: React.FC = () => {
     setHasLoadedEmailConfig(false);
     setCurrentUser(user);
     setViewingUserId(user.id);
+
+    // Load user's settings
+    try {
+      const settings = await api.settings.get();
+      setUserSettings(settings);
+      if (settings.language) {
+        if (settings.language === 'auto') {
+          localStorage.removeItem('i18nextLng');
+          const browserLang = navigator.language.split('-')[0];
+          const detectedLang = ['en', 'it'].includes(browserLang) ? browserLang : 'en';
+          i18n.changeLanguage(detectedLang);
+        } else {
+          localStorage.setItem('i18nextLng', settings.language);
+          i18n.changeLanguage(settings.language);
+        }
+      }
+    } catch {
+      // Settings might not exist yet, that's okay
+    }
 
     if (user.role === 'admin') {
       const adminAllowed = new Set<View>([
@@ -2484,7 +2532,13 @@ const App: React.FC = () => {
                 onAction={handleRecurringAction}
               />
             )}
-            {activeView === 'settings' && <UserSettings />}
+            {activeView === 'settings' && (
+              <UserSettings
+                settings={userSettings}
+                onUpdate={handleUpdateUserSettings}
+                onUpdatePassword={handleUpdateUserPassword}
+              />
+            )}
           </>
         )}
       </Layout>

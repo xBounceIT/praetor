@@ -1,28 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import { Settings } from '../services/api';
 import { getTheme, applyTheme, Theme } from '../utils/theme';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 
-export interface UserSettingsData {
-  fullName: string;
-  email: string;
-  language?: 'en' | 'it' | 'auto';
+interface UserSettingsProps {
+  settings: Settings;
+  isLoading?: boolean;
+  onUpdate: (updates: Partial<Settings>) => void;
+  onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
-const UserSettings: React.FC = () => {
+const UserSettings: React.FC<UserSettingsProps> = ({
+  settings,
+  isLoading = false,
+  onUpdate,
+  onUpdatePassword,
+}) => {
   const { t } = useTranslation(['settings', 'common']);
 
-  const [settings, setSettings] = useState<UserSettingsData>({
-    fullName: '',
-    email: '',
-    language: 'auto',
-  });
-  const [initialSettings, setInitialSettings] = useState<UserSettingsData | null>(null);
+  const [fullName, setFullName] = useState(settings.fullName);
+  const [email, setEmail] = useState(settings.email);
+  const [language, setLanguage] = useState(settings.language || 'auto');
+  const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
 
-  const [isSaved, setIsSaved] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'language' | 'password'>(
+    'profile',
+  );
   const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -32,72 +38,48 @@ const UserSettings: React.FC = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // Theme state
-  const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
+  useEffect(() => {
+    setFullName(settings.fullName);
+    setEmail(settings.email);
+    setLanguage(settings.language || 'auto');
+  }, [settings]);
 
   const handleThemeChange = (theme: Theme) => {
     setCurrentTheme(theme);
     applyTheme(theme);
   };
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const data = await api.settings.get();
-        const profile = {
-          fullName: data.fullName,
-          email: data.email,
-          language: data.language || 'auto',
-        };
-        setSettings(profile);
-        setInitialSettings(profile);
-      } catch (err) {
-        console.error('Failed to load settings:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadSettings();
-  }, []);
-
   const handleSave = async (e: React.FormEvent) => {
-    if (e) e.preventDefault();
+    e.preventDefault();
     setIsSaving(true);
     try {
-      const payload = {
-        fullName: settings.fullName,
-        email: settings.email,
-        language: settings.language,
-      };
-      await api.settings.update(payload);
-      setInitialSettings(payload);
+      await onUpdate({
+        fullName,
+        email,
+        language,
+      });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (err) {
       console.error('Failed to save settings:', err);
-      alert('Failed to save settings');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleLanguageChange = async (language: 'en' | 'it' | 'auto') => {
-    if (language === 'auto') {
-      // Clear the stored language and let i18n detect from browser
+  const handleLanguageChange = async (lang: 'en' | 'it' | 'auto') => {
+    if (lang === 'auto') {
       localStorage.removeItem('i18nextLng');
-      // Detect browser language and use it (fallback to 'en')
       const browserLang = navigator.language.split('-')[0];
       const detectedLang = ['en', 'it'].includes(browserLang) ? browserLang : 'en';
       i18n.changeLanguage(detectedLang);
     } else {
-      i18n.changeLanguage(language);
-      localStorage.setItem('i18nextLng', language);
+      i18n.changeLanguage(lang);
+      localStorage.setItem('i18nextLng', lang);
     }
-    setSettings({ ...settings, language });
+    setLanguage(lang);
     try {
-      const payload = { fullName: settings.fullName, email: settings.email, language };
-      await api.settings.update(payload);
-      setInitialSettings(payload);
+      await onUpdate({ fullName, email, language: lang });
     } catch (err) {
       console.error('Failed to update language:', err);
     }
@@ -120,7 +102,7 @@ const UserSettings: React.FC = () => {
 
     setIsSavingPassword(true);
     try {
-      await api.settings.updatePassword(currentPassword, newPassword);
+      await onUpdatePassword(currentPassword, newPassword);
       setPasswordSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
@@ -134,6 +116,11 @@ const UserSettings: React.FC = () => {
     }
   };
 
+  const hasChanges =
+    fullName !== settings.fullName ||
+    email !== settings.email ||
+    language !== (settings.language || 'auto');
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
@@ -146,7 +133,7 @@ const UserSettings: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">{t('title')}</h2>
@@ -154,64 +141,116 @@ const UserSettings: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-8">
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-8">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <i className="fa-solid fa-user mr-2"></i>
+          {t('userProfile.title')}
+          {activeTab === 'profile' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('appearance')}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <i className="fa-solid fa-palette mr-2"></i>
+          {t('appearance.title')}
+          {activeTab === 'appearance' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('language')}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <i className="fa-solid fa-language mr-2"></i>
+          {t('language.title')}
+          {activeTab === 'language' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('password')}
+          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'password' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <i className="fa-solid fa-lock mr-2"></i>
+          {t('password.title')}
+          {activeTab === 'password' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'profile' && (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-left-4 duration-300">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-user text-praetor"></i>
             <h3 className="font-bold text-slate-800">{t('userProfile.title')}</h3>
           </div>
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  {t('userProfile.fullName')}
-                </label>
-                <input
-                  type="text"
-                  value={settings.fullName}
-                  onChange={(e) => setSettings({ ...settings, fullName: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  {t('userProfile.email')}
-                </label>
-                <input
-                  type="email"
-                  value={settings.email}
-                  onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                />
+          <form onSubmit={handleSave}>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    {t('userProfile.fullName')}
+                  </label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    {t('userProfile.email')}
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                  />
+                </div>
               </div>
             </div>
-            <div className="flex justify-end pt-4">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
               <button
-                onClick={handleSave}
-                disabled={isSaving || JSON.stringify(settings) === JSON.stringify(initialSettings)}
-                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${isSaved ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : JSON.stringify(settings) === JSON.stringify(initialSettings) ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                type="submit"
+                disabled={isSaving || !hasChanges}
+                className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
+                  isSaved
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
+                    : isSaving || !hasChanges
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
+                }`}
               >
                 {isSaving ? (
-                  <>
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
-                    {t('general.saving')}
-                  </>
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
                 ) : isSaved ? (
-                  <>
-                    <i className="fa-solid fa-check"></i> {t('general.changesSaved')}
-                  </>
+                  <i className="fa-solid fa-check"></i>
                 ) : (
-                  <>
-                    <i className="fa-solid fa-save"></i> {t('general.saveChanges')}
-                  </>
+                  <i className="fa-solid fa-save"></i>
                 )}
+                {isSaving
+                  ? t('general.saving')
+                  : isSaved
+                    ? t('general.changesSaved')
+                    : t('general.saveChanges')}
               </button>
             </div>
-          </div>
+          </form>
         </section>
+      )}
 
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+      {activeTab === 'appearance' && (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-palette text-praetor"></i>
             <h3 className="font-bold text-slate-800">{t('appearance.title')}</h3>
           </div>
@@ -249,9 +288,11 @@ const UserSettings: React.FC = () => {
             </div>
           </div>
         </section>
+      )}
 
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+      {activeTab === 'language' && (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-language text-praetor"></i>
             <h3 className="font-bold text-slate-800">{t('language.title')}</h3>
           </div>
@@ -259,13 +300,13 @@ const UserSettings: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <button
                 onClick={() => handleLanguageChange('auto')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'auto' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'auto' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
                   <i
-                    className={`fa-solid fa-globe text-xl ${settings.language === 'auto' ? 'text-praetor' : 'text-slate-400'}`}
+                    className={`fa-solid fa-globe text-xl ${language === 'auto' ? 'text-praetor' : 'text-slate-400'}`}
                   ></i>
-                  {settings.language === 'auto' && (
+                  {language === 'auto' && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
                     </div>
@@ -279,13 +320,13 @@ const UserSettings: React.FC = () => {
 
               <button
                 onClick={() => handleLanguageChange('en')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'en' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'en' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
                   <span
-                    className={`fi fi-gb text-xl ${settings.language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}
+                    className={`fi fi-gb text-xl ${language === 'en' ? 'scale-110' : 'grayscale opacity-70'}`}
                   ></span>
-                  {settings.language === 'en' && (
+                  {language === 'en' && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
                     </div>
@@ -301,13 +342,13 @@ const UserSettings: React.FC = () => {
 
               <button
                 onClick={() => handleLanguageChange('it')}
-                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${settings.language === 'it' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
+                className={`relative p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${language === 'it' ? 'border-praetor bg-slate-50' : 'border-slate-100 hover:border-slate-200'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-slate-100 shrink-0 shadow-sm flex items-center justify-center overflow-hidden relative">
                   <span
-                    className={`fi fi-it text-xl ${settings.language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}
+                    className={`fi fi-it text-xl ${language === 'it' ? 'scale-110' : 'grayscale opacity-70'}`}
                   ></span>
-                  {settings.language === 'it' && (
+                  {language === 'it' && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-praetor rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                       <i className="fa-solid fa-check text-white text-[8px]"></i>
                     </div>
@@ -323,88 +364,95 @@ const UserSettings: React.FC = () => {
             </div>
           </div>
         </section>
+      )}
 
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+      {activeTab === 'password' && (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3 rounded-t-2xl">
             <i className="fa-solid fa-lock text-praetor"></i>
             <h3 className="font-bold text-slate-800">{t('password.title')}</h3>
           </div>
-          <div className="p-6">
-            {passwordError && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                <i className="fa-solid fa-circle-exclamation"></i>
-                {passwordError}
-              </div>
-            )}
+          <form onSubmit={handlePasswordUpdate}>
+            <div className="p-6">
+              {passwordError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  {passwordError}
+                </div>
+              )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  {t('password.currentPassword')}
-                </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              <div className="hidden md:block"></div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  {t('password.newPassword')}
-                </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  {t('password.confirmNewPassword')}
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
-                  placeholder="••••••••"
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    {t('password.currentPassword')}
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <div className="hidden md:block"></div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    {t('password.newPassword')}
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    {t('password.confirmNewPassword')}
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-semibold"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
               </div>
             </div>
-
-            <div className="flex justify-end pt-8">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
               <button
-                onClick={handlePasswordUpdate}
+                type="submit"
                 disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
-                className={`px-8 py-3 text-white font-bold rounded-xl transition-all duration-300 ease-in-out shadow-md flex items-center gap-2 disabled:opacity-50 ${passwordSuccess ? 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600' : !currentPassword || !newPassword || !confirmPassword ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
+                  passwordSuccess
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
+                    : isSavingPassword || !currentPassword || !newPassword || !confirmPassword
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
+                }`}
               >
                 {isSavingPassword ? (
-                  <>
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
-                    {t('password.updating')}
-                  </>
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
                 ) : passwordSuccess ? (
-                  <>
-                    <i className="fa-solid fa-check"></i> {t('password.passwordUpdated')}
-                  </>
+                  <i className="fa-solid fa-check"></i>
                 ) : (
-                  <>
-                    <i className="fa-solid fa-key"></i> {t('password.updatePassword')}
-                  </>
+                  <i className="fa-solid fa-key"></i>
                 )}
+                {isSavingPassword
+                  ? t('password.updating')
+                  : passwordSuccess
+                    ? t('password.passwordUpdated')
+                    : t('password.updatePassword')}
               </button>
             </div>
-          </div>
+          </form>
         </section>
-      </div>
+      )}
     </div>
   );
 };
