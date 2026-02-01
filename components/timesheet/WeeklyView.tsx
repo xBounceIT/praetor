@@ -512,6 +512,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           {rowErrors[rowIndex].clientId}
                         </p>
                       )}
+                      <div className="h-7 invisible">Spacer</div>
                     </div>
                   </td>
                   <td className="px-4 py-4">
@@ -533,6 +534,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           {rowErrors[rowIndex].projectId}
                         </p>
                       )}
+                      <div className="h-7 invisible">Spacer</div>
                     </div>
                   </td>
                   <td className="px-4 py-4">
