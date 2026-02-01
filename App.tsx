@@ -28,7 +28,7 @@ import {
 import { COLORS } from './constants';
 import i18n from './i18n';
 import Layout from './components/Layout';
-import TimeEntryForm from './components/timesheet/TimeEntryForm';
+import DailyView from './components/timesheet/DailyView';
 
 import Calendar from './components/shared/Calendar';
 import UserSettings from './components/UserSettings';
@@ -275,7 +275,7 @@ const TrackerView: React.FC<{
               </div>
             )}
 
-            <TimeEntryForm
+            <DailyView
               clients={clients}
               projects={projects}
               projectTasks={projectTasks}

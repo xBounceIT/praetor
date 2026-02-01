@@ -6,7 +6,7 @@ import CustomSelect from '../shared/CustomSelect';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface TimeEntryFormProps {
+interface DailyViewProps {
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
@@ -29,7 +29,7 @@ interface TimeEntryFormProps {
 
 // Helper to format custom pattern - needs to be inside component to use translations
 
-const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
+const DailyView: React.FC<DailyViewProps> = ({
   clients,
   projects,
   projectTasks,
@@ -585,4 +585,4 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   );
 };
 
-export default TimeEntryForm;
+export default DailyView;
