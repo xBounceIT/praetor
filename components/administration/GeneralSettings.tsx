@@ -178,7 +178,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
             </div>
 
             <div className="p-6 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                     {t('general.dailyHourLimit')}
@@ -216,6 +216,25 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   />
                   <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
                     {t('general.startOfWeekDescription')}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    {t('general.defaultLocationLabel')}
+                  </label>
+                  <CustomSelect
+                    options={[
+                      { id: 'office', name: t('general.locationTypes.office') },
+                      { id: 'customer_premise', name: t('general.locationTypes.customerPremise') },
+                      { id: 'remote', name: t('general.locationTypes.remote') },
+                      { id: 'transfer', name: t('general.locationTypes.transfer') },
+                    ]}
+                    value={defaultLocation}
+                    onChange={(val) => setDefaultLocation(val as TimeEntryLocation)}
+                  />
+                  <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                    {t('general.defaultLocationDescription')}
                   </p>
                 </div>
               </div>
@@ -258,25 +277,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
                 </label>
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  {t('general.defaultLocationLabel')}
-                </label>
-                <CustomSelect
-                  options={[
-                    { id: 'office', name: t('general.locationTypes.office') },
-                    { id: 'customer_premise', name: t('general.locationTypes.customerPremise') },
-                    { id: 'remote', name: t('general.locationTypes.remote') },
-                    { id: 'transfer', name: t('general.locationTypes.transfer') },
-                  ]}
-                  value={defaultLocation}
-                  onChange={(val) => setDefaultLocation(val as TimeEntryLocation)}
-                />
-                <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
-                  {t('general.defaultLocationDescription')}
-                </p>
               </div>
             </div>
           </section>
