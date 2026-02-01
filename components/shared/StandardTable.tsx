@@ -327,7 +327,7 @@ const StandardTable = <T extends Record<string, any>>({
                   return (
                     <th
                       key={colId}
-                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
+                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
                     >
                       {/* Inline wrapper for button beside text */}
                       <span className="inline-flex items-center gap-1">
