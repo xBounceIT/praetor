@@ -337,6 +337,9 @@ const TrackerView: React.FC<{
                         {t('entry.task')}
                       </th>
                       <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
+                        {t('entry.location')}
+                      </th>
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
                         {t('tracker.notes')}
                       </th>
                       <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter text-right">
@@ -348,7 +351,7 @@ const TrackerView: React.FC<{
                   <tbody className="divide-y divide-slate-100">
                     {filteredEntries.length === 0 ? (
                       <tr>
-                        <td colSpan={selectedDate ? 5 : 6} className="px-6 py-20 text-center">
+                        <td colSpan={selectedDate ? 6 : 7} className="px-6 py-20 text-center">
                           <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
                           <p className="text-slate-400 font-medium text-sm">
                             {t('tracker.noEntries')}
@@ -393,6 +396,15 @@ const TrackerView: React.FC<{
                                 ></i>
                               )}
                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm align-top">
+                            {entry.location ? (
+                              <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                                {t(`entry.locationTypes.${entry.location}`)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 text-xs">-</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm align-top">
                             {entry.notes ? (
