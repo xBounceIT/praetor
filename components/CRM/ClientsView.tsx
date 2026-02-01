@@ -166,7 +166,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorKey: 'name',
         cell: ({ row }) => (
           <span
-            className={`font-semibold ${row.isDisabled ? 'line-through text-slate-400' : 'text-slate-800'}`}
+            className={`font-semibold whitespace-nowrap ${row.isDisabled ? 'line-through text-slate-400' : 'text-slate-800'}`}
           >
             {row.name}
           </span>

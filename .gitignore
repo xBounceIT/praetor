@@ -30,7 +30,8 @@ server/.env
 # Todo file
 todo.md
 
-.agent/*/*
+.agent*
 opencode.json
 TODO.md
-.claude/*
+.claude*
+.gemini*
