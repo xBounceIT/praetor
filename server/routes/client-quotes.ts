@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -67,7 +68,7 @@ const calculateQuoteTotals = async (
   return { total, subtotal, taxableAmount, totalTax };
 };
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All quote routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
@@ -92,7 +93,7 @@ export default async function (fastify, _opts) {
   };
 
   // GET / - List all quotes with their items
-  fastify.get('/', async (_request, _reply) => {
+  fastify.get('/', async (_request: FastifyRequest, _reply: FastifyReply) => {
     // Get all quotes
     const quotesResult = await query(
       `SELECT
@@ -133,8 +134,8 @@ export default async function (fastify, _opts) {
     );
 
     // Group items by quote
-    const itemsByQuote = {};
-    itemsResult.rows.forEach((item) => {
+    const itemsByQuote: Record<string, unknown[]> = {};
+    itemsResult.rows.forEach((item: { quoteId: string }) => {
       if (!itemsByQuote[item.quoteId]) {
         itemsByQuote[item.quoteId] = [];
       }
@@ -142,18 +143,23 @@ export default async function (fastify, _opts) {
     });
 
     // Attach items to quotes
-    const quotes = quotesResult.rows.map((quote) => ({
-      ...quote,
-      quoteCode: quote.quote_code,
-      items: itemsByQuote[quote.id] || [],
-      isExpired: isQuoteExpired(quote.status, quote.expirationDate),
-    }));
+    const quotes = quotesResult.rows.map(
+      (quote: {
+        id: string;
+        status: string;
+        expirationDate: string | Date | null | undefined;
+      }) => ({
+        ...quote,
+        items: itemsByQuote[quote.id] || [],
+        isExpired: isQuoteExpired(quote.status, quote.expirationDate),
+      }),
+    );
 
     return quotes;
   });
 
   // POST / - Create quote with items
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const {
       quoteCode,
       clientId,
@@ -164,7 +170,17 @@ export default async function (fastify, _opts) {
       status,
       expirationDate,
       notes,
-    } = request.body;
+    } = request.body as {
+      quoteCode: unknown;
+      clientId: unknown;
+      clientName: unknown;
+      items: unknown;
+      paymentTerms: unknown;
+      discount: unknown;
+      status: unknown;
+      expirationDate: unknown;
+      notes: unknown;
+    };
 
     const quoteCodeResult = requireNonEmptyString(quoteCode, 'quoteCode');
     if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
@@ -336,8 +352,8 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /:id - Update quote
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const {
       quoteCode,
       clientId,
@@ -349,7 +365,18 @@ export default async function (fastify, _opts) {
       expirationDate,
       notes,
       isExpired: isExpiredOverride,
-    } = request.body;
+    } = request.body as {
+      quoteCode: unknown;
+      clientId: unknown;
+      clientName: unknown;
+      items: unknown;
+      paymentTerms: unknown;
+      discount: unknown;
+      status: unknown;
+      expirationDate: unknown;
+      notes: unknown;
+      isExpired: unknown;
+    };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -509,7 +536,15 @@ export default async function (fastify, _opts) {
           discount: itemDiscountResult.value || 0,
         });
       }
-      const totals = await calculateQuoteTotals(normalizedItems, effectiveDiscount);
+      const totals = await calculateQuoteTotals(
+        normalizedItems as Array<{
+          productId: string;
+          quantity: number;
+          unitPrice: number;
+          discount?: number;
+        }>,
+        effectiveDiscount as number,
+      );
       if (!Number.isFinite(totals.total) || totals.total <= 0) {
         return badRequest(reply, 'Total must be greater than 0');
       }
@@ -530,7 +565,7 @@ export default async function (fastify, _opts) {
         unitPrice: parseFloat(row.unitPrice),
         discount: parseFloat(row.discount || 0),
       }));
-      const totals = await calculateQuoteTotals(itemsForTotal, effectiveDiscount);
+      const totals = await calculateQuoteTotals(itemsForTotal, effectiveDiscount as number);
       if (!Number.isFinite(totals.total) || totals.total <= 0) {
         return badRequest(reply, 'Total must be greater than 0');
       }
@@ -657,8 +692,8 @@ export default async function (fastify, _opts) {
   });
 
   // DELETE /:id - Delete quote
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as unknown as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 

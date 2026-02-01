@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -8,7 +9,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
@@ -30,7 +31,7 @@ export default async function (fastify, _opts) {
     }));
   });
 
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const {
       name,
       supplierCode,
@@ -42,7 +43,18 @@ export default async function (fastify, _opts) {
       taxCode,
       paymentTerms,
       notes,
-    } = request.body;
+    } = request.body as {
+      name?: string;
+      supplierCode?: string;
+      contactName?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      vatNumber?: string;
+      taxCode?: string;
+      paymentTerms?: string;
+      notes?: string;
+    };
 
     const nameResult = requireNonEmptyString(name, 'name');
     if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -112,8 +124,8 @@ export default async function (fastify, _opts) {
     });
   });
 
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const {
       name,
       isDisabled,
@@ -126,7 +138,19 @@ export default async function (fastify, _opts) {
       taxCode,
       paymentTerms,
       notes,
-    } = request.body;
+    } = request.body as {
+      name?: string;
+      isDisabled?: boolean;
+      supplierCode?: string;
+      contactName?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      vatNumber?: string;
+      taxCode?: string;
+      paymentTerms?: string;
+      notes?: string;
+    };
 
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -215,8 +239,8 @@ export default async function (fastify, _opts) {
     };
   });
 
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
     const result = await query('DELETE FROM suppliers WHERE id = $1 RETURNING id', [

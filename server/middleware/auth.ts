@@ -1,4 +1,5 @@
 import jwt, { type JwtPayload } from 'jsonwebtoken';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
@@ -8,7 +9,7 @@ type SessionJwtPayload = JwtPayload & {
   sessionStart?: number;
 };
 
-export const authenticateToken = async (request, reply) => {
+export const authenticateToken = async (request: FastifyRequest, reply: FastifyReply) => {
   const authHeader = request.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -48,8 +49,8 @@ export const authenticateToken = async (request, reply) => {
   }
 };
 
-export const requireRole = (...roles) => {
-  return async (request, reply) => {
+export const requireRole = (...roles: string[]) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
       return reply.code(401).send({ error: 'Authentication required' });
     }

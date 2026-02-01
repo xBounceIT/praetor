@@ -1,4 +1,3 @@
-// @ts-expect-error: ldapjs does not have type definitions
 import ldap from 'ldapjs';
 import fs from 'fs';
 import { query } from '../db/index.ts';
@@ -22,6 +21,31 @@ interface LdapEntry {
   [key: string]: unknown;
 }
 
+interface LdapClient {
+  bind: (dn: string, password: string, callback: (err: Error | null) => void) => void;
+  unbind: (callback: (err?: Error) => void) => void;
+  search: (
+    base: string,
+    options: { scope: string; filter: string; attributes?: string[] },
+    callback: (err: Error | null, res: LdapSearchResult) => void,
+  ) => void;
+}
+
+interface LdapSearchResult {
+  on: (
+    event: string,
+    callback:
+      | ((entry: LdapSearchEntry) => void)
+      | ((err: Error) => void)
+      | ((result: { status: number }) => void),
+  ) => void;
+}
+
+interface LdapSearchEntry {
+  objectName: string;
+  object: Record<string, unknown>;
+}
+
 class LDAPService {
   config: LdapConfig | null;
 
@@ -36,7 +60,7 @@ class LDAPService {
     }
   }
 
-  async getClient() {
+  async getClient(): Promise<LdapClient | null> {
     if (!this.config) {
       await this.loadConfig();
     }
@@ -69,11 +93,11 @@ class LDAPService {
     return ldap.createClient({
       url: this.config.server_url,
       tlsOptions: tlsOptions,
-    });
+    }) as LdapClient;
   }
 
-  async authenticate(username, password) {
-    let client;
+  async authenticate(username: string, password: string): Promise<boolean> {
+    let client: LdapClient | null = null;
     try {
       client = await this.getClient();
       if (!client) {
@@ -82,7 +106,7 @@ class LDAPService {
 
       // Bind with service account first to find the user's DN
       await new Promise<void>((resolve, reject) => {
-        client.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
+        client!.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -118,28 +142,28 @@ class LDAPService {
     }
   }
 
-  async findUserDn(client, username) {
-    const filter = this.config.user_filter.replace('{0}', username);
+  async findUserDn(client: LdapClient, username: string): Promise<string | null> {
+    const filter = this.config!.user_filter.replace('{0}', username);
     const searchOptions = {
       scope: 'sub',
       filter: filter,
     };
 
     return new Promise((resolve, reject) => {
-      client.search(this.config.base_dn, searchOptions, (err, res) => {
+      client.search(this.config!.base_dn, searchOptions, (err, res) => {
         if (err) return reject(err);
 
-        let foundDn = null;
+        let foundDn: string | null = null;
 
-        res.on('searchEntry', (entry) => {
+        res.on('searchEntry', (entry: LdapSearchEntry) => {
           foundDn = entry.objectName;
         });
 
-        res.on('error', (err) => {
+        res.on('error', (err: Error) => {
           reject(err);
         });
 
-        res.on('end', (result) => {
+        res.on('end', (result: { status: number }) => {
           if (result.status !== 0) {
             reject(new Error('LDAP search failed status: ' + result.status));
           } else {
@@ -151,8 +175,13 @@ class LDAPService {
   }
 
   // Sync users from LDAP to local DB
-  async syncUsers() {
-    let client;
+  async syncUsers(): Promise<{
+    skipped?: boolean;
+    reason?: string;
+    synced?: number;
+    created?: number;
+  }> {
+    let client: LdapClient | null = null;
     try {
       console.log('Starting LDAP Sync...');
       client = await this.getClient();
@@ -162,13 +191,16 @@ class LDAPService {
       }
 
       await new Promise<void>((resolve, reject) => {
-        client.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
+        client!.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
       });
 
       // Search for all users
+      if (!this.config) {
+        return { skipped: true, reason: 'LDAP config not loaded' };
+      }
       const filter = this.config.user_filter.replace('{0}', '*'); // Assumption: filter can handle * wildcard for all
       // If user_filter is strictly (uid={0}), then (uid=*) should work.
 
@@ -185,11 +217,11 @@ class LDAPService {
         client.search(this.config.base_dn, searchOptions, (err, res) => {
           if (err) return reject(err);
 
-          res.on('searchEntry', (entry) => {
+          res.on('searchEntry', (entry: LdapSearchEntry) => {
             entries.push(entry.object as unknown as LdapEntry);
           });
 
-          res.on('error', (err) => {
+          res.on('error', (err: Error) => {
             console.error('LDAP Search Error:', err);
           });
 
@@ -218,13 +250,18 @@ class LDAPService {
         }
 
         if (!username) {
-          console.warn('Skipping LDAP entry without username:', entry.dn);
+          console.warn('Skipping LDAP entry without username');
           continue;
         }
 
         // Name
-        let name = entry.cn || entry.displayName || username;
-        if (Array.isArray(name)) name = name[0];
+        const nameValue: string | string[] | undefined = entry.cn || entry.displayName;
+        let name: string;
+        if (nameValue) {
+          name = Array.isArray(nameValue) ? nameValue[0] : nameValue;
+        } else {
+          name = username;
+        }
 
         // Check dependencies
         // We matched local users by username

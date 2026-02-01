@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -8,17 +9,23 @@ import {
   optionalNonEmptyString,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all clients
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, _reply) => {
-      const isStandardUser = request.user.role === 'user';
+    async (request: FastifyRequest, _reply: FastifyReply) => {
+      const isStandardUser = request.user!.role === 'user';
       let queryText = 'SELECT * FROM clients ORDER BY name';
-      let queryParams = [];
+      const queryParams: (string | null)[] = [];
 
       if (isStandardUser) {
         queryText = `
@@ -28,7 +35,7 @@ export default async function (fastify, _opts) {
                 WHERE uc.user_id = $1
                 ORDER BY c.name
             `;
-        queryParams = [request.user.id];
+        queryParams.push(request.user!.id);
       }
 
       const result = await query(queryText, queryParams);
@@ -66,7 +73,7 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         name,
         type,
@@ -78,7 +85,18 @@ export default async function (fastify, _opts) {
         vatNumber,
         taxCode,
         billingCode,
-      } = request.body;
+      } = request.body as {
+        name: unknown;
+        type: unknown;
+        contactName: unknown;
+        clientCode: unknown;
+        email: unknown;
+        phone: unknown;
+        address: unknown;
+        vatNumber: unknown;
+        taxCode: unknown;
+        billingCode: unknown;
+      };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -169,16 +187,17 @@ export default async function (fastify, _opts) {
           billingCode,
         });
       } catch (err) {
-        if (err.code === '23505') {
+        const error = err as DatabaseError;
+        if (error.code === '23505') {
           // Unique violation
-          if (err.constraint === 'idx_clients_vat_number_unique') {
+          if (error.constraint === 'idx_clients_vat_number_unique') {
             return badRequest(reply, 'VAT number already exists');
           }
-          if (err.constraint === 'idx_clients_client_code_unique') {
+          if (error.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
           // Fallback or generic unique error
-          if (err.detail && err.detail.includes('client_code')) {
+          if (error.detail && error.detail.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'VAT number already exists');
@@ -194,8 +213,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const {
         name,
         isDisabled,
@@ -208,7 +227,19 @@ export default async function (fastify, _opts) {
         vatNumber,
         taxCode,
         billingCode,
-      } = request.body;
+      } = request.body as {
+        name: unknown;
+        isDisabled: unknown;
+        type: unknown;
+        contactName: unknown;
+        clientCode: unknown;
+        email: unknown;
+        phone: unknown;
+        address: unknown;
+        vatNumber: unknown;
+        taxCode: unknown;
+        billingCode: unknown;
+      };
       const body = request.body ?? {};
       const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
       const hasClientCode = Object.prototype.hasOwnProperty.call(body, 'clientCode');
@@ -329,15 +360,16 @@ export default async function (fastify, _opts) {
           billingCode: c.billing_code,
         };
       } catch (err) {
-        if (err.code === '23505') {
+        const error = err as DatabaseError;
+        if (error.code === '23505') {
           // Unique violation
-          if (err.constraint === 'idx_clients_vat_number_unique') {
+          if (error.constraint === 'idx_clients_vat_number_unique') {
             return badRequest(reply, 'VAT number already exists');
           }
-          if (err.constraint === 'idx_clients_client_code_unique') {
+          if (error.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          if (err.detail && err.detail.includes('client_code')) {
+          if (error.detail && error.detail.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'VAT number already exists');
@@ -353,8 +385,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [

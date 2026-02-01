@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -8,7 +9,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All product routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
@@ -25,7 +26,7 @@ export default async function (fastify, _opts) {
   });
 
   // POST / - Create product
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const {
       name,
       productCode,
@@ -37,7 +38,20 @@ export default async function (fastify, _opts) {
       taxRate,
       type,
       supplierId,
-    } = request.body;
+      costUnit,
+    } = request.body as {
+      name: unknown;
+      productCode: unknown;
+      description: unknown;
+      costo: unknown;
+      molPercentage: unknown;
+      category: unknown;
+      subcategory: unknown;
+      taxRate: unknown;
+      type: unknown;
+      supplierId: unknown;
+      costUnit: unknown;
+    };
 
     const nameResult = requireNonEmptyString(name, 'name');
     if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -149,9 +163,22 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /:id - Update product
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
-    const body = request.body;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const body = request.body as {
+      name?: unknown;
+      productCode?: unknown;
+      description?: unknown;
+      costo?: unknown;
+      molPercentage?: unknown;
+      category?: unknown;
+      subcategory?: unknown;
+      taxRate?: unknown;
+      type?: unknown;
+      supplierId?: unknown;
+      costUnit?: unknown;
+      isDisabled?: unknown;
+    };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -349,8 +376,8 @@ export default async function (fastify, _opts) {
   });
 
   // DELETE /:id - Delete product
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as unknown as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 

@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -7,14 +8,14 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get global settings (available to all authenticated users)
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, _reply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       const result = await query(
         'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection FROM general_settings WHERE id = 1',
       );
@@ -32,7 +33,11 @@ export default async function (fastify, _opts) {
       const s = result.rows[0];
       // Only return API key to admins
       const geminiApiKey =
-        request.user.role === 'admin' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
+        request.user!.role === 'admin'
+          ? s.gemini_api_key || ''
+          : s.gemini_api_key
+            ? '********'
+            : '';
 
       return {
         currency: s.currency,
@@ -52,7 +57,7 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         currency,
         dailyLimit,
@@ -61,12 +66,22 @@ export default async function (fastify, _opts) {
         enableAiInsights,
         geminiApiKey,
         allowWeekendSelection,
-      } = request.body;
+      } = request.body as {
+        currency?: string;
+        dailyLimit?: number;
+        startOfWeek?: string;
+        treatSaturdayAsHoliday?: boolean;
+        enableAiInsights?: boolean;
+        geminiApiKey?: string;
+        allowWeekendSelection?: boolean;
+      };
       const currencyResult = optionalNonEmptyString(currency, 'currency');
-      if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
+      if (!currencyResult.ok)
+        return badRequest(reply, (currencyResult as { ok: false; message: string }).message);
 
       const dailyLimitResult = optionalLocalizedNonNegativeNumber(dailyLimit, 'dailyLimit');
-      if (!dailyLimitResult.ok) return badRequest(reply, dailyLimitResult.message);
+      if (!dailyLimitResult.ok)
+        return badRequest(reply, (dailyLimitResult as { ok: false; message: string }).message);
 
       const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
       const enableAiInsightsValue = parseBoolean(enableAiInsights);
@@ -85,8 +100,8 @@ export default async function (fastify, _opts) {
              WHERE id = 1 
              RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection`,
         [
-          currencyResult.value,
-          dailyLimitResult.value,
+          (currencyResult as { ok: true; value: string | null }).value,
+          (dailyLimitResult as { ok: true; value: number | null }).value,
           startOfWeek,
           treatSaturdayAsHolidayValue,
           enableAiInsightsValue,

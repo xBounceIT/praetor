@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -11,13 +12,19 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All invoices routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all invoices with their items
-  fastify.get('/', async (_request, _reply) => {
+  fastify.get('/', async (_request: FastifyRequest, _reply: FastifyReply) => {
     // Get all invoices
     const invoicesResult = await query(
       `SELECT 
@@ -56,8 +63,8 @@ export default async function (fastify, _opts) {
     );
 
     // Group items by invoice
-    const itemsByInvoice = {};
-    itemsResult.rows.forEach((item) => {
+    const itemsByInvoice: Record<string, unknown[]> = {};
+    itemsResult.rows.forEach((item: { invoiceId: string }) => {
       if (!itemsByInvoice[item.invoiceId]) {
         itemsByInvoice[item.invoiceId] = [];
       }
@@ -65,28 +72,46 @@ export default async function (fastify, _opts) {
     });
 
     // Attach items to invoices
-    const invoices = invoicesResult.rows.map((invoice) => ({
-      ...invoice,
-      issueDate: invoice.issueDate.toISOString().split('T')[0],
-      dueDate: invoice.dueDate.toISOString().split('T')[0],
-      subtotal: parseFloat(invoice.subtotal),
-      taxAmount: parseFloat(invoice.taxAmount),
-      total: parseFloat(invoice.total),
-      amountPaid: parseFloat(invoice.amountPaid),
-      items: (itemsByInvoice[invoice.id] || []).map((item) => ({
-        ...item,
-        quantity: parseFloat(item.quantity),
-        unitPrice: parseFloat(item.unitPrice),
-        taxRate: parseFloat(item.taxRate),
-        discount: parseFloat(item.discount),
-      })),
-    }));
+    const invoices = invoicesResult.rows.map(
+      (invoice: {
+        id: string;
+        issueDate: { toISOString: () => string };
+        dueDate: { toISOString: () => string };
+        subtotal: string;
+        taxAmount: string;
+        total: string;
+        amountPaid: string;
+      }) => ({
+        ...invoice,
+        issueDate: invoice.issueDate.toISOString().split('T')[0],
+        dueDate: invoice.dueDate.toISOString().split('T')[0],
+        subtotal: parseFloat(invoice.subtotal),
+        taxAmount: parseFloat(invoice.taxAmount),
+        total: parseFloat(invoice.total),
+        amountPaid: parseFloat(invoice.amountPaid),
+        items: (itemsByInvoice[invoice.id] || []).map((item: unknown) => {
+          const typedItem = item as {
+            quantity: string;
+            unitPrice: string;
+            taxRate: string;
+            discount: string;
+          };
+          return {
+            ...typedItem,
+            quantity: parseFloat(typedItem.quantity),
+            unitPrice: parseFloat(typedItem.unitPrice),
+            taxRate: parseFloat(typedItem.taxRate),
+            discount: parseFloat(typedItem.discount),
+          };
+        }),
+      }),
+    );
 
     return invoices;
   });
 
   // POST / - Create invoice with items
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const {
       linkedSaleId,
       clientId,
@@ -101,7 +126,21 @@ export default async function (fastify, _opts) {
       amountPaid,
       notes,
       items,
-    } = request.body;
+    } = request.body as {
+      linkedSaleId: unknown;
+      clientId: unknown;
+      clientName: unknown;
+      invoiceNumber: unknown;
+      issueDate: unknown;
+      dueDate: unknown;
+      status: unknown;
+      subtotal: unknown;
+      taxAmount: unknown;
+      total: unknown;
+      amountPaid: unknown;
+      notes: unknown;
+      items: unknown;
+    };
 
     const clientIdResult = requireNonEmptyString(clientId, 'clientId');
     if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -261,8 +300,8 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /:id - Update invoice
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const {
       clientId,
       clientName,
@@ -276,7 +315,20 @@ export default async function (fastify, _opts) {
       amountPaid,
       notes,
       items,
-    } = request.body;
+    } = request.body as {
+      clientId: unknown;
+      clientName: unknown;
+      invoiceNumber: unknown;
+      issueDate: unknown;
+      dueDate: unknown;
+      status: unknown;
+      subtotal: unknown;
+      taxAmount: unknown;
+      total: unknown;
+      amountPaid: unknown;
+      notes: unknown;
+      items: unknown;
+    };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -316,7 +368,7 @@ export default async function (fastify, _opts) {
     }
 
     if (issueDate && dueDate) {
-      if (new Date(dueDate) < new Date(issueDate)) {
+      if (new Date(dueDate as string) < new Date(issueDate as string)) {
         return badRequest(reply, 'dueDate must be on or after issueDate');
       }
     }
@@ -510,8 +562,8 @@ export default async function (fastify, _opts) {
   });
 
   // DELETE /:id - Delete invoice
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -528,8 +580,9 @@ export default async function (fastify, _opts) {
       return reply.code(204).send();
     } catch (err) {
       console.error('DELETE INVOICE ERROR:', err);
+      const error = err as DatabaseError;
       // Check for specific DB errors
-      if (err.code === '23503') {
+      if (error.code === '23503') {
         // Foreign key violation
         return reply.code(409).send({
           error: 'Cannot delete invoice because it is referenced by other records (e.g. payments)',

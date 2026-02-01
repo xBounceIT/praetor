@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -10,22 +11,28 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all tasks
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, _reply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
             FROM tasks ORDER BY name
         `;
-      let queryParams = [];
+      let queryParams: string[] = [];
 
-      if (request.user.role === 'user') {
+      if (request.user!.role === 'user') {
         queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
@@ -34,7 +41,7 @@ export default async function (fastify, _opts) {
                 WHERE ut.user_id = $1
                 ORDER BY t.name
             `;
-        queryParams = [request.user.id];
+        queryParams = [request.user!.id];
       }
 
       const result = await query(queryText, queryParams);
@@ -64,9 +71,17 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } =
-        request.body;
+        request.body as {
+          name: string;
+          projectId: string;
+          description?: string;
+          isRecurring?: boolean;
+          recurrencePattern?: string;
+          recurrenceStart?: string;
+          recurrenceDuration?: number;
+        };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -75,7 +90,7 @@ export default async function (fastify, _opts) {
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
 
       const durationResult = optionalLocalizedNonNegativeNumber(
-        request.body.recurrenceDuration,
+        (request.body as { recurrenceDuration?: number }).recurrenceDuration,
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
@@ -129,7 +144,8 @@ export default async function (fastify, _opts) {
           isDisabled: false,
         });
       } catch (err) {
-        if (err.code === '23503') {
+        const error = err as DatabaseError;
+        if (error.code === '23503') {
           // Foreign key violation
           return reply.code(400).send({ error: 'Project not found' });
         }
@@ -144,8 +160,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const {
         name,
         description,
@@ -154,29 +170,38 @@ export default async function (fastify, _opts) {
         recurrenceStart,
         recurrenceEnd,
         isDisabled,
-      } = request.body;
+      } = request.body as {
+        name?: string;
+        description?: string;
+        isRecurring?: boolean;
+        recurrencePattern?: string;
+        recurrenceStart?: string;
+        recurrenceEnd?: string;
+        isDisabled?: boolean;
+        recurrenceDuration?: number;
+      };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const durationResult = optionalLocalizedNonNegativeNumber(
-        request.body.recurrenceDuration,
+        (request.body as { recurrenceDuration?: number }).recurrenceDuration,
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
 
       if (recurrenceStart !== undefined && recurrenceStart !== null && recurrenceStart !== '') {
         const startResult = parseDateString(recurrenceStart, 'recurrenceStart');
-        if (!startResult.ok) return badRequest(reply, startResult.message);
+        if (!startResult.ok)
+          return badRequest(reply, (startResult as { ok: false; message: string }).message);
       }
 
       if (recurrenceEnd !== undefined && recurrenceEnd !== null && recurrenceEnd !== '') {
         const endResult = parseDateString(recurrenceEnd, 'recurrenceEnd');
-        if (!endResult.ok) return badRequest(reply, endResult.message);
+        if (!endResult.ok)
+          return badRequest(reply, (endResult as { ok: false; message: string }).message);
       }
 
       const isRecurringValue =
-        isRecurring === undefined || isRecurring === null || isRecurring === ''
-          ? null
-          : parseBoolean(isRecurring);
+        isRecurring === undefined || isRecurring === null ? null : parseBoolean(isRecurring);
 
       const result = await query(
         `UPDATE tasks 
@@ -231,8 +256,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [idResult.value]);
@@ -250,8 +275,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const result = await query('SELECT user_id FROM user_tasks WHERE task_id = $1', [
@@ -267,9 +292,9 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { userIds } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -282,7 +307,7 @@ export default async function (fastify, _opts) {
         // Delete existing assignments
         await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
 
-        for (const userId of userIdsResult.value) {
+        for (const userId of userIdsResult.value!) {
           await query(
             'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [userId, idResult.value],

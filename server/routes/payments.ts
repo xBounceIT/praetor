@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -10,7 +11,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All payments routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
@@ -47,9 +48,17 @@ export default async function (fastify, _opts) {
   });
 
   // POST / - Create payment
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const { invoiceId, clientId, amount, paymentDate, paymentMethod, reference, notes } =
-      request.body;
+      request.body as {
+        invoiceId: unknown;
+        clientId: unknown;
+        amount: unknown;
+        paymentDate: unknown;
+        paymentMethod: unknown;
+        reference: unknown;
+        notes: unknown;
+      };
 
     const clientIdResult = requireNonEmptyString(clientId, 'clientId');
     if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -114,7 +123,7 @@ export default async function (fastify, _opts) {
 
         if (invoiceRes.rows.length > 0) {
           const inv = invoiceRes.rows[0];
-          const newAmountPaid = parseFloat(inv.amount_paid) + parseFloat(amount);
+          const newAmountPaid = parseFloat(inv.amount_paid) + parseFloat(String(amount));
           const total = parseFloat(inv.total);
 
           let newStatus = 'sent'; // default if not fully paid
@@ -148,9 +157,15 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /:id - Update payment
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
-    const { amount, paymentDate, paymentMethod, reference, notes } = request.body;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { amount, paymentDate, paymentMethod, reference, notes } = request.body as {
+      amount: unknown;
+      paymentDate: unknown;
+      paymentMethod: unknown;
+      reference: unknown;
+      notes: unknown;
+    };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -260,8 +275,8 @@ export default async function (fastify, _opts) {
   });
 
   // DELETE /:id - Delete payment
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as unknown as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 

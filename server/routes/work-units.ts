@@ -1,4 +1,5 @@
-﻿import { query } from '../db/index.ts';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
@@ -10,7 +11,7 @@ import {
 } from '../utils/validation.ts';
 
 // Helper to fetch unit with managers and user count
-const fetchUnitDetails = async (unitId) => {
+const fetchUnitDetails = async (unitId: string) => {
   const result = await query(
     `
         SELECT w.*,
@@ -29,16 +30,16 @@ const fetchUnitDetails = async (unitId) => {
   return result.rows[0];
 };
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List work units
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       let result;
-      if (request.user.role === 'admin') {
+      if (request.user!.role === 'admin') {
         result = await query(`
                 SELECT w.*,
                     (
@@ -51,7 +52,7 @@ export default async function (fastify, _opts) {
                 FROM work_units w
                 ORDER BY w.name
             `);
-      } else if (request.user.role === 'manager') {
+      } else if (request.user!.role === 'manager') {
         result = await query(
           `
                 SELECT w.*,
@@ -69,7 +70,7 @@ export default async function (fastify, _opts) {
                 )
                 ORDER BY w.name
             `,
-          [request.user.id],
+          [request.user!.id],
         );
       } else {
         return reply.code(403).send({ error: 'Insufficient permissions' });
@@ -94,8 +95,12 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
-      const { name, managerIds, description } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { name, managerIds, description } = request.body as {
+        name?: string;
+        managerIds?: string[];
+        description?: string;
+      };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -149,9 +154,14 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { name, managerIds, description, isDisabled } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { name, managerIds, description, isDisabled } = request.body as {
+        name?: string;
+        managerIds?: string[];
+        description?: string;
+        isDisabled?: boolean;
+      };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -176,7 +186,12 @@ export default async function (fastify, _opts) {
 
           if (name !== undefined) {
             updates.push(`name = $${paramIdx++}`);
-            values.push(optionalNonEmptyString(name, 'name').value);
+            const nameResult = optionalNonEmptyString(name, 'name');
+            if (!nameResult.ok) {
+              await query('ROLLBACK');
+              return badRequest(reply, nameResult.message);
+            }
+            values.push(nameResult.value);
           }
           if (description !== undefined) {
             updates.push(`description = $${paramIdx++}`);
@@ -251,8 +266,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -274,17 +289,17 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check permissions
-      if (request.user.role !== 'admin') {
+      if (request.user!.role !== 'admin') {
         // Check if user is a manager of this unit
         const check = await query(
           'SELECT 1 FROM work_unit_managers WHERE work_unit_id = $1 AND user_id = $2',
-          [idResult.value, request.user.id],
+          [idResult.value, request.user!.id],
         );
         if (check.rows.length === 0) {
           return reply.code(403).send({ error: 'Access denied' });
@@ -311,9 +326,9 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { userIds } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { userIds } = request.body as { userIds?: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 

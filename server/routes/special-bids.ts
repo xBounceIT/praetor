@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -10,7 +11,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
@@ -34,7 +35,7 @@ export default async function (fastify, _opts) {
     return result.rows;
   });
 
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const {
       clientId,
       clientName,
@@ -44,7 +45,16 @@ export default async function (fastify, _opts) {
       molPercentage,
       startDate,
       endDate,
-    } = request.body;
+    } = request.body as {
+      clientId: unknown;
+      clientName: unknown;
+      productId: unknown;
+      productName: unknown;
+      unitPrice: unknown;
+      molPercentage: unknown;
+      startDate: unknown;
+      endDate: unknown;
+    };
 
     const clientIdResult = requireNonEmptyString(clientId, 'clientId');
     if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -139,8 +149,8 @@ export default async function (fastify, _opts) {
     return reply.code(201).send(result.rows[0]);
   });
 
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const {
       clientId,
       clientName,
@@ -150,7 +160,16 @@ export default async function (fastify, _opts) {
       molPercentage,
       startDate,
       endDate,
-    } = request.body;
+    } = request.body as {
+      clientId: unknown;
+      clientName: unknown;
+      productId: unknown;
+      productName: unknown;
+      unitPrice: unknown;
+      molPercentage: unknown;
+      startDate: unknown;
+      endDate: unknown;
+    };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -217,8 +236,8 @@ export default async function (fastify, _opts) {
     }
 
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
       if (end < start) return badRequest(reply, 'endDate must be on or after startDate');
     }
 
@@ -331,8 +350,8 @@ export default async function (fastify, _opts) {
     return result.rows[0];
   });
 
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as unknown as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
     const result = await query('DELETE FROM special_bids WHERE id = $1 RETURNING id', [

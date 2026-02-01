@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -11,7 +12,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
@@ -47,12 +48,13 @@ export default async function (fastify, _opts) {
        ORDER BY created_at ASC`,
     );
 
-    const itemsByQuote = {};
+    const itemsByQuote: Record<string, unknown[]> = {};
     itemsResult.rows.forEach((item) => {
-      if (!itemsByQuote[item.quoteId]) {
-        itemsByQuote[item.quoteId] = [];
+      const quoteId = (item as { quoteId: string }).quoteId;
+      if (!itemsByQuote[quoteId]) {
+        itemsByQuote[quoteId] = [];
       }
-      itemsByQuote[item.quoteId].push(item);
+      itemsByQuote[quoteId].push(item);
     });
 
     return quotesResult.rows.map((quote) => ({
@@ -61,7 +63,7 @@ export default async function (fastify, _opts) {
     }));
   });
 
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const {
       supplierId,
       supplierName,
@@ -72,7 +74,24 @@ export default async function (fastify, _opts) {
       status,
       expirationDate,
       notes,
-    } = request.body;
+    } = request.body as {
+      supplierId?: string;
+      supplierName?: string;
+      purchaseOrderNumber?: string;
+      items?: Array<{
+        productId?: string;
+        productName?: string;
+        quantity?: string | number;
+        unitPrice?: string | number;
+        discount?: string | number;
+        note?: string;
+      }>;
+      paymentTerms?: string;
+      discount?: string | number;
+      status?: string;
+      expirationDate?: string;
+      notes?: string;
+    };
 
     const supplierIdResult = requireNonEmptyString(supplierId, 'supplierId');
     if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
@@ -188,8 +207,8 @@ export default async function (fastify, _opts) {
     });
   });
 
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const {
       supplierId,
       supplierName,
@@ -200,26 +219,43 @@ export default async function (fastify, _opts) {
       status,
       expirationDate,
       notes,
-    } = request.body;
+    } = request.body as {
+      supplierId?: string;
+      supplierName?: string;
+      purchaseOrderNumber?: string;
+      items?: Array<{
+        productId?: string;
+        productName?: string;
+        quantity?: string | number;
+        unitPrice?: string | number;
+        discount?: string | number;
+        note?: string;
+      }>;
+      paymentTerms?: string;
+      discount?: string | number;
+      status?: string;
+      expirationDate?: string;
+      notes?: string;
+    };
 
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
-    let supplierIdValue = supplierId;
+    let supplierIdValue: string | undefined | null = supplierId;
     if (supplierId !== undefined) {
       const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
       if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
       supplierIdValue = supplierIdResult.value;
     }
 
-    let supplierNameValue = supplierName;
+    let supplierNameValue: string | undefined | null = supplierName;
     if (supplierName !== undefined) {
       const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
       supplierNameValue = supplierNameResult.value;
     }
 
-    let purchaseOrderNumberValue = purchaseOrderNumber;
+    let purchaseOrderNumberValue: string | undefined | null = purchaseOrderNumber;
     if (purchaseOrderNumber !== undefined) {
       const purchaseOrderNumberResult = optionalNonEmptyString(
         purchaseOrderNumber,
@@ -230,14 +266,14 @@ export default async function (fastify, _opts) {
       purchaseOrderNumberValue = purchaseOrderNumberResult.value;
     }
 
-    let expirationDateValue = expirationDate;
+    let expirationDateValue: string | undefined | null = expirationDate;
     if (expirationDate !== undefined) {
       const expirationDateResult = optionalDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
       expirationDateValue = expirationDateResult.value;
     }
 
-    let discountValue = discount;
+    let discountValue: number | undefined | null = discount as number | undefined;
     if (discount !== undefined) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
@@ -373,8 +409,8 @@ export default async function (fastify, _opts) {
     };
   });
 
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
     const result = await query('DELETE FROM supplier_quotes WHERE id = $1 RETURNING id', [

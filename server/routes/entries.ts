@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -12,29 +13,29 @@ import {
   isWeekendDate,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List time entries
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       let result;
 
-      if (request.user.role === 'manager') {
+      if (request.user!.role === 'manager') {
         // Managers can see their own entries and those of users in their work units
-        const { userId } = request.query;
+        const { userId } = request.query as { userId?: string };
 
         if (userId) {
           // If requesting specific user, verify permission
-          if (userId !== request.user.id) {
+          if (userId !== request.user!.id) {
             const managedCheck = await query(
               `SELECT 1 
                          FROM user_work_units uwu
                          JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                          WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-              [request.user.id, userId],
+              [request.user!.id, userId],
             );
 
             if (managedCheck.rows.length === 0) {
@@ -57,14 +58,14 @@ export default async function (fastify, _opts) {
                   project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
            FROM time_entries 
            WHERE user_id = $1 
-              OR user_id IN (
+             OR user_id IN (
                   SELECT uwu.user_id 
                   FROM user_work_units uwu
                   JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                   WHERE wum.user_id = $1
               )
            ORDER BY created_at DESC`,
-            [request.user.id],
+            [request.user!.id],
           );
         }
       } else {
@@ -73,7 +74,7 @@ export default async function (fastify, _opts) {
           `SELECT id, user_id, date, client_id, client_name, project_id, 
                 project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
          FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-          [request.user.id],
+          [request.user!.id],
         );
       }
 
@@ -103,7 +104,7 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         date,
         clientId,
@@ -115,7 +116,18 @@ export default async function (fastify, _opts) {
         duration,
         isPlaceholder,
         userId,
-      } = request.body;
+      } = request.body as {
+        date: string;
+        clientId: string;
+        clientName: string;
+        projectId: string;
+        projectName: string;
+        task: string;
+        notes?: string;
+        duration?: number;
+        isPlaceholder?: boolean;
+        userId?: string;
+      };
 
       const dateResult = parseDateString(date, 'date');
       if (!dateResult.ok) return badRequest(reply, dateResult.message);
@@ -153,21 +165,21 @@ export default async function (fastify, _opts) {
       const isPlaceholderValue = parseBoolean(isPlaceholder);
 
       // Allow managers to create entries for other users
-      let targetUserId = request.user.id;
-      if (userId && request.user.role === 'manager') {
+      let targetUserId = request.user!.id;
+      if (userId && request.user!.role === 'manager') {
         targetUserId = userId;
         const targetUserIdResult = requireNonEmptyString(targetUserId, 'userId');
         if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
         targetUserId = targetUserIdResult.value;
 
         // Verify manager has access to this user
-        if (targetUserId !== request.user.id) {
+        if (targetUserId !== request.user!.id) {
           const managedCheck = await query(
             `SELECT 1 
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user.id, targetUserId],
+            [request.user!.id, targetUserId],
           );
           if (managedCheck.rows.length === 0) {
             return reply
@@ -228,9 +240,13 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { duration, notes, isPlaceholder } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { duration, notes, isPlaceholder } = request.body as {
+        duration?: number;
+        notes?: string;
+        isPlaceholder?: boolean;
+      };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -252,18 +268,18 @@ export default async function (fastify, _opts) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (existing.rows[0].user_id !== request.user.id) {
-        if (request.user.role === 'user') {
+      if (existing.rows[0].user_id !== request.user!.id) {
+        if (request.user!.role === 'user') {
           return reply.code(403).send({ error: 'Not authorized to update this entry' });
         }
 
-        if (request.user.role === 'manager') {
+        if (request.user!.role === 'manager') {
           const managedCheck = await query(
             `SELECT 1 
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user.id, existing.rows[0].user_id],
+            [request.user!.id, existing.rows[0].user_id],
           );
           if (managedCheck.rows.length === 0) {
             return reply.code(403).send({ error: 'Not authorized to update this entry' });
@@ -306,8 +322,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -319,18 +335,18 @@ export default async function (fastify, _opts) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (existing.rows[0].user_id !== request.user.id) {
-        if (request.user.role === 'user') {
+      if (existing.rows[0].user_id !== request.user!.id) {
+        if (request.user!.role === 'user') {
           return reply.code(403).send({ error: 'Not authorized to delete this entry' });
         }
 
-        if (request.user.role === 'manager') {
+        if (request.user!.role === 'manager') {
           const managedCheck = await query(
             `SELECT 1 
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user.id, existing.rows[0].user_id],
+            [request.user!.id, existing.rows[0].user_id],
           );
           if (managedCheck.rows.length === 0) {
             return reply.code(403).send({ error: 'Not authorized to delete this entry' });
@@ -349,8 +365,13 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
     },
-    async (request, reply) => {
-      const { projectId, task, futureOnly, placeholderOnly } = request.query;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { projectId, task, futureOnly, placeholderOnly } = request.query as {
+        projectId: string;
+        task: string;
+        futureOnly?: string;
+        placeholderOnly?: string;
+      };
 
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
@@ -362,21 +383,21 @@ export default async function (fastify, _opts) {
       const placeholderOnlyValue = parseQueryBoolean(placeholderOnly) || false;
 
       let sql = 'DELETE FROM time_entries WHERE project_id = $1 AND task = $2';
-      const params = [projectIdResult.value, taskResult.value];
+      const params: (string | boolean)[] = [projectIdResult.value, taskResult.value];
       let paramIndex = 3;
 
       // Only delete user's own entries unless manager (who can delete managed users' entries)
-      if (request.user.role === 'user') {
+      if (request.user!.role === 'user') {
         sql += ` AND user_id = $${paramIndex++}`;
-        params.push(request.user.id);
-      } else if (request.user.role === 'manager') {
+        params.push(request.user!.id);
+      } else if (request.user!.role === 'manager') {
         sql += ` AND (user_id = $${paramIndex} OR user_id IN (
                   SELECT uwu.user_id 
                   FROM user_work_units uwu
                   JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                   WHERE wum.user_id = $${paramIndex}
               ))`;
-        params.push(request.user.id);
+        params.push(request.user!.id);
         paramIndex++;
       }
 

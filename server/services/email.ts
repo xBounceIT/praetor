@@ -1,4 +1,3 @@
-// @ts-expect-error: nodemailer does not have type definitions bundled
 import nodemailer from 'nodemailer';
 import { query } from '../db/index.ts';
 import { decrypt } from '../utils/crypto.ts';

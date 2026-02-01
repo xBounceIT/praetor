@@ -1,14 +1,15 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
 import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All notifications routes require authentication
   fastify.addHook('onRequest', authenticateToken);
 
   // GET / - Fetch notifications for current user
-  fastify.get('/', async (request, _reply) => {
-    const userId = request.user.id;
+  fastify.get('/', async (request: FastifyRequest, _reply: FastifyReply) => {
+    const userId = request.user!.id;
 
     const result = await query(
       `SELECT 
@@ -40,9 +41,9 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /:id/read - Mark single notification as read
-  fastify.put('/:id/read', async (request, reply) => {
-    const { id } = request.params;
-    const userId = request.user.id;
+  fastify.put('/:id/read', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const userId = request.user!.id;
 
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -63,8 +64,8 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /read-all - Mark all notifications as read
-  fastify.put('/read-all', async (request, _reply) => {
-    const userId = request.user.id;
+  fastify.put('/read-all', async (request: FastifyRequest, _reply: FastifyReply) => {
+    const userId = request.user!.id;
 
     await query(`UPDATE notifications SET is_read = TRUE WHERE user_id = $1`, [userId]);
 
@@ -72,9 +73,9 @@ export default async function (fastify, _opts) {
   });
 
   // DELETE /:id - Delete a notification
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
-    const userId = request.user.id;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const userId = request.user!.id;
 
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);

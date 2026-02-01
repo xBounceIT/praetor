@@ -1,12 +1,13 @@
 import bcrypt from 'bcryptjs';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { generateToken, authenticateToken } from '../middleware/auth.ts';
 import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /login
-  fastify.post('/login', async (request, reply) => {
-    const { username, password } = request.body;
+  fastify.post('/login', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { username, password } = request.body as { username: unknown; password: unknown };
 
     const usernameResult = requireNonEmptyString(username, 'username');
     if (!usernameResult.ok) {
@@ -39,7 +40,8 @@ export default async function (fastify, _opts) {
       const ldapService = (await import('../services/ldap.ts')).default;
       ldapAuthSuccess = await ldapService.authenticate(usernameResult.value, passwordResult.value);
     } catch (err) {
-      console.error('LDAP Auth Attempt Failed:', err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('LDAP Auth Attempt Failed:', errorMessage);
     }
 
     let validPassword = false;
@@ -73,13 +75,13 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken],
     },
-    async (request, _reply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       return {
-        id: request.user.id,
-        name: request.user.name,
-        username: request.user.username,
-        role: request.user.role,
-        avatarInitials: request.user.avatar_initials,
+        id: request.user!.id,
+        name: request.user!.name,
+        username: request.user!.username,
+        role: request.user!.role,
+        avatarInitials: request.user!.avatar_initials,
       };
     },
   );

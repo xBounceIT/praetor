@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -7,7 +8,7 @@ import {
   badRequest,
 } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET /config - Get LDAP configuration (admin only)
   fastify.get(
     '/config',
@@ -56,7 +57,7 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('admin')],
     },
-    async (request, reply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         enabled,
         serverUrl,
@@ -67,7 +68,17 @@ export default async function (fastify, _opts) {
         groupBaseDn,
         groupFilter,
         roleMappings,
-      } = request.body;
+      } = request.body as {
+        enabled?: boolean;
+        serverUrl?: string;
+        baseDn?: string;
+        bindDn?: string;
+        bindPassword?: string;
+        userFilter?: string;
+        groupBaseDn?: string;
+        groupFilter?: string;
+        roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
+      };
       const enabledValue = parseBoolean(enabled);
 
       if (enabledValue) {

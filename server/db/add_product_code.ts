@@ -1,4 +1,4 @@
-import { query } from './index';
+import { query } from './index.ts';
 
 /**
  * Migration: Add product_code column to products table

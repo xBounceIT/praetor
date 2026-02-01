@@ -1,22 +1,29 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import { requireNonEmptyString, validateHexColor, badRequest } from '../utils/validation.ts';
 
-export default async function (fastify, _opts) {
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all projects
   fastify.get(
     '/',
     {
       onRequest: [authenticateToken],
     },
-    async (request, _reply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       let queryText = `
             SELECT id, name, client_id, color, description, is_disabled 
             FROM projects ORDER BY name
         `;
-      let queryParams = [];
+      let queryParams: string[] = [];
 
-      if (request.user.role === 'user') {
+      if (request.user!.role === 'user') {
         queryText = `
                 SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled 
                 FROM projects p
@@ -24,7 +31,7 @@ export default async function (fastify, _opts) {
                 WHERE up.user_id = $1
                 ORDER BY p.name
             `;
-        queryParams = [request.user.id];
+        queryParams = [request.user!.id];
       }
 
       const result = await query(queryText, queryParams);
@@ -48,8 +55,13 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { name, clientId, description, color } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { name, clientId, description, color } = request.body as {
+        name: string;
+        clientId: string;
+        description?: string;
+        color?: string;
+      };
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -59,10 +71,10 @@ export default async function (fastify, _opts) {
 
       const id = 'p-' + Date.now();
       const colorResult = color ? validateHexColor(color, 'color') : null;
-      if (color && !colorResult.ok) {
-        return badRequest(reply, colorResult.message);
+      if (color && colorResult && !colorResult.ok) {
+        return badRequest(reply, (colorResult as { ok: false; message: string }).message);
       }
-      const projectColor = colorResult?.value || '#3b82f6';
+      const projectColor = (colorResult as { ok: true; value: string } | null)?.value || '#3b82f6';
 
       try {
         await query(
@@ -88,7 +100,8 @@ export default async function (fastify, _opts) {
           isDisabled: false,
         });
       } catch (err) {
-        if (err.code === '23503') {
+        const error = err as DatabaseError;
+        if (error.code === '23503') {
           // Foreign key violation
           return reply.code(400).send({ error: 'Client not found' });
         }
@@ -103,8 +116,8 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -125,14 +138,21 @@ export default async function (fastify, _opts) {
     {
       onRequest: [authenticateToken, requireRole('manager')],
     },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { name, clientId, description, color, isDisabled } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { name, clientId, description, color, isDisabled } = request.body as {
+        name?: string;
+        clientId?: string;
+        description?: string;
+        color?: string;
+        isDisabled?: boolean;
+      };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (color !== undefined && color !== null && color !== '') {
         const colorResult = validateHexColor(color, 'color');
-        if (!colorResult.ok) return badRequest(reply, colorResult.message);
+        if (!colorResult.ok)
+          return badRequest(reply, (colorResult as { ok: false; message: string }).message);
       }
 
       try {
@@ -170,7 +190,8 @@ export default async function (fastify, _opts) {
           isDisabled: updated.is_disabled,
         };
       } catch (err) {
-        if (err.code === '23503') {
+        const error = err as DatabaseError;
+        if (error.code === '23503') {
           // Foreign key violation
           return reply.code(400).send({ error: 'Client not found' });
         }

@@ -1,9 +1,10 @@
+import type { FastifyInstance } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import emailService from '../services/email.ts';
 import { encrypt } from '../utils/crypto.ts';
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET /config - Get email configuration (Admin only)
   fastify.get(
     '/config',

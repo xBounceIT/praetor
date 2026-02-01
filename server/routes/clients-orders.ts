@@ -1,3 +1,4 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import {
@@ -25,13 +26,13 @@ const PROJECT_COLORS = [
 
 const getRandomColor = () => PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
 
-export default async function (fastify, _opts) {
+export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All clients_orders routes require manager role
   fastify.addHook('onRequest', authenticateToken);
   fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all clients_orders with their items
-  fastify.get('/', async (_request, _reply) => {
+  fastify.get('/', async (_request: FastifyRequest, _reply: FastifyReply) => {
     // Get all clients_orders
     const clients_ordersResult = await query(
       `SELECT
@@ -70,8 +71,8 @@ export default async function (fastify, _opts) {
     );
 
     // Group items by order
-    const itemsByOrder = {};
-    itemsResult.rows.forEach((item) => {
+    const itemsByOrder: Record<string, unknown[]> = {};
+    itemsResult.rows.forEach((item: { orderId: string }) => {
       if (!itemsByOrder[item.orderId]) {
         itemsByOrder[item.orderId] = [];
       }
@@ -79,7 +80,7 @@ export default async function (fastify, _opts) {
     });
 
     // Attach items to clients_orders
-    const clients_orders = clients_ordersResult.rows.map((order) => ({
+    const clients_orders = clients_ordersResult.rows.map((order: { id: string }) => ({
       ...order,
       items: itemsByOrder[order.id] || [],
     }));
@@ -88,9 +89,18 @@ export default async function (fastify, _opts) {
   });
 
   // POST / - Create order with items
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const { linkedQuoteId, clientId, clientName, items, paymentTerms, discount, status, notes } =
-      request.body;
+      request.body as {
+        linkedQuoteId: unknown;
+        clientId: unknown;
+        clientName: unknown;
+        items: unknown;
+        paymentTerms: unknown;
+        discount: unknown;
+        status: unknown;
+        notes: unknown;
+      };
 
     const clientIdResult = requireNonEmptyString(clientId, 'clientId');
     if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -220,9 +230,17 @@ export default async function (fastify, _opts) {
   });
 
   // PUT /:id - Update order
-  fastify.put('/:id', async (request, reply) => {
-    const { id } = request.params;
-    const { clientId, clientName, items, paymentTerms, discount, status, notes } = request.body;
+  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { clientId, clientName, items, paymentTerms, discount, status, notes } = request.body as {
+      clientId: unknown;
+      clientName: unknown;
+      items: unknown;
+      paymentTerms: unknown;
+      discount: unknown;
+      status: unknown;
+      notes: unknown;
+    };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 
@@ -247,18 +265,17 @@ export default async function (fastify, _opts) {
       discountValue = discountResult.value;
     }
 
-    const normalizeNotesValue = (value: string | null | undefined) => (value ?? '').toString();
-    const normalizeSpecialBidId = (value: string | null | undefined) =>
-      value ? value.toString() : '';
+    const normalizeNotesValue = (value: unknown) => String(value ?? '');
+    const normalizeSpecialBidId = (value: unknown) => (value ? String(value) : '');
     const normalizeItemsForUpdate = (itemsToNormalize: unknown[]) => {
       if (!Array.isArray(itemsToNormalize) || itemsToNormalize.length === 0) {
         badRequest(reply, 'Items must be a non-empty array');
         return null;
       }
 
-      const normalizedItems = [];
+      const normalizedItems: Record<string, unknown>[] = [];
       for (let i = 0; i < itemsToNormalize.length; i++) {
-        const item = itemsToNormalize[i];
+        const item = itemsToNormalize[i] as Record<string, unknown>;
         const productNameResult = requireNonEmptyString(
           item.productName,
           `items[${i}].productName`,
@@ -313,14 +330,14 @@ export default async function (fastify, _opts) {
       return normalizedItems;
     };
 
-    const normalizeItemsForComparison = (itemsToNormalize: (typeof items)[number][]) => {
+    const normalizeItemsForComparison = (itemsToNormalize: Record<string, unknown>[]) => {
       return itemsToNormalize
         .map((item) => {
           const normalized = {
-            id: item.id ? item.id.toString() : '',
-            productId: item.productId ? item.productId.toString() : '',
-            productName: item.productName ? item.productName.toString() : '',
-            specialBidId: normalizeSpecialBidId(item.specialBidId),
+            id: item.id ? String(item.id) : '',
+            productId: item.productId ? String(item.productId) : '',
+            productName: item.productName ? String(item.productName) : '',
+            specialBidId: normalizeSpecialBidId(item.specialBidId as string | null | undefined),
             quantity: Number(item.quantity),
             unitPrice: Number(item.unitPrice),
             discount:
@@ -335,8 +352,8 @@ export default async function (fastify, _opts) {
     };
 
     const itemsMatch = (
-      leftItems: (typeof items)[number][],
-      rightItems: (typeof items)[number][],
+      leftItems: Record<string, unknown>[],
+      rightItems: Record<string, unknown>[],
     ) => {
       if (leftItems.length !== rightItems.length) {
         return false;
@@ -359,9 +376,9 @@ export default async function (fastify, _opts) {
       return true;
     };
 
-    let normalizedItems: (typeof items)[number][] | null = null;
+    let normalizedItems: Record<string, unknown>[] | null = null;
     if (items !== undefined) {
-      normalizedItems = normalizeItemsForUpdate(items);
+      normalizedItems = normalizeItemsForUpdate(items as unknown[]);
       if (!normalizedItems) return;
     }
 
@@ -385,7 +402,7 @@ export default async function (fastify, _opts) {
     }
 
     const existingOrder = existingOrderResult.rows[0];
-    let existingItems: (typeof items)[number][] | null = null;
+    let existingItems: Record<string, unknown>[] | null = null;
 
     // Check if order is read-only (non-draft status)
     // Status changes are always allowed, but other field changes are blocked for non-draft clients_orders
@@ -464,8 +481,12 @@ export default async function (fastify, _opts) {
         );
         existingItems = itemsResult.rows;
 
-        const normalizedExistingItems = normalizeItemsForComparison(existingItems);
-        const normalizedIncomingItems = normalizeItemsForComparison(normalizedItems ?? []);
+        const normalizedExistingItems = normalizeItemsForComparison(
+          existingItems as Record<string, unknown>[],
+        );
+        const normalizedIncomingItems = normalizeItemsForComparison(
+          (normalizedItems ?? []) as Record<string, unknown>[],
+        );
         if (!itemsMatch(normalizedExistingItems, normalizedIncomingItems)) {
           lockedFields.push('items');
         }
@@ -654,7 +675,7 @@ export default async function (fastify, _opts) {
       // Get all managers except the current user
       const managersResult = await query(
         `SELECT id FROM users WHERE role = 'manager' AND id != $1 AND is_disabled = FALSE`,
-        [request.user.id],
+        [request.user!.id],
       );
 
       // Create a notification for each manager
@@ -686,8 +707,8 @@ export default async function (fastify, _opts) {
   });
 
   // DELETE /:id - Delete order (only allowed for draft status)
-  fastify.delete('/:id', async (request, reply) => {
-    const { id } = request.params;
+  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as unknown as { id: string };
     const idResult = requireNonEmptyString(id, 'id');
     if (!idResult.ok) return badRequest(reply, idResult.message);
 

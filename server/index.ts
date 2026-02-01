@@ -65,7 +65,7 @@ fastify.get('/api/health', async (_request, _reply) => {
 });
 
 // Error handling
-fastify.setErrorHandler((error, request, reply) => {
+fastify.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
   console.error('Error:', error);
   reply.code(error.statusCode || 500).send({
     error: error.message || 'Internal server error',
@@ -209,7 +209,8 @@ try {
           await ldapService.syncUsers();
         }
       } catch (err) {
-        console.error('Periodic LDAP Sync Error:', err.message);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        console.error('Periodic LDAP Sync Error:', errorMessage);
       }
     }, SYNC_INTERVAL);
   } catch (err) {
