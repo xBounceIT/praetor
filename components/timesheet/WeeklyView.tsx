@@ -102,6 +102,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [rowErrors, setRowErrors] = useState<
+    Record<number, { clientId?: string; projectId?: string; taskName?: string }>
+  >({});
 
   // Initialize rows from existing entries in this week using useMemo
   const initialRows = useMemo(() => {
@@ -149,6 +152,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     setPrevInitialRows(initialRows);
     setRows(initialRows);
     setHasChanges(false);
+    setRowErrors({});
   }
 
   const handleWeekChange = (offset: number) => {
@@ -156,6 +160,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     newStart.setDate(newStart.getDate() + offset * 7);
     setCurrentWeekStart(newStart);
     setHasChanges(false);
+    setRowErrors({});
   };
 
   const handleValueChange = (
@@ -208,6 +213,18 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       newRows[rowIndex].taskName = firstTask?.name || '';
     }
 
+    // Clear error for the changed field
+    if (rowErrors[rowIndex]?.[field as keyof (typeof rowErrors)[number]]) {
+      const newErrors = { ...rowErrors };
+      if (newErrors[rowIndex]) {
+        delete newErrors[rowIndex][field as keyof (typeof newErrors)[number]];
+        if (Object.keys(newErrors[rowIndex]).length === 0) {
+          delete newErrors[rowIndex];
+        }
+      }
+      setRowErrors(newErrors);
+    }
+
     setRows(newRows);
     setHasChanges(true);
   };
@@ -225,6 +242,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       },
     ]);
     setHasChanges(true);
+    // Clear errors for the new row index
+    const newRowIndex = rows.length;
+    if (rowErrors[newRowIndex]) {
+      const newErrors = { ...rowErrors };
+      delete newErrors[newRowIndex];
+      setRowErrors(newErrors);
+    }
   };
 
   const deleteRow = (rowIndex: number) => {
@@ -242,10 +266,60 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     }
     setRows(newRows);
     setHasChanges(true);
+    // Remove errors for deleted row and shift remaining errors
+    const newErrors: Record<number, { clientId?: string; projectId?: string; taskName?: string }> =
+      {};
+    Object.entries(rowErrors).forEach(([key, value]) => {
+      const idx = parseInt(key, 10);
+      if (idx < rowIndex) {
+        newErrors[idx] = value;
+      } else if (idx > rowIndex) {
+        newErrors[idx - 1] = value;
+      }
+    });
+    setRowErrors(newErrors);
   };
 
   const handleSubmit = async () => {
     setIsLoading(true);
+
+    // Validation
+    const newErrors: Record<number, { clientId?: string; projectId?: string; taskName?: string }> =
+      {};
+    let hasValidationErrors = false;
+
+    rows.forEach((row, rowIndex) => {
+      const hasTimeEntries = Object.values(row.days).some((d) => d.duration > 0);
+      if (!hasTimeEntries) return;
+
+      const rowError: { clientId?: string; projectId?: string; taskName?: string } = {};
+
+      if (!row.clientId) {
+        rowError.clientId = t('common:validation.clientRequired');
+        hasValidationErrors = true;
+      }
+      if (!row.projectId) {
+        rowError.projectId = t('common:validation.projectRequired');
+        hasValidationErrors = true;
+      }
+      // Only validate task if project has tasks available
+      const availableTasks = projectTasks.filter((t) => t.projectId === row.projectId);
+      if (availableTasks.length > 0 && !row.taskName) {
+        rowError.taskName = t('common:validation.taskNameRequired');
+        hasValidationErrors = true;
+      }
+
+      if (Object.keys(rowError).length > 0) {
+        newErrors[rowIndex] = rowError;
+      }
+    });
+
+    if (hasValidationErrors) {
+      setRowErrors(newErrors);
+      setIsLoading(false);
+      return;
+    }
+
     const entriesToAdd: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[] = [];
 
     rows.forEach((row) => {
@@ -425,19 +499,23 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   className="group hover:bg-slate-50/30 transition-all duration-500"
                 >
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-2 w-32">
+                    <div className="flex flex-col gap-1 w-32">
                       <CustomSelect
                         options={clients.map((c) => ({ id: c.id, name: c.name }))}
                         value={row.clientId}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val as string)}
-                        className="bg-transparent!"
+                        className={`bg-transparent! ${rowErrors[rowIndex]?.clientId ? 'border-red-500!' : ''}`}
                         searchable={true}
                       />
-                      <div className="h-7 invisible">Spacer</div>
+                      {rowErrors[rowIndex]?.clientId && (
+                        <p className="text-red-500 text-[10px] font-bold">
+                          {rowErrors[rowIndex].clientId}
+                        </p>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-2 w-32">
+                    <div className="flex flex-col gap-1 w-32">
                       <CustomSelect
                         options={projects
                           .filter((p) => p.clientId === row.clientId)
@@ -446,25 +524,34 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         onChange={(val) =>
                           handleRowInfoChange(rowIndex, 'projectId', val as string)
                         }
-                        className="bg-transparent!"
+                        className={`bg-transparent! ${rowErrors[rowIndex]?.projectId ? 'border-red-500!' : ''}`}
                         placeholder={t('weekly.selectProject')}
                         searchable={true}
                       />
-                      <div className="h-7 invisible">Spacer</div>
+                      {rowErrors[rowIndex]?.projectId && (
+                        <p className="text-red-500 text-[10px] font-bold">
+                          {rowErrors[rowIndex].projectId}
+                        </p>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-2 w-36">
+                    <div className="flex flex-col gap-1 w-36">
                       <CustomSelect
                         options={projectTasks
                           .filter((t) => t.projectId === row.projectId)
                           .map((t) => ({ id: t.name, name: t.name }))}
                         value={row.taskName}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'taskName', val as string)}
-                        className="bg-transparent!"
+                        className={`bg-transparent! ${rowErrors[rowIndex]?.taskName ? 'border-red-500!' : ''}`}
                         placeholder={t('weekly.selectTask')}
                         searchable={true}
                       />
+                      {rowErrors[rowIndex]?.taskName && (
+                        <p className="text-red-500 text-[10px] font-bold">
+                          {rowErrors[rowIndex].taskName}
+                        </p>
+                      )}
                       <input
                         type="text"
                         placeholder={t('weekly.weekNote')}
@@ -475,7 +562,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-2 w-32">
+                    <div className="flex flex-col gap-1 w-32">
                       <CustomSelect
                         options={[
                           { id: 'office', name: t('weekly.locationTypes.office') },
