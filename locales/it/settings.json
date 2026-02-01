@@ -114,6 +114,13 @@
     "logOutput": "I risultati del test appariranno qui.",
     "testSuccess": "SUCCESSO",
     "testFailure": "FALLIMENTO",
+    "testMessages": {
+      "EMAIL_NOT_ENABLED": "L'email non è abilitata",
+      "SMTP_NOT_CONFIGURED": "L'host SMTP non è configurato",
+      "CONNECTION_SUCCESS": "Connessione riuscita",
+      "EMAIL_SENT_SUCCESS": "Email inviata con successo",
+      "SMTP_ERROR": "{{error}}"
+    },
     "encryption": {
       "tls": "TLS/STARTTLS",
       "ssl": "SSL",

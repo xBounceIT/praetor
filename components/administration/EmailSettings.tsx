@@ -6,7 +6,9 @@ import CustomSelect from '../shared/CustomSelect';
 interface EmailSettingsProps {
   config: EmailConfig;
   onSave: (config: EmailConfig) => Promise<void>;
-  onTestEmail: (recipientEmail: string) => Promise<{ success: boolean; message: string }>;
+  onTestEmail: (
+    recipientEmail: string,
+  ) => Promise<{ success: boolean; code: string; params?: Record<string, string> }>;
 }
 
 const DEFAULT_CONFIG: EmailConfig = {
@@ -28,7 +30,8 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   const [testEmail, setTestEmail] = useState('');
   const [testResult, setTestResult] = useState<{
     success: boolean;
-    message: string;
+    code: string;
+    params?: Record<string, string>;
   } | null>(null);
   const [isTestLoading, setIsTestLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -131,11 +134,23 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
     } catch (err) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to send test email',
+        code: 'SMTP_ERROR',
+        params: { error: err instanceof Error ? err.message : 'Failed to send test email' },
       });
     } finally {
       setIsTestLoading(false);
     }
+  };
+
+  const getTranslatedMessage = (code: string, params?: Record<string, string>) => {
+    const translationKey = `email.testMessages.${code}`;
+    const defaultMessage = code;
+
+    if (params?.error) {
+      return t(translationKey, { error: params.error, defaultValue: params.error });
+    }
+
+    return t(translationKey, defaultMessage);
   };
 
   return (
@@ -415,7 +430,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                   {testResult.success
                     ? t('email.testSuccess', 'SUCCESS')
                     : t('email.testFailure', 'FAILURE')}
-                  ] {testResult.message}
+                  ] {getTranslatedMessage(testResult.code, testResult.params)}
                 </div>
                 {testResult.success && (
                   <div className="text-slate-400 mt-2">

@@ -93,28 +93,33 @@ class EmailService {
     return nodemailer.createTransport(transportOptions);
   }
 
-  async testConnection(): Promise<{ success: boolean; message: string }> {
+  async testConnection(): Promise<{
+    success: boolean;
+    code: string;
+    params?: Record<string, string>;
+  }> {
     try {
       if (!this.config) {
         await this.loadConfig();
       }
 
       if (!this.config || !this.config.enabled) {
-        return { success: false, message: 'Email is not enabled' };
+        return { success: false, code: 'EMAIL_NOT_ENABLED' };
       }
 
       if (!this.config.smtp_host) {
-        return { success: false, message: 'SMTP host is not configured' };
+        return { success: false, code: 'SMTP_NOT_CONFIGURED' };
       }
 
       const transporter = this.createTransporter();
       await transporter.verify();
-      return { success: true, message: 'Connection successful' };
+      return { success: true, code: 'CONNECTION_SUCCESS' };
     } catch (err) {
       console.error('Email connection test failed:', err);
       return {
         success: false,
-        message: err instanceof Error ? err.message : 'Connection test failed',
+        code: 'SMTP_ERROR',
+        params: { error: err instanceof Error ? err.message : 'Connection test failed' },
       };
     }
   }
@@ -124,18 +129,23 @@ class EmailService {
     subject: string,
     html: string,
     text?: string,
-  ): Promise<{ success: boolean; message: string; messageId?: string }> {
+  ): Promise<{
+    success: boolean;
+    code: string;
+    params?: Record<string, string>;
+    messageId?: string;
+  }> {
     try {
       if (!this.config) {
         await this.loadConfig();
       }
 
       if (!this.config || !this.config.enabled) {
-        return { success: false, message: 'Email is not enabled' };
+        return { success: false, code: 'EMAIL_NOT_ENABLED' };
       }
 
       if (!this.config.smtp_host) {
-        return { success: false, message: 'SMTP host is not configured' };
+        return { success: false, code: 'SMTP_NOT_CONFIGURED' };
       }
 
       const transporter = this.createTransporter();
@@ -154,21 +164,25 @@ class EmailService {
 
       return {
         success: true,
-        message: 'Email sent successfully',
+        code: 'EMAIL_SENT_SUCCESS',
         messageId: info.messageId,
       };
     } catch (err) {
       console.error('Failed to send email:', err);
       return {
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to send email',
+        code: 'SMTP_ERROR',
+        params: { error: err instanceof Error ? err.message : 'Failed to send email' },
       };
     }
   }
 
-  async sendTestEmail(
-    recipientEmail: string,
-  ): Promise<{ success: boolean; message: string; messageId?: string }> {
+  async sendTestEmail(recipientEmail: string): Promise<{
+    success: boolean;
+    code: string;
+    params?: Record<string, string>;
+    messageId?: string;
+  }> {
     const subject = 'Praetor Email Configuration Test';
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

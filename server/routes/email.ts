@@ -130,7 +130,7 @@ export default async function (fastify, _opts) {
       const { recipientEmail } = request.body as { recipientEmail: string };
 
       if (!recipientEmail || !recipientEmail.includes('@')) {
-        return reply.code(400).send({ error: 'Valid recipient email is required' });
+        return reply.code(400).send({ error: 'INVALID_RECIPIENT', code: 'INVALID_RECIPIENT' });
       }
 
       // Reload config before testing
@@ -139,12 +139,17 @@ export default async function (fastify, _opts) {
       const result = await emailService.sendTestEmail(recipientEmail);
 
       if (!result.success) {
-        return reply.code(500).send({ error: result.message });
+        return reply.code(500).send({
+          error: result.code,
+          code: result.code,
+          params: result.params,
+        });
       }
 
       return {
         success: true,
-        message: result.message,
+        code: result.code,
+        params: result.params,
         messageId: result.messageId,
       };
     },
@@ -163,12 +168,17 @@ export default async function (fastify, _opts) {
       const result = await emailService.testConnection();
 
       if (!result.success) {
-        return reply.code(500).send({ error: result.message });
+        return reply.code(500).send({
+          error: result.code,
+          code: result.code,
+          params: result.params,
+        });
       }
 
       return {
         success: true,
-        message: result.message,
+        code: result.code,
+        params: result.params,
       };
     },
   );
