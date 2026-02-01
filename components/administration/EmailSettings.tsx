@@ -359,7 +359,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             ) : isSaved ? (
               <span className="flex items-center gap-2">
                 <i className="fa-solid fa-check"></i>
-                {t('common:saved', 'Saved!')}
+                {t('general.saved', 'Saved!')}
               </span>
             ) : (
               t('general.saveConfiguration', 'Save Configuration')

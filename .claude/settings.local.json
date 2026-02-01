@@ -17,7 +17,8 @@
       "Bash(bun run build:*)",
       "WebSearch",
       "Bash(bun run lint:fix:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(grep:*)"
     ]
   }
 }
