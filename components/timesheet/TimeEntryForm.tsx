@@ -371,8 +371,11 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         </form>
       ) : (
         <div className="space-y-4">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <div className="md:col-span-1">
+          <form
+            onSubmit={handleSubmit}
+            className="grid grid-cols-1 md:grid-cols-[2fr_2fr_2fr_1.5fr_1fr] gap-4"
+          >
+            <div>
               <CustomSelect
                 label={t('entry.client')}
                 options={clientOptions}
@@ -388,7 +391,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
               )}
             </div>
-            <div className="md:col-span-1">
+            <div>
               <CustomSelect
                 label={t('entry.project')}
                 options={projectOptions}
@@ -407,7 +410,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
               )}
             </div>
-            <div className="md:col-span-1">
+            <div>
               <CustomSelect
                 label={t('entry.task')}
                 options={taskOptions}
@@ -439,7 +442,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 />
               )}
             </div>
-            <div className="md:col-span-1">
+            <div>
               <CustomSelect
                 label={t('entry.location')}
                 options={[
@@ -452,7 +455,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 onChange={(val) => setLocation(val as TimeEntryLocation)}
               />
             </div>
-            <div className="md:col-span-1">
+            <div>
               <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
                 {t('entry.hours')} <span className="text-red-500">*</span>
               </label>

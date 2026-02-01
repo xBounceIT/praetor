@@ -7,6 +7,7 @@
 * Rimosse le pagine Progetti e Attività dal modulo Presenze
 * Aggiunto all'utente base il modulo Progetti in sola lettura
 * Aggiunto sistema di notifiche email
+* Aggiutno campo luogo in Timesheet, con default "Remoto" ma personalizzabile dalle impostazioni globali
 
 ## 20260125 - Operativo
 

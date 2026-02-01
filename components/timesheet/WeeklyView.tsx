@@ -101,7 +101,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   const [prevInitialRows, setPrevInitialRows] = useState<RowData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [activeDropdownRow, setActiveDropdownRow] = useState<number | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
   // Initialize rows from existing entries in this week using useMemo
@@ -374,11 +373,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       </div>
 
       {/* Grid */}
-      <div
-        className={`bg-white rounded-2xl shadow-sm border border-slate-200 ${activeDropdownRow !== null ? '' : 'overflow-hidden'}`}
-      >
-        <div className={`${activeDropdownRow !== null ? 'overflow-visible' : 'overflow-x-auto'}`}>
-          <table className="w-full text-left border-collapse min-w-200 isolate">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-200">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">
@@ -426,7 +423,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 <tr
                   key={rowIndex}
                   className="group hover:bg-slate-50/30 transition-all duration-500"
-                  style={{ zIndex: activeDropdownRow === rowIndex ? 50 : 0, position: 'relative' }}
                 >
                   <td className="px-4 py-4">
                     <div className="flex flex-col gap-2 w-32">
@@ -435,8 +431,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         value={row.clientId}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'clientId', val as string)}
                         className="bg-transparent!"
-                        onOpen={() => setActiveDropdownRow(rowIndex)}
-                        onClose={() => setActiveDropdownRow(null)}
                         searchable={true}
                       />
                       <div className="h-7 invisible">Spacer</div>
@@ -454,8 +448,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         }
                         className="bg-transparent!"
                         placeholder={t('weekly.selectProject')}
-                        onOpen={() => setActiveDropdownRow(rowIndex)}
-                        onClose={() => setActiveDropdownRow(null)}
                         searchable={true}
                       />
                       <div className="h-7 invisible">Spacer</div>
@@ -471,8 +463,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         onChange={(val) => handleRowInfoChange(rowIndex, 'taskName', val as string)}
                         className="bg-transparent!"
                         placeholder={t('weekly.selectTask')}
-                        onOpen={() => setActiveDropdownRow(rowIndex)}
-                        onClose={() => setActiveDropdownRow(null)}
                         searchable={true}
                       />
                       <input
@@ -499,8 +489,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                         value={row.location}
                         onChange={(val) => handleRowInfoChange(rowIndex, 'location', val as string)}
                         className="bg-transparent!"
-                        onOpen={() => setActiveDropdownRow(rowIndex)}
-                        onClose={() => setActiveDropdownRow(null)}
                       />
                       <div className="h-7 invisible">Spacer</div>
                     </div>
