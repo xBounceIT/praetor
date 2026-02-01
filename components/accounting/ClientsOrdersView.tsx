@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ClientsOrder, ClientsOrderItem, Client, Product, SpecialBid } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
@@ -349,51 +349,54 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   };
 
   // Calculate totals
-  const calculateTotals = (items: ClientsOrderItem[], globalDiscount: number) => {
-    let subtotal = 0;
-    let totalCost = 0;
-    const taxGroups: Record<number, number> = {};
+  const calculateTotals = useCallback(
+    (items: ClientsOrderItem[], globalDiscount: number) => {
+      let subtotal = 0;
+      let totalCost = 0;
+      const taxGroups: Record<number, number> = {};
 
-    items.forEach((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      const lineSubtotal = item.quantity * item.unitPrice;
-      const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
-      const lineNet = lineSubtotal - lineDiscount;
+      items.forEach((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        const lineSubtotal = item.quantity * item.unitPrice;
+        const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
+        const lineNet = lineSubtotal - lineDiscount;
 
-      subtotal += lineNet;
+        subtotal += lineNet;
 
-      if (product) {
-        const taxRate = product.taxRate;
-        // Applying global discount proportionally to the tax base
-        const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-        const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-        taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-        // Use stored snapshot values to avoid retroactive changes
-        const cost = item.specialBidId
-          ? Number(item.specialBidUnitPrice ?? 0)
-          : Number(item.productCost ?? product.costo);
-        totalCost += item.quantity * cost;
-      }
-    });
+        if (product) {
+          const taxRate = product.taxRate;
+          // Applying global discount proportionally to the tax base
+          const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+          const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+          taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
+          // Use stored snapshot values to avoid retroactive changes
+          const cost = item.specialBidId
+            ? Number(item.specialBidUnitPrice ?? 0)
+            : Number(item.productCost ?? product.costo);
+          totalCost += item.quantity * cost;
+        }
+      });
 
-    const discountAmount = subtotal * (globalDiscount / 100);
-    const taxableAmount = subtotal - discountAmount;
-    const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-    const total = taxableAmount + totalTax;
-    const margin = taxableAmount - totalCost;
-    const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+      const discountAmount = subtotal * (globalDiscount / 100);
+      const taxableAmount = subtotal - discountAmount;
+      const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+      const total = taxableAmount + totalTax;
+      const margin = taxableAmount - totalCost;
+      const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
 
-    return {
-      subtotal,
-      taxableAmount,
-      discountAmount,
-      totalTax,
-      total,
-      margin,
-      marginPercentage,
-      taxGroups,
-    };
-  };
+      return {
+        subtotal,
+        taxableAmount,
+        discountAmount,
+        totalTax,
+        total,
+        margin,
+        marginPercentage,
+        taxGroups,
+      };
+    },
+    [products],
+  );
 
   const activeClients = clients.filter((c) => !c.isDisabled);
   const activeProducts = products.filter((p) => !p.isDisabled);
@@ -422,7 +425,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const columns = useMemo(
     () => [
       {
-        header: t('crm:quotes.clientColumn'),
+        header: t('accounting:clientsOrders.clientColumn'),
         accessorFn: (row: ClientsOrder) => row.clientName,
         cell: ({ row }: { row: ClientsOrder }) => (
           <div className="flex items-center gap-3">
@@ -438,14 +441,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               <div
                 className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
               >
-                {t('crm:quotes.itemsCount', { count: row.items.length })}
+                {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
               </div>
             </div>
           </div>
         ),
       },
       {
-        header: t('crm:quotes.totalColumn'),
+        header: t('accounting:clientsOrders.totalColumn'),
         accessorFn: (row: ClientsOrder) => {
           const { total } = calculateTotals(row.items, row.discount);
           return total;
@@ -463,7 +466,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         filterFormat: (val: unknown) => (val as number).toFixed(2),
       },
       {
-        header: t('crm:quotes.paymentTermsColumn'),
+        header: t('accounting:clientsOrders.paymentTermsColumn'),
         accessorFn: (row: ClientsOrder) =>
           row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms,
         cell: ({ row }: { row: ClientsOrder }) => (
@@ -475,7 +478,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
       {
-        header: t('crm:quotes.statusColumn'),
+        header: t('accounting:clientsOrders.statusColumn'),
         accessorFn: (row: ClientsOrder) => getOrderStatusLabel(row.status, t),
         cell: ({ row }: { row: ClientsOrder }) => (
           <div
@@ -489,7 +492,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
       {
-        header: t('crm:quotes.actionsColumn'),
+        header: t('accounting:clientsOrders.actionsColumn'),
         id: 'actions',
         disableSorting: true,
         disableFiltering: true,
@@ -586,8 +589,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currency, onUpdateClientsOrder, onViewQuote, t],
+    [currency, onUpdateClientsOrder, onViewQuote, t, calculateTotals],
   );
 
   return (
