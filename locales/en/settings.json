@@ -81,7 +81,15 @@
     "apiKeyDescription": "Required for AI features. Your key is stored securely. Get one at",
     "googleAiStudio": "Google AI Studio",
     "monday": "Monday",
-    "sunday": "Sunday"
+    "sunday": "Sunday",
+    "defaultLocationLabel": "Default Work Location",
+    "defaultLocationDescription": "Default location for new time entries. Users can override per entry.",
+    "locationTypes": {
+      "office": "Office",
+      "customerPremise": "Customer Premise",
+      "remote": "Remote",
+      "transfer": "Transfer"
+    }
   },
   "messages": {
     "loading": "Loading settings...",

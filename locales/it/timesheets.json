@@ -75,6 +75,13 @@
       "everyThird": "Ogni Terzo {{day}}",
       "everyFourth": "Ogni Quarto {{day}}",
       "everyLast": "Ogni Ultimo {{day}}"
+    },
+    "location": "Luogo",
+    "locationTypes": {
+      "office": "Ufficio",
+      "customerPremise": "Sede Cliente",
+      "remote": "Remoto",
+      "transfer": "Trasferta"
     }
   },
   "calendar": {
@@ -122,6 +129,13 @@
       "fri": "Ven",
       "sat": "Sab",
       "sun": "Dom"
+    },
+    "location": "Luogo",
+    "locationTypes": {
+      "office": "Ufficio",
+      "customerPremise": "Sede Cliente",
+      "remote": "Remoto",
+      "transfer": "Trasferta"
     }
   },
   "recurring": {

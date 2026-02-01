@@ -23,6 +23,7 @@ import {
   SpecialBid,
   Notification,
   EmailConfig,
+  TimeEntryLocation,
 } from './types';
 import { COLORS } from './constants';
 import i18n from './i18n';
@@ -120,6 +121,7 @@ const TrackerView: React.FC<{
   enableAiInsights: boolean;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   geminiApiKey?: string;
+  defaultLocation?: TimeEntryLocation;
 }> = ({
   entries,
   clients,
@@ -145,6 +147,7 @@ const TrackerView: React.FC<{
   enableAiInsights,
   onRecurringAction,
   geminiApiKey,
+  defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -239,6 +242,7 @@ const TrackerView: React.FC<{
           startOfWeek={startOfWeek}
           treatSaturdayAsHoliday={treatSaturdayAsHoliday}
           allowWeekendSelection={allowWeekendSelection}
+          defaultLocation={defaultLocation}
         />
       ) : (
         <div className="flex flex-col lg:flex-row gap-8">
@@ -283,6 +287,7 @@ const TrackerView: React.FC<{
               currentDayTotal={dailyTotal}
               enableAiInsights={enableAiInsights}
               geminiApiKey={geminiApiKey}
+              defaultLocation={defaultLocation}
             />
 
             <div className="space-y-4">
@@ -575,6 +580,7 @@ const App: React.FC = () => {
     allowWeekendSelection: true,
     enableAiInsights: false,
     geminiApiKey: '',
+    defaultLocation: 'remote' as TimeEntryLocation,
   });
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
@@ -861,6 +867,7 @@ const App: React.FC = () => {
       setGeneralSettings({
         ...genSettings,
         geminiApiKey: genSettings.geminiApiKey || '',
+        defaultLocation: genSettings.defaultLocation || 'remote',
       });
       setHasLoadedGeneralSettings(true);
     };
@@ -1977,6 +1984,7 @@ const App: React.FC = () => {
       setGeneralSettings({
         ...updated,
         geminiApiKey: updated.geminiApiKey || '',
+        defaultLocation: updated.defaultLocation || 'remote',
       });
     } catch (err) {
       console.error('Failed to update general settings:', err);
@@ -2211,6 +2219,7 @@ const App: React.FC = () => {
                 enableAiInsights={generalSettings.enableAiInsights}
                 onRecurringAction={handleRecurringAction}
                 geminiApiKey={generalSettings.geminiApiKey}
+                defaultLocation={generalSettings.defaultLocation}
               />
             )}
             {activeView === 'crm/clients' &&

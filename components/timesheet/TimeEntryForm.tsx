@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Project, ProjectTask, TimeEntry, UserRole } from '../../types';
+import { Client, Project, ProjectTask, TimeEntry, UserRole, TimeEntryLocation } from '../../types';
 import { parseSmartEntry } from '../../services/geminiService';
 import CustomSelect from '../shared/CustomSelect';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
@@ -24,6 +24,7 @@ interface TimeEntryFormProps {
   currentDayTotal: number;
   enableAiInsights: boolean;
   geminiApiKey?: string;
+  defaultLocation?: TimeEntryLocation;
 }
 
 // Helper to format custom pattern - needs to be inside component to use translations
@@ -40,6 +41,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   currentDayTotal,
   enableAiInsights,
   geminiApiKey,
+  defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
 
@@ -83,6 +85,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
+  const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
   const [errors, setErrors] = useState<{
     hours?: string;
     clientId?: string;
@@ -194,6 +197,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
       task: selectedTaskName,
       notes,
       duration: durationVal,
+      location,
     });
 
     // Handle recursion if checked
@@ -210,6 +214,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     // Reset form
     setDuration('');
     setNotes('');
+    setLocation(defaultLocation);
     setMakeRecurring(false);
     setRecurrenceEndDate('');
     setRecurrencePattern('weekly');
@@ -366,7 +371,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         </form>
       ) : (
         <div className="space-y-4">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="md:col-span-1">
               <CustomSelect
                 label={t('entry.client')}
@@ -402,7 +407,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
               )}
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-1">
               <CustomSelect
                 label={t('entry.task')}
                 options={taskOptions}
@@ -433,6 +438,19 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                   className="mt-2 w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm animate-in fade-in slide-in-from-top-1 duration-200"
                 />
               )}
+            </div>
+            <div className="md:col-span-1">
+              <CustomSelect
+                label={t('entry.location')}
+                options={[
+                  { id: 'office', name: t('entry.locationTypes.office') },
+                  { id: 'customer_premise', name: t('entry.locationTypes.customerPremise') },
+                  { id: 'remote', name: t('entry.locationTypes.remote') },
+                  { id: 'transfer', name: t('entry.locationTypes.transfer') },
+                ]}
+                value={location}
+                onChange={(val) => setLocation(val as TimeEntryLocation)}
+              />
             </div>
             <div className="md:col-span-1">
               <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">

@@ -46,20 +46,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
 
           result = await query(
-            `SELECT id, user_id, date, client_id, client_name, project_id, 
-                  project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
+            `SELECT id, user_id, date, client_id, client_name, project_id,
+                  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
            FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
             [userId],
           );
         } else {
           // No specific user requested, return all accessible (own + managed)
           result = await query(
-            `SELECT id, user_id, date, client_id, client_name, project_id, 
-                  project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
-           FROM time_entries 
-           WHERE user_id = $1 
+            `SELECT id, user_id, date, client_id, client_name, project_id,
+                  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+           FROM time_entries
+           WHERE user_id = $1
              OR user_id IN (
-                  SELECT uwu.user_id 
+                  SELECT uwu.user_id
                   FROM user_work_units uwu
                   JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                   WHERE wum.user_id = $1
@@ -71,8 +71,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } else {
         // Regular users can only see their own entries
         result = await query(
-          `SELECT id, user_id, date, client_id, client_name, project_id, 
-                project_name, task, notes, duration, hourly_cost, is_placeholder, created_at
+          `SELECT id, user_id, date, client_id, client_name, project_id,
+                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
          FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
           [request.user!.id],
         );
@@ -91,6 +91,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         duration: parseFloat(e.duration),
         hourlyCost: parseFloat(e.hourly_cost || 0),
         isPlaceholder: e.is_placeholder,
+        location: e.location || 'remote',
         createdAt: new Date(e.created_at).getTime(),
       }));
 
@@ -116,6 +117,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         duration,
         isPlaceholder,
         userId,
+        location,
       } = request.body as {
         date: string;
         clientId: string;
@@ -127,6 +129,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         duration?: number;
         isPlaceholder?: boolean;
         userId?: string;
+        location?: string;
       };
 
       const dateResult = parseDateString(date, 'date');
@@ -197,9 +200,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const id = Math.random().toString(36).substr(2, 9);
 
+      const locationValue = location || 'remote';
+
       await query(
-        `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        `INSERT INTO time_entries (id, user_id, date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder, location)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           id,
           targetUserId,
@@ -213,6 +218,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           durationResult.value || 0,
           hourlyCost,
           isPlaceholderValue,
+          locationValue,
         ],
       );
 
@@ -229,6 +235,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         duration: durationResult.value || 0,
         hourlyCost: parseFloat(hourlyCost),
         isPlaceholder: isPlaceholderValue,
+        location: locationValue,
         createdAt: Date.now(),
       });
     },
@@ -242,10 +249,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { duration, notes, isPlaceholder } = request.body as {
+      const { duration, notes, isPlaceholder, location } = request.body as {
         duration?: number;
         notes?: string;
         isPlaceholder?: boolean;
+        location?: string;
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -275,7 +283,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         if (request.user!.role === 'manager') {
           const managedCheck = await query(
-            `SELECT 1 
+            `SELECT 1
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
@@ -288,13 +296,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const result = await query(
-        `UPDATE time_entries 
+        `UPDATE time_entries
        SET duration = COALESCE($2, duration),
            notes = COALESCE($3, notes),
-           is_placeholder = COALESCE($4, is_placeholder)
+           is_placeholder = COALESCE($4, is_placeholder),
+           location = COALESCE($5, location)
        WHERE id = $1
        RETURNING *`,
-        [idResult.value, duration, notes, isPlaceholder],
+        [idResult.value, duration, notes, isPlaceholder, location],
       );
 
       const e = result.rows[0];
@@ -311,6 +320,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         duration: parseFloat(e.duration),
         hourlyCost: parseFloat(e.hourly_cost || 0),
         isPlaceholder: e.is_placeholder,
+        location: e.location || 'remote',
         createdAt: new Date(e.created_at).getTime(),
       };
     },

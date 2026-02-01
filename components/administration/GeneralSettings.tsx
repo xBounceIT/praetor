@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GeneralSettings as IGeneralSettings } from '../../types';
+import { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
 import CustomSelect, { Option } from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
@@ -43,6 +43,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [allowWeekendSelection, setAllowWeekendSelection] = useState(
     settings.allowWeekendSelection ?? true,
   );
+  const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>(
+    settings.defaultLocation || 'remote',
+  );
   const [enableAiInsights, setEnableAiInsights] = useState(settings.enableAiInsights);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [activeTab, setActiveTab] = useState<'localization' | 'tracking' | 'ai'>('localization');
@@ -55,6 +58,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setStartOfWeek(settings.startOfWeek);
     setTreatSaturdayAsHoliday(settings.treatSaturdayAsHoliday);
     setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
+    setDefaultLocation(settings.defaultLocation || 'remote');
     setEnableAiInsights(settings.enableAiInsights);
     setGeminiApiKey(settings.geminiApiKey || '');
   }, [settings]);
@@ -72,6 +76,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         startOfWeek,
         treatSaturdayAsHoliday,
         allowWeekendSelection,
+        defaultLocation,
         enableAiInsights,
         geminiApiKey,
       });
@@ -90,6 +95,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     startOfWeek !== settings.startOfWeek ||
     treatSaturdayAsHoliday !== settings.treatSaturdayAsHoliday ||
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
+    defaultLocation !== (settings.defaultLocation || 'remote') ||
     enableAiInsights !== settings.enableAiInsights ||
     geminiApiKey !== (settings.geminiApiKey || '');
 
@@ -249,6 +255,25 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                   />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
                 </label>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  {t('general.defaultLocationLabel')}
+                </label>
+                <CustomSelect
+                  options={[
+                    { id: 'office', name: t('general.locationTypes.office') },
+                    { id: 'customer_premise', name: t('general.locationTypes.customerPremise') },
+                    { id: 'remote', name: t('general.locationTypes.remote') },
+                    { id: 'transfer', name: t('general.locationTypes.transfer') },
+                  ]}
+                  value={defaultLocation}
+                  onChange={(val) => setDefaultLocation(val as TimeEntryLocation)}
+                />
+                <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                  {t('general.defaultLocationDescription')}
+                </p>
               </div>
             </div>
           </section>

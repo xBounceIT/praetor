@@ -81,7 +81,15 @@
     "apiKeyDescription": "Richiesta per le funzionalità AI. La tua chiave è archiviata in modo sicuro. Ottienine una su",
     "googleAiStudio": "Google AI Studio",
     "monday": "Lunedì",
-    "sunday": "Domenica"
+    "sunday": "Domenica",
+    "defaultLocationLabel": "Luogo di Lavoro Predefinito",
+    "defaultLocationDescription": "Luogo predefinito per nuove voci. Modificabile per singola voce.",
+    "locationTypes": {
+      "office": "Ufficio",
+      "customerPremise": "Sede Cliente",
+      "remote": "Remoto",
+      "transfer": "Trasferta"
+    }
   },
   "messages": {
     "loading": "Caricamento impostazioni...",

@@ -1,6 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Project, ProjectTask, TimeEntry, UserRole, User } from '../../types';
+import {
+  Client,
+  Project,
+  ProjectTask,
+  TimeEntry,
+  UserRole,
+  User,
+  TimeEntryLocation,
+} from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { isItalianHoliday } from '../../utils/holidays';
@@ -21,6 +29,7 @@ interface WeeklyViewProps {
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
   allowWeekendSelection?: boolean;
+  defaultLocation?: TimeEntryLocation;
 }
 
 const toLocalISOString = (date: Date) => {
@@ -43,6 +52,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   onViewUserChange,
   treatSaturdayAsHoliday,
   allowWeekendSelection = false,
+  defaultLocation = 'remote',
 }) => {
   const { t, i18n } = useTranslation('timesheets');
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -83,6 +93,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     clientId: string;
     projectId: string;
     taskName: string;
+    location: TimeEntryLocation;
     days: Record<string, { duration: number; note: string; id?: string }>;
     weekNote: string;
   };
@@ -98,15 +109,16 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     const weekDates = weekDays.map((d) => d.dateStr);
     const weekEntries = entries.filter((e) => weekDates.includes(e.date));
 
-    // Group by client/project/task
+    // Group by client/project/task/location
     const groups: Record<string, RowData> = {};
     weekEntries.forEach((e) => {
-      const key = `${e.clientId}-${e.projectId}-${e.task}`;
+      const key = `${e.clientId}-${e.projectId}-${e.task}-${e.location || defaultLocation}`;
       if (!groups[key]) {
         groups[key] = {
           clientId: e.clientId,
           projectId: e.projectId,
           taskName: e.task,
+          location: e.location || defaultLocation,
           days: {
             [e.date]: { duration: e.duration, note: e.notes || '', id: e.id },
           },
@@ -124,12 +136,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         clientId: clients[0]?.id || '',
         projectId: projects.find((p) => p.clientId === (clients[0]?.id || ''))?.id || '',
         taskName: '',
+        location: defaultLocation,
         days: {},
         weekNote: '',
       });
     }
     return result;
-  }, [entries, clients, projects, weekDays]);
+  }, [entries, clients, projects, weekDays, defaultLocation]);
 
   // Update rows when initialRows changes
   // Update rows when initialRows changes (pattern: adjust state during render)
@@ -177,7 +190,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     value: string,
   ) => {
     const newRows = [...rows];
-    newRows[rowIndex][field] = value;
+    if (field === 'location') {
+      newRows[rowIndex].location = value as TimeEntryLocation;
+    } else {
+      newRows[rowIndex][field] = value;
+    }
 
     // Auto-fill project if client changes
     if (field === 'clientId') {
@@ -203,6 +220,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         clientId: clients[0]?.id || '',
         projectId: projects.find((p) => p.clientId === (clients[0]?.id || ''))?.id || '',
         taskName: '',
+        location: defaultLocation,
         days: {},
         weekNote: '',
       },
@@ -218,6 +236,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         clientId: clients[0]?.id || '',
         projectId: projects.find((p) => p.clientId === (clients[0]?.id || ''))?.id || '',
         taskName: '',
+        location: defaultLocation,
         days: {},
         weekNote: '',
       });
@@ -250,6 +269,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               duration: data.duration,
               notes: data.note || row.weekNote, // Use individual note or fallback to week note
               hourlyCost: 0,
+              location: row.location,
             });
           } else {
             // Handle update if needed? User didn't explicitly ask for editing existing in weekly view,
@@ -262,6 +282,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
               clientId: row.clientId,
               clientName: client?.name || 'Unknown',
               projectName: project?.name || 'General',
+              location: row.location,
             });
           }
         }
@@ -369,6 +390,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-36">
                   {t('weekly.task')}
                 </th>
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">
+                  {t('weekly.location')}
+                </th>
                 {weekDays.map((day) => (
                   <th
                     key={day.dateStr}
@@ -460,6 +484,27 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       />
                     </div>
                   </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col gap-2 w-32">
+                      <CustomSelect
+                        options={[
+                          { id: 'office', name: t('weekly.locationTypes.office') },
+                          {
+                            id: 'customer_premise',
+                            name: t('weekly.locationTypes.customerPremise'),
+                          },
+                          { id: 'remote', name: t('weekly.locationTypes.remote') },
+                          { id: 'transfer', name: t('weekly.locationTypes.transfer') },
+                        ]}
+                        value={row.location}
+                        onChange={(val) => handleRowInfoChange(rowIndex, 'location', val as string)}
+                        className="bg-transparent!"
+                        onOpen={() => setActiveDropdownRow(rowIndex)}
+                        onClose={() => setActiveDropdownRow(null)}
+                      />
+                      <div className="h-7 invisible">Spacer</div>
+                    </div>
+                  </td>
                   {weekDays.map((day) => (
                     <td
                       key={day.dateStr}
@@ -512,7 +557,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             </tbody>
             <tfoot className="bg-slate-50/50 border-t border-slate-200">
               <tr>
-                <td colSpan={3} className="px-4 py-4">
+                <td colSpan={4} className="px-4 py-4">
                   <button
                     onClick={addRow}
                     className="text-xs font-bold text-praetor bg-transparent px-4 py-2 rounded-lg flex items-center gap-2 uppercase tracking-widest transition-all duration-300 ease-in-out"

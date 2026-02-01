@@ -197,7 +197,21 @@ CREATE TABLE IF NOT EXISTS time_entries (
 ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS hourly_cost DECIMAL(10, 2) DEFAULT 0;
 
 -- Ensure location column exists for existing installations
-ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS location VARCHAR(20) DEFAULT 'remote' CHECK (location IN ('remote', 'office', 'client'));
+ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS location VARCHAR(20) DEFAULT 'remote';
+
+-- Location field migration: update constraint for new values
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'time_entries_location_check') THEN
+        ALTER TABLE time_entries DROP CONSTRAINT time_entries_location_check;
+    END IF;
+END $$;
+
+ALTER TABLE time_entries ADD CONSTRAINT time_entries_location_check
+    CHECK (location IN ('remote', 'office', 'customer_premise', 'transfer'));
+
+-- Migrate old 'client' values to 'customer_premise'
+UPDATE time_entries SET location = 'customer_premise' WHERE location = 'client';
 
 -- User settings table
 CREATE TABLE IF NOT EXISTS settings (
@@ -700,4 +714,7 @@ CREATE TABLE IF NOT EXISTS email_config (
 
 -- Insert default email config row
 INSERT INTO email_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- Add default_location to general_settings
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_location VARCHAR(20) DEFAULT 'remote';
 

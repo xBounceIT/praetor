@@ -75,6 +75,13 @@
       "everyThird": "Every Third {{day}}",
       "everyFourth": "Every Fourth {{day}}",
       "everyLast": "Every Last {{day}}"
+    },
+    "location": "Location",
+    "locationTypes": {
+      "office": "Office",
+      "customerPremise": "Customer Premise",
+      "remote": "Remote",
+      "transfer": "Transfer"
     }
   },
   "calendar": {
@@ -122,6 +129,13 @@
       "fri": "Fri",
       "sat": "Sat",
       "sun": "Sun"
+    },
+    "location": "Location",
+    "locationTypes": {
+      "office": "Office",
+      "customerPremise": "Customer Premise",
+      "remote": "Remote",
+      "transfer": "Transfer"
     }
   },
   "recurring": {

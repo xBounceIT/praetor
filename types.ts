@@ -1,5 +1,6 @@
 export type UserRole = 'admin' | 'manager' | 'user';
 export type EmployeeType = 'app_user' | 'internal' | 'external';
+export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 
 export interface User {
   id: string;
@@ -43,6 +44,7 @@ export interface GeneralSettings {
   enableAiInsights: boolean;
   geminiApiKey?: string;
   allowWeekendSelection: boolean;
+  defaultLocation?: TimeEntryLocation;
 }
 
 export interface Client {
@@ -96,6 +98,7 @@ export interface TimeEntry {
   hourlyCost: number;
   createdAt: number;
   isPlaceholder?: boolean;
+  location?: TimeEntryLocation;
 }
 
 export interface LdapRoleMapping {
