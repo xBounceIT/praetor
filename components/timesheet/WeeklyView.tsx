@@ -487,7 +487,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     )}
                   </th>
                 ))}
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-20 text-right">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-20 text-right sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                   {t('weekly.total')}
                 </th>
               </tr>
@@ -613,7 +613,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right sticky right-0 bg-white group-hover:bg-slate-50/30 transition-all duration-500 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-end gap-2">
                       <span className="text-sm font-black text-slate-800">
                         {Object.values(row.days)
@@ -654,7 +654,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </p>
                   </td>
                 ))}
-                <td className="px-4 py-4 text-right">
+                <td className="px-4 py-4 text-right sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                   <p className="text-sm font-black text-slate-900">
                     {(weekTotal as number).toFixed(1)}
                   </p>
