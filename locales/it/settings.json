@@ -96,7 +96,7 @@
     "smtpServer": "Configurazione Server SMTP",
     "host": "Host SMTP",
     "port": "Porta",
-    "encryption": "Crittografia",
+    "encryptionLabel": "Crittografia",
     "username": "Nome Utente",
     "password": "Password",
     "rejectUnauthorized": "Rifiuta certificati non autorizzati",

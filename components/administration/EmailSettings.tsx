@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EmailConfig, SmtpEncryption } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
@@ -24,6 +24,7 @@ const DEFAULT_CONFIG: EmailConfig = {
 const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEmail }) => {
   const { t } = useTranslation('settings');
   const [formData, setFormData] = useState<EmailConfig>(config || DEFAULT_CONFIG);
+  const [originalConfig, setOriginalConfig] = useState<EmailConfig>(config || DEFAULT_CONFIG);
   const [testEmail, setTestEmail] = useState('');
   const [testResult, setTestResult] = useState<{
     success: boolean;
@@ -34,6 +35,16 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   const [isSaved, setIsSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
+
+  // Sync formData when config prop changes (e.g., after API fetch)
+  useEffect(() => {
+    if (config) {
+      setFormData(config);
+      setOriginalConfig(config);
+    }
+  }, [config]);
+
+  const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalConfig);
 
   const encryptionOptions = [
     { id: 'tls', name: t('email.encryption.tls', 'TLS/STARTTLS') },
@@ -49,6 +60,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
       setIsSaving(true);
       try {
         await onSave(formData);
+        setOriginalConfig(formData);
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);
       } catch (err) {
@@ -81,6 +93,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
     setIsSaving(true);
     try {
       await onSave(formData);
+      setOriginalConfig(formData);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (err) {
@@ -211,7 +224,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
 
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                {t('email.encryption', 'Encryption')}
+                {t('email.encryptionLabel', 'Encryption')}
               </label>
               <CustomSelect
                 options={encryptionOptions}
@@ -324,7 +337,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
         <div className="flex justify-end pt-4">
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !hasChanges}
             className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50"
           >
             {isSaving ? (
