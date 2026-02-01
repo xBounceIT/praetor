@@ -114,6 +114,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           onClick={() => setActiveTab('localization')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'localization' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
         >
+          <i className="fa-solid fa-globe mr-2"></i>
           {t('general.tabs.localization')}
           {activeTab === 'localization' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
@@ -123,6 +124,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           onClick={() => setActiveTab('tracking')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'tracking' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
         >
+          <i className="fa-solid fa-clock mr-2"></i>
           {t('general.tabs.tracking')}
           {activeTab === 'tracking' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
@@ -132,6 +134,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           onClick={() => setActiveTab('ai')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ai' ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
         >
+          <i className="fa-solid fa-wand-magic-sparkles mr-2"></i>
           {t('general.tabs.ai')}
           {activeTab === 'ai' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
