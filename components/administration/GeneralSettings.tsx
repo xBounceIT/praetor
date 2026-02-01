@@ -193,9 +193,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                       }}
                       className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none transition-all text-sm font-bold"
                     />
-                    <span className="text-xs font-bold text-slate-400 uppercase whitespace-nowrap">
-                      {t('general.hoursPerDay')}
-                    </span>
                   </div>
                   <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
                     {t('general.dailyLimitDescription')}
