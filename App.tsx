@@ -172,7 +172,8 @@ const TrackerView: React.FC<{
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
 
   const handleDeleteClick = (entry: TimeEntry) => {
-    if (entry.isPlaceholder) {
+    const task = projectTasks.find((t) => t.name === entry.task && t.projectId === entry.projectId);
+    if (entry.isPlaceholder || task?.isRecurring) {
       // Show modal for recurring entries
       setPendingDeleteEntry(entry);
     } else {
