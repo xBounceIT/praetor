@@ -37,7 +37,7 @@ import RecurringManager from './components/RecurringManager';
 import ClientsView from './components/CRM/ClientsView';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
-import AdminAuthentication from './components/administration/AdminAuthentication';
+import AuthSettings from './components/administration/AuthSettings';
 import GeneralSettings from './components/administration/GeneralSettings';
 import CustomSelect from './components/shared/CustomSelect';
 import WeeklyView from './components/timesheet/WeeklyView';
@@ -2442,7 +2442,7 @@ const App: React.FC = () => {
             )}
 
             {currentUser.role === 'admin' && activeView === 'configuration/authentication' && (
-              <AdminAuthentication config={ldapConfig} onSave={handleSaveLdapConfig} />
+              <AuthSettings config={ldapConfig} onSave={handleSaveLdapConfig} />
             )}
 
             {currentUser.role === 'admin' && activeView === 'configuration/email' && (
