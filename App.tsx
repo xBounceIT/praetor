@@ -53,7 +53,6 @@ import ClientsOrdersView from './components/accounting/ClientsOrdersView';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import PaymentsView from './components/PaymentsView';
 import ExpensesView from './components/ExpensesView';
-import FinancialReportsView from './components/FinancialReportsView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/CRM/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
@@ -653,7 +652,6 @@ const App: React.FC = () => {
       // Finances module
       'finances/payments',
       'finances/expenses',
-      'finances/reports',
       'projects/manage',
       'projects/tasks',
       'suppliers/quotes',
@@ -690,7 +688,6 @@ const App: React.FC = () => {
       // Finances module
       'finances/payments',
       'finances/expenses',
-      'finances/reports',
       'projects/manage',
       'projects/tasks',
       'suppliers/quotes',
@@ -754,7 +751,6 @@ const App: React.FC = () => {
       // Finances module - manager
       'finances/payments': ['manager'],
       'finances/expenses': ['manager'],
-      'finances/reports': ['manager'],
       // Projects module - manager and user (read-only for user)
       'projects/manage': ['manager', 'user'],
       'projects/tasks': ['manager', 'user'],
@@ -2390,16 +2386,6 @@ const App: React.FC = () => {
                   onAddExpense={addExpense}
                   onUpdateExpense={handleUpdateExpense}
                   onDeleteExpense={handleDeleteExpense}
-                  currency={generalSettings.currency}
-                />
-              )}
-
-            {activeView === 'finances/reports' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <FinancialReportsView
-                  invoices={invoices}
-                  expenses={expenses}
-                  payments={payments}
                   currency={generalSettings.currency}
                 />
               )}

@@ -356,16 +356,6 @@ const Layout: React.FC<LayoutProps> = ({
                 setIsMobileMenuOpen(false);
               }}
             />
-            <NavItem
-              icon="fa-chart-line"
-              label={t('routes.reports')}
-              active={activeView === 'finances/reports'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('finances/reports');
-                setIsMobileMenuOpen(false);
-              }}
-            />
           </>
         );
       case 'suppliers':

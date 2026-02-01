@@ -279,7 +279,6 @@ export type View =
   // Finances module
   | 'finances/payments'
   | 'finances/expenses'
-  | 'finances/reports'
   // HR module (Deprecated/Moved)
   // | 'hr/workforce'
   // | 'hr/work-units'
