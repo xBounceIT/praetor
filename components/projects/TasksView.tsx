@@ -52,24 +52,12 @@ const TasksView: React.FC<TasksViewProps> = ({
     const saved = localStorage.getItem('praetor_tasks_rowsPerPage');
     return saved ? parseInt(saved, 10) : 5;
   });
-  const [disabledCurrentPage, setDisabledCurrentPage] = useState(1);
-  const [disabledRowsPerPage, setDisabledRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_tasks_disabled_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
 
   const handleRowsPerPageChange = (val: string) => {
     const value = parseInt(val, 10);
     setRowsPerPage(value);
     localStorage.setItem('praetor_tasks_rowsPerPage', value.toString());
     setCurrentPage(1);
-  };
-
-  const handleDisabledRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setDisabledRowsPerPage(value);
-    localStorage.setItem('praetor_tasks_disabled_rowsPerPage', value.toString());
-    setDisabledCurrentPage(1);
   };
 
   const checkInheritedDisabled = useCallback(
@@ -81,32 +69,15 @@ const TasksView: React.FC<TasksViewProps> = ({
     [projects, clients],
   );
 
-  const activeTasksTotal = useMemo(() => {
-    return tasks.filter((t) => !t.isDisabled && !checkInheritedDisabled(t));
-  }, [tasks, checkInheritedDisabled]);
-
-  const disabledTasksTotal = useMemo(() => {
-    return tasks.filter((t) => t.isDisabled || checkInheritedDisabled(t));
-  }, [tasks, checkInheritedDisabled]);
-
-  const hasAnyDisabledTasks = tasks.some((t) => t.isDisabled || checkInheritedDisabled(t));
-
   // Pagination Logic
-  const totalPages = Math.ceil(activeTasksTotal.length / rowsPerPage);
+  const totalPages = Math.ceil(tasks.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
-  const activeTasksPage = activeTasksTotal.slice(startIndex, startIndex + rowsPerPage);
-
-  const disabledTotalPages = Math.ceil(disabledTasksTotal.length / disabledRowsPerPage);
-  const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-  const disabledTasksPage = disabledTasksTotal.slice(
-    disabledStartIndex,
-    disabledStartIndex + disabledRowsPerPage,
-  );
+  const paginatedTasks = tasks.slice(startIndex, startIndex + rowsPerPage);
 
   const isManagement = role === 'admin' || role === 'manager';
 
   // Column definitions for StandardTable
-  const activeColumns: Column<ProjectTask>[] = useMemo(
+  const columns: Column<ProjectTask>[] = useMemo(
     () => [
       {
         header: t('common:labels.client'),
@@ -159,168 +130,32 @@ const TasksView: React.FC<TasksViewProps> = ({
       {
         header: t('tasks.name'),
         accessorKey: 'name',
-        cell: ({ value }) => <span className="text-sm font-bold text-slate-800">{value}</span>,
-      },
-      {
-        header: t('tasks.description'),
-        accessorFn: (task) => task.description || '',
-        cell: ({ value }) => (
-          <p className="text-xs text-slate-500 truncate max-w-50">
-            {value || (
-              <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
-            )}
-          </p>
-        ),
-      },
-      {
-        header: t('projects.tableHeaders.status'),
-        accessorFn: (task) => {
-          const project = projects.find((p) => p.id === task.projectId);
-          const client = clients.find((c) => c.id === project?.clientId);
-          const isProjectDisabled = project?.isDisabled || false;
-          const isClientDisabled = client?.isDisabled || false;
-          const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-          return isInheritedDisabled
-            ? t('projects:projects.statusInheritedDisable')
-            : t('projects:projects.statusActive');
-        },
-        cell: ({ row }) => {
-          const project = projects.find((p) => p.id === row.projectId);
-          const client = clients.find((c) => c.id === project?.clientId);
-          const isProjectDisabled = project?.isDisabled || false;
-          const isClientDisabled = client?.isDisabled || false;
-          const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-          return isInheritedDisabled ? (
-            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
-          ) : (
-            <StatusBadge type="active" label={t('projects:projects.statusActive')} />
-          );
-        },
-      },
-      {
-        header: t('projects.tableHeaders.actions'),
-        id: 'actions',
-        className: 'text-right w-[140px]',
-        headerClassName: 'text-right',
-        disableSorting: true,
-        disableFiltering: true,
-        cell: ({ row }) =>
-          isManagement ? (
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openAssignments(row.id);
-                }}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                title={t('tasks.manageMembers')}
-              >
-                <i className="fa-solid fa-users"></i>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openEditModal(row);
-                }}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                title={t('tasks.editTask')}
-              >
-                <i className="fa-solid fa-pen-to-square"></i>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUpdateTask(row.id, { isDisabled: true });
-                }}
-                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                title={t('projects.disableProject')}
-              >
-                <i className="fa-solid fa-ban"></i>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingTask(row);
-                  confirmDelete();
-                }}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title={t('common:buttons.delete')}
-              >
-                <i className="fa-solid fa-trash-can"></i>
-              </button>
-            </div>
-          ) : null,
-      },
-    ],
-    [t, projects, clients, isManagement, onUpdateTask],
-  );
-
-  const disabledColumns: Column<ProjectTask>[] = useMemo(
-    () => [
-      {
-        header: t('common:labels.client'),
-        accessorFn: (task) => {
-          const project = projects.find((p) => p.id === task.projectId);
-          const client = clients.find((c) => c.id === project?.clientId);
-          return client?.name || '—';
-        },
-        cell: ({ row }) => {
-          const project = projects.find((p) => p.id === row.projectId);
-          const client = clients.find((c) => c.id === project?.clientId);
-          return client ? (
-            <span className="text-sm font-bold text-slate-500">{client.name}</span>
-          ) : (
-            <span className="text-xs text-slate-400 italic">—</span>
-          );
-        },
-      },
-      {
-        header: t('tasks.project'),
-        accessorFn: (task) => {
-          const project = projects.find((p) => p.id === task.projectId);
-          return project?.name || t('projects.unknown');
-        },
-        cell: ({ row }) => {
-          const project = projects.find((p) => p.id === row.projectId);
-          const isProjectDisabled = project?.isDisabled || false;
+        cell: ({ value, row }) => {
+          const isDisabled = row.isDisabled || checkInheritedDisabled(row);
           return (
-            <div className="flex items-center gap-2">
-              <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: project?.color || '#ccc' }}
-              ></div>
-              <span
-                className={`text-[10px] font-black uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200 ${
-                  isProjectDisabled
-                    ? 'text-amber-600 bg-amber-50 border-amber-100'
-                    : 'text-slate-400'
-                }`}
-              >
-                {project?.name || t('projects.unknown')}
-              </span>
-            </div>
+            <span
+              className={`text-sm font-bold ${isDisabled ? 'text-slate-600 line-through decoration-slate-300' : 'text-slate-800'}`}
+            >
+              {value}
+            </span>
           );
         },
       },
       {
-        header: t('tasks.name'),
-        accessorKey: 'name',
-        cell: ({ value }) => (
-          <span className="text-sm font-bold text-slate-600 line-through decoration-slate-300">
-            {value}
-          </span>
-        ),
-      },
-      {
         header: t('tasks.description'),
         accessorFn: (task) => task.description || '',
-        cell: ({ value }) => (
-          <p className="text-xs text-slate-400 truncate max-w-50 italic">
-            {value || (
-              <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
-            )}
-          </p>
-        ),
+        cell: ({ value, row }) => {
+          const isDisabled = row.isDisabled || checkInheritedDisabled(row);
+          return (
+            <p
+              className={`text-xs truncate max-w-50 ${isDisabled ? 'text-slate-400 italic' : 'text-slate-500'}`}
+            >
+              {value || (
+                <span className="italic text-slate-400">{t('projects.noDescriptionProvided')}</span>
+              )}
+            </p>
+          );
+        },
       },
       {
         header: t('projects.tableHeaders.status'),
@@ -340,11 +175,15 @@ const TasksView: React.FC<TasksViewProps> = ({
           const isProjectDisabled = project?.isDisabled || false;
           const isClientDisabled = client?.isDisabled || false;
           const isInheritedDisabled = isProjectDisabled || isClientDisabled;
-          return isInheritedDisabled ? (
-            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
-          ) : (
-            <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
-          );
+          if (row.isDisabled) {
+            return <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />;
+          }
+          if (isInheritedDisabled) {
+            return (
+              <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
+            );
+          }
+          return <StatusBadge type="active" label={t('projects:projects.statusActive')} />;
         },
       },
       {
@@ -354,8 +193,14 @@ const TasksView: React.FC<TasksViewProps> = ({
         headerClassName: 'text-right',
         disableSorting: true,
         disableFiltering: true,
-        cell: ({ row }) =>
-          isManagement ? (
+        cell: ({ row }) => {
+          if (!isManagement) return null;
+          const project = projects.find((p) => p.id === row.projectId);
+          const client = clients.find((c) => c.id === project?.clientId);
+          const isInheritedDisabled = project?.isDisabled || client?.isDisabled;
+          const isTaskDisabled = row.isDisabled;
+
+          return (
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={(e) => {
@@ -377,19 +222,22 @@ const TasksView: React.FC<TasksViewProps> = ({
               >
                 <i className="fa-solid fa-pen-to-square"></i>
               </button>
-              {!(() => {
-                const project = projects.find((p) => p.id === row.projectId);
-                const client = clients.find((c) => c.id === project?.clientId);
-                return project?.isDisabled || client?.isDisabled;
-              })() && (
+              {!isInheritedDisabled && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onUpdateTask(row.id, { isDisabled: false });
+                    onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
                   }}
-                  className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                  className={`p-2 rounded-lg transition-all ${
+                    isTaskDisabled
+                      ? 'text-praetor hover:bg-slate-100'
+                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                  }`}
+                  title={
+                    isTaskDisabled ? t('projects.enableProject') : t('projects.disableProject')
+                  }
                 >
-                  <i className="fa-solid fa-rotate-left"></i>
+                  <i className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
                 </button>
               )}
               <button
@@ -404,10 +252,11 @@ const TasksView: React.FC<TasksViewProps> = ({
                 <i className="fa-solid fa-trash-can"></i>
               </button>
             </div>
-          ) : null,
+          );
+        },
       },
     ],
-    [t, projects, clients, isManagement, onUpdateTask],
+    [t, projects, clients, isManagement, onUpdateTask, checkInheritedDisabled],
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -836,8 +685,8 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       <StandardTable
         title={t('tasks.tasksDirectory')}
-        data={activeTasksPage}
-        columns={activeColumns}
+        data={paginatedTasks}
+        columns={columns}
         defaultRowsPerPage={rowsPerPage}
         footer={
           <>
@@ -860,9 +709,9 @@ const TasksView: React.FC<TasksViewProps> = ({
               />
               <span className="text-xs font-bold text-slate-400 ml-2">
                 {t('common:pagination.showing', {
-                  start: activeTasksPage.length > 0 ? startIndex + 1 : 0,
-                  end: Math.min(startIndex + rowsPerPage, activeTasksTotal.length),
-                  total: activeTasksTotal.length,
+                  start: paginatedTasks.length > 0 ? startIndex + 1 : 0,
+                  end: Math.min(startIndex + rowsPerPage, tasks.length),
+                  total: tasks.length,
                 })}
               </span>
             </div>
@@ -900,82 +749,6 @@ const TasksView: React.FC<TasksViewProps> = ({
           </>
         }
       />
-
-      {hasAnyDisabledTasks && (
-        <StandardTable
-          title={t('tasks.disabledTasks')}
-          data={disabledTasksPage}
-          columns={disabledColumns}
-          defaultRowsPerPage={disabledRowsPerPage}
-          containerClassName="border-dashed bg-slate-50"
-          footer={
-            <>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-500">
-                  {t('common:labels.rowsPerPage')}
-                </span>
-                <CustomSelect
-                  options={[
-                    { id: '5', name: '5' },
-                    { id: '10', name: '10' },
-                    { id: '20', name: '20' },
-                    { id: '50', name: '50' },
-                  ]}
-                  value={disabledRowsPerPage.toString()}
-                  onChange={(val) => handleDisabledRowsPerPageChange(val as string)}
-                  className="w-20"
-                  buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                  searchable={false}
-                />
-                <span className="text-xs font-bold text-slate-400 ml-2">
-                  {t('common:pagination.showing', {
-                    start: disabledTasksPage.length > 0 ? disabledStartIndex + 1 : 0,
-                    end: Math.min(
-                      disabledStartIndex + disabledRowsPerPage,
-                      disabledTasksTotal.length,
-                    ),
-                    total: disabledTasksTotal.length,
-                  })}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDisabledCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={disabledCurrentPage === 1}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-left text-xs"></i>
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setDisabledCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                        disabledCurrentPage === page
-                          ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                          : 'text-slate-500 hover:bg-slate-100'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() =>
-                    setDisabledCurrentPage((prev) => Math.min(disabledTotalPages, prev + 1))
-                  }
-                  disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-right text-xs"></i>
-                </button>
-              </div>
-            </>
-          }
-        />
-      )}
     </div>
   );
 };
