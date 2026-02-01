@@ -51,7 +51,8 @@ const Modal: React.FC<ModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[${zIndex}] flex items-center justify-center p-4 ${backdropClass}`}
+      className={`fixed inset-0 flex items-center justify-center p-4 ${backdropClass}`}
+      style={{ zIndex }}
       onClick={handleBackdropClick}
     >
       {children}
