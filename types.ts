@@ -293,7 +293,8 @@ export type View =
   | 'hr/external-employees'
   // Standalone
   | 'settings'
-  | 'docs/api';
+  | 'docs/api'
+  | 'docs/frontend';
 
 export interface WorkUnit {
   id: string;

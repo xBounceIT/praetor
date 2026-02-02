@@ -49,6 +49,7 @@ import api, { setAuthToken, getAuthToken, Settings } from './services/api';
 
 import NotFound from './components/NotFound';
 import ApiDocsView from './components/docs/ApiDocsView';
+import FrontendDocsView from './components/docs/FrontendDocsView';
 import InternalListingView from './components/HR/InternalListingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
@@ -662,6 +663,7 @@ const App: React.FC = () => {
       'hr/external-employees',
       'settings',
       'docs/api',
+      'docs/frontend',
     ],
     [],
   );
@@ -670,6 +672,9 @@ const App: React.FC = () => {
     const pathname = window.location.pathname;
     if (pathname.startsWith('/docs/api')) {
       return 'docs/api';
+    }
+    if (pathname.startsWith('/docs/frontend')) {
+      return 'docs/frontend';
     }
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
     const hash = rawHash as View;
@@ -703,6 +708,7 @@ const App: React.FC = () => {
       'hr/external-employees',
       'settings',
       'docs/api',
+      'docs/frontend',
     ];
     return validViews.includes(hash)
       ? hash
@@ -733,7 +739,7 @@ const App: React.FC = () => {
   }, [clientsOrders]);
 
   const isRouteAccessible = useMemo(() => {
-    if (activeView === 'docs/api') return true;
+    if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
     if (!currentUser) return false;
     if (activeView === '404') return false;
 
@@ -773,6 +779,7 @@ const App: React.FC = () => {
       // Standalone
       settings: ['admin', 'manager', 'user'],
       'docs/api': ['admin', 'manager', 'user'],
+      'docs/frontend': ['admin', 'manager', 'user'],
     };
 
     const allowedRoles = permissions[activeView as View];
@@ -791,9 +798,10 @@ const App: React.FC = () => {
   // Sync hash with activeView
   useEffect(() => {
     if (isLoading) return;
-    if (activeView === 'docs/api') {
-      if (window.location.pathname !== '/docs/api') {
-        window.history.replaceState(null, '', '/docs/api');
+    if (activeView === 'docs/api' || activeView === 'docs/frontend') {
+      const targetPath = activeView === 'docs/api' ? '/docs/api' : '/docs/frontend';
+      if (window.location.pathname !== targetPath) {
+        window.history.replaceState(null, '', targetPath);
       }
       return;
     }
@@ -2103,6 +2111,7 @@ const App: React.FC = () => {
         'configuration/email',
         'settings',
         'docs/api',
+        'docs/frontend',
       ]);
       if (activeView === '404' || !adminAllowed.has(activeView as View)) {
         setActiveView(getDefaultViewForRole(user.role));
@@ -2249,6 +2258,15 @@ const App: React.FC = () => {
       <>
         {currentUser && <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />}
         <ApiDocsView />
+      </>
+    );
+  }
+
+  if (activeView === 'docs/frontend') {
+    return (
+      <>
+        {currentUser && <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />}
+        <FrontendDocsView />
       </>
     );
   }

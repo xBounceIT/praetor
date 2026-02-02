@@ -21,6 +21,12 @@ const docsFrontendDevPlugin: Plugin = {
   apply: 'serve',
   configureServer(server) {
     if (!existsSync(docsFrontendDir)) return;
+    server.middlewares.use((req, _res, next) => {
+      if (req.url === '/docs/frontend' || req.url === '/docs/frontend/') {
+        req.url = '/docs/frontend/index.html';
+      }
+      next();
+    });
     server.middlewares.use(
       '/docs/frontend',
       sirv(docsFrontendDir, { dev: true, etag: true, extensions: ['html'] }),
