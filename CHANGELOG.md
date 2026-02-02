@@ -6,8 +6,9 @@
 * Aggiunta filtri sulle colonne stile excel
 * Rimosse le pagine Progetti e Attività dal modulo Presenze
 * Aggiunto all'utente base il modulo Progetti in sola lettura
-* Aggiunto sistema di notifiche email
+* Aggiunto sistema di notifiche email con tester
 * Aggiunto campo luogo in Timesheet, con default "Remoto" ma personalizzabile dalle impostazioni globali
+* Riorganizzate le pagine e file
 
 ## 20260125 - Operativo
 
