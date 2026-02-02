@@ -48,6 +48,7 @@ import { getLocalDateString } from './utils/date';
 import api, { setAuthToken, getAuthToken, Settings } from './services/api';
 
 import NotFound from './components/NotFound';
+import ApiDocsView from './components/docs/ApiDocsView';
 import InternalListingView from './components/HR/InternalListingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
@@ -660,11 +661,16 @@ const App: React.FC = () => {
       'hr/internal-employees',
       'hr/external-employees',
       'settings',
+      'docs/api',
     ],
     [],
   );
 
   const [activeView, setActiveView] = useState<View | '404'>(() => {
+    const pathname = window.location.pathname;
+    if (pathname.startsWith('/docs/api')) {
+      return 'docs/api';
+    }
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
     const hash = rawHash as View;
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
@@ -696,6 +702,7 @@ const App: React.FC = () => {
       'hr/internal-employees',
       'hr/external-employees',
       'settings',
+      'docs/api',
     ];
     return validViews.includes(hash)
       ? hash
@@ -726,6 +733,7 @@ const App: React.FC = () => {
   }, [clientsOrders]);
 
   const isRouteAccessible = useMemo(() => {
+    if (activeView === 'docs/api') return true;
     if (!currentUser) return false;
     if (activeView === '404') return false;
 
@@ -764,6 +772,7 @@ const App: React.FC = () => {
       'hr/external-employees': ['manager'],
       // Standalone
       settings: ['admin', 'manager', 'user'],
+      'docs/api': ['admin', 'manager', 'user'],
     };
 
     const allowedRoles = permissions[activeView as View];
@@ -782,6 +791,12 @@ const App: React.FC = () => {
   // Sync hash with activeView
   useEffect(() => {
     if (isLoading) return;
+    if (activeView === 'docs/api') {
+      if (window.location.pathname !== '/docs/api') {
+        window.history.replaceState(null, '', '/docs/api');
+      }
+      return;
+    }
     if (!currentUser) {
       if (window.location.hash !== '#/login') window.location.hash = '/login';
       return;
@@ -2087,6 +2102,7 @@ const App: React.FC = () => {
         'configuration/general',
         'configuration/email',
         'settings',
+        'docs/api',
       ]);
       if (activeView === '404' || !adminAllowed.has(activeView as View)) {
         setActiveView(getDefaultViewForRole(user.role));
@@ -2225,6 +2241,15 @@ const App: React.FC = () => {
           <p className="text-slate-600 font-medium">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  if (activeView === 'docs/api') {
+    return (
+      <>
+        {currentUser && <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />}
+        <ApiDocsView />
+      </>
     );
   }
 

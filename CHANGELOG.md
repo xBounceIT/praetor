@@ -1,5 +1,5 @@
 ## 20260209 - Operativo
-- Aggiunto Swagger e TypeDoc per documentazione automatica Backend e Frontend durante commit
+- Aggiunto Swagger (/docs/api) e TypeDoc (/docs/frontend) per documentazione automatica Backend e Frontend durante commit
 - Refactoring completo backend e frontend per supporto documentazione automatica
 - Migliorati controlli pre-commit per maggiore qualità del codice
 

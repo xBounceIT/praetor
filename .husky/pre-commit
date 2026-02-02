@@ -1,3 +1,6 @@
+bun run build
 bun run docs
-git add docs
+bun install
+git add docs bun.lock
 bunx lint-staged
+bun run lint:fix

@@ -1,5 +1,7 @@
+import { cpSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import sirv from 'sirv';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import pkg from './package.json';
@@ -12,6 +14,39 @@ const getBuildDate = () => {
   return `${year}${month}${day}`;
 };
 
+const docsFrontendDir = path.resolve(__dirname, 'docs', 'frontend');
+
+const docsFrontendDevPlugin: Plugin = {
+  name: 'docs-frontend-dev',
+  apply: 'serve',
+  configureServer(server) {
+    if (!existsSync(docsFrontendDir)) return;
+    server.middlewares.use(
+      '/docs/frontend',
+      sirv(docsFrontendDir, { dev: true, etag: true, extensions: ['html'] }),
+    );
+  },
+};
+
+const docsFrontendBuildPlugin = (): Plugin => {
+  let rootDir = __dirname;
+  let outDir = 'dist';
+  return {
+    name: 'docs-frontend-build',
+    apply: 'build',
+    configResolved(resolved) {
+      rootDir = resolved.root;
+      outDir = resolved.build.outDir;
+    },
+    closeBundle() {
+      if (!existsSync(docsFrontendDir)) return;
+      const targetDir = path.resolve(rootDir, outDir, 'docs', 'frontend');
+      mkdirSync(targetDir, { recursive: true });
+      cpSync(docsFrontendDir, targetDir, { recursive: true });
+    },
+  };
+};
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
@@ -19,7 +54,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
     },
-    plugins: [tailwindcss(), react()],
+    plugins: [tailwindcss(), react(), docsFrontendDevPlugin, docsFrontendBuildPlugin()],
     define: {
       'process.env.APP_VERSION': JSON.stringify(pkg.version),
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
