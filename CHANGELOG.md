@@ -9,6 +9,9 @@
 * Aggiunto sistema di notifiche email con tester
 * Aggiunto campo luogo in Timesheet, con default "Remoto" ma personalizzabile dalle impostazioni globali
 * Riorganizzate le pagine e file
+* Migrato da NPM a BUN
+* Revert HTTP2 -> HTTP1.1 (senza ssl i browser non lo supportano e da errori)
+* Risolti 200+ errori typescript
 
 ## 20260125 - Operativo
 
