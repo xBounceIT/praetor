@@ -1,1 +1,3 @@
+bun run docs
+git add docs
 bunx lint-staged

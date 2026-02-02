@@ -8,6 +8,69 @@ import {
   validateClientIdentifier,
   optionalNonEmptyString,
 } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const clientSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    description: { type: ['string', 'null'] },
+    isDisabled: { type: 'boolean' },
+    type: { type: 'string' },
+    contactName: { type: ['string', 'null'] },
+    clientCode: { type: ['string', 'null'] },
+    email: { type: ['string', 'null'] },
+    phone: { type: ['string', 'null'] },
+    address: { type: ['string', 'null'] },
+    vatNumber: { type: ['string', 'null'] },
+    taxCode: { type: ['string', 'null'] },
+    billingCode: { type: ['string', 'null'] },
+  },
+  required: ['id', 'name'],
+} as const;
+
+const clientCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    type: { type: 'string' },
+    contactName: { type: 'string' },
+    clientCode: { type: 'string' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    address: { type: 'string' },
+    vatNumber: { type: 'string' },
+    taxCode: { type: 'string' },
+    billingCode: { type: 'string' },
+  },
+  required: ['name'],
+} as const;
+
+const clientUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    isDisabled: { type: 'boolean' },
+    type: { type: 'string' },
+    contactName: { type: 'string' },
+    clientCode: { type: 'string' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    address: { type: 'string' },
+    vatNumber: { type: 'string' },
+    taxCode: { type: 'string' },
+    billingCode: { type: 'string' },
+  },
+} as const;
 
 interface DatabaseError extends Error {
   code?: string;
@@ -21,6 +84,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['clients'],
+        summary: 'List clients',
+        response: {
+          200: { type: 'array', items: clientSchema },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       const isStandardUser = request.user!.role === 'user';
@@ -72,6 +143,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['clients'],
+        summary: 'Create client',
+        body: clientCreateBodySchema,
+        response: {
+          201: clientSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
@@ -212,6 +292,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['clients'],
+        summary: 'Update client',
+        params: idParamSchema,
+        body: clientUpdateBodySchema,
+        response: {
+          200: clientSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -384,6 +474,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['clients'],
+        summary: 'Delete client',
+        params: idParamSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };

@@ -8,6 +8,35 @@ import {
   optionalEmail,
   badRequest,
 } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const settingsSchema = {
+  type: 'object',
+  properties: {
+    fullName: { type: 'string' },
+    email: { type: 'string' },
+    language: { type: 'string', enum: ['en', 'it', 'auto'] },
+  },
+  required: ['fullName', 'email', 'language'],
+} as const;
+
+const settingsUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    fullName: { type: 'string' },
+    email: { type: 'string' },
+    language: { type: 'string', enum: ['en', 'it', 'auto'] },
+  },
+} as const;
+
+const passwordUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    currentPassword: { type: 'string' },
+    newPassword: { type: 'string' },
+  },
+  required: ['currentPassword', 'newPassword'],
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get current user's settings
@@ -15,6 +44,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Get current user settings',
+        response: {
+          200: settingsSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       const result = await query(
@@ -54,6 +91,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Update settings',
+        body: settingsUpdateBodySchema,
+        response: {
+          200: settingsSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { fullName, email, language } = request.body as {
@@ -111,6 +157,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/password',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['settings'],
+        summary: 'Update password',
+        body: passwordUpdateBodySchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { currentPassword, newPassword } = request.body as {

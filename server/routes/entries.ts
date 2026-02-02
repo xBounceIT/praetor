@@ -12,6 +12,96 @@ import {
   parseQueryBoolean,
   isWeekendDate,
 } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const entrySchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    userId: { type: 'string' },
+    date: { type: 'string', format: 'date' },
+    clientId: { type: 'string' },
+    clientName: { type: 'string' },
+    projectId: { type: 'string' },
+    projectName: { type: 'string' },
+    task: { type: 'string' },
+    notes: { type: ['string', 'null'] },
+    duration: { type: 'number' },
+    hourlyCost: { type: 'number' },
+    isPlaceholder: { type: 'boolean' },
+    location: { type: 'string' },
+    createdAt: { type: 'number' },
+  },
+  required: [
+    'id',
+    'userId',
+    'date',
+    'clientId',
+    'clientName',
+    'projectId',
+    'projectName',
+    'task',
+    'duration',
+    'hourlyCost',
+    'isPlaceholder',
+    'location',
+    'createdAt',
+  ],
+} as const;
+
+const entryCreateBodySchema = {
+  type: 'object',
+  properties: {
+    date: { type: 'string', format: 'date' },
+    clientId: { type: 'string' },
+    clientName: { type: 'string' },
+    projectId: { type: 'string' },
+    projectName: { type: 'string' },
+    task: { type: 'string' },
+    notes: { type: 'string' },
+    duration: { type: 'number' },
+    isPlaceholder: { type: 'boolean' },
+    userId: { type: 'string' },
+    location: { type: 'string' },
+  },
+  required: ['date', 'clientId', 'clientName', 'projectId', 'projectName', 'task'],
+} as const;
+
+const entryUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    duration: { type: 'number' },
+    notes: { type: 'string' },
+    isPlaceholder: { type: 'boolean' },
+    location: { type: 'string' },
+  },
+} as const;
+
+const entriesListQuerySchema = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string' },
+  },
+} as const;
+
+const entriesBulkDeleteQuerySchema = {
+  type: 'object',
+  properties: {
+    projectId: { type: 'string' },
+    task: { type: 'string' },
+    futureOnly: { type: 'boolean' },
+    placeholderOnly: { type: 'boolean' },
+  },
+  required: ['projectId', 'task'],
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List time entries
@@ -19,6 +109,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
+      schema: {
+        tags: ['entries'],
+        summary: 'List time entries',
+        querystring: entriesListQuerySchema,
+        response: {
+          200: { type: 'array', items: entrySchema },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       let result;
@@ -104,6 +203,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
+      schema: {
+        tags: ['entries'],
+        summary: 'Create time entry',
+        body: entryCreateBodySchema,
+        response: {
+          201: entrySchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
@@ -246,6 +354,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
+      schema: {
+        tags: ['entries'],
+        summary: 'Update time entry',
+        params: idParamSchema,
+        body: entryUpdateBodySchema,
+        response: {
+          200: entrySchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -331,6 +449,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
+      schema: {
+        tags: ['entries'],
+        summary: 'Delete time entry',
+        params: idParamSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -374,6 +501,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager', 'user')],
+      schema: {
+        tags: ['entries'],
+        summary: 'Bulk delete time entries',
+        querystring: entriesBulkDeleteQuerySchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { projectId, task, futureOnly, placeholderOnly } = request.query as {

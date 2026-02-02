@@ -10,6 +10,68 @@ import {
   optionalDateString,
   badRequest,
 } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const taskSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    projectId: { type: 'string' },
+    description: { type: ['string', 'null'] },
+    isRecurring: { type: 'boolean' },
+    recurrencePattern: { type: ['string', 'null'] },
+    recurrenceStart: { type: ['string', 'null'] },
+    recurrenceEnd: { type: ['string', 'null'] },
+    recurrenceDuration: { type: 'number' },
+    isDisabled: { type: 'boolean' },
+  },
+  required: ['id', 'name', 'projectId', 'isRecurring', 'recurrenceDuration', 'isDisabled'],
+} as const;
+
+const taskCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    projectId: { type: 'string' },
+    description: { type: 'string' },
+    isRecurring: { type: 'boolean' },
+    recurrencePattern: { type: 'string' },
+    recurrenceStart: { type: 'string' },
+    recurrenceDuration: { type: 'number' },
+  },
+  required: ['name', 'projectId'],
+} as const;
+
+const taskUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    description: { type: 'string' },
+    isRecurring: { type: 'boolean' },
+    recurrencePattern: { type: 'string' },
+    recurrenceStart: { type: 'string' },
+    recurrenceEnd: { type: 'string' },
+    recurrenceDuration: { type: 'number' },
+    isDisabled: { type: 'boolean' },
+  },
+} as const;
+
+const userIdsSchema = {
+  type: 'object',
+  properties: {
+    userIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['userIds'],
+} as const;
 
 interface DatabaseError extends Error {
   code?: string;
@@ -23,6 +85,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['tasks'],
+        summary: 'List tasks',
+        response: {
+          200: { type: 'array', items: taskSchema },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       let queryText = `
@@ -70,6 +140,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Create task',
+        body: taskCreateBodySchema,
+        response: {
+          201: taskSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } =
@@ -159,6 +238,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Update task',
+        params: idParamSchema,
+        body: taskUpdateBodySchema,
+        response: {
+          200: taskSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -255,6 +344,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Delete task',
+        params: idParamSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -274,6 +372,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id/users',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Get task user assignments',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: { type: 'string' } },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -291,6 +398,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id/users',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Update task user assignments',
+        params: idParamSchema,
+        body: userIdsSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };

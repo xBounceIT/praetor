@@ -3,6 +3,79 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import emailService from '../services/email.ts';
 import { encrypt } from '../utils/crypto.ts';
+import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const emailConfigSchema = {
+  type: 'object',
+  properties: {
+    enabled: { type: 'boolean' },
+    smtpHost: { type: 'string' },
+    smtpPort: { type: 'number' },
+    smtpEncryption: { type: 'string' },
+    smtpRejectUnauthorized: { type: 'boolean' },
+    smtpUser: { type: 'string' },
+    smtpPassword: { type: 'string' },
+    fromEmail: { type: 'string' },
+    fromName: { type: 'string' },
+  },
+  required: [
+    'enabled',
+    'smtpHost',
+    'smtpPort',
+    'smtpEncryption',
+    'smtpRejectUnauthorized',
+    'smtpUser',
+    'smtpPassword',
+    'fromEmail',
+    'fromName',
+  ],
+} as const;
+
+const emailConfigUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    enabled: { type: 'boolean' },
+    smtpHost: { type: 'string' },
+    smtpPort: { type: 'number' },
+    smtpEncryption: { type: 'string' },
+    smtpRejectUnauthorized: { type: 'boolean' },
+    smtpUser: { type: 'string' },
+    smtpPassword: { type: 'string' },
+    fromEmail: { type: 'string' },
+    fromName: { type: 'string' },
+  },
+} as const;
+
+const emailTestBodySchema = {
+  type: 'object',
+  properties: {
+    recipientEmail: { type: 'string' },
+  },
+  required: ['recipientEmail'],
+} as const;
+
+const emailTestResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    code: { type: 'string' },
+    params: { type: ['object', 'null'] },
+    messageId: { type: 'string' },
+  },
+  required: ['success', 'code'],
+  additionalProperties: true,
+} as const;
+
+const emailTestConnectionResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    code: { type: 'string' },
+    params: { type: ['object', 'null'] },
+  },
+  required: ['success', 'code'],
+  additionalProperties: true,
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET /config - Get email configuration (Admin only)
@@ -10,6 +83,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/config',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['email'],
+        summary: 'Get email configuration',
+        response: {
+          200: emailConfigSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (_request, _reply) => {
       const result = await query('SELECT * FROM email_config WHERE id = 1');
@@ -46,6 +127,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/config',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['email'],
+        summary: 'Update email configuration',
+        body: emailConfigUpdateBodySchema,
+        response: {
+          200: emailConfigSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request, _reply) => {
       const {
@@ -126,6 +216,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/test',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['email'],
+        summary: 'Send test email',
+        body: emailTestBodySchema,
+        response: {
+          200: emailTestResponseSchema,
+          400: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
     },
     async (request, reply) => {
       const { recipientEmail } = request.body as { recipientEmail: string };
@@ -161,6 +261,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/test-connection',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['email'],
+        summary: 'Test SMTP connection',
+        response: {
+          200: emailTestConnectionResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
     },
     async (_request, reply) => {
       // Reload config before testing

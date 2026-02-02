@@ -1,3 +1,8 @@
+## 20260209 - Operativo
+- Aggiunto Swagger e TypeDoc per documentazione automatica Backend e Frontend durante commit
+- Refactoring completo backend e frontend per supporto documentazione automatica
+- Migliorati controlli pre-commit per maggiore qualità del codice
+
 ## 20260202 - Operativo
 
 * Ridisegnata la sidebar per avere tutti i moduli disponibili nel menu esposti e le loro pagine come voci del dropdown

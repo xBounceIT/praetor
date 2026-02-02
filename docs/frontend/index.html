@@ -1,0 +1,82 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="."><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>praetor</title><meta name="description" content="Documentation for praetor"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><div class="table-cell" id="tsd-search"><div class="field"><label for="tsd-search-field" class="tsd-widget tsd-toolbar-icon search no-caption"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></label><input type="text" id="tsd-search-field" aria-label="Search"/></div><div class="field"><div id="tsd-toolbar-links"></div></div><ul class="results"><li class="state loading">Preparing search index...</li><li class="state failure">The search index is not available</li></ul><a href="index.html" class="title">praetor</a></div><div class="table-cell" id="tsd-widgets"><a href="#" class="tsd-widget tsd-toolbar-icon menu no-caption" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>praetor</h1></div><div class="tsd-panel tsd-typography"><a id="praetor" class="tsd-anchor"></a><h1 class="tsd-anchor-link">Praetor<a href="#praetor" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1><p>Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of tools like Anuko Time Tracker.</p>
+<a id="features" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Features<a href="#features" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><ul>
+<li><strong>Smart Time Entry</strong>: Log time using natural language (e.g., &quot;2 hours on Frontend for Acme&quot;) powered by Google Gemini AI.</li>
+<li><strong>Robust Reporting</strong>:
+<ul>
+<li><strong>Dashboard</strong>: High-level overview with bar charts for weekly activity and pie charts for project distribution.</li>
+<li><strong>Detailed Reports</strong>: Filter by Date Range, Client, Project, Task, and User.</li>
+<li><strong>Visualizations</strong>: Interactive charts built with Recharts.</li>
+</ul>
+</li>
+<li><strong>Role-Based Access Control (RBAC)</strong>:
+<ul>
+<li><strong>Admin</strong>: Full system access, user management, authentication settings.</li>
+<li><strong>Manager</strong>: Access to all user reports and project/client management.</li>
+<li><strong>User</strong>: Personal time tracking and reporting.</li>
+</ul>
+</li>
+<li><strong>Hierarchical Management</strong>: Manage Clients, Projects, and Tasks with dependency filtering.</li>
+<li><strong>Recurring Tasks</strong>: Automate time entry placeholders for daily, weekly, or monthly tasks.</li>
+<li><strong>AI Coach</strong>: Receive personalized productivity insights and pattern analysis.</li>
+<li><strong>Authentication</strong>: Built-in credential system with a UI for configuring LDAP/Active Directory integration.</li>
+</ul>
+<a id="tech-stack" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Tech Stack<a href="#tech-stack" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><ul>
+<li><strong>Frontend</strong>: React 19, TypeScript</li>
+<li><strong>Styling</strong>: Tailwind CSS</li>
+<li><strong>Charts</strong>: Recharts</li>
+<li><strong>AI Integration</strong>: Google Gemini API (<code>@google/genai</code>)</li>
+<li><strong>Icons</strong>: FontAwesome</li>
+</ul>
+<a id="setup--installation" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Setup &amp; Installation<a href="#setup--installation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><ol>
+<li>
+<p><strong>Clone the repository</strong></p>
+<pre><code class="bash"><span class="hl-0">git</span><span class="hl-1"> </span><span class="hl-2">clone</span><span class="hl-1"> </span><span class="hl-2">https://github.com/xBounceIT/praetor</span><br/><span class="hl-0">cd</span><span class="hl-1"> </span><span class="hl-2">praetor</span>
+</code><button type="button">Copy</button></pre>
+
+</li>
+<li>
+<p><strong>Install dependencies</strong></p>
+<pre><code class="bash"><span class="hl-0">bun</span><span class="hl-1"> </span><span class="hl-2">install</span>
+</code><button type="button">Copy</button></pre>
+
+</li>
+<li>
+<p><strong>Environment Configuration</strong>
+The application requires a Google Gemini API key to function fully (Smart Entry &amp; AI Coach).</p>
+<p>Ensure the <code>API_KEY</code> environment variable is set in your environment.</p>
+<p><em>Example <code>.env</code> (if using a build tool like Vite):</em></p>
+<pre><code><span class="hl-3">API_KEY</span><span class="hl-1">=</span><span class="hl-4">your_google_gemini_api_key</span>
+</code><button>Copy</button></pre>
+
+</li>
+<li>
+<p><strong>Run Locally</strong></p>
+<pre><code class="bash"><span class="hl-0">bun</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">dev</span>
+</code><button type="button">Copy</button></pre>
+
+</li>
+</ol>
+<a id="deployment" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Deployment<a href="#deployment" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><a id="docker" class="tsd-anchor"></a><h3 class="tsd-anchor-link">Docker<a href="#docker" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>You can containerize the application using Nginx to serve the static files:</p>
+<pre><code class="bash"><span class="hl-0">cp</span><span class="hl-1"> </span><span class="hl-2">.env.example</span><span class="hl-1"> </span><span class="hl-2">.env</span><br/><br/><span class="hl-0">docker</span><span class="hl-1"> </span><span class="hl-2">compose</span><span class="hl-1"> </span><span class="hl-2">up</span><span class="hl-1"> </span><span class="hl-5">-d</span><span class="hl-1"> </span><span class="hl-5">--build</span>
+</code><button type="button">Copy</button></pre>
+
+<a id="usage-guide" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Usage Guide<a href="#usage-guide" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><ul>
+<li>
+<p><strong>Login</strong>:</p>
+<ul>
+<li>Default Admin: <code>admin</code> / <code>password</code></li>
+<li>Default Manager: <code>manager</code> / <code>password</code></li>
+<li>Default User: <code>user</code> / <code>password</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Tracking Time</strong>: Navigate to the &quot;Time Tracker&quot; view. You can manually select clients/projects or toggle &quot;Magic Input&quot; to type a sentence describing your work.</p>
+</li>
+<li>
+<p><strong>Reports</strong>: Go to the &quot;Reports&quot; view. Use the animated tabs to switch between the graphical Dashboard and the Detailed List view. Managers can filter by specific users.</p>
+</li>
+<li>
+<p><strong>Settings</strong>: Click your avatar in the top right to access user profile settings, daily goals, and UI preferences.</p>
+</li>
+</ul>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#praetor"><span>Praetor</span></a><ul><li><a href="#features"><span>Features</span></a></li><li><a href="#tech-stack"><span>Tech <wbr/>Stack</span></a></li><li><a href="#setup--installation"><span>Setup &amp; <wbr/>Installation</span></a></li><li><a href="#deployment"><span>Deployment</span></a></li><li><ul><li><a href="#docker"><span>Docker</span></a></li></ul></li><li><a href="#usage-guide"><span>Usage <wbr/>Guide</span></a></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">praetor</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>

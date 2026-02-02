@@ -7,6 +7,45 @@ import {
   parseBoolean,
   badRequest,
 } from '../utils/validation.ts';
+import { standardErrorResponses } from '../schemas/common.ts';
+
+const generalSettingsSchema = {
+  type: 'object',
+  properties: {
+    currency: { type: 'string' },
+    dailyLimit: { type: 'number' },
+    startOfWeek: { type: 'string' },
+    treatSaturdayAsHoliday: { type: 'boolean' },
+    enableAiInsights: { type: 'boolean' },
+    geminiApiKey: { type: 'string' },
+    allowWeekendSelection: { type: 'boolean' },
+    defaultLocation: { type: 'string' },
+  },
+  required: [
+    'currency',
+    'dailyLimit',
+    'startOfWeek',
+    'treatSaturdayAsHoliday',
+    'enableAiInsights',
+    'geminiApiKey',
+    'allowWeekendSelection',
+    'defaultLocation',
+  ],
+} as const;
+
+const generalSettingsUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    currency: { type: 'string' },
+    dailyLimit: { type: 'number' },
+    startOfWeek: { type: 'string' },
+    treatSaturdayAsHoliday: { type: 'boolean' },
+    enableAiInsights: { type: 'boolean' },
+    geminiApiKey: { type: 'string' },
+    allowWeekendSelection: { type: 'boolean' },
+    defaultLocation: { type: 'string' },
+  },
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get global settings (available to all authenticated users)
@@ -14,6 +53,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['general-settings'],
+        summary: 'Get global settings',
+        response: {
+          200: generalSettingsSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       const result = await query(
@@ -58,6 +105,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['general-settings'],
+        summary: 'Update global settings',
+        body: generalSettingsUpdateBodySchema,
+        response: {
+          200: generalSettingsSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {

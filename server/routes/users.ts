@@ -11,6 +11,81 @@ import {
   optionalArrayOfStrings,
   badRequest,
 } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const userSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    username: { type: 'string' },
+    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+    avatarInitials: { type: 'string' },
+    costPerHour: { type: 'number' },
+    isDisabled: { type: 'boolean' },
+    employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+  },
+  required: [
+    'id',
+    'name',
+    'username',
+    'role',
+    'avatarInitials',
+    'costPerHour',
+    'isDisabled',
+    'employeeType',
+  ],
+} as const;
+
+const userCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    username: { type: 'string' },
+    password: { type: 'string' },
+    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+    costPerHour: { type: 'number' },
+    employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+  },
+  required: ['name'],
+} as const;
+
+const userUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    isDisabled: { type: 'boolean' },
+    costPerHour: { type: 'number' },
+    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+  },
+} as const;
+
+const assignmentsSchema = {
+  type: 'object',
+  properties: {
+    clientIds: { type: 'array', items: { type: 'string' } },
+    projectIds: { type: 'array', items: { type: 'string' } },
+    taskIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['clientIds', 'projectIds', 'taskIds'],
+} as const;
+
+const assignmentsUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    clientIds: { type: 'array', items: { type: 'string' } },
+    projectIds: { type: 'array', items: { type: 'string' } },
+    taskIds: { type: 'array', items: { type: 'string' } },
+  },
+} as const;
 
 interface DatabaseError extends Error {
   code?: string;
@@ -51,6 +126,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['users'],
+        summary: 'List users',
+        response: {
+          200: { type: 'array', items: userSchema },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       let result;
@@ -101,6 +184,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('admin', 'manager')],
+      schema: {
+        tags: ['users'],
+        summary: 'Create user',
+        body: userCreateBodySchema,
+        response: {
+          201: userSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, username, password, role, costPerHour, employeeType } = request.body as {
@@ -222,6 +314,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('admin', 'manager')],
+      schema: {
+        tags: ['users'],
+        summary: 'Delete user',
+        params: idParamSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -258,6 +359,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('admin', 'manager')],
+      schema: {
+        tags: ['users'],
+        summary: 'Update user',
+        params: idParamSchema,
+        body: userUpdateBodySchema,
+        response: {
+          200: userSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -399,6 +510,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id/assignments',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['users'],
+        summary: 'Get user assignments',
+        params: idParamSchema,
+        response: {
+          200: assignmentsSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -437,6 +557,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id/assignments',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['users'],
+        summary: 'Update user assignments',
+        params: idParamSchema,
+        body: assignmentsUpdateBodySchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };

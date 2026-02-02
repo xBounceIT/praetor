@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "App.tsx",
+    "index.tsx",
+    "components",
+    "services",
+    "utils",
+    "types.ts",
+    "constants.tsx"
+  ],
+  "entryPointStrategy": "expand",
+  "tsconfig": "tsconfig.json",
+  "out": "docs/frontend",
+  "excludeExternals": true,
+  "includeVersion": false
+}

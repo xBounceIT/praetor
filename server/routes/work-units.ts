@@ -9,6 +9,65 @@ import {
   ensureArrayOfStrings,
   badRequest,
 } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const managerSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+  },
+  required: ['id', 'name'],
+} as const;
+
+const workUnitSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    managers: { type: 'array', items: managerSchema },
+    description: { type: ['string', 'null'] },
+    isDisabled: { type: 'boolean' },
+    userCount: { type: 'number' },
+  },
+  required: ['id', 'name', 'managers', 'isDisabled', 'userCount'],
+} as const;
+
+const workUnitCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    managerIds: { type: 'array', items: { type: 'string' } },
+    description: { type: 'string' },
+  },
+  required: ['name', 'managerIds'],
+} as const;
+
+const workUnitUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    managerIds: { type: 'array', items: { type: 'string' } },
+    description: { type: 'string' },
+    isDisabled: { type: 'boolean' },
+  },
+} as const;
+
+const workUnitUsersBodySchema = {
+  type: 'object',
+  properties: {
+    userIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['userIds'],
+} as const;
 
 // Helper to fetch unit with managers and user count
 const fetchUnitDetails = async (unitId: string) => {
@@ -36,6 +95,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['work-units'],
+        summary: 'List work units',
+        response: {
+          200: { type: 'array', items: workUnitSchema },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       let result;
@@ -94,6 +161,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['work-units'],
+        summary: 'Create work unit',
+        body: workUnitCreateBodySchema,
+        response: {
+          201: workUnitSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, managerIds, description } = request.body as {
@@ -153,6 +229,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['work-units'],
+        summary: 'Update work unit',
+        params: idParamSchema,
+        body: workUnitUpdateBodySchema,
+        response: {
+          200: workUnitSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -265,6 +351,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['work-units'],
+        summary: 'Delete work unit',
+        params: idParamSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -288,6 +383,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id/users',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['work-units'],
+        summary: 'Get users in work unit',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: { type: 'string' } },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -325,6 +429,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id/users',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['work-units'],
+        summary: 'Update work unit users',
+        params: idParamSchema,
+        body: workUnitUsersBodySchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };

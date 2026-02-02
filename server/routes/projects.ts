@@ -2,6 +2,50 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireRole } from '../middleware/auth.ts';
 import { requireNonEmptyString, validateHexColor, badRequest } from '../utils/validation.ts';
+import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const projectSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    clientId: { type: 'string' },
+    color: { type: 'string' },
+    description: { type: ['string', 'null'] },
+    isDisabled: { type: 'boolean' },
+  },
+  required: ['id', 'name', 'clientId', 'color', 'isDisabled'],
+} as const;
+
+const projectCreateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    clientId: { type: 'string' },
+    description: { type: 'string' },
+    color: { type: 'string' },
+  },
+  required: ['name', 'clientId'],
+} as const;
+
+const projectUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    clientId: { type: 'string' },
+    description: { type: 'string' },
+    color: { type: 'string' },
+    isDisabled: { type: 'boolean' },
+  },
+} as const;
 
 interface DatabaseError extends Error {
   code?: string;
@@ -15,6 +59,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken],
+      schema: {
+        tags: ['projects'],
+        summary: 'List projects',
+        response: {
+          200: { type: 'array', items: projectSchema },
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       let queryText = `
@@ -54,6 +106,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['projects'],
+        summary: 'Create project',
+        body: projectCreateBodySchema,
+        response: {
+          201: projectSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, clientId, description, color } = request.body as {
@@ -115,6 +176,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['projects'],
+        summary: 'Delete project',
+        params: idParamSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
@@ -137,6 +207,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/:id',
     {
       onRequest: [authenticateToken, requireRole('manager')],
+      schema: {
+        tags: ['projects'],
+        summary: 'Update project',
+        params: idParamSchema,
+        body: projectUpdateBodySchema,
+        response: {
+          200: projectSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };

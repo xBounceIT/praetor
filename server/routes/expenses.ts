@@ -10,6 +10,58 @@ import {
   optionalLocalizedPositiveNumber,
   badRequest,
 } from '../utils/validation.ts';
+import { standardErrorResponses } from '../schemas/common.ts';
+
+const idParamSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+  },
+  required: ['id'],
+} as const;
+
+const expenseSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    description: { type: 'string' },
+    amount: { type: 'number' },
+    expenseDate: { type: 'string', format: 'date' },
+    category: { type: ['string', 'null'] },
+    vendor: { type: ['string', 'null'] },
+    receiptReference: { type: ['string', 'null'] },
+    notes: { type: ['string', 'null'] },
+    createdAt: { type: 'number' },
+  },
+  required: ['id', 'description', 'amount', 'expenseDate', 'createdAt'],
+} as const;
+
+const expenseCreateBodySchema = {
+  type: 'object',
+  properties: {
+    description: { type: 'string' },
+    amount: { type: 'number' },
+    expenseDate: { type: 'string', format: 'date' },
+    category: { type: 'string' },
+    vendor: { type: 'string' },
+    receiptReference: { type: 'string' },
+    notes: { type: 'string' },
+  },
+  required: ['description', 'amount', 'expenseDate'],
+} as const;
+
+const expenseUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    description: { type: 'string' },
+    amount: { type: 'number' },
+    expenseDate: { type: 'string', format: 'date' },
+    category: { type: 'string' },
+    vendor: { type: 'string' },
+    receiptReference: { type: 'string' },
+    notes: { type: 'string' },
+  },
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All expenses routes require manager role
@@ -17,9 +69,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all expenses
-  fastify.get('/', async (_request: FastifyRequest, _reply: FastifyReply) => {
-    const result = await query(
-      `SELECT 
+  fastify.get(
+    '/',
+    {
+      schema: {
+        tags: ['expenses'],
+        summary: 'List expenses',
+        response: {
+          200: { type: 'array', items: expenseSchema },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (_request: FastifyRequest, _reply: FastifyReply) => {
+      const result = await query(
+        `SELECT 
                 id, 
                 description,
                 amount,
@@ -31,55 +95,69 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
             FROM expenses 
             ORDER BY expense_date DESC`,
-    );
+      );
 
-    const expenses = result.rows.map((expense) => ({
-      ...expense,
-      amount: parseFloat(expense.amount),
-      expenseDate: expense.expenseDate.toISOString().split('T')[0],
-    }));
+      const expenses = result.rows.map((expense) => ({
+        ...expense,
+        amount: parseFloat(expense.amount),
+        expenseDate: expense.expenseDate.toISOString().split('T')[0],
+      }));
 
-    return expenses;
-  });
+      return expenses;
+    },
+  );
 
   // POST / - Create expense
-  fastify.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { description, amount, expenseDate, category, vendor, receiptReference, notes } =
-      request.body as {
-        description: string;
-        amount: number;
-        expenseDate: string;
-        category?: string;
-        vendor?: string;
-        receiptReference?: string;
-        notes?: string;
-      };
+  fastify.post(
+    '/',
+    {
+      schema: {
+        tags: ['expenses'],
+        summary: 'Create expense',
+        body: expenseCreateBodySchema,
+        response: {
+          201: expenseSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { description, amount, expenseDate, category, vendor, receiptReference, notes } =
+        request.body as {
+          description: string;
+          amount: number;
+          expenseDate: string;
+          category?: string;
+          vendor?: string;
+          receiptReference?: string;
+          notes?: string;
+        };
 
-    const descriptionResult = requireNonEmptyString(description, 'description');
-    if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
+      const descriptionResult = requireNonEmptyString(description, 'description');
+      if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
 
-    const amountResult = parseLocalizedPositiveNumber(amount, 'amount');
-    if (!amountResult.ok) return badRequest(reply, amountResult.message);
+      const amountResult = parseLocalizedPositiveNumber(amount, 'amount');
+      if (!amountResult.ok) return badRequest(reply, amountResult.message);
 
-    const expenseDateResult = parseDateString(expenseDate, 'expenseDate');
-    if (!expenseDateResult.ok) return badRequest(reply, expenseDateResult.message);
+      const expenseDateResult = parseDateString(expenseDate, 'expenseDate');
+      if (!expenseDateResult.ok) return badRequest(reply, expenseDateResult.message);
 
-    const categoryResult = optionalNonEmptyString(category, 'category');
-    if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
+      const categoryResult = optionalNonEmptyString(category, 'category');
+      if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
 
-    const vendorResult = optionalNonEmptyString(vendor, 'vendor');
-    if (!vendorResult.ok) return badRequest(reply, vendorResult.message);
+      const vendorResult = optionalNonEmptyString(vendor, 'vendor');
+      if (!vendorResult.ok) return badRequest(reply, vendorResult.message);
 
-    const receiptReferenceResult = optionalNonEmptyString(receiptReference, 'receiptReference');
-    if (!receiptReferenceResult.ok) return badRequest(reply, receiptReferenceResult.message);
+      const receiptReferenceResult = optionalNonEmptyString(receiptReference, 'receiptReference');
+      if (!receiptReferenceResult.ok) return badRequest(reply, receiptReferenceResult.message);
 
-    const notesResult = optionalNonEmptyString(notes, 'notes');
-    if (!notesResult.ok) return badRequest(reply, notesResult.message);
+      const notesResult = optionalNonEmptyString(notes, 'notes');
+      if (!notesResult.ok) return badRequest(reply, notesResult.message);
 
-    const expenseId = 'exp-' + Date.now();
+      const expenseId = 'exp-' + Date.now();
 
-    const result = await query(
-      `INSERT INTO expenses (
+      const result = await query(
+        `INSERT INTO expenses (
                     id, description, amount, expense_date, category, vendor, receipt_reference, notes
                 ) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
@@ -93,106 +171,121 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     receipt_reference as "receiptReference",
                     notes,
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
-      [
-        expenseId,
-        descriptionResult.value,
-        amountResult.value,
-        expenseDateResult.value,
-        categoryResult.value || 'other',
-        vendorResult.value,
-        receiptReferenceResult.value,
-        notesResult.value,
-      ],
-    );
+        [
+          expenseId,
+          descriptionResult.value,
+          amountResult.value,
+          expenseDateResult.value,
+          categoryResult.value || 'other',
+          vendorResult.value,
+          receiptReferenceResult.value,
+          notesResult.value,
+        ],
+      );
 
-    const expense = result.rows[0];
-    return reply.code(201).send({
-      ...expense,
-      amount: parseFloat(expense.amount),
-      expenseDate: new Date(expense.expenseDate).toISOString().split('T')[0],
-    });
-  });
+      const expense = result.rows[0];
+      return reply.code(201).send({
+        ...expense,
+        amount: parseFloat(expense.amount),
+        expenseDate: new Date(expense.expenseDate).toISOString().split('T')[0],
+      });
+    },
+  );
 
   // PUT /:id - Update expense
-  fastify.put('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const { description, amount, expenseDate, category, vendor, receiptReference, notes } =
-      request.body as {
-        description?: string;
-        amount?: number;
-        expenseDate?: string;
-        category?: string;
-        vendor?: string;
-        receiptReference?: string;
-        notes?: string;
-      };
-    const idResult = requireNonEmptyString(id, 'id');
-    if (!idResult.ok) return badRequest(reply, idResult.message);
+  fastify.put(
+    '/:id',
+    {
+      schema: {
+        tags: ['expenses'],
+        summary: 'Update expense',
+        params: idParamSchema,
+        body: expenseUpdateBodySchema,
+        response: {
+          200: expenseSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { description, amount, expenseDate, category, vendor, receiptReference, notes } =
+        request.body as {
+          description?: string;
+          amount?: number;
+          expenseDate?: string;
+          category?: string;
+          vendor?: string;
+          receiptReference?: string;
+          notes?: string;
+        };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
 
-    let descriptionValue: string | undefined = description;
-    if (description !== undefined) {
-      const descriptionResult = optionalNonEmptyString(description, 'description');
-      if (!descriptionResult.ok)
-        return badRequest(reply, (descriptionResult as { ok: false; message: string }).message);
-      descriptionValue =
-        (descriptionResult as { ok: true; value: string | null }).value ?? undefined;
-    }
+      let descriptionValue: string | undefined = description;
+      if (description !== undefined) {
+        const descriptionResult = optionalNonEmptyString(description, 'description');
+        if (!descriptionResult.ok)
+          return badRequest(reply, (descriptionResult as { ok: false; message: string }).message);
+        descriptionValue =
+          (descriptionResult as { ok: true; value: string | null }).value ?? undefined;
+      }
 
-    let amountValue: number | undefined = amount;
-    if (amount !== undefined) {
-      const amountResult = optionalLocalizedPositiveNumber(amount, 'amount');
-      if (!amountResult.ok)
-        return badRequest(reply, (amountResult as { ok: false; message: string }).message);
-      amountValue = (amountResult as { ok: true; value: number | null }).value ?? undefined;
-    }
+      let amountValue: number | undefined = amount;
+      if (amount !== undefined) {
+        const amountResult = optionalLocalizedPositiveNumber(amount, 'amount');
+        if (!amountResult.ok)
+          return badRequest(reply, (amountResult as { ok: false; message: string }).message);
+        amountValue = (amountResult as { ok: true; value: number | null }).value ?? undefined;
+      }
 
-    let expenseDateValue: string | undefined = expenseDate;
-    if (expenseDate !== undefined) {
-      const expenseDateResult = optionalDateString(expenseDate, 'expenseDate');
-      if (!expenseDateResult.ok)
-        return badRequest(reply, (expenseDateResult as { ok: false; message: string }).message);
-      expenseDateValue =
-        (expenseDateResult as { ok: true; value: string | null }).value ?? undefined;
-    }
+      let expenseDateValue: string | undefined = expenseDate;
+      if (expenseDate !== undefined) {
+        const expenseDateResult = optionalDateString(expenseDate, 'expenseDate');
+        if (!expenseDateResult.ok)
+          return badRequest(reply, (expenseDateResult as { ok: false; message: string }).message);
+        expenseDateValue =
+          (expenseDateResult as { ok: true; value: string | null }).value ?? undefined;
+      }
 
-    let categoryValue: string | undefined = category;
-    if (category !== undefined) {
-      const categoryResult = optionalNonEmptyString(category, 'category');
-      if (!categoryResult.ok)
-        return badRequest(reply, (categoryResult as { ok: false; message: string }).message);
-      categoryValue = (categoryResult as { ok: true; value: string | null }).value ?? undefined;
-    }
+      let categoryValue: string | undefined = category;
+      if (category !== undefined) {
+        const categoryResult = optionalNonEmptyString(category, 'category');
+        if (!categoryResult.ok)
+          return badRequest(reply, (categoryResult as { ok: false; message: string }).message);
+        categoryValue = (categoryResult as { ok: true; value: string | null }).value ?? undefined;
+      }
 
-    let vendorValue: string | undefined = vendor;
-    if (vendor !== undefined) {
-      const vendorResult = optionalNonEmptyString(vendor, 'vendor');
-      if (!vendorResult.ok)
-        return badRequest(reply, (vendorResult as { ok: false; message: string }).message);
-      vendorValue = (vendorResult as { ok: true; value: string | null }).value ?? undefined;
-    }
+      let vendorValue: string | undefined = vendor;
+      if (vendor !== undefined) {
+        const vendorResult = optionalNonEmptyString(vendor, 'vendor');
+        if (!vendorResult.ok)
+          return badRequest(reply, (vendorResult as { ok: false; message: string }).message);
+        vendorValue = (vendorResult as { ok: true; value: string | null }).value ?? undefined;
+      }
 
-    let receiptReferenceValue: string | undefined = receiptReference;
-    if (receiptReference !== undefined) {
-      const receiptReferenceResult = optionalNonEmptyString(receiptReference, 'receiptReference');
-      if (!receiptReferenceResult.ok)
-        return badRequest(
-          reply,
-          (receiptReferenceResult as { ok: false; message: string }).message,
-        );
-      receiptReferenceValue =
-        (receiptReferenceResult as { ok: true; value: string | null }).value ?? undefined;
-    }
+      let receiptReferenceValue: string | undefined = receiptReference;
+      if (receiptReference !== undefined) {
+        const receiptReferenceResult = optionalNonEmptyString(receiptReference, 'receiptReference');
+        if (!receiptReferenceResult.ok)
+          return badRequest(
+            reply,
+            (receiptReferenceResult as { ok: false; message: string }).message,
+          );
+        receiptReferenceValue =
+          (receiptReferenceResult as { ok: true; value: string | null }).value ?? undefined;
+      }
 
-    let notesValue: string | undefined = notes;
-    if (notes !== undefined) {
-      const notesResult = optionalNonEmptyString(notes, 'notes');
-      if (!notesResult.ok)
-        return badRequest(reply, (notesResult as { ok: false; message: string }).message);
-      notesValue = (notesResult as { ok: true; value: string | null }).value ?? undefined;
-    }
+      let notesValue: string | undefined = notes;
+      if (notes !== undefined) {
+        const notesResult = optionalNonEmptyString(notes, 'notes');
+        if (!notesResult.ok)
+          return badRequest(reply, (notesResult as { ok: false; message: string }).message);
+        notesValue = (notesResult as { ok: true; value: string | null }).value ?? undefined;
+      }
 
-    const result = await query(
-      `UPDATE expenses 
+      const result = await query(
+        `UPDATE expenses 
                 SET description = COALESCE($1, description),
                     amount = COALESCE($2, amount),
                     expense_date = COALESCE($3, expense_date),
@@ -211,42 +304,59 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     receipt_reference as "receiptReference",
                     notes,
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
-      [
-        descriptionValue,
-        amountValue,
-        expenseDateValue,
-        categoryValue,
-        vendorValue,
-        receiptReferenceValue,
-        notesValue,
-        idResult.value,
-      ],
-    );
+        [
+          descriptionValue,
+          amountValue,
+          expenseDateValue,
+          categoryValue,
+          vendorValue,
+          receiptReferenceValue,
+          notesValue,
+          idResult.value,
+        ],
+      );
 
-    if (result.rows.length === 0) {
-      return reply.code(404).send({ error: 'Expense not found' });
-    }
+      if (result.rows.length === 0) {
+        return reply.code(404).send({ error: 'Expense not found' });
+      }
 
-    const expense = result.rows[0];
-    return {
-      ...expense,
-      amount: parseFloat(expense.amount),
-      expenseDate: new Date(expense.expenseDate).toISOString().split('T')[0],
-    };
-  });
+      const expense = result.rows[0];
+      return {
+        ...expense,
+        amount: parseFloat(expense.amount),
+        expenseDate: new Date(expense.expenseDate).toISOString().split('T')[0],
+      };
+    },
+  );
 
   // DELETE /:id - Delete expense
-  fastify.delete('/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const idResult = requireNonEmptyString(id, 'id');
-    if (!idResult.ok) return badRequest(reply, idResult.message);
+  fastify.delete(
+    '/:id',
+    {
+      schema: {
+        tags: ['expenses'],
+        summary: 'Delete expense',
+        params: idParamSchema,
+        response: {
+          204: { type: 'null' },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
 
-    const result = await query('DELETE FROM expenses WHERE id = $1 RETURNING id', [idResult.value]);
+      const result = await query('DELETE FROM expenses WHERE id = $1 RETURNING id', [
+        idResult.value,
+      ]);
 
-    if (result.rows.length === 0) {
-      return reply.code(404).send({ error: 'Expense not found' });
-    }
+      if (result.rows.length === 0) {
+        return reply.code(404).send({ error: 'Expense not found' });
+      }
 
-    return reply.code(204).send();
-  });
+      return reply.code(204).send();
+    },
+  );
 }

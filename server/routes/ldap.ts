@@ -7,6 +7,66 @@ import {
   validateEnum,
   badRequest,
 } from '../utils/validation.ts';
+import { standardErrorResponses } from '../schemas/common.ts';
+
+const roleMappingSchema = {
+  type: 'object',
+  properties: {
+    ldapGroup: { type: 'string' },
+    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+  },
+  required: ['ldapGroup', 'role'],
+} as const;
+
+const ldapConfigSchema = {
+  type: 'object',
+  properties: {
+    enabled: { type: 'boolean' },
+    serverUrl: { type: 'string' },
+    baseDn: { type: 'string' },
+    bindDn: { type: 'string' },
+    bindPassword: { type: 'string' },
+    userFilter: { type: 'string' },
+    groupBaseDn: { type: 'string' },
+    groupFilter: { type: 'string' },
+    roleMappings: { type: 'array', items: roleMappingSchema },
+  },
+  required: [
+    'enabled',
+    'serverUrl',
+    'baseDn',
+    'bindDn',
+    'bindPassword',
+    'userFilter',
+    'groupBaseDn',
+    'groupFilter',
+    'roleMappings',
+  ],
+} as const;
+
+const ldapConfigUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    enabled: { type: 'boolean' },
+    serverUrl: { type: 'string' },
+    baseDn: { type: 'string' },
+    bindDn: { type: 'string' },
+    bindPassword: { type: 'string' },
+    userFilter: { type: 'string' },
+    groupBaseDn: { type: 'string' },
+    groupFilter: { type: 'string' },
+    roleMappings: { type: 'array', items: roleMappingSchema },
+  },
+} as const;
+
+const ldapSyncResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+  },
+  required: ['success'],
+  additionalProperties: true,
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET /config - Get LDAP configuration (admin only)
@@ -14,6 +74,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/config',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Get LDAP configuration',
+        response: {
+          200: ldapConfigSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (_request, _reply) => {
       const result = await query(
@@ -56,6 +124,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/config',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Update LDAP configuration',
+        body: ldapConfigUpdateBodySchema,
+        response: {
+          200: ldapConfigSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
@@ -177,6 +254,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/sync',
     {
       onRequest: [authenticateToken, requireRole('admin')],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Trigger LDAP sync',
+        response: {
+          200: ldapSyncResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
     },
     async (_request, _reply) => {
       const ldapService = (await import('../services/ldap.ts')).default;
