@@ -12,6 +12,7 @@
 * Migrato da NPM a BUN
 * Revert HTTP2 -> HTTP1.1 (senza ssl i browser non lo supportano e da errori)
 * Risolti 200+ errori typescript
+* Completamente localizzata l'app
 
 ## 20260125 - Operativo
 
