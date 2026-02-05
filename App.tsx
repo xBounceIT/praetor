@@ -51,6 +51,7 @@ import NotFound from './components/NotFound';
 import ApiDocsView from './components/docs/ApiDocsView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
 import InternalListingView from './components/catalog/InternalListingView';
+import ExternalListingView from './components/catalog/ExternalListingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -652,6 +653,7 @@ const App: React.FC = () => {
       'accounting/clients-invoices',
       // Catalog module
       'catalog/internal-listing',
+      'catalog/external-listing',
       'catalog/special-bids',
       // Finances module
       'finances/payments',
@@ -697,6 +699,7 @@ const App: React.FC = () => {
       'accounting/clients-invoices',
       // Catalog module
       'catalog/internal-listing',
+      'catalog/external-listing',
       'catalog/special-bids',
       // Finances module
       'finances/payments',
@@ -763,6 +766,7 @@ const App: React.FC = () => {
       'accounting/clients-invoices': ['manager'],
       // Catalog module - manager
       'catalog/internal-listing': ['manager'],
+      'catalog/external-listing': ['manager'],
       'catalog/special-bids': ['manager'],
       // Finances module - manager
       'finances/payments': ['manager'],
@@ -2343,7 +2347,19 @@ const App: React.FC = () => {
             {activeView === 'catalog/internal-listing' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
                 <InternalListingView
-                  products={products}
+                  products={products.filter((product) => !product.supplierId)}
+                  onAddProduct={addProduct}
+                  onUpdateProduct={handleUpdateProduct}
+                  onDeleteProduct={handleDeleteProduct}
+                  currency={generalSettings.currency}
+                />
+              )}
+
+            {activeView === 'catalog/external-listing' &&
+              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+                <ExternalListingView
+                  products={products.filter((product) => product.supplierId)}
+                  suppliers={suppliers}
                   onAddProduct={addProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}

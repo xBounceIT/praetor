@@ -158,6 +158,10 @@
     "selectCategoryFirst": "Seleziona prima una categoria",
     "add": "Aggiungi"
   },
+  "externalProducts": {
+    "title": "Listino Esterno",
+    "subtitle": "Gestisci gli articoli dei fornitori"
+  },
   "externalListing": {
     "title": "Offerte Speciali",
     "subtitle": "Definisci prezzi speciali per clienti dedicati",

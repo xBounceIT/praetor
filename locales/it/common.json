@@ -101,6 +101,7 @@
     "clientCodeRequired": "Il codice cliente è obbligatorio",
     "vatOrTaxRequired": "Partita IVA o Codice Fiscale richiesto",
     "productNameRequired": "Il nome del prodotto è obbligatorio",
+    "supplierRequired": "Il fornitore è obbligatorio",
     "costRequired": "Il costo è obbligatorio",
     "molPercentageRequired": "MOL (%) è obbligatorio",
     "molPercentageRange": "MOL (%) deve essere maggiore di 0 e minore di 100",

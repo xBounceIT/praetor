@@ -101,6 +101,7 @@
     "clientCodeRequired": "Client Code is required",
     "vatOrTaxRequired": "Either VAT Number or Tax Code is required",
     "productNameRequired": "Product name is required",
+    "supplierRequired": "Supplier is required",
     "costRequired": "Cost is required",
     "molPercentageRequired": "MOL (%) is required",
     "molPercentageRange": "MOL (%) must be greater than 0 and less than 100",

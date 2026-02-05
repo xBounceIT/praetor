@@ -164,6 +164,10 @@
     "selectCategoryFirst": "Select category first",
     "add": "Add"
   },
+  "externalProducts": {
+    "title": "External Listing",
+    "subtitle": "Manage supplier catalog items"
+  },
   "externalListing": {
     "title": "Special Bids",
     "subtitle": "Define special prices for dedicated clients",
