@@ -50,7 +50,7 @@ import api, { setAuthToken, getAuthToken, Settings } from './services/api';
 import NotFound from './components/NotFound';
 import ApiDocsView from './components/docs/ApiDocsView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
-import InternalListingView from './components/HR/InternalListingView';
+import InternalListingView from './components/catalog/InternalListingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
 import WorkUnitsView from './components/WorkUnitsView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
@@ -60,7 +60,7 @@ import ExpensesView from './components/ExpensesView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/CRM/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
-import ExternalListingView from './components/HR/ExternalListingView';
+import SpecialBidsView from './components/catalog/SpecialBidsView';
 import InternalEmployeesView from './components/InternalEmployeesView';
 import ExternalEmployeesView from './components/ExternalEmployeesView';
 import EmailSettings from './components/administration/EmailSettings';
@@ -652,7 +652,7 @@ const App: React.FC = () => {
       'accounting/clients-invoices',
       // Catalog module
       'catalog/internal-listing',
-      'catalog/external-listing',
+      'catalog/special-bids',
       // Finances module
       'finances/payments',
       'finances/expenses',
@@ -697,7 +697,7 @@ const App: React.FC = () => {
       'accounting/clients-invoices',
       // Catalog module
       'catalog/internal-listing',
-      'catalog/external-listing',
+      'catalog/special-bids',
       // Finances module
       'finances/payments',
       'finances/expenses',
@@ -763,7 +763,7 @@ const App: React.FC = () => {
       'accounting/clients-invoices': ['manager'],
       // Catalog module - manager
       'catalog/internal-listing': ['manager'],
-      'catalog/external-listing': ['manager'],
+      'catalog/special-bids': ['manager'],
       // Finances module - manager
       'finances/payments': ['manager'],
       'finances/expenses': ['manager'],
@@ -2351,9 +2351,9 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'catalog/external-listing' &&
+            {activeView === 'catalog/special-bids' &&
               (currentUser.role === 'admin' || currentUser.role === 'manager') && (
-                <ExternalListingView
+                <SpecialBidsView
                   bids={specialBids}
                   clients={clients}
                   products={products}

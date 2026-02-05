@@ -272,7 +272,7 @@ export type View =
   | 'sales/client-quotes'
   // Catalog module
   | 'catalog/internal-listing'
-  | 'catalog/external-listing'
+  | 'catalog/special-bids'
   // Accounting module
   | 'accounting/clients-orders'
   | 'accounting/clients-invoices'

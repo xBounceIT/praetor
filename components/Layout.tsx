@@ -273,10 +273,10 @@ const Layout: React.FC<LayoutProps> = ({
             <NavItem
               icon="fa-tags"
               label={t('routes.externalListing')}
-              active={activeView === 'catalog/external-listing'}
+              active={activeView === 'catalog/special-bids'}
               isCollapsed={isCollapsed}
               onClick={() => {
-                onViewChange('catalog/external-listing');
+                onViewChange('catalog/special-bids');
                 setIsMobileMenuOpen(false);
               }}
             />
@@ -572,7 +572,7 @@ const Layout: React.FC<LayoutProps> = ({
                     ? t('titles.projects')
                     : activeView === 'projects/tasks'
                       ? t('titles.tasks')
-                      : activeView === 'catalog/external-listing'
+                      : activeView === 'catalog/special-bids'
                         ? t('titles.externalListing')
                         : activeView === 'suppliers/manage'
                           ? t('titles.suppliers')
