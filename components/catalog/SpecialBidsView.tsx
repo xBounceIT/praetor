@@ -58,7 +58,17 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     endDate: new Date().toISOString().split('T')[0],
   });
 
+  const activeClients = clients.filter((c) => !c.isDisabled);
+  const activeProducts = products.filter(
+    (p) => !p.isDisabled && (p.type === 'item' || p.type === 'supply'),
+  );
+  const externalProducts = activeProducts.filter((p) => p.supplierId);
+  const hasExternalProducts = externalProducts.length > 0;
+
   const openAddModal = () => {
+    if (!hasExternalProducts) {
+      return;
+    }
     setEditingBid(null);
     setFormData({
       clientId: '',
@@ -107,6 +117,9 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     const selectedProduct = formData.productId
       ? products.find((p) => p.id === formData.productId)
       : undefined;
+    if (!editingBid && formData.productId && !selectedProduct?.supplierId) {
+      newErrors.productId = t('externalListing.errors.productRequired');
+    }
     const originalPrice = selectedProduct ? Number(selectedProduct.costo) : undefined;
     const normalizedOriginalPrice =
       originalPrice !== undefined && !Number.isNaN(originalPrice) ? originalPrice : undefined;
@@ -232,6 +245,16 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     originalMolValue !== undefined && !Number.isNaN(originalMolValue)
       ? `${originalMolValue.toFixed(2)} %`
       : '--';
+  const externalProductOptions = externalProducts.map((p) => ({ id: p.id, name: p.name }));
+  const productOptions =
+    editingBid &&
+    selectedProductForPrice &&
+    !externalProducts.some((p) => p.id === selectedProductForPrice.id)
+      ? [
+          ...externalProductOptions,
+          { id: selectedProductForPrice.id, name: selectedProductForPrice.name },
+        ]
+      : externalProductOptions;
 
   const calcSalePrice = (costo: number, molPercentage: number) => {
     if (molPercentage >= 100) return costo;
@@ -251,11 +274,6 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       ? Number(formData.molPercentage)
       : undefined;
   const hasBidPricing = bidCostValue !== undefined && bidMolValue !== undefined;
-
-  const activeClients = clients.filter((c) => !c.isDisabled);
-  const activeProducts = products.filter(
-    (p) => !p.isDisabled && (p.type === 'item' || p.type === 'supply'),
-  );
 
   // Table columns definition with TableFilter support
   const columns = useMemo(
@@ -439,7 +457,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                     {t('externalListing.productItem')}
                   </label>
                   <CustomSelect
-                    options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                    options={productOptions}
                     value={formData.productId || ''}
                     onChange={(val) => handleProductChange(val as string)}
                     placeholder={t('externalListing.selectProduct')}
@@ -660,7 +678,12 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
           </div>
           <button
             onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            disabled={!hasExternalProducts}
+            className={`bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all flex items-center gap-2 ${
+              hasExternalProducts
+                ? 'hover:bg-slate-700 active:scale-95'
+                : 'opacity-50 cursor-not-allowed'
+            }`}
           >
             <i className="fa-solid fa-plus"></i> {t('externalListing.createSpecialBid')}
           </button>
