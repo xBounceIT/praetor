@@ -676,17 +676,25 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <h2 className="text-2xl font-black text-slate-800">{t('externalListing.title')}</h2>
             <p className="text-slate-500 text-sm">{t('externalListing.subtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            disabled={!hasExternalProducts}
-            className={`bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all flex items-center gap-2 ${
-              hasExternalProducts
-                ? 'hover:bg-slate-700 active:scale-95'
-                : 'opacity-50 cursor-not-allowed'
-            }`}
-          >
-            <i className="fa-solid fa-plus"></i> {t('externalListing.createSpecialBid')}
-          </button>
+          <div className="relative group">
+            <button
+              onClick={openAddModal}
+              disabled={!hasExternalProducts}
+              className={`bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all flex items-center gap-2 ${
+                hasExternalProducts
+                  ? 'hover:bg-slate-700 active:scale-95'
+                  : 'opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <i className="fa-solid fa-plus"></i> {t('externalListing.createSpecialBid')}
+            </button>
+            {!hasExternalProducts && (
+              <div className="absolute right-0 top-full mt-2 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700">
+                {t('externalListing.noExternalProductsTooltip')}
+                <div className="absolute right-4 -top-1 w-2 h-2 bg-slate-800 border-l border-b border-slate-700 rotate-45"></div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
