@@ -4,6 +4,7 @@ import { User, WorkUnit } from '../types';
 import CustomSelect from './shared/CustomSelect';
 import { workUnitsApi } from '../services/api';
 import Modal from './shared/Modal';
+import Tooltip from './shared/Tooltip';
 
 interface WorkUnitPayload {
   name: string;
@@ -205,20 +206,26 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               </div>
               {userRole === 'admin' && (
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => openEditModal(unit)}
-                    className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
-                    title="Edit"
-                  >
-                    <i className="fa-solid fa-pen"></i>
-                  </button>
-                  <button
-                    onClick={() => confirmDelete(unit)}
-                    className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                    title="Delete"
-                  >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
+                  <Tooltip label="Edit">
+                    {() => (
+                      <button
+                        onClick={() => openEditModal(unit)}
+                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
+                      >
+                        <i className="fa-solid fa-pen"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  <Tooltip label="Delete">
+                    {() => (
+                      <button
+                        onClick={() => confirmDelete(unit)}
+                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    )}
+                  </Tooltip>
                 </div>
               )}
             </div>

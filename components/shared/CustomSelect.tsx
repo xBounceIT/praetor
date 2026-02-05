@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useId, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import Tooltip from './Tooltip';
 
 export interface Option {
   id: string;
@@ -167,6 +168,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     return selected ? selected.name : placeholder || t('select.placeholder');
   };
 
+  const buttonLabel = getButtonLabel();
+  const tooltipLabel =
+    typeof buttonLabel === 'string' && buttonLabel.trim() !== '' ? buttonLabel : null;
+
   const isSelected = (id: string) => {
     if (isMulti) return (value as string[]).includes(id);
     return value === id;
@@ -229,14 +234,15 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               ))}
             </div>
           ) : (
-            <span
-              className={`truncate block ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
-              title={
-                typeof getButtonLabel() === 'string' ? (getButtonLabel() as string) : undefined
-              }
-            >
-              {getButtonLabel()}
-            </span>
+            <Tooltip label={tooltipLabel} disabled={!tooltipLabel}>
+              {() => (
+                <span
+                  className={`truncate block ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
+                >
+                  {buttonLabel}
+                </span>
+              )}
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-2 ml-2 shrink-0">

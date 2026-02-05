@@ -7,6 +7,7 @@ import StatusBadge, { StatusType } from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface InternalListingViewProps {
   products: Product[];
@@ -927,38 +928,46 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             disableFiltering: true,
             cell: ({ row: p }) => (
               <div className="flex justify-end gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (p.isDisabled) {
-                      onUpdateProduct(p.id, { isDisabled: false });
-                    } else {
-                      onUpdateProduct(p.id, { isDisabled: true });
-                    }
-                  }}
-                  className={`p-2 rounded-lg transition-all ${
-                    p.isDisabled
-                      ? 'text-praetor hover:bg-emerald-50'
-                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                  }`}
-                  title={
+                <Tooltip
+                  label={
                     p.isDisabled
                       ? t('crm:internalListing.enableProduct')
                       : t('crm:internalListing.disableProduct')
                   }
                 >
-                  <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    confirmDelete(p);
-                  }}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title={t('crm:internalListing.deleteProductTooltip')}
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </button>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (p.isDisabled) {
+                          onUpdateProduct(p.id, { isDisabled: false });
+                        } else {
+                          onUpdateProduct(p.id, { isDisabled: true });
+                        }
+                      }}
+                      className={`p-2 rounded-lg transition-all ${
+                        p.isDisabled
+                          ? 'text-praetor hover:bg-emerald-50'
+                          : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                      }`}
+                    >
+                      <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <Tooltip label={t('crm:internalListing.deleteProductTooltip')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDelete(p);
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  )}
+                </Tooltip>
               </div>
             ),
             className: 'px-8 py-5',

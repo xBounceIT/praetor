@@ -7,6 +7,7 @@ import StandardTable from '../shared/StandardTable';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { usersApi } from '../../services/api';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface UserManagementProps {
   users: User[];
@@ -883,51 +884,63 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {canManageAssignments && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openAssignments(user.id);
-                          }}
-                          className="text-slate-400 hover:text-praetor transition-colors p-2"
-                          title={t('hr:workforce.manageAssignments')}
-                        >
-                          <i className="fa-solid fa-link"></i>
-                        </button>
+                        <Tooltip label={t('hr:workforce.manageAssignments')}>
+                          {() => (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAssignments(user.id);
+                              }}
+                              className="text-slate-400 hover:text-praetor transition-colors p-2"
+                            >
+                              <i className="fa-solid fa-link"></i>
+                            </button>
+                          )}
+                        </Tooltip>
                       )}
                       {currentUserRole === 'admin' && (
                         <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(user);
-                            }}
-                            className="text-slate-400 hover:text-praetor transition-colors p-2"
-                            title={t('hr:workforce.editUser')}
-                          >
-                            <i className="fa-solid fa-user-pen"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateUser(user.id, { isDisabled: true });
-                            }}
-                            disabled={user.id === currentUserId}
-                            className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
-                            title={t('hr:workforce.disableUser')}
-                          >
-                            <i className="fa-solid fa-ban"></i>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              confirmDelete(user);
-                            }}
-                            disabled={user.id === currentUserId}
-                            className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                            title={t('hr:workforce.deleteUser')}
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
+                          <Tooltip label={t('hr:workforce.editUser')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(user);
+                                }}
+                                className="text-slate-400 hover:text-praetor transition-colors p-2"
+                              >
+                                <i className="fa-solid fa-user-pen"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                          <Tooltip label={t('hr:workforce.disableUser')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateUser(user.id, { isDisabled: true });
+                                }}
+                                disabled={user.id === currentUserId}
+                                className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
+                              >
+                                <i className="fa-solid fa-ban"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                          <Tooltip label={t('hr:workforce.deleteUser')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDelete(user);
+                                }}
+                                disabled={user.id === currentUserId}
+                                className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
+                              </button>
+                            )}
+                          </Tooltip>
                         </>
                       )}
                     </div>
@@ -1097,50 +1110,62 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {canManageAssignments && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAssignments(user.id);
-                            }}
-                            className="text-slate-400 hover:text-praetor transition-colors p-2"
-                            title={t('hr:workforce.manageAssignments')}
-                          >
-                            <i className="fa-solid fa-link"></i>
-                          </button>
+                          <Tooltip label={t('hr:workforce.manageAssignments')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openAssignments(user.id);
+                                }}
+                                className="text-slate-400 hover:text-praetor transition-colors p-2"
+                              >
+                                <i className="fa-solid fa-link"></i>
+                              </button>
+                            )}
+                          </Tooltip>
                         )}
                         {currentUserRole === 'admin' && (
                           <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(user);
-                              }}
-                              className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              title={t('hr:workforce.editUser')}
-                            >
-                              <i className="fa-solid fa-user-pen"></i>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdateUser(user.id, { isDisabled: false });
-                              }}
-                              className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              title={t('hr:workforce.reEnableUser')}
-                            >
-                              <i className="fa-solid fa-rotate-left"></i>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmDelete(user);
-                              }}
-                              disabled={user.id === currentUserId}
-                              className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                              title={t('hr:workforce.deleteUser')}
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
+                            <Tooltip label={t('hr:workforce.editUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(user);
+                                  }}
+                                  className="text-slate-400 hover:text-praetor transition-colors p-2"
+                                >
+                                  <i className="fa-solid fa-user-pen"></i>
+                                </button>
+                              )}
+                            </Tooltip>
+                            <Tooltip label={t('hr:workforce.reEnableUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateUser(user.id, { isDisabled: false });
+                                  }}
+                                  className="text-slate-400 hover:text-praetor transition-colors p-2"
+                                >
+                                  <i className="fa-solid fa-rotate-left"></i>
+                                </button>
+                              )}
+                            </Tooltip>
+                            <Tooltip label={t('hr:workforce.deleteUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    confirmDelete(user);
+                                  }}
+                                  disabled={user.id === currentUserId}
+                                  className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                                >
+                                  <i className="fa-solid fa-trash-can"></i>
+                                </button>
+                              )}
+                            </Tooltip>
                           </>
                         )}
                       </div>

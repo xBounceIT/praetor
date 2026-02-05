@@ -4,6 +4,7 @@ import { Supplier } from '../../types';
 import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface SuppliersViewProps {
   suppliers: Supplier[];
@@ -221,31 +222,39 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onUpdateSupplier(row.id, { isDisabled: !row.isDisabled });
-              }}
-              className={`p-2 rounded-lg transition-all ${
-                row.isDisabled
-                  ? 'text-praetor hover:bg-slate-100'
-                  : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-              }`}
-              title={row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')}
+            <Tooltip
+              label={row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')}
             >
-              <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-            </button>
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateSupplier(row.id, { isDisabled: !row.isDisabled });
+                  }}
+                  className={`p-2 rounded-lg transition-all ${
+                    row.isDisabled
+                      ? 'text-praetor hover:bg-slate-100'
+                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                  }`}
+                >
+                  <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                </button>
+              )}
+            </Tooltip>
             {userRole === 'admin' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  confirmDelete(row);
-                }}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title={t('common:buttons.delete')}
-              >
-                <i className="fa-solid fa-trash-can"></i>
-              </button>
+              <Tooltip label={t('common:buttons.delete')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      confirmDelete(row);
+                    }}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
+              </Tooltip>
             )}
           </div>
         ),

@@ -6,6 +6,7 @@ import StandardTable from './shared/StandardTable';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 import { roundToTwoDecimals } from '../utils/numbers';
 import Modal from './shared/Modal';
+import Tooltip from './shared/Tooltip';
 
 interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
@@ -907,17 +908,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 {t('quotes.total', { defaultValue: 'Total' })}
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <button
-                  type="button"
-                  onClick={toggleExpirationSort}
-                  title={expirationSortTitle}
-                  className="w-full inline-flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none hover:text-slate-600"
-                >
-                  {t('quotes.expirationDate')}
-                  {expirationSortIndicator && (
-                    <span className="text-[10px]">{expirationSortIndicator}</span>
+                <Tooltip label={expirationSortTitle} wrapperClassName="w-full">
+                  {() => (
+                    <button
+                      type="button"
+                      onClick={toggleExpirationSort}
+                      className="w-full inline-flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none hover:text-slate-600"
+                    >
+                      {t('quotes.expirationDate')}
+                      {expirationSortIndicator && (
+                        <span className="text-[10px]">{expirationSortIndicator}</span>
+                      )}
+                    </button>
                   )}
-                </button>
+                </Tooltip>
               </th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
                 {t('common.actions')}
@@ -998,42 +1002,51 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex justify-end gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditModal(quote);
-                        }}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                        title={t('common.edit')}
-                      >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isConfirmDisabled) return;
-                          onUpdateQuote(quote.id, {
-                            status: quote.status === 'received' ? 'approved' : 'received',
-                          });
-                        }}
-                        disabled={isConfirmDisabled}
-                        className={`p-2 rounded-lg transition-all ${isConfirmDisabled ? 'text-slate-200 cursor-not-allowed opacity-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                        title={confirmTitle}
-                      >
-                        <i
-                          className={`fa-solid ${quote.status === 'received' ? 'fa-check' : 'fa-rotate-left'}`}
-                        ></i>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          confirmDelete(quote);
-                        }}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                        title={t('common.delete')}
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
+                      <Tooltip label={t('common.edit')}>
+                        {() => (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(quote);
+                            }}
+                            className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                          >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                          </button>
+                        )}
+                      </Tooltip>
+                      <Tooltip label={confirmTitle}>
+                        {() => (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isConfirmDisabled) return;
+                              onUpdateQuote(quote.id, {
+                                status: quote.status === 'received' ? 'approved' : 'received',
+                              });
+                            }}
+                            disabled={isConfirmDisabled}
+                            className={`p-2 rounded-lg transition-all ${isConfirmDisabled ? 'text-slate-200 cursor-not-allowed opacity-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                          >
+                            <i
+                              className={`fa-solid ${quote.status === 'received' ? 'fa-check' : 'fa-rotate-left'}`}
+                            ></i>
+                          </button>
+                        )}
+                      </Tooltip>
+                      <Tooltip label={t('common.delete')}>
+                        {() => (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmDelete(quote);
+                            }}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        )}
+                      </Tooltip>
                     </div>
                   </td>
                 </tr>

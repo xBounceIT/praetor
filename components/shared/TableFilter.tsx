@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import Tooltip from './Tooltip';
 
 interface TableFilterProps {
   title: string;
@@ -133,9 +134,11 @@ const TableFilter: React.FC<TableFilterProps> = ({
                 onChange={() => handleCheckboxChange(opt)}
                 className="w-3.5 h-3.5 rounded text-praetor focus:ring-praetor border-gray-300"
               />
-              <span className="text-[11px] text-slate-600 truncate select-none" title={opt}>
-                {opt}
-              </span>
+              <Tooltip label={opt}>
+                {() => (
+                  <span className="text-[11px] text-slate-600 truncate select-none">{opt}</span>
+                )}
+              </Tooltip>
             </label>
           ))
         ) : (

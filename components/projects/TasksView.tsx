@@ -6,6 +6,7 @@ import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { tasksApi } from '../../services/api';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface TasksViewProps {
   tasks: ProjectTask[];
@@ -202,55 +203,69 @@ const TasksView: React.FC<TasksViewProps> = ({
 
           return (
             <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openAssignments(row.id);
-                }}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                title={t('tasks.manageMembers')}
-              >
-                <i className="fa-solid fa-users"></i>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openEditModal(row);
-                }}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                title={t('tasks.editTask')}
-              >
-                <i className="fa-solid fa-pen-to-square"></i>
-              </button>
+              <Tooltip label={t('tasks.manageMembers')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openAssignments(row.id);
+                    }}
+                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-users"></i>
+                  </button>
+                )}
+              </Tooltip>
+              <Tooltip label={t('tasks.editTask')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditModal(row);
+                    }}
+                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-pen-to-square"></i>
+                  </button>
+                )}
+              </Tooltip>
               {!isInheritedDisabled && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
-                  }}
-                  className={`p-2 rounded-lg transition-all ${
-                    isTaskDisabled
-                      ? 'text-praetor hover:bg-slate-100'
-                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                  }`}
-                  title={
+                <Tooltip
+                  label={
                     isTaskDisabled ? t('projects.enableProject') : t('projects.disableProject')
                   }
                 >
-                  <i className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                </button>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
+                      }}
+                      className={`p-2 rounded-lg transition-all ${
+                        isTaskDisabled
+                          ? 'text-praetor hover:bg-slate-100'
+                          : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                      }`}
+                    >
+                      <i className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingTask(row);
-                  confirmDelete();
-                }}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title={t('common:buttons.delete')}
-              >
-                <i className="fa-solid fa-trash-can"></i>
-              </button>
+              <Tooltip label={t('common:buttons.delete')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingTask(row);
+                      confirmDelete();
+                    }}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
+              </Tooltip>
             </div>
           );
         },

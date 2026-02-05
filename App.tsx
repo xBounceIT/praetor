@@ -31,6 +31,7 @@ import Layout from './components/Layout';
 import DailyView from './components/timesheet/DailyView';
 
 import Calendar from './components/shared/Calendar';
+import Tooltip from './components/shared/Tooltip';
 import UserSettings from './components/UserSettings';
 import Login from './components/Login';
 import UserManagement from './components/administration/UserManagement';
@@ -395,10 +396,11 @@ const TrackerView: React.FC<{
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-slate-800">{entry.task}</span>
                               {entry.isPlaceholder && (
-                                <i
-                                  className="fa-solid fa-repeat text-[10px] text-indigo-400"
-                                  title={t('entry.recurringTask')}
-                                ></i>
+                                <Tooltip label={t('entry.recurringTask')}>
+                                  {() => (
+                                    <i className="fa-solid fa-repeat text-[10px] text-indigo-400"></i>
+                                  )}
+                                </Tooltip>
                               )}
                             </div>
                           </td>

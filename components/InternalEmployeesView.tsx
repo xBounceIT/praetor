@@ -4,6 +4,7 @@ import { User } from '../types';
 import Modal from './shared/Modal';
 import StandardTable, { Column } from './shared/StandardTable';
 import StatusBadge from './shared/StatusBadge';
+import Tooltip from './shared/Tooltip';
 
 interface InternalEmployeesViewProps {
   users: User[];
@@ -182,28 +183,35 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       id: 'actions',
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => openEditModal(row)}
-            className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
-            title={t('internalEmployees.editEmployee')}
-          >
-            <i className="fa-solid fa-pen-to-square"></i>
-          </button>
+          <Tooltip label={t('internalEmployees.editEmployee')}>
+            {() => (
+              <button
+                onClick={() => openEditModal(row)}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+              >
+                <i className="fa-solid fa-pen-to-square"></i>
+              </button>
+            )}
+          </Tooltip>
           {row.employeeType === 'internal' ? (
-            <button
-              onClick={() => confirmDelete(row)}
-              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              title={t('common:delete')}
-            >
-              <i className="fa-solid fa-trash"></i>
-            </button>
+            <Tooltip label={t('common:delete')}>
+              {() => (
+                <button
+                  onClick={() => confirmDelete(row)}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <i className="fa-solid fa-trash"></i>
+                </button>
+              )}
+            </Tooltip>
           ) : (
-            <span
-              className="p-2 text-slate-300 cursor-not-allowed"
-              title={t('internalEmployees.cannotDeleteAppUser')}
-            >
-              <i className="fa-solid fa-lock"></i>
-            </span>
+            <Tooltip label={t('internalEmployees.cannotDeleteAppUser')}>
+              {() => (
+                <span className="p-2 text-slate-300 cursor-not-allowed">
+                  <i className="fa-solid fa-lock"></i>
+                </span>
+              )}
+            </Tooltip>
           )}
         </div>
       ),

@@ -6,6 +6,7 @@ import CustomSelect from '../shared/CustomSelect';
 import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -201,14 +202,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </label>
                 <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   {COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={`w-8 h-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
-                      style={{ backgroundColor: c }}
-                      title={c}
-                    />
+                    <Tooltip key={c} label={c}>
+                      {() => (
+                        <button
+                          type="button"
+                          onClick={() => setColor(c)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all transform active:scale-90 ${color === c ? 'border-praetor scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      )}
+                    </Tooltip>
                   ))}
                 </div>
               </div>
@@ -437,49 +440,61 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               cell: ({ row }) =>
                 isManagement ? (
                   <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditModal(row);
-                      }}
-                      className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                      title={t('projects:projects.editProject')}
-                    >
-                      <i className="fa-solid fa-pen-to-square"></i>
-                    </button>
+                    <Tooltip label={t('projects:projects.editProject')}>
+                      {() => (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(row);
+                          }}
+                          className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                      )}
+                    </Tooltip>
                     {row.isDisabled ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUpdateProject(row.id, { isDisabled: false });
-                        }}
-                        className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                        title={t('projects:projects.enableProject')}
-                      >
-                        <i className="fa-solid fa-rotate-left"></i>
-                      </button>
+                      <Tooltip label={t('projects:projects.enableProject')}>
+                        {() => (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateProject(row.id, { isDisabled: false });
+                            }}
+                            className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                          >
+                            <i className="fa-solid fa-rotate-left"></i>
+                          </button>
+                        )}
+                      </Tooltip>
                     ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUpdateProject(row.id, { isDisabled: true });
-                        }}
-                        className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                        title={t('projects:projects.disableProject')}
-                      >
-                        <i className="fa-solid fa-ban"></i>
-                      </button>
+                      <Tooltip label={t('projects:projects.disableProject')}>
+                        {() => (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateProject(row.id, { isDisabled: true });
+                            }}
+                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                          >
+                            <i className="fa-solid fa-ban"></i>
+                          </button>
+                        )}
+                      </Tooltip>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        promptDelete(row);
-                      }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      title={t('common:buttons.delete')}
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
+                    <Tooltip label={t('common:buttons.delete')}>
+                      {() => (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            promptDelete(row);
+                          }}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      )}
+                    </Tooltip>
                   </div>
                 ) : null,
             },

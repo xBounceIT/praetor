@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Project, ProjectTask } from '../types';
 import Modal from './shared/Modal';
+import Tooltip from './shared/Tooltip';
 
 interface RecurringManagerProps {
   tasks: ProjectTask[];
@@ -114,13 +115,16 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => setSelectedTask(task)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                        title={t('recurring.removeRecurrence')}
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
+                      <Tooltip label={t('recurring.removeRecurrence')}>
+                        {() => (
+                          <button
+                            onClick={() => setSelectedTask(task)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        )}
+                      </Tooltip>
                     </td>
                   </tr>
                 );

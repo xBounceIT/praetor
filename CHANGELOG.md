@@ -2,6 +2,9 @@
 - Aggiunto Swagger (/docs/api) e TypeDoc (/docs/frontend) per documentazione automatica Backend e Frontend durante commit
 - Refactoring completo backend e frontend per supporto documentazione automatica
 - Migliorati controlli pre-commit per maggiore qualità del codice
+- Aggiunta pagina listino esterno
+- Modificato special bid per fare riferimento solo a listino esterno
+- Aggiunto tooltip custom su ciascun pulsante
 
 ## 20260202 - Operativo
 

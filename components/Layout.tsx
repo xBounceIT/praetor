@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, User, Notification } from '../types';
 import NotificationBell from './shared/NotificationBell';
+import Tooltip from './shared/Tooltip';
 
 interface Module {
   id: string;
@@ -511,41 +512,42 @@ const Layout: React.FC<LayoutProps> = ({
         >
           {accessibleModules.map((module) => (
             <div key={module.id} className="space-y-1 mb-2">
-              <button
-                onClick={() => handleModuleSwitch(module)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
-                  ${
-                    activeModule.id === module.id
-                      ? 'bg-white text-praetor shadow-lg shadow-black/10'
-                      : 'text-white/60 hover:bg-white/10 hover:text-white'
-                  }
-                  ${isCollapsed ? 'justify-center' : ''}`}
+              <Tooltip
+                label={module.name}
+                position="right"
+                disabled={!isCollapsed}
+                wrapperClassName="w-full"
               >
-                <div
-                  className={`flex items-center justify-center transition-colors ${activeModule.id === module.id ? 'text-praetor' : ''}`}
-                >
-                  <i className={`fa-solid ${module.icon} text-lg w-6 text-center`}></i>
-                </div>
+                {() => (
+                  <button
+                    onClick={() => handleModuleSwitch(module)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200
+                      ${
+                        activeModule.id === module.id
+                          ? 'bg-white text-praetor shadow-lg shadow-black/10'
+                          : 'text-white/60 hover:bg-white/10 hover:text-white'
+                      }
+                      ${isCollapsed ? 'justify-center' : ''}`}
+                  >
+                    <div
+                      className={`flex items-center justify-center transition-colors ${activeModule.id === module.id ? 'text-praetor' : ''}`}
+                    >
+                      <i className={`fa-solid ${module.icon} text-lg w-6 text-center`}></i>
+                    </div>
 
-                {!isCollapsed && (
-                  <>
-                    <span className="font-bold text-sm tracking-wide flex-1 text-left uppercase">
-                      {module.name}
-                    </span>
-                    <i
-                      className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${expandedModuleId === module.id ? 'rotate-180' : ''}`}
-                    ></i>
-                  </>
+                    {!isCollapsed && (
+                      <>
+                        <span className="font-bold text-sm tracking-wide flex-1 text-left uppercase">
+                          {module.name}
+                        </span>
+                        <i
+                          className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${expandedModuleId === module.id ? 'rotate-180' : ''}`}
+                        ></i>
+                      </>
+                    )}
+                  </button>
                 )}
-
-                {/* Tooltip for collapsed state */}
-                {isCollapsed && (
-                  <div className="absolute left-full ml-4 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700 top-1/2 -translate-y-1/2">
-                    {module.name}
-                    <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-800 border-l border-b border-slate-700 rotate-45"></div>
-                  </div>
-                )}
-              </button>
+              </Tooltip>
 
               {/* Module Sub-items */}
               {expandedModuleId === module.id && !isCollapsed && (
@@ -699,28 +701,25 @@ interface NavItemProps {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`group relative w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-      active
-        ? 'bg-white/20 text-white shadow-lg shadow-black/10'
-        : 'text-white/60 hover:bg-white/10 hover:text-white'
-    } ${isCollapsed ? 'justify-center' : ''}`}
-  >
-    <i
-      className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
-    ></i>
-    {!isCollapsed && (
-      <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
+  <Tooltip label={label} position="right" disabled={!isCollapsed} wrapperClassName="w-full">
+    {() => (
+      <button
+        onClick={onClick}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+          active
+            ? 'bg-white/20 text-white shadow-lg shadow-black/10'
+            : 'text-white/60 hover:bg-white/10 hover:text-white'
+        } ${isCollapsed ? 'justify-center' : ''}`}
+      >
+        <i
+          className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
+        ></i>
+        {!isCollapsed && (
+          <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
+        )}
+      </button>
     )}
-
-    {isCollapsed && (
-      <div className="absolute left-full ml-4 px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700">
-        {label}
-        <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-800 border-l border-b border-slate-700 rotate-45"></div>
-      </div>
-    )}
-  </button>
+  </Tooltip>
 );
 
 export default Layout;

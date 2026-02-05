@@ -7,6 +7,7 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import StatusBadge, { StatusType } from '../shared/StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 const getPaymentTermsOptions = (t: (key: string) => string) => [
   { id: 'immediate', name: t('crm:paymentTerms.immediate') },
@@ -500,90 +501,113 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div className="flex justify-end gap-2">
             {onViewQuote && row.linkedQuoteId && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewQuote(row.linkedQuoteId!);
-                }}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                title={t('crm:quotes.viewQuote')}
-              >
-                <i className="fa-solid fa-link"></i>
-              </button>
+              <Tooltip label={t('crm:quotes.viewQuote')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewQuote(row.linkedQuoteId!);
+                    }}
+                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-link"></i>
+                  </button>
+                )}
+              </Tooltip>
             )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditModal(row);
-              }}
-              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-              title={
+            <Tooltip
+              label={
                 row.status === 'draft'
                   ? t('accounting:clientsOrders.editOrder')
                   : t('crm:quotes.viewQuote')
               }
             >
-              <i
-                className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
-              ></i>
-            </button>
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditModal(row);
+                  }}
+                  className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                >
+                  <i
+                    className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
+                  ></i>
+                </button>
+              )}
+            </Tooltip>
             {row.status === 'draft' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUpdateClientsOrder(row.id, { status: 'sent' });
-                }}
-                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                title={t('accounting:clientsOrders.markAsSent')}
-              >
-                <i className="fa-solid fa-paper-plane"></i>
-              </button>
+              <Tooltip label={t('accounting:clientsOrders.markAsSent')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateClientsOrder(row.id, { status: 'sent' });
+                    }}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-paper-plane"></i>
+                  </button>
+                )}
+              </Tooltip>
             )}
             {row.status === 'sent' && (
               <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateClientsOrder(row.id, { status: 'confirmed' });
-                  }}
-                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                  title={t('accounting:clientsOrders.markAsConfirmed')}
-                >
-                  <i className="fa-solid fa-check"></i>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateClientsOrder(row.id, { status: 'denied' });
-                  }}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title={t('accounting:clientsOrders.markAsDenied')}
-                >
-                  <i className="fa-solid fa-xmark"></i>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateClientsOrder(row.id, { status: 'draft' });
-                  }}
-                  className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                  title={t('accounting:clientsOrders.revertToDraft')}
-                >
-                  <i className="fa-solid fa-rotate-left"></i>
-                </button>
+                <Tooltip label={t('accounting:clientsOrders.markAsConfirmed')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateClientsOrder(row.id, { status: 'confirmed' });
+                      }}
+                      className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-check"></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <Tooltip label={t('accounting:clientsOrders.markAsDenied')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateClientsOrder(row.id, { status: 'denied' });
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <Tooltip label={t('accounting:clientsOrders.revertToDraft')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateClientsOrder(row.id, { status: 'draft' });
+                      }}
+                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-rotate-left"></i>
+                    </button>
+                  )}
+                </Tooltip>
               </>
             )}
             {row.status === 'draft' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  confirmDelete(row);
-                }}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title={t('accounting:clientsOrders.deleteOrder')}
-              >
-                <i className="fa-solid fa-trash-can"></i>
-              </button>
+              <Tooltip label={t('accounting:clientsOrders.deleteOrder')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      confirmDelete(row);
+                    }}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
+              </Tooltip>
             )}
           </div>
         ),

@@ -12,6 +12,7 @@ import {
 import CustomSelect from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { isItalianHoliday } from '../../utils/holidays';
+import Tooltip from '../shared/Tooltip';
 
 interface WeeklyViewProps {
   entries: TimeEntry[];
@@ -480,10 +481,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       {day.dayNum}
                     </p>
                     {day.holidayName && (
-                      <div
-                        className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"
-                        title={day.holidayName}
-                      ></div>
+                      <Tooltip label={day.holidayName} wrapperClassName="absolute top-1 right-1">
+                        {() => (
+                          <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                        )}
+                      </Tooltip>
                     )}
                   </th>
                 ))}
@@ -620,13 +622,16 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                           .reduce((sum, d) => sum + (d.duration || 0), 0)
                           .toFixed(1)}
                       </span>
-                      <button
-                        onClick={() => deleteRow(rowIndex)}
-                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
-                        title={t('weekly.deleteRow')}
-                      >
-                        <i className="fa-solid fa-trash-can text-sm"></i>
-                      </button>
+                      <Tooltip label={t('weekly.deleteRow')}>
+                        {() => (
+                          <button
+                            onClick={() => deleteRow(rowIndex)}
+                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-300"
+                          >
+                            <i className="fa-solid fa-trash-can text-sm"></i>
+                          </button>
+                        )}
+                      </Tooltip>
                     </div>
                   </td>
                 </tr>

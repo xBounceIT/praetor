@@ -7,6 +7,7 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import StatusBadge, { StatusType } from '../shared/StatusBadge';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface ClientQuotesViewProps {
   quotes: Quote[];
@@ -709,15 +710,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (history) return;
-                  openEditModal(row);
-                }}
-                disabled={history}
-                className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
-                title={
+              <Tooltip
+                label={
                   history
                     ? t('sales:clientQuotes.historyActionsDisabled', {
                         defaultValue: 'History entries cannot be modified.',
@@ -725,32 +719,40 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     : t('sales:clientQuotes.editQuote')
                 }
               >
-                <i className="fa-solid fa-pen-to-square"></i>
-              </button>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (history) return;
+                      openEditModal(row);
+                    }}
+                    disabled={history}
+                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                  >
+                    <i className="fa-solid fa-pen-to-square"></i>
+                  </button>
+                )}
+              </Tooltip>
               {row.status === 'accepted' && onCreateClientsOrder && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isCreateSaleDisabled) return;
-                    onCreateClientsOrder(row);
-                  }}
-                  disabled={isCreateSaleDisabled}
-                  className={`p-2 rounded-lg transition-all ${isCreateSaleDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
-                  title={createSaleTitle}
-                >
-                  <i className="fa-solid fa-cart-plus"></i>
-                </button>
+                <Tooltip label={createSaleTitle}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isCreateSaleDisabled) return;
+                        onCreateClientsOrder(row);
+                      }}
+                      disabled={isCreateSaleDisabled}
+                      className={`p-2 rounded-lg transition-all ${isCreateSaleDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                    >
+                      <i className="fa-solid fa-cart-plus"></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
               {row.status === 'draft' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (history) return;
-                    onUpdateQuote(row.id, { status: 'sent' });
-                  }}
-                  disabled={history}
-                  className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
-                  title={
+                <Tooltip
+                  label={
                     history
                       ? t('sales:clientQuotes.historyActionsDisabled', {
                           defaultValue: 'History entries cannot be modified.',
@@ -758,20 +760,25 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       : t('sales:clientQuotes.markAsSent')
                   }
                 >
-                  <i className="fa-solid fa-paper-plane"></i>
-                </button>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (history) return;
+                        onUpdateQuote(row.id, { status: 'sent' });
+                      }}
+                      disabled={history}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                    >
+                      <i className="fa-solid fa-paper-plane"></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
               {row.status === 'sent' && (
                 <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (history) return;
-                      onUpdateQuote(row.id, { status: 'accepted' });
-                    }}
-                    disabled={history}
-                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                    title={
+                  <Tooltip
+                    label={
                       history
                         ? t('sales:clientQuotes.historyActionsDisabled', {
                             defaultValue: 'History entries cannot be modified.',
@@ -779,17 +786,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         : t('sales:clientQuotes.markAsConfirmed')
                     }
                   >
-                    <i className="fa-solid fa-check"></i>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (history) return;
-                      onUpdateQuote(row.id, { status: 'denied' });
-                    }}
-                    disabled={history}
-                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
-                    title={
+                    {() => (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (history) return;
+                          onUpdateQuote(row.id, { status: 'accepted' });
+                        }}
+                        disabled={history}
+                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                      >
+                        <i className="fa-solid fa-check"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  <Tooltip
+                    label={
                       history
                         ? t('sales:clientQuotes.historyActionsDisabled', {
                             defaultValue: 'History entries cannot be modified.',
@@ -797,37 +809,55 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         : t('sales:clientQuotes.markAsDenied')
                     }
                   >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
+                    {() => (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (history) return;
+                          onUpdateQuote(row.id, { status: 'denied' });
+                        }}
+                        disabled={history}
+                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    )}
+                  </Tooltip>
                 </>
               )}
               {row.status === 'draft' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isDeleteDisabled) return;
-                    confirmDelete(row);
-                  }}
-                  disabled={isDeleteDisabled}
-                  className={`p-2 text-slate-400 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
-                  title={deleteTitle}
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </button>
+                <Tooltip label={deleteTitle}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isDeleteDisabled) return;
+                        confirmDelete(row);
+                      }}
+                      disabled={isDeleteDisabled}
+                      className={`p-2 text-slate-400 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
               {history && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canRestore) return;
-                    onUpdateQuote(row.id, { status: 'draft', isExpired: false });
-                  }}
-                  disabled={!canRestore}
-                  className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-slate-400'}`}
-                  title={restoreTitle}
-                >
-                  <i className="fa-solid fa-rotate-left"></i>
-                </button>
+                <Tooltip label={restoreTitle}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!canRestore) return;
+                        onUpdateQuote(row.id, { status: 'draft', isExpired: false });
+                      }}
+                      disabled={!canRestore}
+                      className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-slate-400'}`}
+                    >
+                      <i className="fa-solid fa-rotate-left"></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
             </div>
           );

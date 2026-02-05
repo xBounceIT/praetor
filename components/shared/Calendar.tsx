@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { TimeEntry } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
 import { getLocalDateString } from '../../utils/date';
+import Tooltip from './Tooltip';
 
 interface CalendarProps {
   // Original props
@@ -157,57 +158,58 @@ const Calendar: React.FC<CalendarProps> = ({
     const isSaturday = dayOfWeek === 6;
     const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
     const isForbidden = !allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday;
+    const holidayLabel =
+      holidayName || (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '');
 
     days.push(
-      <button
-        key={d}
-        type="button"
-        disabled={isForbidden}
-        title={
-          holidayName ||
-          (isSunday ? 'Domenica' : isSaturday && treatSaturdayAsHoliday ? 'Sabato' : '')
-        }
-        onClick={() => {
-          if (!isForbidden) handleDateClick(dateStr);
-        }}
-        className={`relative h-9 w-full flex flex-col items-center justify-center rounded-lg transition-all border 
-          ${
-            isSelected
-              ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
-              : isInRange
-                ? 'bg-stone-200 text-slate-800 border-stone-200' // Changed to a more neutral/stone color
-                : isWeekendOrHoliday
-                  ? 'bg-red-50 text-red-500 border-red-100'
-                  : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                    : isToday
-                      ? 'bg-slate-100 text-praetor border-slate-200'
-                      : 'hover:bg-slate-50 border-transparent text-slate-700'
-          }`}
-      >
-        <span
-          className={`text-sm font-bold ${
-            isSelected || isInRange
-              ? ''
-              : isWeekendOrHoliday
-                ? 'text-red-600'
-                : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                  ? 'text-emerald-700'
-                  : ''
-          }`}
-        >
-          {d}
-        </span>
+      <Tooltip key={d} label={holidayLabel} disabled={!holidayLabel} wrapperClassName="w-full">
+        {() => (
+          <button
+            type="button"
+            disabled={isForbidden}
+            onClick={() => {
+              if (!isForbidden) handleDateClick(dateStr);
+            }}
+            className={`relative h-9 w-full flex flex-col items-center justify-center rounded-lg transition-all border 
+              ${
+                isSelected
+                  ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
+                  : isInRange
+                    ? 'bg-stone-200 text-slate-800 border-stone-200' // Changed to a more neutral/stone color
+                    : isWeekendOrHoliday
+                      ? 'bg-red-50 text-red-500 border-red-100'
+                      : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        : isToday
+                          ? 'bg-slate-100 text-praetor border-slate-200'
+                          : 'hover:bg-slate-50 border-transparent text-slate-700'
+              }`}
+          >
+            <span
+              className={`text-sm font-bold ${
+                isSelected || isInRange
+                  ? ''
+                  : isWeekendOrHoliday
+                    ? 'text-red-600'
+                    : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
+                      ? 'text-emerald-700'
+                      : ''
+              }`}
+            >
+              {d}
+            </span>
 
-        {hasActivity && selectionMode === 'single' && (
-          <span
-            className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
-          ></span>
+            {hasActivity && selectionMode === 'single' && (
+              <span
+                className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? 'bg-white' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-praetor'}`}
+              ></span>
+            )}
+            {holidayName && selectionMode === 'single' && (
+              <span className="absolute top-0.5 right-0.5 w-1 h-1 bg-red-400 rounded-full animate-pulse"></span>
+            )}
+          </button>
         )}
-        {holidayName && selectionMode === 'single' && (
-          <span className="absolute top-0.5 right-0.5 w-1 h-1 bg-red-400 rounded-full animate-pulse"></span>
-        )}
-      </button>,
+      </Tooltip>,
     );
   }
 

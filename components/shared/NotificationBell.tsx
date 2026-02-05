@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Notification } from '../../types';
+import Tooltip from './Tooltip';
 
 interface NotificationBellProps {
   notifications: Notification[];
@@ -165,14 +166,17 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                         {!notification.isRead && (
                           <span className="w-2 h-2 bg-praetor rounded-full flex-shrink-0"></span>
                         )}
-                        <button
-                          onClick={(e) => handleDelete(e, notification.id)}
-                          className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                          aria-label={t('notifications.delete', 'Delete notification')}
-                          title={t('notifications.delete', 'Delete notification')}
-                        >
-                          <i className="fa-solid fa-xmark text-xs"></i>
-                        </button>
+                        <Tooltip label={t('notifications.delete', 'Delete notification')}>
+                          {() => (
+                            <button
+                              onClick={(e) => handleDelete(e, notification.id)}
+                              className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                              aria-label={t('notifications.delete', 'Delete notification')}
+                            >
+                              <i className="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                          )}
+                        </Tooltip>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {formatTimeAgo(notification.createdAt)}

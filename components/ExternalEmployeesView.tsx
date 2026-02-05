@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User } from '../types';
 import Modal from './shared/Modal';
+import Tooltip from './shared/Tooltip';
 
 interface ExternalEmployeesViewProps {
   users: User[];
@@ -322,20 +323,26 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEditModal(employee)}
-                        className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
-                        title={t('externalEmployees.editEmployee')}
-                      >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(employee)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title={t('common:delete')}
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
+                      <Tooltip label={t('externalEmployees.editEmployee')}>
+                        {() => (
+                          <button
+                            onClick={() => openEditModal(employee)}
+                            className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                          >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                          </button>
+                        )}
+                      </Tooltip>
+                      <Tooltip label={t('common:delete')}>
+                        {() => (
+                          <button
+                            onClick={() => confirmDelete(employee)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        )}
+                      </Tooltip>
                     </div>
                   </td>
                 </tr>
