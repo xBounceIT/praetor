@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Client, Product, SpecialBid } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
@@ -182,10 +182,10 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     setIsModalOpen(false);
   };
 
-  const confirmDelete = (bid: SpecialBid) => {
+  const confirmDelete = useCallback((bid: SpecialBid) => {
     setBidToDelete(bid);
     setIsDeleteConfirmOpen(true);
-  };
+  }, []);
 
   const handleDelete = () => {
     if (bidToDelete) {
@@ -398,7 +398,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
         },
       },
     ],
-    [currency, t],
+    [currency, t, confirmDelete],
   );
 
   return (
