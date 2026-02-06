@@ -290,8 +290,8 @@ export type View =
   | 'suppliers/manage'
   | 'suppliers/quotes'
   // HR module
-  | 'hr/internal-employees'
-  | 'hr/external-employees'
+  | 'hr/internal'
+  | 'hr/external'
   // Standalone
   | 'settings'
   | 'docs/api'

@@ -21,7 +21,7 @@ const moduleDefaultRoutes: Record<string, View> = {
   accounting: 'accounting/clients-orders',
   finances: 'finances/payments',
   suppliers: 'suppliers/manage',
-  hr: 'hr/internal-employees',
+  hr: 'hr/internal',
   configuration: 'configuration/authentication',
 };
 
@@ -299,20 +299,20 @@ const Layout: React.FC<LayoutProps> = ({
             <NavItem
               icon="fa-user-tie"
               label={t('routes.internalEmployees')}
-              active={activeView === 'hr/internal-employees'}
+              active={activeView === 'hr/internal'}
               isCollapsed={isCollapsed}
               onClick={() => {
-                onViewChange('hr/internal-employees');
+                onViewChange('hr/internal');
                 setIsMobileMenuOpen(false);
               }}
             />
             <NavItem
               icon="fa-user-clock"
               label={t('routes.externalEmployees')}
-              active={activeView === 'hr/external-employees'}
+              active={activeView === 'hr/external'}
               isCollapsed={isCollapsed}
               onClick={() => {
-                onViewChange('hr/external-employees');
+                onViewChange('hr/external');
                 setIsMobileMenuOpen(false);
               }}
             />
@@ -592,9 +592,9 @@ const Layout: React.FC<LayoutProps> = ({
                             ? t('titles.suppliers')
                             : activeView === 'suppliers/quotes'
                               ? t('titles.supplierQuotes')
-                              : activeView === 'hr/internal-employees'
+                              : activeView === 'hr/internal'
                                 ? t('titles.internalEmployees')
-                                : activeView === 'hr/external-employees'
+                                : activeView === 'hr/external'
                                   ? t('titles.externalEmployees')
                                   : t(
                                       `routes.${activeView

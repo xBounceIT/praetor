@@ -63,8 +63,8 @@ import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SuppliersView from './components/CRM/SuppliersView';
 import SupplierQuotesView from './components/SupplierQuotesView';
 import SpecialBidsView from './components/catalog/SpecialBidsView';
-import InternalEmployeesView from './components/InternalEmployeesView';
-import ExternalEmployeesView from './components/ExternalEmployeesView';
+import InternalEmployeesView from './components/HR/InternalEmployeesView';
+import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import EmailSettings from './components/administration/EmailSettings';
 
 const getCurrencySymbol = (currency: string) => {
@@ -663,8 +663,8 @@ const App: React.FC = () => {
       'projects/manage',
       'projects/tasks',
       'suppliers/quotes',
-      'hr/internal-employees',
-      'hr/external-employees',
+      'hr/internal',
+      'hr/external',
       'settings',
       'docs/api',
       'docs/frontend',
@@ -709,8 +709,8 @@ const App: React.FC = () => {
       'projects/manage',
       'projects/tasks',
       'suppliers/quotes',
-      'hr/internal-employees',
-      'hr/external-employees',
+      'hr/internal',
+      'hr/external',
       'settings',
       'docs/api',
       'docs/frontend',
@@ -780,8 +780,8 @@ const App: React.FC = () => {
       'suppliers/manage': ['manager'],
       'suppliers/quotes': ['manager'],
       // HR module - manager only
-      'hr/internal-employees': ['manager'],
-      'hr/external-employees': ['manager'],
+      'hr/internal': ['manager'],
+      'hr/external': ['manager'],
       // Standalone
       settings: ['admin', 'manager', 'user'],
       'docs/api': ['admin', 'manager', 'user'],
@@ -2480,7 +2480,7 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'hr/internal-employees' && currentUser.role === 'manager' && (
+            {activeView === 'hr/internal' && currentUser.role === 'manager' && (
               <InternalEmployeesView
                 users={users}
                 onAddEmployee={addInternalEmployee}
@@ -2490,7 +2490,7 @@ const App: React.FC = () => {
               />
             )}
 
-            {activeView === 'hr/external-employees' && currentUser.role === 'manager' && (
+            {activeView === 'hr/external' && currentUser.role === 'manager' && (
               <ExternalEmployeesView
                 users={users}
                 onAddEmployee={addExternalEmployee}
