@@ -134,35 +134,24 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     }
 
     const itemsWithSnapshots = (formData.items || []).map((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      const bid = item.specialBidId
-        ? specialBids.find((b) => b.id === item.specialBidId)
-        : undefined;
-      const hasBid = Boolean(item.specialBidId);
-
-      const productCost = Number(item.productCost ?? product?.costo ?? 0);
-      const productMolPercentage = item.productMolPercentage ?? product?.molPercentage ?? null;
-
-      const specialBidUnitPrice = hasBid
-        ? Number(item.specialBidUnitPrice ?? bid?.unitPrice ?? 0)
-        : null;
-      const specialBidMolPercentage = hasBid
-        ? (item.specialBidMolPercentage ?? bid?.molPercentage ?? null)
-        : null;
-
       return {
         ...item,
         unitPrice: roundToTwoDecimals(item.unitPrice),
         discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
-        productCost: roundToTwoDecimals(productCost),
+        productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
+        productTaxRate: roundToTwoDecimals(Number(item.productTaxRate ?? 0)),
         productMolPercentage:
-          productMolPercentage !== null ? roundToTwoDecimals(Number(productMolPercentage)) : null,
+          item.productMolPercentage === undefined || item.productMolPercentage === null
+            ? null
+            : roundToTwoDecimals(Number(item.productMolPercentage)),
         specialBidUnitPrice:
-          specialBidUnitPrice !== null ? roundToTwoDecimals(specialBidUnitPrice) : null,
+          item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+            ? null
+            : roundToTwoDecimals(Number(item.specialBidUnitPrice)),
         specialBidMolPercentage:
-          specialBidMolPercentage !== null
-            ? roundToTwoDecimals(Number(specialBidMolPercentage))
-            : null,
+          item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+            ? null
+            : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
       };
     });
 
@@ -221,6 +210,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           specialBidId: applicableBid ? applicableBid.id : '',
           unitPrice: calcProductSalePrice(cost, mol),
           productCost: Number(product.costo),
+          productTaxRate: Number(product.taxRate ?? 0),
           productMolPercentage: product.molPercentage,
           specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
           specialBidMolPercentage: applicableBid?.molPercentage ?? null,
@@ -252,6 +242,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       quantity: 1,
       unitPrice: 0,
       productCost: 0,
+      productTaxRate: 0,
       productMolPercentage: null,
       specialBidUnitPrice: null,
       specialBidMolPercentage: null,
@@ -299,6 +290,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           newItems[index].specialBidId = applicableBid.id;
           newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
           newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
@@ -307,6 +299,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           newItems[index].specialBidId = '';
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = null;
           newItems[index].specialBidMolPercentage = null;
@@ -324,6 +317,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData({ ...formData, items: newItems });
@@ -340,6 +334,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
           newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
@@ -351,54 +346,47 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   };
 
   // Calculate totals
-  const calculateTotals = useCallback(
-    (items: ClientsOrderItem[], globalDiscount: number) => {
-      let subtotal = 0;
-      let totalCost = 0;
-      const taxGroups: Record<number, number> = {};
+  const calculateTotals = useCallback((items: ClientsOrderItem[], globalDiscount: number) => {
+    let subtotal = 0;
+    let totalCost = 0;
+    const taxGroups: Record<number, number> = {};
 
-      items.forEach((item) => {
-        const product = products.find((p) => p.id === item.productId);
-        const lineSubtotal = item.quantity * item.unitPrice;
-        const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
-        const lineNet = lineSubtotal - lineDiscount;
+    items.forEach((item) => {
+      const lineSubtotal = item.quantity * item.unitPrice;
+      const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
+      const lineNet = lineSubtotal - lineDiscount;
 
-        subtotal += lineNet;
+      subtotal += lineNet;
 
-        if (product) {
-          const taxRate = product.taxRate;
-          // Applying global discount proportionally to the tax base
-          const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-          const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-          taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-          // Use stored snapshot values to avoid retroactive changes
-          const cost = item.specialBidId
-            ? Number(item.specialBidUnitPrice ?? 0)
-            : Number(item.productCost ?? product.costo);
-          totalCost += item.quantity * cost;
-        }
-      });
+      const taxRate = Number(item.productTaxRate ?? 0);
+      const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+      const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+      taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-      const discountAmount = subtotal * (globalDiscount / 100);
-      const taxableAmount = subtotal - discountAmount;
-      const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-      const total = taxableAmount + totalTax;
-      const margin = taxableAmount - totalCost;
-      const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+      const cost = item.specialBidId
+        ? Number(item.specialBidUnitPrice ?? 0)
+        : Number(item.productCost ?? 0);
+      totalCost += item.quantity * cost;
+    });
 
-      return {
-        subtotal,
-        taxableAmount,
-        discountAmount,
-        totalTax,
-        total,
-        margin,
-        marginPercentage,
-        taxGroups,
-      };
-    },
-    [products],
-  );
+    const discountAmount = subtotal * (globalDiscount / 100);
+    const taxableAmount = subtotal - discountAmount;
+    const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+    const total = taxableAmount + totalTax;
+    const margin = taxableAmount - totalCost;
+    const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+
+    return {
+      subtotal,
+      taxableAmount,
+      discountAmount,
+      totalTax,
+      total,
+      margin,
+      marginPercentage,
+      taxGroups,
+    };
+  }, []);
 
   const activeClients = clients.filter((c) => !c.isDisabled);
   const activeProducts = products.filter((p) => !p.isDisabled);
@@ -765,19 +753,17 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedProduct = activeProducts.find((p) => p.id === item.productId);
                     const selectedBid = item.specialBidId
                       ? specialBids.find((b) => b.id === item.specialBidId)
                       : undefined;
 
-                    // Use stored snapshot values to avoid retroactive changes
                     const cost = item.specialBidId
-                      ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
-                      : (item.productCost ?? selectedProduct?.costo ?? 0);
+                      ? Number(item.specialBidUnitPrice ?? 0)
+                      : Number(item.productCost ?? 0);
 
                     const molSource = item.specialBidId
-                      ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
-                      : (item.productMolPercentage ?? selectedProduct?.molPercentage);
+                      ? item.specialBidMolPercentage
+                      : item.productMolPercentage;
                     const molPercentage = molSource ? Number(molSource) : 0;
                     const salePrice = Number(item.unitPrice || 0);
                     const margin = salePrice - cost;
@@ -1124,7 +1110,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       </div>
 
       {/* Main Table with all orders and TableFilter */}
-      <StandardTable
+      <StandardTable<ClientsOrder>
         title={t('accounting:clientsOrders.title')}
         data={orders}
         columns={columns}

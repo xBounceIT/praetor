@@ -754,7 +754,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         </div>
       </div>
 
-      <StandardTable
+      <StandardTable<ProjectTask>
         title={t('tasks.tasksDirectory')}
         data={paginatedTasks}
         columns={columns}

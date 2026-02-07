@@ -190,6 +190,7 @@ export interface QuoteItem {
   quantity: number;
   unitPrice: number;
   productCost?: number;
+  productTaxRate?: number;
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
@@ -233,6 +234,7 @@ export interface ClientsOrderItem {
   quantity: number;
   unitPrice: number;
   productCost?: number;
+  productTaxRate?: number;
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;

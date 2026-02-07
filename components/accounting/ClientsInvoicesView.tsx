@@ -750,7 +750,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       </div>
 
       {/* Main Table with all invoices and TableFilter */}
-      <StandardTable
+      <StandardTable<Invoice>
         title={t('accounting:clientsInvoices.allInvoices')}
         data={invoices}
         columns={columns}

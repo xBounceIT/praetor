@@ -847,7 +847,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         </div>
       </div>
 
-      <StandardTable
+      <StandardTable<Product>
         title={t('crm:externalProducts.title')}
         defaultRowsPerPage={5}
         data={products}

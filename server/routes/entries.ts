@@ -543,7 +543,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                   WHERE wum.user_id = $${paramIndex}
               ))`;
-        params.push(request.user?.id);
+        params.push(request.user!.id);
         paramIndex++;
       }
 

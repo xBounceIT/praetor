@@ -97,6 +97,24 @@ const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   ...item,
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
+  productCost:
+    item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
+  productTaxRate:
+    item.productTaxRate === undefined || item.productTaxRate === null
+      ? 0
+      : Number(item.productTaxRate),
+  productMolPercentage:
+    item.productMolPercentage === undefined || item.productMolPercentage === null
+      ? null
+      : Number(item.productMolPercentage),
+  specialBidUnitPrice:
+    item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+      ? null
+      : Number(item.specialBidUnitPrice),
+  specialBidMolPercentage:
+    item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+      ? null
+      : Number(item.specialBidMolPercentage),
   discount: Number(item.discount || 0),
   note: item.note || '',
 });
@@ -112,6 +130,24 @@ const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderItem => 
   ...item,
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
+  productCost:
+    item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
+  productTaxRate:
+    item.productTaxRate === undefined || item.productTaxRate === null
+      ? 0
+      : Number(item.productTaxRate),
+  productMolPercentage:
+    item.productMolPercentage === undefined || item.productMolPercentage === null
+      ? null
+      : Number(item.productMolPercentage),
+  specialBidUnitPrice:
+    item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+      ? null
+      : Number(item.specialBidUnitPrice),
+  specialBidMolPercentage:
+    item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+      ? null
+      : Number(item.specialBidMolPercentage),
   discount: Number(item.discount || 0),
 });
 

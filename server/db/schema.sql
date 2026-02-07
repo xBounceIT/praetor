@@ -582,6 +582,7 @@ CREATE TABLE IF NOT EXISTS quote_items (
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
     special_bid_unit_price DECIMAL(15, 6),
     special_bid_mol_percentage DECIMAL(5, 2),
@@ -592,10 +593,43 @@ CREATE TABLE IF NOT EXISTS quote_items (
 
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0;
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_tax_rate DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS note TEXT;
+UPDATE quote_items qi
+SET product_tax_rate = p.tax_rate
+FROM products p
+WHERE qi.product_tax_rate IS NULL
+  AND qi.product_id = p.id;
+UPDATE quote_items
+SET product_tax_rate = 0
+WHERE product_tax_rate IS NULL;
+ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET DEFAULT 0;
+ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET NOT NULL;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'clients_order_items'
+    ) THEN
+        ALTER TABLE clients_order_items ADD COLUMN IF NOT EXISTS product_tax_rate DECIMAL(5, 2);
+        UPDATE clients_order_items coi
+        SET product_tax_rate = p.tax_rate
+        FROM products p
+        WHERE coi.product_tax_rate IS NULL
+          AND coi.product_id = p.id;
+        UPDATE clients_order_items
+        SET product_tax_rate = 0
+        WHERE product_tax_rate IS NULL;
+        ALTER TABLE clients_order_items ALTER COLUMN product_tax_rate SET DEFAULT 0;
+        ALTER TABLE clients_order_items ALTER COLUMN product_tax_rate SET NOT NULL;
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
 
@@ -880,4 +914,3 @@ INSERT INTO email_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- Add default_location to general_settings
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_location VARCHAR(20) DEFAULT 'remote';
-

@@ -11,17 +11,17 @@ export type Column<T> = {
   header: string;
   accessorKey?: keyof T;
   accessorFn?: (row: T) => string | number | boolean | null | undefined;
-  cell?: (info: { getValue: () => unknown; row: T; value: unknown }) => ReactNode;
+  cell?: (info: { getValue: () => T[keyof T] | string | number | boolean | null | undefined; row: T; value: T[keyof T] | string | number | boolean | null | undefined }) => ReactNode;
   id?: string; // Unique ID for the column, required if accessorKey is missing
   className?: string;
   headerClassName?: string;
   disableSorting?: boolean;
   disableFiltering?: boolean;
-  filterFormat?: (value: unknown) => string;
+  filterFormat?: (value: T[keyof T] | string | number | boolean | null | undefined) => string;
   align?: 'left' | 'center' | 'right';
 };
 
-type StandardTableProps<T = Record<string, unknown>> = {
+type StandardTableProps<T extends object = object> = {
   title: string;
   totalCount?: number;
   totalLabel?: string;
@@ -41,7 +41,7 @@ type StandardTableProps<T = Record<string, unknown>> = {
   onRowClick?: (row: T) => void;
 };
 
-const StandardTable = <T extends Record<string, unknown>>({
+const StandardTable = <T extends object>({
   title,
   totalCount: externalTotalCount,
   totalLabel,
@@ -117,7 +117,7 @@ const StandardTable = <T extends Record<string, unknown>>({
   }, []);
 
   const getColId = useCallback(
-    (col: Column<T>) => col.id || (col.accessorKey as string) || col.header,
+    (col: Column<T>) => col.id || String(col.accessorKey) || col.header,
     [],
   );
 

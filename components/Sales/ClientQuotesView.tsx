@@ -76,6 +76,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null);
+  const [pendingClientChange, setPendingClientChange] = useState<{
+    clientId: string;
+    clientName: string;
+  } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const getStatusLabel = useCallback(
@@ -128,53 +132,47 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   );
 
   // Calculate totals for a quote
-  const calculateQuoteTotals = useCallback(
-    (items: QuoteItem[], globalDiscount: number) => {
-      let subtotal = 0;
-      let totalCost = 0;
-      const taxGroups: Record<number, number> = {};
+  const calculateQuoteTotals = useCallback((items: QuoteItem[], globalDiscount: number) => {
+    let subtotal = 0;
+    let totalCost = 0;
+    const taxGroups: Record<number, number> = {};
 
-      items.forEach((item) => {
-        const product = products.find((p) => p.id === item.productId);
-        const lineSubtotal = item.quantity * item.unitPrice;
-        const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
-        const lineNet = lineSubtotal - lineDiscount;
+    items.forEach((item) => {
+      const lineSubtotal = item.quantity * item.unitPrice;
+      const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
+      const lineNet = lineSubtotal - lineDiscount;
 
-        subtotal += lineNet;
+      subtotal += lineNet;
 
-        if (product) {
-          const taxRate = product.taxRate;
-          const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-          const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-          taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
+      const taxRate = Number(item.productTaxRate ?? 0);
+      const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+      const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+      taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-          const cost = item.specialBidId
-            ? Number(item.specialBidUnitPrice ?? 0)
-            : Number(item.productCost ?? product.costo);
-          totalCost += item.quantity * cost;
-        }
-      });
+      const cost = item.specialBidId
+        ? Number(item.specialBidUnitPrice ?? 0)
+        : Number(item.productCost ?? 0);
+      totalCost += item.quantity * cost;
+    });
 
-      const discountAmount = subtotal * (globalDiscount / 100);
-      const taxableAmount = subtotal - discountAmount;
-      const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-      const total = taxableAmount + totalTax;
-      const margin = taxableAmount - totalCost;
-      const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+    const discountAmount = subtotal * (globalDiscount / 100);
+    const taxableAmount = subtotal - discountAmount;
+    const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+    const total = taxableAmount + totalTax;
+    const margin = taxableAmount - totalCost;
+    const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
 
-      return {
-        subtotal,
-        taxableAmount,
-        discountAmount,
-        totalTax,
-        total,
-        margin,
-        marginPercentage,
-        taxGroups,
-      };
-    },
-    [products],
-  );
+    return {
+      subtotal,
+      taxableAmount,
+      discountAmount,
+      totalTax,
+      total,
+      margin,
+      marginPercentage,
+      taxGroups,
+    };
+  }, []);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Quote>>({
@@ -197,6 +195,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const openAddModal = () => {
     setEditingQuote(null);
+    setPendingClientChange(null);
     setFormData({
       quoteCode: '',
       clientId: '',
@@ -214,6 +213,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const openEditModal = useCallback((quote: Quote) => {
     setEditingQuote(quote);
+    setPendingClientChange(null);
     // Ensure expirationDate is in YYYY-MM-DD format for the date input
     const formattedDate = quote.expirationDate
       ? new Date(quote.expirationDate).toISOString().split('T')[0]
@@ -284,35 +284,24 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     }
 
     const itemsWithSnapshots = (formData.items || []).map((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      const bid = item.specialBidId
-        ? specialBids.find((b) => b.id === item.specialBidId)
-        : undefined;
-      const hasBid = Boolean(item.specialBidId);
-
-      const productCost = Number(item.productCost ?? product?.costo ?? 0);
-      const productMolPercentage = item.productMolPercentage ?? product?.molPercentage ?? null;
-
-      const specialBidUnitPrice = hasBid
-        ? Number(item.specialBidUnitPrice ?? bid?.unitPrice ?? 0)
-        : null;
-      const specialBidMolPercentage = hasBid
-        ? (item.specialBidMolPercentage ?? bid?.molPercentage ?? null)
-        : null;
-
       return {
         ...item,
         unitPrice: roundToTwoDecimals(item.unitPrice),
         discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
-        productCost: roundToTwoDecimals(productCost),
+        productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
+        productTaxRate: roundToTwoDecimals(Number(item.productTaxRate ?? 0)),
         productMolPercentage:
-          productMolPercentage !== null ? roundToTwoDecimals(Number(productMolPercentage)) : null,
+          item.productMolPercentage === undefined || item.productMolPercentage === null
+            ? null
+            : roundToTwoDecimals(Number(item.productMolPercentage)),
         specialBidUnitPrice:
-          specialBidUnitPrice !== null ? roundToTwoDecimals(specialBidUnitPrice) : null,
+          item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+            ? null
+            : roundToTwoDecimals(Number(item.specialBidUnitPrice)),
         specialBidMolPercentage:
-          specialBidMolPercentage !== null
-            ? roundToTwoDecimals(Number(specialBidMolPercentage))
-            : null,
+          item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+            ? null
+            : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
       };
     });
 
@@ -343,48 +332,96 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     }
   };
 
-  const handleClientChange = (clientId: string) => {
+  const applyClientChange = (clientId: string, clientName: string, shouldReprice: boolean) => {
     if (isReadOnly) return;
-    const client = clients.find((c) => c.id === clientId);
+    setPendingClientChange(null);
     setFormData((prev) => {
-      const updatedItems = (prev.items || []).map((item) => {
-        if (!item.productId) {
-          if (item.specialBidId) {
-            return { ...item, specialBidId: '' };
-          }
-          return item;
-        }
+      const updatedItems = shouldReprice
+        ? (prev.items || []).map((item) => {
+            if (!item.productId) {
+              if (item.specialBidId) {
+                return { ...item, specialBidId: '' };
+              }
+              return item;
+            }
 
-        const product = products.find((p) => p.id === item.productId);
-        if (!product) {
-          return { ...item, specialBidId: '' };
-        }
+            const product = products.find((p) => p.id === item.productId);
+            if (!product) {
+              return { ...item, specialBidId: '' };
+            }
 
-        const applicableBid = activeSpecialBids.find(
-          (b) => b.clientId === clientId && b.productId === item.productId,
-        );
-        const molSource = applicableBid?.molPercentage ?? product.molPercentage;
-        const mol = molSource ? Number(molSource) : 0;
-        const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
+            const applicableBid = activeSpecialBids.find(
+              (b) => b.clientId === clientId && b.productId === item.productId,
+            );
+            const molSource = applicableBid?.molPercentage ?? product.molPercentage;
+            const mol = molSource ? Number(molSource) : 0;
+            const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
 
-        return {
-          ...item,
-          specialBidId: applicableBid ? applicableBid.id : '',
-          unitPrice: calcProductSalePrice(cost, mol),
-          productCost: Number(product.costo),
-          productMolPercentage: product.molPercentage,
-          specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
-          specialBidMolPercentage: applicableBid?.molPercentage ?? null,
-        };
-      });
+            return {
+              ...item,
+              id:
+                shouldReprice && editingQuote
+                  ? `temp-reprice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                  : item.id,
+              specialBidId: applicableBid ? applicableBid.id : '',
+              unitPrice: calcProductSalePrice(cost, mol),
+              productCost: Number(product.costo),
+              productTaxRate: Number(product.taxRate ?? 0),
+              productMolPercentage: product.molPercentage,
+              specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
+              specialBidMolPercentage: applicableBid?.molPercentage ?? null,
+            };
+          })
+        : prev.items || [];
 
       return {
         ...prev,
         clientId,
-        clientName: client?.name || '',
+        clientName,
         items: updatedItems,
       };
     });
+  };
+
+  const handleClientChange = (clientId: string) => {
+    if (isReadOnly) return;
+    const client = clients.find((c) => c.id === clientId);
+    const nextClientName = client?.name || '';
+    const shouldPromptReprice =
+      Boolean(editingQuote) &&
+      clientId !== formData.clientId &&
+      Boolean(formData.items && formData.items.length > 0);
+
+    if (shouldPromptReprice) {
+      setPendingClientChange({ clientId, clientName: nextClientName });
+      return;
+    }
+
+    applyClientChange(clientId, nextClientName, true);
+    if (errors.clientId) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.clientId;
+        return newErrors;
+      });
+    }
+  };
+
+  const handleClientChangeKeepSnapshots = () => {
+    if (!pendingClientChange) return;
+    applyClientChange(pendingClientChange.clientId, pendingClientChange.clientName, false);
+    if (errors.clientId) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.clientId;
+        return newErrors;
+      });
+    }
+  };
+
+  const handleClientChangeReprice = () => {
+    if (!pendingClientChange) return;
+    applyClientChange(pendingClientChange.clientId, pendingClientChange.clientName, true);
     if (errors.clientId) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -403,6 +440,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       quantity: 1,
       unitPrice: 0,
       productCost: 0,
+      productTaxRate: 0,
       productMolPercentage: null,
       specialBidUnitPrice: null,
       specialBidMolPercentage: null,
@@ -452,6 +490,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           console.log(`[SpecialBid] Bid: ${applicableBid.unitPrice}, Mol: ${mol}`);
           newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
           newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
@@ -460,6 +499,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].specialBidId = '';
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = null;
           newItems[index].specialBidMolPercentage = null;
@@ -478,6 +518,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData({ ...formData, items: newItems });
@@ -495,6 +536,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
           newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
           newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
@@ -506,56 +548,47 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   };
 
   // Calculate totals (used in form)
-  const calculateTotals = useCallback(
-    (items: QuoteItem[], globalDiscount: number) => {
-      let subtotal = 0;
-      let totalCost = 0;
-      const taxGroups: Record<number, number> = {};
+  const calculateTotals = useCallback((items: QuoteItem[], globalDiscount: number) => {
+    let subtotal = 0;
+    let totalCost = 0;
+    const taxGroups: Record<number, number> = {};
 
-      items.forEach((item) => {
-        const product = products.find((p) => p.id === item.productId);
-        const lineSubtotal = item.quantity * item.unitPrice;
-        const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
-        const lineNet = lineSubtotal - lineDiscount;
+    items.forEach((item) => {
+      const lineSubtotal = item.quantity * item.unitPrice;
+      const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
+      const lineNet = lineSubtotal - lineDiscount;
 
-        subtotal += lineNet;
+      subtotal += lineNet;
 
-        if (product) {
-          const taxRate = product.taxRate;
-          // Applying global discount proportionally to the tax base
-          const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-          const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-          taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
+      const taxRate = Number(item.productTaxRate ?? 0);
+      const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+      const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+      taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-          // Determine cost: use stored snapshot values to avoid retroactive changes
-          const cost = item.specialBidId
-            ? Number(item.specialBidUnitPrice ?? 0)
-            : Number(item.productCost ?? product.costo);
+      const cost = item.specialBidId
+        ? Number(item.specialBidUnitPrice ?? 0)
+        : Number(item.productCost ?? 0);
+      totalCost += item.quantity * cost;
+    });
 
-          totalCost += item.quantity * cost;
-        }
-      });
+    const discountAmount = subtotal * (globalDiscount / 100);
+    const taxableAmount = subtotal - discountAmount;
+    const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+    const total = taxableAmount + totalTax;
+    const margin = taxableAmount - totalCost;
+    const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
 
-      const discountAmount = subtotal * (globalDiscount / 100);
-      const taxableAmount = subtotal - discountAmount;
-      const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-      const total = taxableAmount + totalTax;
-      const margin = taxableAmount - totalCost;
-      const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
-
-      return {
-        subtotal,
-        taxableAmount,
-        discountAmount,
-        totalTax,
-        total,
-        margin,
-        marginPercentage,
-        taxGroups,
-      };
-    },
-    [products],
-  );
+    return {
+      subtotal,
+      taxableAmount,
+      discountAmount,
+      totalTax,
+      total,
+      margin,
+      marginPercentage,
+      taxGroups,
+    };
+  }, []);
 
   const activeClients = clients.filter((c) => !c.isDisabled);
   const activeProducts = products.filter((p) => !p.isDisabled);
@@ -1090,19 +1123,18 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => {
-                    const selectedProduct = activeProducts.find((p) => p.id === item.productId);
                     const selectedBid = item.specialBidId
                       ? specialBids.find((b) => b.id === item.specialBidId)
                       : undefined;
 
                     // Cost is the bid price if selected, otherwise product cost
                     const cost = item.specialBidId
-                      ? (item.specialBidUnitPrice ?? selectedBid?.unitPrice ?? 0)
-                      : (item.productCost ?? selectedProduct?.costo ?? 0);
+                      ? Number(item.specialBidUnitPrice ?? 0)
+                      : Number(item.productCost ?? 0);
 
                     const molSource = item.specialBidId
-                      ? (item.specialBidMolPercentage ?? selectedBid?.molPercentage)
-                      : (item.productMolPercentage ?? selectedProduct?.molPercentage);
+                      ? item.specialBidMolPercentage
+                      : item.productMolPercentage;
                     const molPercentage = molSource ? Number(molSource) : 0;
                     const quantity = Number(item.quantity || 0);
                     const lineCost = cost * quantity;
@@ -1327,6 +1359,44 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </button>
             </div>
           </form>
+        </div>
+      </Modal>
+
+      <Modal isOpen={Boolean(pendingClientChange)} onClose={() => setPendingClientChange(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 space-y-5">
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('sales:clientQuotes.clientChangeRepriceTitle')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('sales:clientQuotes.clientChangeRepriceMessage')}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleClientChangeKeepSnapshots}
+                className="w-full py-3 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                {t('sales:clientQuotes.clientChangeKeepSnapshots')}
+              </button>
+              <button
+                type="button"
+                onClick={handleClientChangeReprice}
+                className="w-full py-3 text-sm font-bold text-white bg-praetor hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                {t('sales:clientQuotes.clientChangeRepriceNow')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingClientChange(null)}
+                className="w-full py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+              >
+                {t('sales:clientQuotes.clientChangeRepriceCancel')}
+              </button>
+            </div>
+          </div>
         </div>
       </Modal>
 

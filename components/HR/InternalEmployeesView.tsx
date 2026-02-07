@@ -168,7 +168,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       cell: ({ value }) => (
         <span className="font-medium text-slate-600">
           {currency}
-          {(value || 0).toFixed(2)}
+          {Number(value ?? 0).toFixed(2)}
         </span>
       ),
     },
@@ -365,7 +365,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       </div>
 
       {/* Employees Table */}
-      <StandardTable
+      <StandardTable<User>
         title={t('internalEmployees.allEmployees')}
         data={allEmployees}
         columns={columns}

@@ -789,7 +789,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         </div>
       </div>
 
-      <StandardTable
+      <StandardTable<Product>
         title={t('crm:internalListing.title')}
         defaultRowsPerPage={5}
         data={products}

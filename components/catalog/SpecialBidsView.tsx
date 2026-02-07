@@ -707,7 +707,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
         </div>
       </div>
 
-      <StandardTable
+      <StandardTable<SpecialBid>
         title={t('externalListing.title')}
         data={bids}
         columns={columns}

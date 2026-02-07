@@ -13,25 +13,39 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
-const getProductTaxRates = async (productIds: string[]) => {
-  const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
-  if (uniqueIds.length === 0) {
-    return new Map<string, number>();
-  }
-  const result = await query('SELECT id, tax_rate FROM products WHERE id = ANY($1)', [uniqueIds]);
-  const rates = new Map<string, number>();
-  result.rows.forEach((row) => {
-    const rate = parseFloat(row.tax_rate);
-    rates.set(row.id, Number.isFinite(rate) ? rate : 0);
-  });
-  return rates;
+type IncomingQuoteItem = {
+  id?: string;
+  productId: string;
+  productName: string;
+  specialBidId?: string | null;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  note?: string | null;
 };
 
-const calculateQuoteTotals = async (
-  items: Array<{ productId: string; quantity: number; unitPrice: number; discount?: number }>,
+type QuoteItemSnapshot = {
+  productCost: number;
+  productTaxRate: number;
+  productMolPercentage: number | null;
+  specialBidUnitPrice: number | null;
+  specialBidMolPercentage: number | null;
+};
+
+type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
+
+const normalizeNullableString = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  const stringValue = String(value).trim();
+  return stringValue.length > 0 ? stringValue : null;
+};
+
+const normalizeSpecialBidId = (value: unknown) => normalizeNullableString(value);
+
+const calculateQuoteTotals = (
+  items: Array<{ quantity: number; unitPrice: number; discount?: number; productTaxRate?: number }>,
   globalDiscount: number,
 ) => {
-  const taxRates = await getProductTaxRates(items.map((item) => item.productId));
   const normalizedGlobalDiscount = Number.isFinite(globalDiscount) ? globalDiscount : 0;
   let subtotal = 0;
   let totalTax = 0;
@@ -57,7 +71,7 @@ const calculateQuoteTotals = async (
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
 
-    const taxRate = taxRates.get(item.productId) ?? 0;
+    const taxRate = Number(item.productTaxRate ?? 0);
     const lineNetAfterGlobal = lineNet * (1 - normalizedGlobalDiscount / 100);
     const taxAmount = lineNetAfterGlobal * (taxRate / 100);
     totalTax += taxAmount;
@@ -67,6 +81,155 @@ const calculateQuoteTotals = async (
   const taxableAmount = subtotal - discountAmount;
   const total = taxableAmount + totalTax;
   return { total, subtotal, taxableAmount, totalTax };
+};
+
+const getProductSnapshots = async (productIds: string[]) => {
+  const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return new Map<string, QuoteItemSnapshot>();
+
+  const result = await query(
+    `SELECT
+        id,
+        costo,
+        mol_percentage as "molPercentage",
+        tax_rate as "taxRate"
+     FROM products
+     WHERE id = ANY($1)`,
+    [uniqueIds],
+  );
+
+  const snapshots = new Map<string, QuoteItemSnapshot>();
+  result.rows.forEach((row) => {
+    snapshots.set(row.id, {
+      productCost: Number(row.costo ?? 0),
+      productTaxRate: Number(row.taxRate ?? 0),
+      productMolPercentage:
+        row.molPercentage === undefined || row.molPercentage === null
+          ? null
+          : Number(row.molPercentage),
+      specialBidUnitPrice: null,
+      specialBidMolPercentage: null,
+    });
+  });
+  return snapshots;
+};
+
+const getSpecialBidSnapshots = async (specialBidIds: string[]) => {
+  const uniqueIds = Array.from(new Set(specialBidIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return new Map<
+      string,
+      { productId: string; unitPrice: number; molPercentage: number | null }
+    >();
+  }
+
+  const result = await query(
+    `SELECT
+        id,
+        product_id as "productId",
+        unit_price as "unitPrice",
+        mol_percentage as "molPercentage"
+     FROM special_bids
+     WHERE id = ANY($1)`,
+    [uniqueIds],
+  );
+
+  const snapshots = new Map<
+    string,
+    { productId: string; unitPrice: number; molPercentage: number | null }
+  >();
+  result.rows.forEach((row) => {
+    snapshots.set(row.id, {
+      productId: row.productId,
+      unitPrice: Number(row.unitPrice ?? 0),
+      molPercentage:
+        row.molPercentage === undefined || row.molPercentage === null
+          ? null
+          : Number(row.molPercentage),
+    });
+  });
+  return snapshots;
+};
+
+const resolveQuoteItemSnapshots = async (
+  items: IncomingQuoteItem[],
+  existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
+): Promise<ResolvedQuoteItem[]> => {
+  const itemsNeedingRecalc = items.filter((item) => {
+    if (!existingItemsById || !item.id) return true;
+    const existingItem = existingItemsById.get(item.id);
+    if (!existingItem) return true;
+    return (
+      existingItem.productId !== item.productId ||
+      normalizeSpecialBidId(existingItem.specialBidId) !== normalizeSpecialBidId(item.specialBidId)
+    );
+  });
+
+  const productSnapshots = await getProductSnapshots(
+    itemsNeedingRecalc.map((item) => item.productId),
+  );
+  const specialBidSnapshots = await getSpecialBidSnapshots(
+    itemsNeedingRecalc
+      .map((item) => normalizeSpecialBidId(item.specialBidId))
+      .filter((bidId): bidId is string => bidId !== null),
+  );
+
+  const resolvedItems: ResolvedQuoteItem[] = [];
+  for (const item of items) {
+    const normalizedBidId = normalizeSpecialBidId(item.specialBidId);
+    if (existingItemsById && item.id) {
+      const existingItem = existingItemsById.get(item.id);
+      const isUnchanged =
+        existingItem &&
+        existingItem.productId === item.productId &&
+        normalizeSpecialBidId(existingItem.specialBidId) === normalizedBidId;
+      if (existingItem && isUnchanged) {
+        resolvedItems.push({
+          ...item,
+          specialBidId: normalizedBidId,
+          productCost: existingItem.productCost,
+          productTaxRate: existingItem.productTaxRate,
+          productMolPercentage: existingItem.productMolPercentage ?? null,
+          specialBidUnitPrice: existingItem.specialBidUnitPrice ?? null,
+          specialBidMolPercentage: existingItem.specialBidMolPercentage ?? null,
+        });
+        continue;
+      }
+    }
+
+    const productSnapshot = productSnapshots.get(item.productId);
+    if (!productSnapshot) {
+      throw new Error(`items productId "${item.productId}" is invalid`);
+    }
+
+    let specialBidUnitPrice: number | null = null;
+    let specialBidMolPercentage: number | null = null;
+    if (normalizedBidId) {
+      const specialBidSnapshot = specialBidSnapshots.get(normalizedBidId);
+      if (!specialBidSnapshot) {
+        throw new Error(`specialBidId "${normalizedBidId}" is invalid`);
+      }
+      if (specialBidSnapshot.productId !== item.productId) {
+        throw new Error(
+          `specialBidId "${normalizedBidId}" does not match productId "${item.productId}"`,
+        );
+      }
+      specialBidUnitPrice = specialBidSnapshot.unitPrice;
+      specialBidMolPercentage = specialBidSnapshot.molPercentage;
+    }
+
+    resolvedItems.push({
+      ...item,
+      specialBidId: normalizedBidId,
+      productCost: productSnapshot.productCost,
+      productTaxRate: productSnapshot.productTaxRate,
+      productMolPercentage: productSnapshot.productMolPercentage,
+      specialBidUnitPrice,
+      specialBidMolPercentage,
+    });
+  }
+
+  return resolvedItems;
 };
 
 const idParamSchema = {
@@ -88,6 +251,7 @@ const quoteItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
+    productTaxRate: { type: 'number' },
     productMolPercentage: { type: ['number', 'null'] },
     specialBidUnitPrice: { type: ['number', 'null'] },
     specialBidMolPercentage: { type: ['number', 'null'] },
@@ -102,6 +266,7 @@ const quoteItemSchema = {
     'quantity',
     'unitPrice',
     'productCost',
+    'productTaxRate',
     'discount',
   ],
 } as const;
@@ -140,12 +305,14 @@ const quoteSchema = {
 const quoteItemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     productName: { type: 'string' },
     specialBidId: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
+    productTaxRate: { type: 'number' },
     productMolPercentage: { type: 'number' },
     specialBidUnitPrice: { type: 'number' },
     specialBidMolPercentage: { type: 'number' },
@@ -229,6 +396,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const quotesResult = await query(
         `SELECT
                 id,
+                quote_code as "quoteCode",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -254,6 +422,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 quantity,
                 unit_price as "unitPrice",
                 product_cost as "productCost",
+                product_tax_rate as "productTaxRate",
                 product_mol_percentage as "productMolPercentage",
                 special_bid_unit_price as "specialBidUnitPrice",
                 special_bid_mol_percentage as "specialBidMolPercentage",
@@ -347,21 +516,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems: {
-        productId: string;
-        productName: string;
-        quantity: number;
-        unitPrice: number;
-        productCost: number;
-        productMolPercentage?: number | null;
-        specialBidUnitPrice?: number | null;
-        specialBidMolPercentage?: number | null;
-        discount: number;
-        specialBidId?: string | null;
-        note?: string | null;
-      }[] = [];
+      const normalizedItems: IncomingQuoteItem[] = [];
       for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+        const item = items[i] as Record<string, unknown>;
         const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
         if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
         const productNameResult = requireNonEmptyString(
@@ -382,25 +539,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
         normalizedItems.push({
-          ...item,
+          id: normalizeNullableString(item.id) ?? undefined,
           productId: productIdResult.value,
           productName: productNameResult.value,
+          specialBidId: normalizeSpecialBidId(item.specialBidId),
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
-          productCost: Number(item.productCost ?? 0),
-          productMolPercentage:
-            item.productMolPercentage === undefined || item.productMolPercentage === null
-              ? null
-              : Number(item.productMolPercentage),
-          specialBidUnitPrice:
-            item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
-              ? null
-              : Number(item.specialBidUnitPrice),
-          specialBidMolPercentage:
-            item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
-              ? null
-              : Number(item.specialBidMolPercentage),
           discount: itemDiscountResult.value || 0,
+          note: normalizeNullableString(item.note),
         });
       }
 
@@ -411,7 +557,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountValue = discountResult.value || 0;
 
-      const totals = await calculateQuoteTotals(normalizedItems, discountValue);
+      let resolvedItems: ResolvedQuoteItem[];
+      try {
+        resolvedItems = await resolveQuoteItemSnapshots(normalizedItems);
+      } catch (err) {
+        return badRequest(reply, (err as Error).message);
+      }
+
+      const totals = calculateQuoteTotals(resolvedItems, discountValue);
       if (!Number.isFinite(totals.total) || totals.total <= 0) {
         return badRequest(reply, 'Total must be greater than 0');
       }
@@ -450,11 +603,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Insert quote items
         const createdItems: unknown[] = [];
-        for (const item of normalizedItems) {
+        for (const item of resolvedItems) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
           const itemResult = await query(
-            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                      RETURNING
                         id,
                         quote_id as "quoteId",
@@ -464,6 +617,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         quantity,
                         unit_price as "unitPrice",
                         product_cost as "productCost",
+                        product_tax_rate as "productTaxRate",
                         product_mol_percentage as "productMolPercentage",
                         special_bid_unit_price as "specialBidUnitPrice",
                         special_bid_mol_percentage as "specialBidMolPercentage",
@@ -478,6 +632,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.quantity,
               item.unitPrice,
               item.productCost,
+              item.productTaxRate,
               item.productMolPercentage ?? null,
               item.specialBidUnitPrice ?? null,
               item.specialBidMolPercentage ?? null,
@@ -640,26 +795,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      let normalizedItems: Array<{
-        productId: string;
-        productName: string;
-        quantity: number;
-        unitPrice: number;
-        productCost: number;
-        productMolPercentage?: number | null;
-        specialBidUnitPrice?: number | null;
-        specialBidMolPercentage?: number | null;
-        discount: number;
-        specialBidId?: string | null;
-        note?: string | null;
-      }> | null = null;
+      let normalizedItems: ResolvedQuoteItem[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = [];
+        const incomingItems: IncomingQuoteItem[] = [];
         for (let i = 0; i < items.length; i++) {
-          const item = items[i];
+          const item = items[i] as Record<string, unknown>;
           const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
           if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
           const productNameResult = requireNonEmptyString(
@@ -682,13 +825,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             `items[${i}].discount`,
           );
           if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
-          normalizedItems.push({
-            ...item,
+          incomingItems.push({
+            id: normalizeNullableString(item.id) ?? undefined,
             productId: productIdResult.value,
             productName: productNameResult.value,
+            specialBidId: normalizeSpecialBidId(item.specialBidId),
             quantity: quantityResult.value,
             unitPrice: unitPriceResult.value,
+            discount: itemDiscountResult.value || 0,
+            note: normalizeNullableString(item.note),
+          });
+        }
+
+        const existingItemsResult = await query(
+          `SELECT
+              id,
+              product_id as "productId",
+              special_bid_id as "specialBidId",
+              product_cost as "productCost",
+              product_tax_rate as "productTaxRate",
+              product_mol_percentage as "productMolPercentage",
+              special_bid_unit_price as "specialBidUnitPrice",
+              special_bid_mol_percentage as "specialBidMolPercentage"
+           FROM quote_items
+           WHERE quote_id = $1`,
+          [idResult.value],
+        );
+        const existingItemsById = new Map<string, IncomingQuoteItem & QuoteItemSnapshot>();
+        existingItemsResult.rows.forEach((item) => {
+          existingItemsById.set(item.id, {
+            id: item.id,
+            productId: item.productId,
+            productName: '',
+            specialBidId: normalizeSpecialBidId(item.specialBidId),
+            quantity: 0,
+            unitPrice: 0,
+            discount: 0,
             productCost: Number(item.productCost ?? 0),
+            productTaxRate: Number(item.productTaxRate ?? 0),
             productMolPercentage:
               item.productMolPercentage === undefined || item.productMolPercentage === null
                 ? null
@@ -701,39 +875,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
                 ? null
                 : Number(item.specialBidMolPercentage),
-            discount: itemDiscountResult.value || 0,
           });
+        });
+
+        try {
+          normalizedItems = await resolveQuoteItemSnapshots(incomingItems, existingItemsById);
+        } catch (err) {
+          return badRequest(reply, (err as Error).message);
         }
-        const totals = await calculateQuoteTotals(
-          normalizedItems as Array<{
-            productId: string;
-            quantity: number;
-            unitPrice: number;
-            discount?: number;
-          }>,
-          effectiveDiscount as number,
-        );
+
+        const totals = calculateQuoteTotals(normalizedItems, effectiveDiscount as number);
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
       } else if (discount !== undefined) {
         const itemsResult = await query(
           `SELECT
-                    product_id as "productId",
                     quantity,
                     unit_price as "unitPrice",
-                    discount
+                    discount,
+                    product_tax_rate as "productTaxRate"
                 FROM quote_items
                 WHERE quote_id = $1`,
           [idResult.value],
         );
         const itemsForTotal = itemsResult.rows.map((row) => ({
-          productId: row.productId,
           quantity: parseFloat(row.quantity),
           unitPrice: parseFloat(row.unitPrice),
           discount: parseFloat(row.discount || 0),
+          productTaxRate: parseFloat(row.productTaxRate || 0),
         }));
-        const totals = await calculateQuoteTotals(itemsForTotal, effectiveDiscount as number);
+        const totals = calculateQuoteTotals(itemsForTotal, effectiveDiscount as number);
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
@@ -791,8 +963,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of normalizedItems) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
           const itemResult = await query(
-            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                      RETURNING
                         id,
                         quote_id as "quoteId",
@@ -802,6 +974,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         quantity,
                         unit_price as "unitPrice",
                         product_cost as "productCost",
+                        product_tax_rate as "productTaxRate",
                         product_mol_percentage as "productMolPercentage",
                         special_bid_unit_price as "specialBidUnitPrice",
                         special_bid_mol_percentage as "specialBidMolPercentage",
@@ -816,6 +989,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.quantity,
               item.unitPrice,
               item.productCost,
+              item.productTaxRate,
               item.productMolPercentage ?? null,
               item.specialBidUnitPrice ?? null,
               item.specialBidMolPercentage ?? null,
@@ -837,6 +1011,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     quantity,
                     unit_price as "unitPrice",
                     product_cost as "productCost",
+                    product_tax_rate as "productTaxRate",
                     product_mol_percentage as "productMolPercentage",
                     special_bid_unit_price as "specialBidUnitPrice",
                     special_bid_mol_percentage as "specialBidMolPercentage",

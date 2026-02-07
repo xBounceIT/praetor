@@ -107,6 +107,11 @@
     "rowsPerPage": "Righe per pagina:",
     "convertToOrder": "Converti in Ordine",
     "orderAlreadyExists": "Esiste già un ordine per questo preventivo.",
-    "restoreDisabledOrderStatus": "Il ripristino è possibile solo se l'ordine collegato è in stato Bozza."
+    "restoreDisabledOrderStatus": "Il ripristino è possibile solo se l'ordine collegato è in stato Bozza.",
+    "clientChangeRepriceTitle": "Aggiornare i prezzi delle righe per il nuovo cliente?",
+    "clientChangeRepriceMessage": "Hai cambiato il cliente su un preventivo esistente. Mantieni gli snapshot correnti delle righe per preservare lo storico, oppure ricalcola le righe usando prodotti e offerte speciali correnti per il nuovo cliente.",
+    "clientChangeKeepSnapshots": "Mantieni snapshot correnti",
+    "clientChangeRepriceNow": "Ricalcola righe",
+    "clientChangeRepriceCancel": "Annulla"
   }
 }

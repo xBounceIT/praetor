@@ -107,6 +107,11 @@
     "rowsPerPage": "Rows per page:",
     "convertToOrder": "Convert to Order",
     "orderAlreadyExists": "An order for this quote already exists.",
-    "restoreDisabledOrderStatus": "Restore is only possible when the linked order is in draft status."
+    "restoreDisabledOrderStatus": "Restore is only possible when the linked order is in draft status.",
+    "clientChangeRepriceTitle": "Update line prices for the new client?",
+    "clientChangeRepriceMessage": "You changed the client on an existing quote. Keep current line snapshots to preserve history, or reprice lines using current products and special bids for the new client.",
+    "clientChangeKeepSnapshots": "Keep current snapshots",
+    "clientChangeRepriceNow": "Reprice lines",
+    "clientChangeRepriceCancel": "Cancel"
   }
 }

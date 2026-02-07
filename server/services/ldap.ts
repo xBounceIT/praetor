@@ -103,17 +103,22 @@ class LDAPService {
       if (!client) {
         return false;
       }
+      const ldapClient = client;
+      const config = this.config;
+      if (!config) {
+        return false;
+      }
 
       // Bind with service account first to find the user's DN
       await new Promise<void>((resolve, reject) => {
-        client?.bind(this.config?.bind_dn, this.config?.bind_password, (err) => {
+        ldapClient.bind(config.bind_dn, config.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
       });
 
       // Find user DN
-      const userDn = await this.findUserDn(client, username);
+      const userDn = await this.findUserDn(ldapClient, username);
       if (!userDn) {
         return false;
       }
@@ -122,8 +127,7 @@ class LDAPService {
       // We need a new client for this to verify credentials safely without messing up the service connection state
       // or we can just re-bind. Re-binding on the same client is standard.
       await new Promise<void>((resolve, reject) => {
-        if (!client) return reject(new Error('Client not available'));
-        client.bind(userDn, password, (err) => {
+        ldapClient.bind(userDn, password, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -143,14 +147,18 @@ class LDAPService {
   }
 
   async findUserDn(client: LdapClient, username: string): Promise<string | null> {
-    const filter = this.config?.user_filter.replace('{0}', username);
+    const config = this.config;
+    if (!config) {
+      return null;
+    }
+    const filter = config.user_filter.replace('{0}', username);
     const searchOptions = {
       scope: 'sub',
       filter: filter,
     };
 
     return new Promise((resolve, reject) => {
-      client.search(this.config?.base_dn, searchOptions, (err, res) => {
+      client.search(config.base_dn, searchOptions, (err, res) => {
         if (err) return reject(err);
 
         let foundDn: string | null = null;
@@ -189,19 +197,21 @@ class LDAPService {
         console.log('LDAP Sync skipped: LDAP is disabled.');
         return { skipped: true, reason: 'LDAP is disabled' };
       }
+      const ldapClient = client;
+      const config = this.config;
+      if (!config) {
+        return { skipped: true, reason: 'LDAP config not loaded' };
+      }
 
       await new Promise<void>((resolve, reject) => {
-        client?.bind(this.config?.bind_dn, this.config?.bind_password, (err) => {
+        ldapClient.bind(config.bind_dn, config.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
       });
 
       // Search for all users
-      if (!this.config) {
-        return { skipped: true, reason: 'LDAP config not loaded' };
-      }
-      const filter = this.config.user_filter.replace('{0}', '*'); // Assumption: filter can handle * wildcard for all
+      const filter = config.user_filter.replace('{0}', '*'); // Assumption: filter can handle * wildcard for all
       // If user_filter is strictly (uid={0}), then (uid=*) should work.
 
       const searchOptions = {
@@ -213,8 +223,7 @@ class LDAPService {
       const entries: LdapEntry[] = [];
 
       await new Promise<void>((resolve, reject) => {
-        if (!client || !this.config) return reject(new Error('Client or config missing'));
-        client.search(this.config.base_dn, searchOptions, (err, res) => {
+        ldapClient.search(config.base_dn, searchOptions, (err, res) => {
           if (err) return reject(err);
 
           res.on('searchEntry', (entry: LdapSearchEntry) => {
