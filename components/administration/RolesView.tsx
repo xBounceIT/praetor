@@ -62,7 +62,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   onUpdateRolePermissions,
   onDeleteRole,
 }) => {
-  const { t } = useTranslation(['common', 'layout', 'administration']);
+  const { t, i18n } = useTranslation(['common', 'layout', 'administration']);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
@@ -84,8 +84,14 @@ const RolesView: React.FC<RolesViewProps> = ({
       }
       grouped[definition.module].push(definition);
     });
-    return { groupedPermissions: grouped, moduleOrder: order };
-  }, []);
+    const sortedOrder = [...order].sort((a, b) =>
+      t(`layout:modules.${a}`, { defaultValue: toTitleCase(a) }).localeCompare(
+        t(`layout:modules.${b}`, { defaultValue: toTitleCase(b) }),
+        i18n.language,
+      ),
+    );
+    return { groupedPermissions: grouped, moduleOrder: sortedOrder };
+  }, [t, i18n.language]);
 
   const canCreateRoles = hasPermission(
     permissions,
