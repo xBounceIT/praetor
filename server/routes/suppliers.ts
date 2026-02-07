@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -73,11 +73,18 @@ const supplierUpdateBodySchema = {
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   fastify.get(
     '/',
     {
+      onRequest: [
+        requireAnyPermission(
+          'crm.suppliers.view',
+          'crm.suppliers_all.view',
+          'catalog.external_listing.view',
+          'suppliers.quotes.view',
+        ),
+      ],
       schema: {
         tags: ['suppliers'],
         summary: 'List suppliers',
@@ -109,6 +116,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('crm.suppliers.create')],
       schema: {
         tags: ['suppliers'],
         summary: 'Create supplier',
@@ -216,6 +224,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('crm.suppliers.update')],
       schema: {
         tags: ['suppliers'],
         summary: 'Update supplier',
@@ -346,6 +355,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('crm.suppliers.delete')],
       schema: {
         tags: ['suppliers'],
         summary: 'Delete supplier',

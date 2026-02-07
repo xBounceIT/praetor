@@ -5,6 +5,7 @@ import CustomSelect from './shared/CustomSelect';
 import { workUnitsApi } from '../services/api';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
+import { buildPermission, hasPermission } from '../utils/permissions';
 
 interface WorkUnitPayload {
   name: string;
@@ -15,7 +16,7 @@ interface WorkUnitPayload {
 interface WorkUnitsViewProps {
   workUnits: WorkUnit[];
   users: User[];
-  userRole: string;
+  permissions: string[];
   onAddWorkUnit: (data: WorkUnitPayload) => Promise<void>;
   onUpdateWorkUnit: (id: string, updates: WorkUnitPayload) => Promise<void>;
   onDeleteWorkUnit: (id: string) => Promise<void>;
@@ -25,7 +26,7 @@ interface WorkUnitsViewProps {
 const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   workUnits,
   users,
-  userRole,
+  permissions,
   onAddWorkUnit,
   onUpdateWorkUnit,
   onDeleteWorkUnit,
@@ -169,9 +170,21 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     );
   }, [users, assignmentSearch]);
 
-  const managerOptions = users
-    .filter((u) => u.role === 'manager')
-    .map((u) => ({ id: u.id, name: u.name }));
+  const managerOptions = users.map((u) => ({ id: u.id, name: u.name }));
+
+  const canCreateWorkUnits = hasPermission(
+    permissions,
+    buildPermission('configuration.work_units', 'create'),
+  );
+  const canUpdateWorkUnits = hasPermission(
+    permissions,
+    buildPermission('configuration.work_units', 'update'),
+  );
+  const canDeleteWorkUnits = hasPermission(
+    permissions,
+    buildPermission('configuration.work_units', 'delete'),
+  );
+  const canManageMembers = canUpdateWorkUnits;
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -183,7 +196,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           </h2>
           <p className="text-slate-500 font-medium">{t('hr:workUnits.subtitle')}</p>
         </div>
-        {userRole === 'admin' && (
+        {canCreateWorkUnits && (
           <button
             onClick={openCreateModal}
             className="px-6 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -204,28 +217,32 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <div className="w-12 h-12 rounded-xl bg-slate-100 text-praetor flex items-center justify-center text-xl">
                 <i className="fa-solid fa-sitemap"></i>
               </div>
-              {userRole === 'admin' && (
+              {(canUpdateWorkUnits || canDeleteWorkUnits) && (
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Tooltip label="Edit">
-                    {() => (
-                      <button
-                        onClick={() => openEditModal(unit)}
-                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
-                      >
-                        <i className="fa-solid fa-pen"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                  <Tooltip label="Delete">
-                    {() => (
-                      <button
-                        onClick={() => confirmDelete(unit)}
-                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
-                    )}
-                  </Tooltip>
+                  {canUpdateWorkUnits && (
+                    <Tooltip label="Edit">
+                      {() => (
+                        <button
+                          onClick={() => openEditModal(unit)}
+                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-praetor hover:bg-slate-100 flex items-center justify-center transition-colors"
+                        >
+                          <i className="fa-solid fa-pen"></i>
+                        </button>
+                      )}
+                    </Tooltip>
+                  )}
+                  {canDeleteWorkUnits && (
+                    <Tooltip label="Delete">
+                      {() => (
+                        <button
+                          onClick={() => confirmDelete(unit)}
+                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      )}
+                    </Tooltip>
+                  )}
                 </div>
               )}
             </div>
@@ -277,7 +294,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                     </p>
                   </div>
                 </div>
-                {userRole === 'admin' && (
+                {canManageMembers && (
                   <button
                     onClick={() => openAssignments(unit)}
                     className="text-xs font-bold text-praetor hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -295,7 +312,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 text-2xl mb-4">
               <i className="fa-solid fa-sitemap"></i>
             </div>
-            {userRole === 'admin' ? (
+            {canCreateWorkUnits ? (
               <>
                 <h3 className="text-lg font-bold text-slate-800">
                   {t('hr:workUnits.noWorkUnitsCreated')}

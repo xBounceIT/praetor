@@ -1,12 +1,138 @@
 -- Praetor Database Schema
 
+-- Roles table
+CREATE TABLE IF NOT EXISTS roles (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    is_system BOOLEAN DEFAULT FALSE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO roles (id, name, is_system, is_admin)
+VALUES
+    ('admin', 'Admin', TRUE, TRUE),
+    ('manager', 'Manager', TRUE, FALSE),
+    ('user', 'User', TRUE, FALSE)
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_id VARCHAR(50) REFERENCES roles(id) ON DELETE CASCADE,
+    permission VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (role_id, permission)
+);
+
+DO $$
+BEGIN
+    IF (SELECT COUNT(*) FROM role_permissions) = 0 THEN
+        INSERT INTO role_permissions (role_id, permission) VALUES
+            ('manager', 'timesheets.tracker.view'),
+            ('manager', 'timesheets.tracker.create'),
+            ('manager', 'timesheets.tracker.update'),
+            ('manager', 'timesheets.tracker.delete'),
+            ('manager', 'timesheets.recurring.view'),
+            ('manager', 'timesheets.recurring.create'),
+            ('manager', 'timesheets.recurring.update'),
+            ('manager', 'timesheets.recurring.delete'),
+            ('manager', 'crm.clients.view'),
+            ('manager', 'crm.clients.create'),
+            ('manager', 'crm.clients.update'),
+            ('manager', 'crm.clients.delete'),
+            ('manager', 'crm.clients_all.view'),
+            ('manager', 'crm.suppliers.view'),
+            ('manager', 'crm.suppliers.create'),
+            ('manager', 'crm.suppliers.update'),
+            ('manager', 'crm.suppliers.delete'),
+            ('manager', 'crm.suppliers_all.view'),
+            ('manager', 'sales.client_quotes.view'),
+            ('manager', 'sales.client_quotes.create'),
+            ('manager', 'sales.client_quotes.update'),
+            ('manager', 'sales.client_quotes.delete'),
+            ('manager', 'catalog.internal_listing.view'),
+            ('manager', 'catalog.internal_listing.create'),
+            ('manager', 'catalog.internal_listing.update'),
+            ('manager', 'catalog.internal_listing.delete'),
+            ('manager', 'catalog.external_listing.view'),
+            ('manager', 'catalog.external_listing.create'),
+            ('manager', 'catalog.external_listing.update'),
+            ('manager', 'catalog.external_listing.delete'),
+            ('manager', 'catalog.special_bids.view'),
+            ('manager', 'catalog.special_bids.create'),
+            ('manager', 'catalog.special_bids.update'),
+            ('manager', 'catalog.special_bids.delete'),
+            ('manager', 'accounting.clients_orders.view'),
+            ('manager', 'accounting.clients_orders.create'),
+            ('manager', 'accounting.clients_orders.update'),
+            ('manager', 'accounting.clients_orders.delete'),
+            ('manager', 'accounting.clients_invoices.view'),
+            ('manager', 'accounting.clients_invoices.create'),
+            ('manager', 'accounting.clients_invoices.update'),
+            ('manager', 'accounting.clients_invoices.delete'),
+            ('manager', 'finances.payments.view'),
+            ('manager', 'finances.payments.create'),
+            ('manager', 'finances.payments.update'),
+            ('manager', 'finances.payments.delete'),
+            ('manager', 'finances.expenses.view'),
+            ('manager', 'finances.expenses.create'),
+            ('manager', 'finances.expenses.update'),
+            ('manager', 'finances.expenses.delete'),
+            ('manager', 'projects.manage.view'),
+            ('manager', 'projects.manage.create'),
+            ('manager', 'projects.manage.update'),
+            ('manager', 'projects.manage.delete'),
+            ('manager', 'projects.manage_all.view'),
+            ('manager', 'projects.tasks.view'),
+            ('manager', 'projects.tasks.create'),
+            ('manager', 'projects.tasks.update'),
+            ('manager', 'projects.tasks.delete'),
+            ('manager', 'projects.tasks_all.view'),
+            ('manager', 'suppliers.quotes.view'),
+            ('manager', 'suppliers.quotes.create'),
+            ('manager', 'suppliers.quotes.update'),
+            ('manager', 'suppliers.quotes.delete'),
+            ('manager', 'hr.internal.view'),
+            ('manager', 'hr.internal.create'),
+            ('manager', 'hr.internal.update'),
+            ('manager', 'hr.internal.delete'),
+            ('manager', 'hr.external.view'),
+            ('manager', 'hr.external.create'),
+            ('manager', 'hr.external.update'),
+            ('manager', 'hr.external.delete'),
+            ('manager', 'configuration.user_management.view'),
+            ('manager', 'configuration.user_management.update'),
+            ('manager', 'configuration.work_units.view'),
+            ('manager', 'settings.view'),
+            ('manager', 'settings.update'),
+            ('manager', 'docs.api.view'),
+            ('manager', 'docs.frontend.view'),
+            ('manager', 'notifications.view'),
+            ('manager', 'notifications.update'),
+            ('manager', 'notifications.delete'),
+            ('user', 'timesheets.tracker.view'),
+            ('user', 'timesheets.tracker.create'),
+            ('user', 'timesheets.tracker.update'),
+            ('user', 'timesheets.tracker.delete'),
+            ('user', 'timesheets.recurring.view'),
+            ('user', 'timesheets.recurring.create'),
+            ('user', 'timesheets.recurring.update'),
+            ('user', 'timesheets.recurring.delete'),
+            ('user', 'projects.manage.view'),
+            ('user', 'projects.tasks.view'),
+            ('user', 'settings.view'),
+            ('user', 'settings.update'),
+            ('user', 'docs.api.view'),
+            ('user', 'docs.frontend.view');
+    END IF;
+END $$;
+
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     username VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'manager', 'user')),
+    role VARCHAR(50) NOT NULL REFERENCES roles(id),
     avatar_initials VARCHAR(5) NOT NULL,
     cost_per_hour DECIMAL(10, 2) DEFAULT 0,
     is_disabled BOOLEAN DEFAULT FALSE,
@@ -22,6 +148,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN DEFAULT FALSE;
 -- Employee type column (app_user = can login, internal/external = no login)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_type VARCHAR(20) DEFAULT 'app_user';
 
+-- Expand role column length for existing installations
+ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(50);
+
 -- Add check constraint for employee_type (safe for existing installations)
 DO $$
 BEGIN
@@ -30,6 +159,27 @@ BEGIN
     ) THEN
         ALTER TABLE users ADD CONSTRAINT users_employee_type_check
             CHECK (employee_type IN ('app_user', 'internal', 'external'));
+    END IF;
+END $$;
+
+-- Drop legacy role check constraint if present
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check'
+    ) THEN
+        ALTER TABLE users DROP CONSTRAINT users_role_check;
+    END IF;
+END $$;
+
+-- Ensure foreign key exists for users.role
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_role_fkey'
+    ) THEN
+        ALTER TABLE users
+            ADD CONSTRAINT users_role_fkey FOREIGN KEY (role) REFERENCES roles(id) ON UPDATE CASCADE;
     END IF;
 END $$;
 

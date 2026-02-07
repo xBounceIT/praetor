@@ -8,6 +8,7 @@ declare module 'fastify' {
       username: string;
       role: string;
       avatar_initials?: string | null;
+      permissions?: string[];
     };
   }
 }

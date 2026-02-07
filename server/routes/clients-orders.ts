@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -129,14 +129,14 @@ const clientOrderUpdateBodySchema = {
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All clients_orders routes require manager role
+  // All clients_orders routes require authentication
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all clients_orders with their items
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('accounting.clients_orders.view')],
       schema: {
         tags: ['clients-orders'],
         summary: 'List client orders',
@@ -207,6 +207,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('accounting.clients_orders.create')],
       schema: {
         tags: ['clients-orders'],
         summary: 'Create client order',
@@ -365,6 +366,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('accounting.clients_orders.update')],
       schema: {
         tags: ['clients-orders'],
         summary: 'Update client order',
@@ -832,7 +834,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Get all managers except the current user
         const managersResult = await query(
-          `SELECT id FROM users WHERE role = 'manager' AND id != $1 AND is_disabled = FALSE`,
+          `SELECT u.id
+           FROM users u
+           JOIN roles r ON u.role = r.id
+           LEFT JOIN role_permissions rp
+             ON rp.role_id = r.id AND rp.permission = 'projects.manage.view'
+           WHERE u.id != $1
+             AND u.is_disabled = FALSE
+             AND (r.is_admin = TRUE OR rp.permission IS NOT NULL)`,
           [request.user!.id],
         );
 
@@ -869,6 +878,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('accounting.clients_orders.delete')],
       schema: {
         tags: ['clients-orders'],
         summary: 'Delete client order',

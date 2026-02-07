@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalEmail,
@@ -78,12 +78,36 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all clients
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'crm.clients.view',
+          'crm.clients_all.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+          'projects.manage.view',
+          'projects.tasks.view',
+          'sales.client_quotes.view',
+          'accounting.clients_orders.view',
+          'accounting.clients_invoices.view',
+          'catalog.special_bids.view',
+          'catalog.internal_listing.view',
+          'catalog.external_listing.view',
+          'finances.payments.view',
+          'finances.expenses.view',
+          'suppliers.quotes.view',
+          'configuration.user_management.view',
+          'configuration.user_management.update',
+        ),
+      ],
       schema: {
         tags: ['clients'],
         summary: 'List clients',
@@ -94,11 +118,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      const isStandardUser = request.user!.role === 'user';
+      const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
+      const canViewClientDetails = hasPermission(request, 'crm.clients.view');
       let queryText = 'SELECT * FROM clients ORDER BY name';
       const queryParams: (string | null)[] = [];
 
-      if (isStandardUser) {
+      if (!canViewAllClients) {
         queryText = `
                 SELECT c.id, c.name
                 FROM clients c
@@ -111,7 +136,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const result = await query(queryText, queryParams);
       const clients = result.rows.map((c) => {
-        if (isStandardUser) {
+        if (!canViewClientDetails) {
           return {
             id: c.id,
             name: c.name,
@@ -142,7 +167,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('crm.clients.create')],
       schema: {
         tags: ['clients'],
         summary: 'Create client',
@@ -244,14 +269,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
-        // Auto-assign new client to all manager users
-        await query(
-          `INSERT INTO user_clients (user_id, client_id)
-           SELECT id, $1 FROM users WHERE role = 'manager'
-           ON CONFLICT (user_id, client_id) DO NOTHING`,
-          [id],
-        );
-
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -291,7 +308,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('crm.clients.update')],
       schema: {
         tags: ['clients'],
         summary: 'Update client',
@@ -473,7 +490,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('crm.clients.delete')],
       schema: {
         tags: ['clients'],
         summary: 'Delete client',

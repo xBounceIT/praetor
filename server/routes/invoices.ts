@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -132,14 +132,14 @@ const invoiceUpdateBodySchema = {
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All invoices routes require manager role
+  // All invoices routes require authentication
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all invoices with their items
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('accounting.clients_invoices.view')],
       schema: {
         tags: ['invoices'],
         summary: 'List invoices',
@@ -240,6 +240,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('accounting.clients_invoices.create')],
       schema: {
         tags: ['invoices'],
         summary: 'Create invoice',
@@ -446,6 +447,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('accounting.clients_invoices.update')],
       schema: {
         tags: ['invoices'],
         summary: 'Update invoice',
@@ -729,6 +731,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('accounting.clients_invoices.delete')],
       schema: {
         tags: ['invoices'],
         summary: 'Delete invoice',

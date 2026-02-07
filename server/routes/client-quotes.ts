@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -188,9 +188,8 @@ const quoteUpdateBodySchema = {
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All quote routes require manager role
+  // All quote routes require authentication
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   const isQuoteExpired = (status: string, expirationDate: string | Date | null | undefined) => {
     if (status === 'confirmed') return false;
@@ -215,6 +214,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('sales.client_quotes.view')],
       schema: {
         tags: ['client-quotes'],
         summary: 'List client quotes',
@@ -294,6 +294,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('sales.client_quotes.create')],
       schema: {
         tags: ['client-quotes'],
         summary: 'Create client quote',
@@ -504,6 +505,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('sales.client_quotes.update')],
       schema: {
         tags: ['client-quotes'],
         summary: 'Update client quote',
@@ -862,6 +864,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('sales.client_quotes.delete')],
       schema: {
         tags: ['client-quotes'],
         summary: 'Delete client quote',

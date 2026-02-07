@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   parseDateString,
@@ -103,12 +103,15 @@ const entriesBulkDeleteQuerySchema = {
   required: ['projectId', 'task'],
 } as const;
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List time entries
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('manager', 'user')],
+      onRequest: [authenticateToken, requirePermission('timesheets.tracker.view')],
       schema: {
         tags: ['entries'],
         summary: 'List time entries',
@@ -121,29 +124,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       let result;
+      const { userId } = request.query as { userId?: string };
+      const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
 
-      if (request.user!.role === 'manager') {
-        // Managers can see their own entries and those of users in their work units
-        const { userId } = request.query as { userId?: string };
-
+      if (canViewAll) {
         if (userId) {
-          // If requesting specific user, verify permission
-          if (userId !== request.user!.id) {
-            const managedCheck = await query(
-              `SELECT 1 
-                         FROM user_work_units uwu
-                         JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                         WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-              [request.user!.id, userId],
-            );
-
-            if (managedCheck.rows.length === 0) {
-              return reply
-                .code(403)
-                .send({ error: 'Not authorized to view entries for this user' });
-            }
-          }
-
           result = await query(
             `SELECT id, user_id, date, client_id, client_name, project_id,
                   project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
@@ -151,28 +136,51 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [userId],
           );
         } else {
-          // No specific user requested, return all accessible (own + managed)
           result = await query(
             `SELECT id, user_id, date, client_id, client_name, project_id,
                   project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-           FROM time_entries
-           WHERE user_id = $1
-             OR user_id IN (
-                  SELECT uwu.user_id
-                  FROM user_work_units uwu
-                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                  WHERE wum.user_id = $1
-              )
-           ORDER BY created_at DESC`,
-            [request.user!.id],
+           FROM time_entries ORDER BY created_at DESC`,
           );
         }
-      } else {
-        // Regular users can only see their own entries
+      } else if (userId && userId !== request.user!.id) {
+        const managedCheck = await query(
+          `SELECT 1
+                 FROM user_work_units uwu
+                 JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                 WHERE wum.user_id = $1 AND uwu.user_id = $2`,
+          [request.user!.id, userId],
+        );
+
+        if (managedCheck.rows.length === 0) {
+          return reply.code(403).send({ error: 'Not authorized to view entries for this user' });
+        }
+
         result = await query(
           `SELECT id, user_id, date, client_id, client_name, project_id,
                 project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
          FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
+          [userId],
+        );
+      } else if (userId) {
+        result = await query(
+          `SELECT id, user_id, date, client_id, client_name, project_id,
+                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+         FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
+          [userId],
+        );
+      } else {
+        result = await query(
+          `SELECT id, user_id, date, client_id, client_name, project_id,
+                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+         FROM time_entries
+         WHERE user_id = $1
+           OR user_id IN (
+                SELECT uwu.user_id
+                FROM user_work_units uwu
+                JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                WHERE wum.user_id = $1
+            )
+         ORDER BY created_at DESC`,
           [request.user!.id],
         );
       }
@@ -202,7 +210,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('manager', 'user')],
+      onRequest: [authenticateToken, requirePermission('timesheets.tracker.create')],
       schema: {
         tags: ['entries'],
         summary: 'Create time entry',
@@ -275,16 +283,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const isPlaceholderValue = parseBoolean(isPlaceholder);
 
-      // Allow managers to create entries for other users
       let targetUserId = request.user!.id;
-      if (userId && request.user!.role === 'manager') {
-        targetUserId = userId;
-        const targetUserIdResult = requireNonEmptyString(targetUserId, 'userId');
+      if (userId) {
+        const targetUserIdResult = requireNonEmptyString(userId, 'userId');
         if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
         targetUserId = targetUserIdResult.value;
 
-        // Verify manager has access to this user
-        if (targetUserId !== request.user!.id) {
+        if (
+          targetUserId !== request.user!.id &&
+          !hasPermission(request, 'timesheets.tracker_all.view')
+        ) {
           const managedCheck = await query(
             `SELECT 1 
                      FROM user_work_units uwu
@@ -353,7 +361,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager', 'user')],
+      onRequest: [authenticateToken, requirePermission('timesheets.tracker.update')],
       schema: {
         tags: ['entries'],
         summary: 'Update time entry',
@@ -395,11 +403,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (existing.rows[0].user_id !== request.user!.id) {
-        if (request.user!.role === 'user') {
-          return reply.code(403).send({ error: 'Not authorized to update this entry' });
-        }
-
-        if (request.user!.role === 'manager') {
+        if (!hasPermission(request, 'timesheets.tracker_all.view')) {
           const managedCheck = await query(
             `SELECT 1
                      FROM user_work_units uwu
@@ -448,7 +452,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager', 'user')],
+      onRequest: [authenticateToken, requirePermission('timesheets.tracker.delete')],
       schema: {
         tags: ['entries'],
         summary: 'Delete time entry',
@@ -473,11 +477,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (existing.rows[0].user_id !== request.user!.id) {
-        if (request.user!.role === 'user') {
-          return reply.code(403).send({ error: 'Not authorized to delete this entry' });
-        }
-
-        if (request.user!.role === 'manager') {
+        if (!hasPermission(request, 'timesheets.tracker_all.view')) {
           const managedCheck = await query(
             `SELECT 1 
                      FROM user_work_units uwu
@@ -500,7 +500,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('manager', 'user')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission('timesheets.tracker.delete', 'timesheets.recurring.delete'),
+      ],
       schema: {
         tags: ['entries'],
         summary: 'Bulk delete time entries',
@@ -533,10 +536,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let paramIndex = 3;
 
       // Only delete user's own entries unless manager (who can delete managed users' entries)
-      if (request.user!.role === 'user') {
-        sql += ` AND user_id = $${paramIndex++}`;
-        params.push(request.user!.id);
-      } else if (request.user!.role === 'manager') {
+      if (!hasPermission(request, 'timesheets.tracker_all.view')) {
         sql += ` AND (user_id = $${paramIndex} OR user_id IN (
                   SELECT uwu.user_id 
                   FROM user_work_units uwu

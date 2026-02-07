@@ -5,13 +5,14 @@ import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
+import { buildPermission, hasPermission } from '../../utils/permissions';
 
 interface ClientsViewProps {
   clients: Client[];
   onAddClient: (clientData: Partial<Client>) => Promise<void>;
   onUpdateClient: (id: string, updates: Partial<Client>) => Promise<void>;
   onDeleteClient: (id: string) => Promise<void>;
-  userRole: 'admin' | 'manager' | 'user';
+  permissions: string[];
 }
 
 const ClientsView: React.FC<ClientsViewProps> = ({
@@ -19,9 +20,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   onAddClient,
   onUpdateClient,
   onDeleteClient,
-  userRole,
+  permissions,
 }) => {
   const { t } = useTranslation(['crm', 'common', 'form']);
+  const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
+  const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
+  const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -43,6 +47,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   });
 
   const openAddModal = () => {
+    if (!canCreateClients) return;
     setEditingClient(null);
     setFormData({
       name: '',
@@ -61,6 +66,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   };
 
   const openEditModal = (client: Client) => {
+    if (!canUpdateClients) return;
     setEditingClient(client);
     setFormData({
       name: client.name || '',
@@ -80,6 +86,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (editingClient && !canUpdateClients) return;
+    if (!editingClient && !canCreateClients) return;
 
     // Validation
     const trimmedName = formData.name?.trim() || '';
@@ -151,6 +160,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   }, []);
 
   const handleDelete = () => {
+    if (!canDeleteClients) return;
     if (clientToDelete) {
       onDeleteClient(clientToDelete.id).then(() => {
         setIsDeleteConfirmOpen(false);
@@ -158,6 +168,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       });
     }
   };
+
+  const canSubmit = editingClient ? canUpdateClients : canCreateClients;
 
   // Column definitions
   const columns = useMemo<Column<Client>[]>(
@@ -243,9 +255,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canUpdateClients) return;
                     onUpdateClient(row.id, { isDisabled: !row.isDisabled });
                   }}
-                  className={`p-2 rounded-lg transition-all ${
+                  disabled={!canUpdateClients}
+                  className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     row.isDisabled
                       ? 'text-praetor hover:bg-slate-100'
                       : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
@@ -255,7 +269,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </button>
               )}
             </Tooltip>
-            {userRole === 'admin' && (
+            {canDeleteClients && (
               <Tooltip label={t('common:buttons.delete')}>
                 {() => (
                   <button
@@ -274,7 +288,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
     ],
-    [t, userRole, onUpdateClient, confirmDelete],
+    [t, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete],
   );
 
   return (
@@ -516,7 +530,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                disabled={!canSubmit}
+                className={`px-10 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
+                  canSubmit
+                    ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
+                    : 'bg-slate-300 shadow-none cursor-not-allowed'
+                }`}
               >
                 {editingClient ? t('common:buttons.update') : t('common:buttons.save')}
               </button>
@@ -563,12 +582,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <h2 className="text-2xl font-black text-slate-800">{t('crm:clients.title')}</h2>
             <p className="text-slate-500 text-sm">{t('crm:clients.subtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
-          </button>
+          {canCreateClients && (
+            <button
+              onClick={openAddModal}
+              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            >
+              <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -577,7 +598,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         data={clients}
         columns={columns}
         defaultRowsPerPage={10}
-        onRowClick={openEditModal}
+        onRowClick={canUpdateClients ? openEditModal : undefined}
         rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
       />
     </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, UserRole, Client, Project, ProjectTask } from '../../types';
+import { User, Client, Project, ProjectTask, Role } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable from '../shared/StandardTable';
 
@@ -8,6 +8,7 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { usersApi } from '../../services/api';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
+import { buildPermission, hasPermission } from '../../utils/permissions';
 
 interface UserManagementProps {
   users: User[];
@@ -18,12 +19,13 @@ interface UserManagementProps {
     name: string,
     username: string,
     password: string,
-    role: UserRole,
+    role: string,
   ) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
   currentUserId: string;
-  currentUserRole: UserRole;
+  permissions: string[];
+  roles: Role[];
   currency: string;
 }
 
@@ -36,21 +38,32 @@ const UserManagement: React.FC<UserManagementProps> = ({
   onDeleteUser,
   onUpdateUser,
   currentUserId,
-  currentUserRole,
+  permissions,
+  roles,
   currency,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
 
-  const ROLE_OPTIONS = [
-    { id: 'user', name: t('hr:roles.user') },
-    { id: 'manager', name: t('hr:roles.manager') },
-    { id: 'admin', name: t('hr:roles.admin') },
-  ];
+  const roleOptions = React.useMemo(
+    () =>
+      roles.length
+        ? roles.map((role) => ({ id: role.id, name: role.name }))
+        : [
+            { id: 'user', name: t('hr:roles.user') },
+            { id: 'manager', name: t('hr:roles.manager') },
+            { id: 'admin', name: t('hr:roles.admin') },
+          ],
+    [roles, t],
+  );
+
+  const roleLookup = React.useMemo(() => {
+    return new Map(roles.map((role) => [role.id, role]));
+  }, [roles]);
 
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('password');
-  const [newRole, setNewRole] = useState<UserRole>('user');
+  const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
@@ -84,7 +97,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState<UserRole>('user');
+  const [editRole, setEditRole] = useState<string>('');
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
   const [activeSearch, setActiveSearch] = useState('');
@@ -100,7 +113,24 @@ const UserManagement: React.FC<UserManagementProps> = ({
     return saved ? parseInt(saved, 10) : 5;
   });
 
-  const canManageAssignments = currentUserRole === 'admin';
+  const canCreateUsers = hasPermission(
+    permissions,
+    buildPermission('configuration.user_management', 'create'),
+  );
+  const canUpdateUsers = hasPermission(
+    permissions,
+    buildPermission('configuration.user_management', 'update'),
+  );
+  const canDeleteUsers = hasPermission(
+    permissions,
+    buildPermission('configuration.user_management', 'delete'),
+  );
+  const canManageAssignments = canUpdateUsers;
+  React.useEffect(() => {
+    if (!newRole && roleOptions[0]?.id) {
+      setNewRole(roleOptions[0].id);
+    }
+  }, [newRole, roleOptions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +159,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setNewName('');
     setNewUsername('');
     setNewPassword('password');
-    setNewRole('user');
+    setNewRole(roleOptions[0]?.id || '');
   };
 
   const handleActiveRowsPerPageChange = (val: string) => {
@@ -335,14 +365,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
       };
 
       if (
-        currentUserRole === 'admin' &&
+        canUpdateUsers &&
         editingUser?.id !== currentUserId &&
+        editRole &&
         editRole !== editingUser?.role
       ) {
         updates.role = editRole;
       }
 
-      if (currentUserRole !== 'admin') {
+      if (canUpdateUsers) {
         updates.costPerHour = parseFloat(editCostPerHour) || 0;
       }
 
@@ -353,13 +384,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const managingUser = users.find((u) => u.id === managingUserId);
   const isEditingSelf = editingUser?.id === currentUserId;
-  const canEditRole = currentUserRole === 'admin' && !isEditingSelf;
+  const canEditRole = canUpdateUsers && !isEditingSelf;
   const hasEditChanges =
     !!editingUser &&
     (editName !== editingUser.name ||
       editIsDisabled !== !!editingUser.isDisabled ||
-      (currentUserRole !== 'admin' &&
-        parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
+      (canUpdateUsers && parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
       (canEditRole && editRole !== editingUser.role));
 
   const filteredProjectsForFilter =
@@ -572,13 +602,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 />
               </div>
 
-              {currentUserRole === 'admin' && (
+              {canUpdateUsers && (
                 <div>
                   <CustomSelect
                     label={t('hr:workforce.role')}
-                    options={ROLE_OPTIONS}
+                    options={roleOptions}
                     value={editRole}
-                    onChange={(val) => setEditRole(val as UserRole)}
+                    onChange={(val) => setEditRole(val as string)}
                     buttonClassName="py-2 text-sm"
                     disabled={isEditingSelf}
                   />
@@ -590,7 +620,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
               )}
 
-              {currentUserRole !== 'admin' && (
+              {canUpdateUsers && (
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}
@@ -644,7 +674,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </div>
         </div>
       </Modal>
-      {currentUserRole === 'admin' && (
+      {canCreateUsers && (
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <i className="fa-solid fa-user-plus text-praetor"></i>
@@ -718,9 +748,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
             <div className="lg:col-span-1">
               <CustomSelect
                 label={t('hr:workforce.role')}
-                options={ROLE_OPTIONS}
+                options={roleOptions}
                 value={newRole}
-                onChange={(val) => setNewRole(val as UserRole)}
+                onChange={(val) => setNewRole(val as string)}
                 buttonClassName="py-2 text-sm"
               />
               <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4"></p>
@@ -838,7 +868,20 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {activeUsers.map((user) => {
-              const canEdit = currentUserRole === 'admin';
+              const canEdit = canUpdateUsers;
+              const role = roleLookup.get(user.role);
+              const isAdminRole = role?.isAdmin || user.role === 'admin';
+              const roleBadgeClass = isAdminRole
+                ? 'bg-slate-800 text-white border-slate-700'
+                : role?.isSystem
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+              const roleIcon = isAdminRole
+                ? 'fa-shield-halved'
+                : role?.isSystem
+                  ? 'fa-briefcase'
+                  : 'fa-user';
+
               return (
                 <tr
                   key={user.id}
@@ -868,17 +911,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                        user.role === 'admin'
-                          ? 'bg-slate-800 text-white border-slate-700'
-                          : user.role === 'manager'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
                     >
-                      {user.role === 'admin' && <i className="fa-solid fa-shield-halved"></i>}
-                      {user.role === 'manager' && <i className="fa-solid fa-briefcase"></i>}
-                      {user.role}
+                      <i className={`fa-solid ${roleIcon}`}></i>
+                      {role?.name || user.role}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -898,7 +934,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           )}
                         </Tooltip>
                       )}
-                      {currentUserRole === 'admin' && (
+                      {canUpdateUsers && (
                         <>
                           <Tooltip label={t('hr:workforce.editUser')}>
                             {() => (
@@ -927,21 +963,23 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               </button>
                             )}
                           </Tooltip>
-                          <Tooltip label={t('hr:workforce.deleteUser')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  confirmDelete(user);
-                                }}
-                                disabled={user.id === currentUserId}
-                                className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-trash-can"></i>
-                              </button>
-                            )}
-                          </Tooltip>
                         </>
+                      )}
+                      {canDeleteUsers && (
+                        <Tooltip label={t('hr:workforce.deleteUser')}>
+                          {() => (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmDelete(user);
+                              }}
+                              disabled={user.id === currentUserId}
+                              className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          )}
+                        </Tooltip>
                       )}
                     </div>
                   </td>
@@ -1064,7 +1102,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {disabledUsers.map((user) => {
-                const canEdit = currentUserRole === 'admin';
+                const canEdit = canUpdateUsers;
+                const role = roleLookup.get(user.role);
+                const isAdminRole = role?.isAdmin || user.role === 'admin';
+                const roleBadgeClass = isAdminRole
+                  ? 'bg-slate-800 text-white border-slate-700'
+                  : role?.isSystem
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                const roleIcon = isAdminRole
+                  ? 'fa-shield-halved'
+                  : role?.isSystem
+                    ? 'fa-briefcase'
+                    : 'fa-user';
                 return (
                   <tr
                     key={user.id}
@@ -1094,17 +1144,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                          user.role === 'admin'
-                            ? 'bg-slate-800 text-white border-slate-700'
-                            : user.role === 'manager'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
                       >
-                        {user.role === 'admin' && <i className="fa-solid fa-shield-halved"></i>}
-                        {user.role === 'manager' && <i className="fa-solid fa-briefcase"></i>}
-                        {user.role}
+                        <i className={`fa-solid ${roleIcon}`}></i>
+                        {role?.name || user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -1124,7 +1167,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                             )}
                           </Tooltip>
                         )}
-                        {currentUserRole === 'admin' && (
+                        {canUpdateUsers && (
                           <>
                             <Tooltip label={t('hr:workforce.editUser')}>
                               {() => (
@@ -1152,21 +1195,23 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                 </button>
                               )}
                             </Tooltip>
-                            <Tooltip label={t('hr:workforce.deleteUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    confirmDelete(user);
-                                  }}
-                                  disabled={user.id === currentUserId}
-                                  className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                                >
-                                  <i className="fa-solid fa-trash-can"></i>
-                                </button>
-                              )}
-                            </Tooltip>
                           </>
+                        )}
+                        {canDeleteUsers && (
+                          <Tooltip label={t('hr:workforce.deleteUser')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDelete(user);
+                                }}
+                                disabled={user.id === currentUserId}
+                                className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
+                              </button>
+                            )}
+                          </Tooltip>
                         )}
                       </div>
                     </td>

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -62,14 +62,14 @@ const paymentUpdateBodySchema = {
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All payments routes require manager role
+  // All payments routes require authentication
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all payments
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('finances.payments.view')],
       schema: {
         tags: ['payments'],
         summary: 'List payments',
@@ -114,6 +114,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('finances.payments.create')],
       schema: {
         tags: ['payments'],
         summary: 'Create payment',
@@ -237,6 +238,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('finances.payments.update')],
       schema: {
         tags: ['payments'],
         summary: 'Update payment',
@@ -370,6 +372,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('finances.payments.delete')],
       schema: {
         tags: ['payments'],
         summary: 'Delete payment',

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
 import { requireNonEmptyString, validateHexColor, badRequest } from '../utils/validation.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 
@@ -53,12 +53,23 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all projects
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'projects.manage.view',
+          'projects.tasks.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+        ),
+      ],
       schema: {
         tags: ['projects'],
         summary: 'List projects',
@@ -75,7 +86,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `;
       let queryParams: string[] = [];
 
-      if (request.user!.role === 'user') {
+      if (!hasPermission(request, 'projects.manage_all.view')) {
         queryText = `
                 SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled 
                 FROM projects p
@@ -105,7 +116,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.manage.create')],
       schema: {
         tags: ['projects'],
         summary: 'Create project',
@@ -144,14 +155,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [id, nameResult.value, clientIdResult.value, projectColor, description || null, false],
         );
 
-        // Auto-assign new project to all manager users
-        await query(
-          `INSERT INTO user_projects (user_id, project_id)
-           SELECT id, $1 FROM users WHERE role = 'manager'
-           ON CONFLICT (user_id, project_id) DO NOTHING`,
-          [id],
-        );
-
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -175,7 +178,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.manage.delete')],
       schema: {
         tags: ['projects'],
         summary: 'Delete project',
@@ -206,7 +209,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.manage.update')],
       schema: {
         tags: ['projects'],
         summary: 'Update project',

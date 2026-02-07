@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -111,11 +111,11 @@ const supplierQuoteUpdateBodySchema = {
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('suppliers.quotes.view')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'List supplier quotes',
@@ -176,6 +176,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('suppliers.quotes.create')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'Create supplier quote',
@@ -338,6 +339,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('suppliers.quotes.update')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'Update supplier quote',
@@ -558,6 +560,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('suppliers.quotes.delete')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'Delete supplier quote',

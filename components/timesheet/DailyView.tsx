@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Project, ProjectTask, TimeEntry, UserRole, TimeEntryLocation } from '../../types';
+import { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { parseSmartEntry } from '../../services/geminiService';
 import CustomSelect from '../shared/CustomSelect';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { buildPermission, hasAnyPermission } from '../../utils/permissions';
 
 interface DailyViewProps {
   clients: Client[];
@@ -20,7 +21,7 @@ interface DailyViewProps {
     endDate?: string,
     duration?: number,
   ) => void;
-  userRole: UserRole;
+  permissions: string[];
   dailyGoal: number;
   currentDayTotal: number;
   enableAiInsights: boolean;
@@ -37,7 +38,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   onAdd,
   selectedDate,
   onMakeRecurring,
-  userRole,
+  permissions,
   dailyGoal,
   currentDayTotal,
   enableAiInsights,
@@ -291,7 +292,9 @@ const DailyView: React.FC<DailyViewProps> = ({
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
 
-  const canCreateCustomTask = userRole === 'admin' || userRole === 'manager';
+  const canCreateCustomTask = hasAnyPermission(permissions, [
+    buildPermission('projects.tasks', 'create'),
+  ]);
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
   const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));

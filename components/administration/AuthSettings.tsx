@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LdapConfig, UserRole, LdapRoleMapping } from '../../types';
+import { LdapConfig, LdapRoleMapping, Role } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 
 interface AuthSettingsProps {
   config: LdapConfig;
   onSave: (config: LdapConfig) => void;
+  roles: Role[];
 }
 
 const DEFAULT_CONFIG: LdapConfig = {
@@ -20,7 +21,7 @@ const DEFAULT_CONFIG: LdapConfig = {
   roleMappings: [],
 };
 
-const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave }) => {
+const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) => {
   const { t } = useTranslation('auth');
   const [formData, setFormData] = useState<LdapConfig>(config || DEFAULT_CONFIG);
   const [testUser, setTestUser] = useState('');
@@ -34,6 +35,14 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
+
+  const roleOptions = roles.length
+    ? roles.map((role) => ({ id: role.id, name: role.name }))
+    : [
+        { id: 'admin', name: t('roles.admin', 'Admin') },
+        { id: 'manager', name: t('roles.manager', 'Manager') },
+        { id: 'user', name: t('roles.user', 'User') },
+      ];
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,7 +171,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave }) => {
   const addRoleMapping = () => {
     setFormData({
       ...formData,
-      roleMappings: [...formData.roleMappings, { ldapGroup: '', praetorRole: 'user' }],
+      roleMappings: [...formData.roleMappings, { ldapGroup: '', role: roleOptions[0]?.id || '' }],
     });
   };
 
@@ -172,7 +181,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave }) => {
     setFormData({ ...formData, roleMappings: newMappings });
   };
 
-  const updateRoleMapping = (index: number, field: 'ldapGroup' | 'praetorRole', value: string) => {
+  const updateRoleMapping = (index: number, field: 'ldapGroup' | 'role', value: string) => {
     const newMappings = [...formData.roleMappings];
     newMappings[index] = { ...newMappings[index], [field]: value };
     setFormData({ ...formData, roleMappings: newMappings });
@@ -405,13 +414,9 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave }) => {
                       <i className="fa-solid fa-arrow-right text-slate-300 text-xs"></i>
                       <div className="w-40">
                         <CustomSelect
-                          options={[
-                            { id: 'admin', name: t('roles.admin', 'Admin') },
-                            { id: 'manager', name: t('roles.manager', 'Manager') },
-                            { id: 'user', name: t('roles.user', 'User') },
-                          ]}
-                          value={mapping.praetorRole}
-                          onChange={(val) => updateRoleMapping(idx, 'praetorRole', val as UserRole)}
+                          options={roleOptions}
+                          value={mapping.role}
+                          onChange={(val) => updateRoleMapping(idx, 'role', val as string)}
                         />
                       </div>
                       <button

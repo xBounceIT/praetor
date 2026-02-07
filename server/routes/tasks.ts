@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   parseDateString,
@@ -79,12 +79,23 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all tasks
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'projects.tasks.view',
+          'projects.manage.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+        ),
+      ],
       schema: {
         tags: ['tasks'],
         summary: 'List tasks',
@@ -102,7 +113,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `;
       let queryParams: string[] = [];
 
-      if (request.user!.role === 'user') {
+      if (!hasPermission(request, 'projects.tasks_all.view')) {
         queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
@@ -139,7 +150,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.tasks.create')],
       schema: {
         tags: ['tasks'],
         summary: 'Create task',
@@ -203,14 +214,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
-        // Auto-assign new task to all manager users
-        await query(
-          `INSERT INTO user_tasks (user_id, task_id)
-           SELECT id, $1 FROM users WHERE role = 'manager'
-           ON CONFLICT (user_id, task_id) DO NOTHING`,
-          [id],
-        );
-
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -237,7 +240,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.tasks.update')],
       schema: {
         tags: ['tasks'],
         summary: 'Update task',
@@ -343,7 +346,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.tasks.delete')],
       schema: {
         tags: ['tasks'],
         summary: 'Delete task',
@@ -371,7 +374,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.tasks.update')],
       schema: {
         tags: ['tasks'],
         summary: 'Get task user assignments',
@@ -397,7 +400,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('projects.tasks.update')],
       schema: {
         tags: ['tasks'],
         summary: 'Update task user assignments',

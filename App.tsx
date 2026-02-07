@@ -8,7 +8,7 @@ import {
   TimeEntry,
   View,
   User,
-  UserRole,
+  Role,
   LdapConfig,
   GeneralSettings as IGeneralSettings,
   Product,
@@ -47,6 +47,12 @@ import { getInsights } from './services/geminiService';
 import { isItalianHoliday } from './utils/holidays';
 import { getLocalDateString } from './utils/date';
 import api, { setAuthToken, getAuthToken, Settings } from './services/api';
+import {
+  buildPermission,
+  hasAnyPermission,
+  hasPermission,
+  VIEW_PERMISSION_MAP,
+} from './utils/permissions';
 
 import NotFound from './components/NotFound';
 import ApiDocsView from './components/docs/ApiDocsView';
@@ -66,6 +72,7 @@ import SpecialBidsView from './components/catalog/SpecialBidsView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import EmailSettings from './components/administration/EmailSettings';
+import RolesView from './components/administration/RolesView';
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -88,6 +95,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('catalog/')) return 'catalog';
   if (view.startsWith('hr/')) return 'hr';
   if (view.startsWith('projects/')) return 'projects';
+  if (view.startsWith('accounting/')) return 'accounting';
   if (view.startsWith('finances/')) return 'finances';
   if (view.startsWith('suppliers/')) return 'suppliers';
   if (view.startsWith('configuration/')) return 'configuration';
@@ -116,7 +124,7 @@ const TrackerView: React.FC<{
     endDate?: string,
     duration?: number,
   ) => void | Promise<void>;
-  userRole: UserRole;
+  permissions: string[];
   viewingUserId: string;
   onViewUserChange: (id: string) => void;
   availableUsers: User[];
@@ -142,7 +150,7 @@ const TrackerView: React.FC<{
   treatSaturdayAsHoliday,
   allowWeekendSelection,
   onMakeRecurring,
-  userRole,
+  permissions,
   viewingUserId,
   onViewUserChange,
   availableUsers,
@@ -239,8 +247,6 @@ const TrackerView: React.FC<{
           projectTasks={projectTasks}
           onDeleteEntry={onDeleteEntry}
           onUpdateEntry={onUpdateEntry}
-          userRole={userRole}
-          currentUser={currentUser}
           viewingUserId={viewingUserId}
           availableUsers={availableUsers}
           onViewUserChange={onViewUserChange}
@@ -288,7 +294,7 @@ const TrackerView: React.FC<{
               onAdd={onAddEntry}
               selectedDate={selectedDate}
               onMakeRecurring={onMakeRecurring}
-              userRole={userRole}
+              permissions={permissions}
               dailyGoal={dailyGoal}
               currentDayTotal={dailyTotal}
               enableAiInsights={enableAiInsights}
@@ -625,7 +631,8 @@ const App: React.FC = () => {
   });
 
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
-  const [managedUserIds, setManagedUserIds] = useState<string[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [hasLoadedRoles, setHasLoadedRoles] = useState(false);
 
   // Notifications state
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -643,6 +650,7 @@ const App: React.FC = () => {
       'timesheets/recurring',
       'configuration/user-management',
       'configuration/work-units',
+      'configuration/roles',
       'configuration/authentication',
       'configuration/general',
       'configuration/email',
@@ -689,6 +697,7 @@ const App: React.FC = () => {
       'timesheets/recurring',
       'configuration/user-management',
       'configuration/work-units',
+      'configuration/roles',
       'configuration/authentication',
       'configuration/general',
       'configuration/email',
@@ -748,48 +757,8 @@ const App: React.FC = () => {
     if (!currentUser) return false;
     if (activeView === '404') return false;
 
-    const permissions: Record<View, UserRole[]> = {
-      // Timesheets module - manager and user
-      'timesheets/tracker': ['manager', 'user'],
-      'timesheets/recurring': ['manager', 'user'],
-      // Configuration module - admin/manager
-      'configuration/authentication': ['admin'],
-      'configuration/general': ['admin'],
-      'configuration/email': ['admin'],
-      'configuration/user-management': ['admin', 'manager'],
-      'configuration/work-units': ['admin', 'manager'],
-      // CRM module - manager
-      'crm/clients': ['manager'],
-      'crm/suppliers': ['manager'],
-      // Sales module - manager
-      'sales/client-quotes': ['manager'],
-      // Accounting module - manager
-      'accounting/clients-orders': ['manager'],
-      'accounting/clients-invoices': ['manager'],
-      // Catalog module - manager
-      'catalog/internal-listing': ['manager'],
-      'catalog/external-listing': ['manager'],
-      'catalog/special-bids': ['manager'],
-      // Finances module - manager
-      'finances/payments': ['manager'],
-      'finances/expenses': ['manager'],
-      // Projects module - manager and user (read-only for user)
-      'projects/manage': ['manager', 'user'],
-      'projects/tasks': ['manager', 'user'],
-      // Suppliers module - manager
-      'suppliers/manage': ['manager'],
-      'suppliers/quotes': ['manager'],
-      // HR module - manager only
-      'hr/internal': ['manager'],
-      'hr/external': ['manager'],
-      // Standalone
-      settings: ['admin', 'manager', 'user'],
-      'docs/api': ['admin', 'manager', 'user'],
-      'docs/frontend': ['admin', 'manager', 'user'],
-    };
-
-    const allowedRoles = permissions[activeView as View];
-    return allowedRoles ? allowedRoles.includes(currentUser.role) : false;
+    const permission = VIEW_PERMISSION_MAP[activeView as View];
+    return permission ? hasPermission(currentUser.permissions, permission) : false;
   }, [activeView, currentUser]);
   const [insights, setInsights] = useState<string>('Logging some time to see patterns!');
   const [isInsightLoading, setIsInsightLoading] = useState(false);
@@ -934,18 +903,208 @@ const App: React.FC = () => {
       setHasLoadedEmailConfig(true);
     };
 
+    const loadRoles = async () => {
+      if (hasLoadedRoles) return;
+      const rolesData = await api.roles.list();
+      setRoles(rolesData);
+      setHasLoadedRoles(true);
+    };
+
     const loadModuleData = async () => {
       try {
+        const permissions = currentUser.permissions || [];
+        const canViewTimesheets = hasAnyPermission(permissions, [
+          buildPermission('timesheets.tracker', 'view'),
+          buildPermission('timesheets.recurring', 'view'),
+        ]);
+        const canViewHr = hasAnyPermission(permissions, [
+          buildPermission('hr.internal', 'view'),
+          buildPermission('hr.external', 'view'),
+        ]);
+        const canViewConfiguration = hasAnyPermission(permissions, [
+          buildPermission('configuration.user_management', 'view'),
+          buildPermission('configuration.user_management_all', 'view'),
+          buildPermission('configuration.user_management', 'update'),
+          buildPermission('configuration.work_units', 'view'),
+          buildPermission('configuration.work_units_all', 'view'),
+          buildPermission('configuration.roles', 'view'),
+          buildPermission('configuration.authentication', 'view'),
+          buildPermission('configuration.general', 'view'),
+          buildPermission('configuration.email', 'view'),
+        ]);
+        const canViewCrm = hasAnyPermission(permissions, [
+          buildPermission('crm.clients', 'view'),
+          buildPermission('crm.clients_all', 'view'),
+          buildPermission('crm.suppliers', 'view'),
+          buildPermission('crm.suppliers_all', 'view'),
+        ]);
+        const canViewSales = hasPermission(
+          permissions,
+          buildPermission('sales.client_quotes', 'view'),
+        );
+        const canViewCatalog = hasAnyPermission(permissions, [
+          buildPermission('catalog.internal_listing', 'view'),
+          buildPermission('catalog.external_listing', 'view'),
+          buildPermission('catalog.special_bids', 'view'),
+        ]);
+        const canViewAccounting = hasAnyPermission(permissions, [
+          buildPermission('accounting.clients_orders', 'view'),
+          buildPermission('accounting.clients_invoices', 'view'),
+        ]);
+        const canViewFinances = hasAnyPermission(permissions, [
+          buildPermission('finances.payments', 'view'),
+          buildPermission('finances.expenses', 'view'),
+        ]);
+        const canViewProjects = hasAnyPermission(permissions, [
+          buildPermission('projects.manage', 'view'),
+          buildPermission('projects.tasks', 'view'),
+        ]);
+        const canViewSuppliersModule = hasPermission(
+          permissions,
+          buildPermission('suppliers.quotes', 'view'),
+        );
+
+        const canListClients = hasAnyPermission(permissions, [
+          buildPermission('crm.clients', 'view'),
+          buildPermission('crm.clients_all', 'view'),
+          buildPermission('timesheets.tracker', 'view'),
+          buildPermission('timesheets.recurring', 'view'),
+          buildPermission('projects.manage', 'view'),
+          buildPermission('projects.tasks', 'view'),
+          buildPermission('sales.client_quotes', 'view'),
+          buildPermission('accounting.clients_orders', 'view'),
+          buildPermission('accounting.clients_invoices', 'view'),
+          buildPermission('catalog.special_bids', 'view'),
+          buildPermission('catalog.internal_listing', 'view'),
+          buildPermission('catalog.external_listing', 'view'),
+          buildPermission('finances.payments', 'view'),
+          buildPermission('finances.expenses', 'view'),
+          buildPermission('suppliers.quotes', 'view'),
+          buildPermission('configuration.user_management', 'view'),
+          buildPermission('configuration.user_management', 'update'),
+        ]);
+        const canListProjects = hasAnyPermission(permissions, [
+          buildPermission('projects.manage', 'view'),
+          buildPermission('projects.tasks', 'view'),
+          buildPermission('timesheets.tracker', 'view'),
+          buildPermission('timesheets.recurring', 'view'),
+        ]);
+        const canListTasks = hasAnyPermission(permissions, [
+          buildPermission('projects.tasks', 'view'),
+          buildPermission('projects.manage', 'view'),
+          buildPermission('timesheets.tracker', 'view'),
+          buildPermission('timesheets.recurring', 'view'),
+        ]);
+        const canListUsers = hasAnyPermission(permissions, [
+          buildPermission('configuration.user_management', 'view'),
+          buildPermission('configuration.user_management_all', 'view'),
+          buildPermission('configuration.user_management', 'update'),
+          buildPermission('hr.internal', 'view'),
+          buildPermission('hr.external', 'view'),
+          buildPermission('timesheets.tracker', 'view'),
+          buildPermission('projects.manage', 'view'),
+          buildPermission('projects.tasks', 'view'),
+          buildPermission('configuration.work_units', 'view'),
+        ]);
+        const canListQuotes = hasPermission(
+          permissions,
+          buildPermission('sales.client_quotes', 'view'),
+        );
+        const canListProducts = hasAnyPermission(permissions, [
+          buildPermission('catalog.internal_listing', 'view'),
+          buildPermission('catalog.external_listing', 'view'),
+          buildPermission('catalog.special_bids', 'view'),
+          buildPermission('suppliers.quotes', 'view'),
+        ]);
+        const canListSpecialBids = hasPermission(
+          permissions,
+          buildPermission('catalog.special_bids', 'view'),
+        );
+        const canListSuppliers = hasAnyPermission(permissions, [
+          buildPermission('crm.suppliers', 'view'),
+          buildPermission('crm.suppliers_all', 'view'),
+          buildPermission('catalog.external_listing', 'view'),
+          buildPermission('suppliers.quotes', 'view'),
+        ]);
+        const canListSupplierQuotes = hasPermission(
+          permissions,
+          buildPermission('suppliers.quotes', 'view'),
+        );
+        const canListOrders = hasPermission(
+          permissions,
+          buildPermission('accounting.clients_orders', 'view'),
+        );
+        const canListInvoices = hasPermission(
+          permissions,
+          buildPermission('accounting.clients_invoices', 'view'),
+        );
+        const canListPayments = hasPermission(
+          permissions,
+          buildPermission('finances.payments', 'view'),
+        );
+        const canListExpenses = hasPermission(
+          permissions,
+          buildPermission('finances.expenses', 'view'),
+        );
+        const canListWorkUnits = hasAnyPermission(permissions, [
+          buildPermission('configuration.work_units', 'view'),
+          buildPermission('configuration.work_units_all', 'view'),
+        ]);
+        const canViewUserManagement = hasAnyPermission(permissions, [
+          buildPermission('configuration.user_management', 'view'),
+          buildPermission('configuration.user_management', 'update'),
+          buildPermission('configuration.user_management', 'create'),
+          buildPermission('configuration.user_management_all', 'view'),
+        ]);
+        const canViewWorkUnits = hasAnyPermission(permissions, [
+          buildPermission('configuration.work_units', 'view'),
+          buildPermission('configuration.work_units', 'update'),
+          buildPermission('configuration.work_units', 'create'),
+          buildPermission('configuration.work_units_all', 'view'),
+        ]);
+        const canViewRoles = hasPermission(
+          permissions,
+          buildPermission('configuration.roles', 'view'),
+        );
+        const canViewAuthentication = hasPermission(
+          permissions,
+          buildPermission('configuration.authentication', 'view'),
+        );
+        const canViewEmail = hasPermission(
+          permissions,
+          buildPermission('configuration.email', 'view'),
+        );
+        const canViewCrmClients = hasAnyPermission(permissions, [
+          buildPermission('crm.clients', 'view'),
+          buildPermission('crm.clients_all', 'view'),
+        ]);
+        const canViewCrmSuppliers = hasAnyPermission(permissions, [
+          buildPermission('crm.suppliers', 'view'),
+          buildPermission('crm.suppliers_all', 'view'),
+        ]);
+        const canViewCatalogExternal = hasPermission(
+          permissions,
+          buildPermission('catalog.external_listing', 'view'),
+        );
+        const canViewCatalogSpecialBids = hasPermission(
+          permissions,
+          buildPermission('catalog.special_bids', 'view'),
+        );
+        const canViewCatalogInternal = hasPermission(
+          permissions,
+          buildPermission('catalog.internal_listing', 'view'),
+        );
+
         switch (module) {
           case 'timesheets': {
-            if (currentUser.role === 'admin') return;
+            if (!canViewTimesheets) return;
             const [entriesData, clientsData, projectsData, tasksData, usersData] =
               await Promise.all([
                 api.entries.list(),
-                api.clients.list(),
-                api.projects.list(),
-                api.tasks.list(),
-                api.users.list(),
+                canListClients ? api.clients.list() : Promise.resolve([]),
+                canListProjects ? api.projects.list() : Promise.resolve([]),
+                canListTasks ? api.tasks.list() : Promise.resolve([]),
+                canListUsers ? api.users.list() : Promise.resolve([]),
               ]);
             setEntries(entriesData);
             setClients(clientsData);
@@ -956,132 +1115,155 @@ const App: React.FC = () => {
             break;
           }
           case 'hr': {
-            if (currentUser.role !== 'manager') return;
-            const [usersData] = await Promise.all([api.users.list()]);
+            if (!canViewHr) return;
+            const [usersData] = await Promise.all([
+              canListUsers ? api.users.list() : Promise.resolve([]),
+            ]);
             setUsers(usersData);
             await loadGeneralSettings();
             break;
           }
           case 'configuration': {
-            if (currentUser.role !== 'admin' && currentUser.role !== 'manager') return;
-            const [usersData, clientsData, projectsData, tasksData] = await Promise.all([
-              api.users.list(),
-              api.clients.list(),
-              api.projects.list(),
-              api.tasks.list(),
-            ]);
-            setUsers(usersData);
-            setClients(clientsData);
-            setProjects(projectsData);
-            setProjectTasks(tasksData);
-            await loadGeneralSettings();
-            if (currentUser.role === 'admin') {
-              await loadLdapConfig();
-              await loadEmailConfig();
+            if (!canViewConfiguration) return;
+            const shouldLoadUsers = canViewUserManagement || canViewWorkUnits;
+            const shouldLoadAssignments = canViewUserManagement;
+            const shouldLoadWorkUnits = canViewWorkUnits;
+            const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
+
+            const [usersData, clientsData, projectsData, tasksData, workUnitsData] =
+              await Promise.all([
+                shouldLoadUsers && canListUsers ? api.users.list() : Promise.resolve([]),
+                shouldLoadAssignments && canListClients ? api.clients.list() : Promise.resolve([]),
+                shouldLoadAssignments && canListProjects
+                  ? api.projects.list()
+                  : Promise.resolve([]),
+                shouldLoadAssignments && canListTasks ? api.tasks.list() : Promise.resolve([]),
+                shouldLoadWorkUnits && canListWorkUnits
+                  ? api.workUnits.list()
+                  : Promise.resolve([]),
+              ]);
+
+            if (shouldLoadUsers) setUsers(usersData);
+            if (shouldLoadAssignments) {
+              setClients(clientsData);
+              setProjects(projectsData);
+              setProjectTasks(tasksData);
             }
+            if (shouldLoadWorkUnits) setWorkUnits(workUnitsData);
+
+            await loadGeneralSettings();
+            if (shouldLoadRoles) await loadRoles();
+            if (canViewAuthentication) await loadLdapConfig();
+            if (canViewEmail) await loadEmailConfig();
             break;
           }
           case 'crm': {
-            if (currentUser.role !== 'manager') return;
-            const [clientsData, quotesData, productsData, specialBidsData] = await Promise.all([
-              api.clients.list(),
-              api.quotes.list(),
-              api.products.list(),
-              api.specialBids.list(),
+            if (!canViewCrm) return;
+            const [clientsData, suppliersData] = await Promise.all([
+              canViewCrmClients && canListClients ? api.clients.list() : Promise.resolve([]),
+              canViewCrmSuppliers && canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
             ]);
-            setClients(clientsData);
+            if (canViewCrmClients) setClients(clientsData);
+            if (canViewCrmSuppliers) setSuppliers(suppliersData);
+            await loadGeneralSettings();
+            break;
+          }
+          case 'sales': {
+            if (!canViewSales) return;
+            const [quotesData, clientsData, productsData, specialBidsData] = await Promise.all([
+              canListQuotes ? api.quotes.list() : Promise.resolve([]),
+              canListClients ? api.clients.list() : Promise.resolve([]),
+              canListProducts ? api.products.list() : Promise.resolve([]),
+              canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
+            ]);
             setQuotes(quotesData);
+            setClients(clientsData);
             setProducts(productsData);
             setSpecialBids(specialBidsData);
             await loadGeneralSettings();
             break;
           }
           case 'accounting': {
-            if (currentUser.role !== 'manager') return;
-            const [ordersData, invoicesData, paymentsData, expensesData, clientsData] =
+            if (!canViewAccounting) return;
+            const [ordersData, invoicesData, clientsData, productsData, specialBidsData] =
               await Promise.all([
-                api.clientsOrders.list(),
-                api.invoices.list(),
-                api.payments.list(),
-                api.expenses.list(),
-                api.clients.list(),
+                canListOrders ? api.clientsOrders.list() : Promise.resolve([]),
+                canListInvoices ? api.invoices.list() : Promise.resolve([]),
+                canListClients ? api.clients.list() : Promise.resolve([]),
+                canListProducts ? api.products.list() : Promise.resolve([]),
+                canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
               ]);
-            setClientsOrders(ordersData);
-            setInvoices(invoicesData);
-            setPayments(paymentsData);
-            setExpenses(expensesData);
-            setClients(clientsData);
+            if (canListOrders) setClientsOrders(ordersData);
+            if (canListInvoices) setInvoices(invoicesData);
+            if (canListClients) setClients(clientsData);
+            if (canListProducts) setProducts(productsData);
+            if (canListSpecialBids) setSpecialBids(specialBidsData);
             await loadGeneralSettings();
             break;
           }
           case 'catalog': {
-            if (currentUser.role !== 'manager') return;
+            if (!canViewCatalog) return;
             const [productsData, specialBidsData, clientsData, suppliersData] = await Promise.all([
-              api.products.list(),
-              api.specialBids.list(),
-              api.clients.list(),
-              api.suppliers.list(),
+              canListProducts ? api.products.list() : Promise.resolve([]),
+              canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
+              canViewCatalogSpecialBids && canListClients
+                ? api.clients.list()
+                : Promise.resolve([]),
+              canViewCatalogExternal && canListSuppliers
+                ? api.suppliers.list()
+                : Promise.resolve([]),
             ]);
-            setProducts(productsData);
-            setSpecialBids(specialBidsData);
-            setClients(clientsData);
-            setSuppliers(suppliersData);
+            if (
+              canListProducts &&
+              (canViewCatalogInternal || canViewCatalogExternal || canViewCatalogSpecialBids)
+            )
+              setProducts(productsData);
+            if (canListSpecialBids && canViewCatalogSpecialBids) setSpecialBids(specialBidsData);
+            if (canViewCatalogSpecialBids && canListClients) setClients(clientsData);
+            if (canViewCatalogExternal && canListSuppliers) setSuppliers(suppliersData);
             await loadGeneralSettings();
             break;
           }
           case 'finances': {
-            if (currentUser.role !== 'manager') return;
+            if (!canViewFinances) return;
             const [paymentsData, expensesData, clientsData] = await Promise.all([
-              api.payments.list(),
-              api.expenses.list(),
-              api.clients.list(),
+              canListPayments ? api.payments.list() : Promise.resolve([]),
+              canListExpenses ? api.expenses.list() : Promise.resolve([]),
+              canListClients ? api.clients.list() : Promise.resolve([]),
             ]);
-            setPayments(paymentsData);
-            setExpenses(expensesData);
-            setClients(clientsData);
+            if (canListPayments) setPayments(paymentsData);
+            if (canListExpenses) setExpenses(expensesData);
+            if (canListClients) setClients(clientsData);
             await loadGeneralSettings();
             break;
           }
           case 'projects': {
-            if (currentUser.role !== 'manager' && currentUser.role !== 'user') return;
-            // User role only needs projects, tasks, and clients for read-only view
-            if (currentUser.role === 'user') {
-              const [projectsData, tasksData, clientsData] = await Promise.all([
-                api.projects.list(),
-                api.tasks.list(),
-                api.clients.list(),
+            if (!canViewProjects) return;
+            const [projectsData, tasksData, clientsData, usersData, workUnitsData] =
+              await Promise.all([
+                canListProjects ? api.projects.list() : Promise.resolve([]),
+                canListTasks ? api.tasks.list() : Promise.resolve([]),
+                canListClients ? api.clients.list() : Promise.resolve([]),
+                canListUsers ? api.users.list() : Promise.resolve([]),
+                canListWorkUnits ? api.workUnits.list() : Promise.resolve([]),
               ]);
-              setProjects(projectsData);
-              setProjectTasks(tasksData);
-              setClients(clientsData);
-            } else {
-              // Manager needs additional data for full CRUD operations
-              const [projectsData, tasksData, clientsData, usersData, workUnitsData] =
-                await Promise.all([
-                  api.projects.list(),
-                  api.tasks.list(),
-                  api.clients.list(),
-                  api.users.list(),
-                  api.workUnits.list(),
-                ]);
-              setProjects(projectsData);
-              setProjectTasks(tasksData);
-              setClients(clientsData);
-              setUsers(usersData);
-              setWorkUnits(workUnitsData);
-            }
+            if (canListProjects) setProjects(projectsData);
+            if (canListTasks) setProjectTasks(tasksData);
+            if (canListClients) setClients(clientsData);
+            if (canListUsers) setUsers(usersData);
+            if (canListWorkUnits) setWorkUnits(workUnitsData);
             break;
           }
           case 'suppliers': {
-            if (currentUser.role !== 'manager') return;
+            if (!canViewSuppliersModule) return;
             const [suppliersData, supplierQuotesData, productsData] = await Promise.all([
-              api.suppliers.list(),
-              api.supplierQuotes.list(),
-              api.products.list(),
+              canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
+              canListSupplierQuotes ? api.supplierQuotes.list() : Promise.resolve([]),
+              canListProducts ? api.products.list() : Promise.resolve([]),
             ]);
-            setSuppliers(suppliersData);
-            setSupplierQuotes(supplierQuotesData);
-            setProducts(productsData);
+            if (canListSuppliers) setSuppliers(suppliersData);
+            if (canListSupplierQuotes) setSupplierQuotes(supplierQuotesData);
+            if (canListProducts) setProducts(productsData);
             await loadGeneralSettings();
             break;
           }
@@ -1106,6 +1288,7 @@ const App: React.FC = () => {
     hasLoadedGeneralSettings,
     hasLoadedLdapConfig,
     hasLoadedEmailConfig,
+    hasLoadedRoles,
   ]);
 
   // Load entries and assignments when viewing user changes
@@ -1114,11 +1297,16 @@ const App: React.FC = () => {
 
     const loadAssignments = async () => {
       try {
-        // If manager/admin is viewing another user, fetch that user's assignments to filter the dropdowns
-        if (
-          (currentUser.role === 'admin' || currentUser.role === 'manager') &&
-          viewingUserId !== currentUser.id
-        ) {
+        const canViewAssignments = hasAnyPermission(currentUser.permissions, [
+          buildPermission('configuration.user_management', 'view'),
+          buildPermission('configuration.user_management', 'update'),
+          buildPermission('configuration.user_management_all', 'view'),
+          buildPermission('timesheets.tracker', 'view'),
+          buildPermission('timesheets.tracker_all', 'view'),
+        ]);
+
+        // If permitted user is viewing another user, fetch that user's assignments to filter the dropdowns
+        if (canViewAssignments && viewingUserId !== currentUser.id) {
           const assignments = await api.users.getAssignments(viewingUserId);
           setViewingUserAssignments(assignments);
         } else {
@@ -1139,48 +1327,12 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Calculate managed user IDs
+  // Load notifications for permitted users
   useEffect(() => {
-    const loadManagedUsers = async () => {
-      // Ensure async execution to avoid synchronous setState warning
-      await Promise.resolve();
-
-      // Check conditions inside the async function to avoid synchronous setState warning
-      if (!currentUser || currentUser.role !== 'manager') {
-        setManagedUserIds((prev) => (prev.length > 0 ? [] : prev));
-        return;
-      }
-
-      // Find work units where current user is a manager
-      const managedUnits = workUnits.filter((unit) =>
-        unit.managers.some((m) => m.id === currentUser.id),
-      );
-
-      if (managedUnits.length === 0) {
-        setManagedUserIds((prev) => (prev.length > 0 ? [] : prev));
-        return;
-      }
-
-      try {
-        // Fetch users for each managed unit
-        const userIdsLists = await Promise.all(
-          managedUnits.map((unit) => api.workUnits.getUsers(unit.id)),
-        );
-
-        // Flatten and unique
-        const allUserIds = Array.from(new Set(userIdsLists.flat()));
-        setManagedUserIds(allUserIds);
-      } catch (err) {
-        console.error('Failed to load managed users:', err);
-      }
-    };
-
-    loadManagedUsers();
-  }, [currentUser, workUnits]);
-
-  // Load notifications for managers
-  useEffect(() => {
-    if (!currentUser || currentUser.role !== 'manager') {
+    if (
+      !currentUser ||
+      !hasPermission(currentUser.permissions, buildPermission('notifications', 'view'))
+    ) {
       // Use queueMicrotask to avoid synchronous setState warning
       queueMicrotask(() => {
         setNotifications([]);
@@ -1242,16 +1394,12 @@ const App: React.FC = () => {
     [notifications],
   );
 
-  // Determine available users for the dropdown based on role
+  // Determine available users for the dropdown based on permissions
   const availableUsers = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'admin') return users;
-    if (currentUser.role === 'manager')
-      return users.filter(
-        (u) => u.role === 'user' || u.id === currentUser.id || managedUserIds.includes(u.id),
-      );
+    if (users.length > 0) return users;
     return [currentUser];
-  }, [users, currentUser, managedUserIds]);
+  }, [users, currentUser]);
 
   const generateRecurringEntries = useCallback(async () => {
     const today = new Date();
@@ -2075,8 +2223,13 @@ const App: React.FC = () => {
     setIsInsightLoading(false);
   };
 
-  const getDefaultViewForRole = (role: UserRole): View =>
-    role === 'admin' ? 'configuration/user-management' : 'timesheets/tracker';
+  const getDefaultViewForPermissions = (permissions: string[]): View => {
+    const allowedView = VALID_VIEWS.find((view) => {
+      const permission = VIEW_PERMISSION_MAP[view];
+      return permission ? hasPermission(permissions, permission) : false;
+    });
+    return allowedView || 'timesheets/tracker';
+  };
 
   const handleLogin = async (user: User, token?: string) => {
     if (token) {
@@ -2108,20 +2261,14 @@ const App: React.FC = () => {
       // Settings might not exist yet, that's okay
     }
 
-    if (user.role === 'admin') {
-      const adminAllowed = new Set<View>([
-        'configuration/user-management',
-        'configuration/work-units',
-        'configuration/authentication',
-        'configuration/general',
-        'configuration/email',
-        'settings',
-        'docs/api',
-        'docs/frontend',
-      ]);
-      if (activeView === '404' || !adminAllowed.has(activeView as View)) {
-        setActiveView(getDefaultViewForRole(user.role));
-      }
+    const defaultView = getDefaultViewForPermissions(user.permissions || []);
+    const activePermission =
+      activeView !== '404' ? VIEW_PERMISSION_MAP[activeView as View] : undefined;
+    const canAccessActive = activePermission
+      ? hasPermission(user.permissions || [], activePermission)
+      : false;
+    if (activeView === '404' || !canAccessActive) {
+      setActiveView(defaultView);
     }
   };
 
@@ -2181,12 +2328,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddUser = async (
-    name: string,
-    username: string,
-    password: string,
-    role: UserRole,
-  ) => {
+  const handleAddUser = async (name: string, username: string, password: string, role: string) => {
     try {
       const user = await api.users.create(name, username, password, role);
       setUsers([...users, user]);
@@ -2248,6 +2390,46 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCreateRole = async (name: string, permissions: string[]) => {
+    try {
+      const role = await api.roles.create(name, permissions);
+      setRoles([...roles, role]);
+    } catch (err) {
+      console.error('Failed to create role', err);
+      throw err;
+    }
+  };
+
+  const handleRenameRole = async (id: string, name: string) => {
+    try {
+      const updated = await api.roles.rename(id, name);
+      setRoles(roles.map((role) => (role.id === id ? updated : role)));
+    } catch (err) {
+      console.error('Failed to rename role', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateRolePermissions = async (id: string, permissions: string[]) => {
+    try {
+      const updated = await api.roles.updatePermissions(id, permissions);
+      setRoles(roles.map((role) => (role.id === id ? updated : role)));
+    } catch (err) {
+      console.error('Failed to update role permissions', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteRole = async (id: string) => {
+    try {
+      await api.roles.delete(id);
+      setRoles(roles.filter((role) => role.id !== id));
+    } catch (err) {
+      console.error('Failed to delete role', err);
+      throw err;
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -2295,6 +2477,7 @@ const App: React.FC = () => {
         onViewChange={setActiveView}
         currentUser={currentUser}
         onLogout={handleLogout}
+        roles={roles}
         isNotFound={!isRouteAccessible}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
@@ -2322,7 +2505,7 @@ const App: React.FC = () => {
                 treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
                 allowWeekendSelection={generalSettings.allowWeekendSelection}
                 onMakeRecurring={handleMakeRecurring}
-                userRole={currentUser.role}
+                permissions={currentUser.permissions || []}
                 viewingUserId={viewingUserId}
                 onViewUserChange={setViewingUserId}
                 availableUsers={availableUsers}
@@ -2335,19 +2518,22 @@ const App: React.FC = () => {
                 defaultLocation={generalSettings.defaultLocation}
               />
             )}
-            {activeView === 'crm/clients' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['crm/clients']) &&
+              activeView === 'crm/clients' && (
                 <ClientsView
                   clients={clients}
                   onAddClient={addClient}
                   onUpdateClient={handleUpdateClient}
                   onDeleteClient={handleDeleteClient}
-                  userRole={currentUser.role}
+                  permissions={currentUser.permissions || []}
                 />
               )}
 
-            {activeView === 'catalog/internal-listing' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['catalog/internal-listing'],
+            ) &&
+              activeView === 'catalog/internal-listing' && (
                 <InternalListingView
                   products={products.filter((product) => !product.supplierId)}
                   onAddProduct={addProduct}
@@ -2357,8 +2543,11 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'catalog/external-listing' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['catalog/external-listing'],
+            ) &&
+              activeView === 'catalog/external-listing' && (
                 <ExternalListingView
                   products={products.filter((product) => product.supplierId)}
                   suppliers={suppliers}
@@ -2369,8 +2558,8 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'catalog/special-bids' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['catalog/special-bids']) &&
+              activeView === 'catalog/special-bids' && (
                 <SpecialBidsView
                   bids={specialBids}
                   clients={clients}
@@ -2382,8 +2571,8 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'sales/client-quotes' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
+              activeView === 'sales/client-quotes' && (
                 <ClientQuotesView
                   quotes={quotes}
                   clients={clients}
@@ -2400,8 +2589,11 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'accounting/clients-orders' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['accounting/clients-orders'],
+            ) &&
+              activeView === 'accounting/clients-orders' && (
                 <ClientsOrdersView
                   orders={clientsOrders}
                   clients={clients}
@@ -2418,8 +2610,11 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'accounting/clients-invoices' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['accounting/clients-invoices'],
+            ) &&
+              activeView === 'accounting/clients-invoices' && (
                 <ClientsInvoicesView
                   invoices={invoices}
                   clients={clients}
@@ -2432,8 +2627,8 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'finances/payments' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['finances/payments']) &&
+              activeView === 'finances/payments' && (
                 <PaymentsView
                   payments={payments}
                   clients={clients}
@@ -2445,8 +2640,8 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'finances/expenses' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['finances/expenses']) &&
+              activeView === 'finances/expenses' && (
                 <ExpensesView
                   expenses={expenses}
                   onAddExpense={addExpense}
@@ -2456,19 +2651,19 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'crm/suppliers' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['crm/suppliers']) &&
+              activeView === 'crm/suppliers' && (
                 <SuppliersView
                   suppliers={suppliers}
                   onAddSupplier={addSupplier}
                   onUpdateSupplier={handleUpdateSupplier}
                   onDeleteSupplier={handleDeleteSupplier}
-                  userRole={currentUser.role}
+                  permissions={currentUser.permissions || []}
                 />
               )}
 
-            {activeView === 'suppliers/quotes' &&
-              (currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['suppliers/quotes']) &&
+              activeView === 'suppliers/quotes' && (
                 <SupplierQuotesView
                   quotes={supplierQuotes}
                   suppliers={suppliers}
@@ -2480,31 +2675,33 @@ const App: React.FC = () => {
                 />
               )}
 
-            {activeView === 'hr/internal' && currentUser.role === 'manager' && (
-              <InternalEmployeesView
-                users={users}
-                onAddEmployee={addInternalEmployee}
-                onUpdateEmployee={handleUpdateEmployee}
-                onDeleteEmployee={handleDeleteEmployee}
-                currency={generalSettings.currency}
-              />
-            )}
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/internal']) &&
+              activeView === 'hr/internal' && (
+                <InternalEmployeesView
+                  users={users}
+                  onAddEmployee={addInternalEmployee}
+                  onUpdateEmployee={handleUpdateEmployee}
+                  onDeleteEmployee={handleDeleteEmployee}
+                  currency={generalSettings.currency}
+                />
+              )}
 
-            {activeView === 'hr/external' && currentUser.role === 'manager' && (
-              <ExternalEmployeesView
-                users={users}
-                onAddEmployee={addExternalEmployee}
-                onUpdateEmployee={handleUpdateEmployee}
-                onDeleteEmployee={handleDeleteEmployee}
-                currency={generalSettings.currency}
-              />
-            )}
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/external']) &&
+              activeView === 'hr/external' && (
+                <ExternalEmployeesView
+                  users={users}
+                  onAddEmployee={addExternalEmployee}
+                  onUpdateEmployee={handleUpdateEmployee}
+                  onDeleteEmployee={handleDeleteEmployee}
+                  currency={generalSettings.currency}
+                />
+              )}
 
             {activeView === 'projects/manage' && (
               <ProjectsView
                 projects={projects}
                 clients={clients}
-                role={currentUser.role}
+                permissions={currentUser.permissions || []}
                 onAddProject={addProject}
                 onUpdateProject={handleUpdateProject}
                 onDeleteProject={handleDeleteProject}
@@ -2516,7 +2713,7 @@ const App: React.FC = () => {
                 tasks={projectTasks}
                 projects={projects}
                 clients={clients}
-                role={currentUser.role}
+                permissions={currentUser.permissions || []}
                 users={availableUsers}
                 onAddTask={addProjectTask}
                 onUpdateTask={handleUpdateTask}
@@ -2532,7 +2729,10 @@ const App: React.FC = () => {
               />
             )}
 
-            {(currentUser.role === 'admin' || currentUser.role === 'manager') &&
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['configuration/user-management'],
+            ) &&
               activeView === 'configuration/user-management' && (
                 <UserManagement
                   users={users}
@@ -2543,17 +2743,21 @@ const App: React.FC = () => {
                   onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}
                   currentUserId={currentUser.id}
-                  currentUserRole={currentUser.role}
+                  permissions={currentUser.permissions || []}
+                  roles={roles}
                   currency={getCurrencySymbol(generalSettings.currency)}
                 />
               )}
 
-            {(currentUser.role === 'admin' || currentUser.role === 'manager') &&
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['configuration/work-units'],
+            ) &&
               activeView === 'configuration/work-units' && (
                 <WorkUnitsView
                   workUnits={workUnits}
                   users={users}
-                  userRole={currentUser.role}
+                  permissions={currentUser.permissions || []}
                   onAddWorkUnit={addWorkUnit}
                   onUpdateWorkUnit={updateWorkUnit}
                   onDeleteWorkUnit={deleteWorkUnit}
@@ -2561,21 +2765,42 @@ const App: React.FC = () => {
                 />
               )}
 
-            {currentUser.role === 'admin' && activeView === 'configuration/general' && (
-              <GeneralSettings settings={generalSettings} onUpdate={handleUpdateGeneralSettings} />
-            )}
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['configuration/general']) &&
+              activeView === 'configuration/general' && (
+                <GeneralSettings
+                  settings={generalSettings}
+                  onUpdate={handleUpdateGeneralSettings}
+                />
+              )}
 
-            {currentUser.role === 'admin' && activeView === 'configuration/authentication' && (
-              <AuthSettings config={ldapConfig} onSave={handleSaveLdapConfig} />
-            )}
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['configuration/authentication'],
+            ) &&
+              activeView === 'configuration/authentication' && (
+                <AuthSettings config={ldapConfig} onSave={handleSaveLdapConfig} roles={roles} />
+              )}
 
-            {currentUser.role === 'admin' && activeView === 'configuration/email' && (
-              <EmailSettings
-                config={emailConfig}
-                onSave={handleSaveEmailConfig}
-                onTestEmail={handleTestEmail}
-              />
-            )}
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['configuration/roles']) &&
+              activeView === 'configuration/roles' && (
+                <RolesView
+                  roles={roles}
+                  permissions={currentUser.permissions || []}
+                  onCreateRole={handleCreateRole}
+                  onRenameRole={handleRenameRole}
+                  onUpdateRolePermissions={handleUpdateRolePermissions}
+                  onDeleteRole={handleDeleteRole}
+                />
+              )}
+
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['configuration/email']) &&
+              activeView === 'configuration/email' && (
+                <EmailSettings
+                  config={emailConfig}
+                  onSave={handleSaveEmailConfig}
+                  onTestEmail={handleTestEmail}
+                />
+              )}
 
             {activeView === 'timesheets/recurring' && (
               <RecurringManager

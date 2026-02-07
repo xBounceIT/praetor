@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 import { standardErrorResponses, successResponseSchema } from '../schemas/common.ts';
 
@@ -44,6 +44,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('notifications.view')],
       schema: {
         tags: ['notifications'],
         summary: 'Fetch notifications',
@@ -90,6 +91,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id/read',
     {
+      onRequest: [requirePermission('notifications.update')],
       schema: {
         tags: ['notifications'],
         summary: 'Mark notification as read',
@@ -127,6 +129,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/read-all',
     {
+      onRequest: [requirePermission('notifications.update')],
       schema: {
         tags: ['notifications'],
         summary: 'Mark all notifications as read',
@@ -149,6 +152,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('notifications.delete')],
       schema: {
         tags: ['notifications'],
         summary: 'Delete notification',

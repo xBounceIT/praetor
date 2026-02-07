@@ -1,4 +1,5 @@
-export type UserRole = 'admin' | 'manager' | 'user';
+export type UserRole = string;
+export type Permission = string;
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 
@@ -6,12 +7,21 @@ export interface User {
   id: string;
   name: string;
   role: UserRole;
+  permissions?: Permission[];
   avatarInitials: string;
   username: string;
   password?: string;
   costPerHour?: number;
   isDisabled?: boolean;
   employeeType?: EmployeeType;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  isSystem: boolean;
+  isAdmin: boolean;
+  permissions: Permission[];
 }
 
 export interface UserSettings {
@@ -103,7 +113,7 @@ export interface TimeEntry {
 
 export interface LdapRoleMapping {
   ldapGroup: string;
-  praetorRole: UserRole;
+  role: string;
 }
 
 export interface LdapConfig {
@@ -265,6 +275,7 @@ export type View =
   | 'configuration/user-management'
   | 'configuration/work-units'
   | 'configuration/email'
+  | 'configuration/roles'
   // CRM module
   | 'crm/clients'
   | 'crm/suppliers'

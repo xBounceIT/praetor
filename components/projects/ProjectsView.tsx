@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Project, Client, UserRole } from '../../types';
+import { Project, Client } from '../../types';
 import { COLORS } from '../../constants';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
+import { buildPermission, hasPermission } from '../../utils/permissions';
 
 interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
-  role: UserRole;
+  permissions: string[];
   onAddProject: (name: string, clientId: string, description?: string) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
@@ -20,12 +21,24 @@ interface ProjectsViewProps {
 const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
-  role,
+  permissions,
   onAddProject,
   onUpdateProject,
   onDeleteProject,
 }) => {
   const { t } = useTranslation(['projects', 'common', 'form']);
+  const canCreateProjects = hasPermission(
+    permissions,
+    buildPermission('projects.manage', 'create'),
+  );
+  const canUpdateProjects = hasPermission(
+    permissions,
+    buildPermission('projects.manage', 'update'),
+  );
+  const canDeleteProjects = hasPermission(
+    permissions,
+    buildPermission('projects.manage', 'delete'),
+  );
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,10 +54,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const isManagement = role === 'admin' || role === 'manager';
-
   // Modal Handlers
   const openAddModal = () => {
+    if (!canCreateProjects) return;
     setEditingProject(null);
     setName('');
     setClientId('');
@@ -56,6 +68,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   };
 
   const openEditModal = (project: Project) => {
+    if (!canUpdateProjects) return;
     setEditingProject(project);
     setName(project.name);
     setClientId(project.clientId);
@@ -77,6 +90,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+
+    if (editingProject && !canUpdateProjects) return;
+    if (!editingProject && !canCreateProjects) return;
 
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('projects:projects.projectNameRequired');
@@ -107,11 +123,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   };
 
   const handleDelete = () => {
+    if (!canDeleteProjects) return;
     if (projectToDelete) {
       onDeleteProject(projectToDelete.id);
       closeModal();
     }
   };
+
+  const canSubmit = editingProject ? canUpdateProjects : canCreateProjects;
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
@@ -271,7 +290,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                disabled={!canSubmit}
+                className={`px-8 py-2.5 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
+                  canSubmit
+                    ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
+                    : 'bg-slate-300 shadow-none cursor-not-allowed'
+                }`}
               >
                 {editingProject ? t('common:buttons.update') : t('projects:projects.addProject')}
               </button>
@@ -321,7 +345,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             <p className="text-slate-500 text-sm">{t('projects:projects.subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
-            {isManagement && (
+            {canCreateProjects && (
               <button
                 onClick={openAddModal}
                 className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
@@ -337,7 +361,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         title={t('projects:projects.projectsDirectory')}
         defaultRowsPerPage={5}
         data={projects}
-        onRowClick={isManagement ? openEditModal : undefined}
+        onRowClick={canUpdateProjects ? openEditModal : undefined}
         rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
         columns={
           [
@@ -437,66 +461,74 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               align: 'right',
               disableSorting: true,
               disableFiltering: true,
-              cell: ({ row }) =>
-                isManagement ? (
+              cell: ({ row }) => {
+                if (!canUpdateProjects && !canDeleteProjects) return null;
+                return (
                   <div className="flex items-center justify-end gap-2">
-                    <Tooltip label={t('projects:projects.editProject')}>
-                      {() => (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditModal(row);
-                          }}
-                          className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                        >
-                          <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
-                      )}
-                    </Tooltip>
-                    {row.isDisabled ? (
-                      <Tooltip label={t('projects:projects.enableProject')}>
-                        {() => (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateProject(row.id, { isDisabled: false });
-                            }}
-                            className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                          >
-                            <i className="fa-solid fa-rotate-left"></i>
-                          </button>
+                    {canUpdateProjects && (
+                      <>
+                        <Tooltip label={t('projects:projects.editProject')}>
+                          {() => (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditModal(row);
+                              }}
+                              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                            >
+                              <i className="fa-solid fa-pen-to-square"></i>
+                            </button>
+                          )}
+                        </Tooltip>
+                        {row.isDisabled ? (
+                          <Tooltip label={t('projects:projects.enableProject')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateProject(row.id, { isDisabled: false });
+                                }}
+                                className="p-2 text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <i className="fa-solid fa-rotate-left"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                        ) : (
+                          <Tooltip label={t('projects:projects.disableProject')}>
+                            {() => (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateProject(row.id, { isDisabled: true });
+                                }}
+                                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                              >
+                                <i className="fa-solid fa-ban"></i>
+                              </button>
+                            )}
+                          </Tooltip>
                         )}
-                      </Tooltip>
-                    ) : (
-                      <Tooltip label={t('projects:projects.disableProject')}>
+                      </>
+                    )}
+                    {canDeleteProjects && (
+                      <Tooltip label={t('common:buttons.delete')}>
                         {() => (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onUpdateProject(row.id, { isDisabled: true });
+                              promptDelete(row);
                             }}
-                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                           >
-                            <i className="fa-solid fa-ban"></i>
+                            <i className="fa-solid fa-trash-can"></i>
                           </button>
                         )}
                       </Tooltip>
                     )}
-                    <Tooltip label={t('common:buttons.delete')}>
-                      {() => (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            promptDelete(row);
-                          }}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      )}
-                    </Tooltip>
                   </div>
-                ) : null,
+                );
+              },
             },
           ] as Column<Project>[]
         }

@@ -1,14 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Client,
-  Project,
-  ProjectTask,
-  TimeEntry,
-  UserRole,
-  User,
-  TimeEntryLocation,
-} from '../../types';
+import { Client, Project, ProjectTask, TimeEntry, User, TimeEntryLocation } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { isItalianHoliday } from '../../utils/holidays';
@@ -22,8 +14,6 @@ interface WeeklyViewProps {
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
-  userRole: UserRole;
-  currentUser: User;
   viewingUserId: string;
   availableUsers: User[];
   onViewUserChange: (id: string) => void;

@@ -1,6 +1,7 @@
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
+import { getRolePermissions } from '../utils/permissions.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
 
@@ -30,7 +31,9 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
     // Fetch fresh user data from database
     const result = await query(
-      'SELECT id, name, username, role, avatar_initials FROM users WHERE id = $1',
+      `SELECT u.id, u.name, u.username, u.role, u.avatar_initials
+       FROM users u
+       WHERE u.id = $1`,
       [decoded.userId],
     );
 
@@ -38,7 +41,9 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       return reply.code(401).send({ error: 'User not found' });
     }
 
-    request.user = result.rows[0];
+    const user = result.rows[0];
+    const permissions = await getRolePermissions(user.role);
+    request.user = { ...user, permissions };
 
     // Sliding window: Issue new token with same sessionStart
     // This resets the 30m idle timer but keeps the 8h max session limit
@@ -61,10 +66,44 @@ export const requireRole = (...roles: string[]) => {
   };
 };
 
+export const requirePermission = (...permissions: string[]) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    const userPermissions = request.user.permissions || [];
+    const hasAll = permissions.every((permission) => userPermissions.includes(permission));
+    if (!hasAll) {
+      return reply.code(403).send({ error: 'Insufficient permissions' });
+    }
+  };
+};
+
+export const requireAnyPermission = (...permissions: string[]) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    const userPermissions = request.user.permissions || [];
+    const hasAny = permissions.some((permission) => userPermissions.includes(permission));
+    if (!hasAny) {
+      return reply.code(403).send({ error: 'Insufficient permissions' });
+    }
+  };
+};
+
 export const generateToken = (userId: string, sessionStart: number = Date.now()) => {
   // Token expires in 30 minutes (idle timeout)
   // sessionStart tracks the absolute start of the session (max 8 hours)
   return jwt.sign({ userId, sessionStart }, JWT_SECRET, { expiresIn: '30m' });
 };
 
-export default { authenticateToken, requireRole, generateToken };
+export default {
+  authenticateToken,
+  requireRole,
+  requirePermission,
+  requireAnyPermission,
+  generateToken,
+};

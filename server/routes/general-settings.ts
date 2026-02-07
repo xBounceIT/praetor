@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   optionalNonEmptyString,
   optionalLocalizedNonNegativeNumber,
@@ -47,6 +47,9 @@ const generalSettingsUpdateBodySchema = {
   },
 } as const;
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - Get global settings (available to all authenticated users)
   fastify.get(
@@ -80,12 +83,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const s = result.rows[0];
       // Only return API key to admins
-      const geminiApiKey =
-        request.user!.role === 'admin'
-          ? s.gemini_api_key || ''
-          : s.gemini_api_key
-            ? '********'
-            : '';
+      const geminiApiKey = hasPermission(request, 'configuration.general.update')
+        ? s.gemini_api_key || ''
+        : s.gemini_api_key
+          ? '********'
+          : '';
 
       return {
         currency: s.currency,
@@ -104,7 +106,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.general.update')],
       schema: {
         tags: ['general-settings'],
         summary: 'Update global settings',

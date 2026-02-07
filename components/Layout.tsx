@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, User, Notification } from '../types';
+import { View, User, Notification, Role } from '../types';
 import NotificationBell from './shared/NotificationBell';
 import Tooltip from './shared/Tooltip';
+import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 
 interface Module {
   id: string;
@@ -11,18 +12,24 @@ interface Module {
   active: boolean;
 }
 
-// Default route for each module
-const moduleDefaultRoutes: Record<string, View> = {
-  timesheets: 'timesheets/tracker',
-  crm: 'crm/clients',
-  sales: 'sales/client-quotes',
-  catalog: 'catalog/internal-listing',
-  projects: 'projects/manage',
-  accounting: 'accounting/clients-orders',
-  finances: 'finances/payments',
-  suppliers: 'suppliers/manage',
-  hr: 'hr/internal',
-  configuration: 'configuration/authentication',
+const moduleRoutes: Record<string, View[]> = {
+  timesheets: ['timesheets/tracker', 'timesheets/recurring'],
+  crm: ['crm/clients', 'crm/suppliers'],
+  sales: ['sales/client-quotes'],
+  catalog: ['catalog/internal-listing', 'catalog/external-listing', 'catalog/special-bids'],
+  projects: ['projects/manage', 'projects/tasks'],
+  accounting: ['accounting/clients-orders', 'accounting/clients-invoices'],
+  finances: ['finances/payments', 'finances/expenses'],
+  suppliers: ['suppliers/manage', 'suppliers/quotes'],
+  hr: ['hr/internal', 'hr/external'],
+  configuration: [
+    'configuration/authentication',
+    'configuration/general',
+    'configuration/user-management',
+    'configuration/work-units',
+    'configuration/roles',
+    'configuration/email',
+  ],
 };
 
 // Get module from route
@@ -46,6 +53,7 @@ interface LayoutProps {
   onViewChange: (view: View) => void;
   currentUser: User;
   onLogout: () => void;
+  roles: Role[];
   isNotFound?: boolean;
   notifications?: Notification[];
   unreadNotificationCount?: number;
@@ -60,6 +68,7 @@ const Layout: React.FC<LayoutProps> = ({
   onViewChange,
   currentUser,
   onLogout,
+  roles,
   isNotFound,
   notifications = [],
   unreadNotificationCount = 0,
@@ -90,37 +99,29 @@ const Layout: React.FC<LayoutProps> = ({
     [t],
   ).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
 
+  const canAccessView = (view: View) => {
+    const permission = VIEW_PERMISSION_MAP[view];
+    return permission ? hasPermission(currentUser.permissions, permission) : false;
+  };
+
+  const roleLabel = useMemo(() => {
+    const role = roles.find((item) => item.id === currentUser.role);
+    return (
+      role?.name || t(`roles.${currentUser.role}`, { ns: 'hr', defaultValue: currentUser.role })
+    );
+  }, [currentUser.role, roles, t]);
+
+  const canViewNotifications = hasPermission(
+    currentUser.permissions,
+    buildPermission('notifications', 'view'),
+  );
+
   // Compute active module from current route
   const activeModule = modules.find((m) => m.id === getModuleFromRoute(activeView)) || modules[0];
 
-  // Filter modules based on user role
   const accessibleModules = modules.filter((m) => {
-    // Admin only access to Configuration (Administration)
-    if (m.id === 'configuration') return currentUser.role === 'admin';
-
-    // Timesheets access for managers and users
-    if (m.id === 'timesheets') return currentUser.role === 'manager' || currentUser.role === 'user';
-
-    // Manager only access (Admin and users excluded as requested)
-    if (
-      m.id === 'crm' ||
-      m.id === 'sales' ||
-      m.id === 'catalog' ||
-      m.id === 'accounting' ||
-      m.id === 'finances'
-    ) {
-      return currentUser.role === 'manager';
-    }
-
-    // HR module: manager only access
-    if (m.id === 'hr') return currentUser.role === 'manager';
-
-    // Projects module: accessible to manager and user (read-only for user)
-    if (m.id === 'projects') {
-      return currentUser.role === 'manager' || currentUser.role === 'user';
-    }
-
-    return true;
+    const routes = moduleRoutes[m.id] || [];
+    return routes.some((route) => canAccessView(route));
   });
 
   useEffect(() => {
@@ -153,10 +154,9 @@ const Layout: React.FC<LayoutProps> = ({
       // Navigate to default route if we're not already in this module
       // This ensures that expanding a module also shows its content if we were elsewhere
       if (activeModule.id !== module.id) {
-        const defaultRoute = moduleDefaultRoutes[module.id];
-        if (defaultRoute) {
-          onViewChange(defaultRoute);
-        }
+        const routes = moduleRoutes[module.id] || [];
+        const defaultRoute = routes.find((route) => canAccessView(route)) || routes[0];
+        if (defaultRoute) onViewChange(defaultRoute);
       }
     }
   };
@@ -170,267 +170,309 @@ const Layout: React.FC<LayoutProps> = ({
       case 'timesheets':
         return (
           <>
-            <NavItem
-              icon="fa-list-check"
-              label={t('routes.timeTracker')}
-              active={activeView === 'timesheets/tracker'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('timesheets/tracker');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('timesheets/tracker') && (
+              <NavItem
+                icon="fa-list-check"
+                label={t('routes.timeTracker')}
+                active={activeView === 'timesheets/tracker'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('timesheets/tracker');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
 
-            <NavItem
-              icon="fa-repeat"
-              label={t('routes.recurringTasks')}
-              active={activeView === 'timesheets/recurring'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('timesheets/recurring');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('timesheets/recurring') && (
+              <NavItem
+                icon="fa-repeat"
+                label={t('routes.recurringTasks')}
+                active={activeView === 'timesheets/recurring'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('timesheets/recurring');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'crm':
         return (
           <>
-            <NavItem
-              icon="fa-building"
-              label={t('routes.clients')}
-              active={activeView === 'crm/clients'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('crm/clients');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-truck"
-              label={t('routes.suppliers')}
-              active={activeView === 'crm/suppliers'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('crm/suppliers');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('crm/clients') && (
+              <NavItem
+                icon="fa-building"
+                label={t('routes.clients')}
+                active={activeView === 'crm/clients'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('crm/clients');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('crm/suppliers') && (
+              <NavItem
+                icon="fa-truck"
+                label={t('routes.suppliers')}
+                active={activeView === 'crm/suppliers'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('crm/suppliers');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'sales':
         return (
           <>
-            <NavItem
-              icon="fa-file-invoice"
-              label={t('routes.clientQuotes')}
-              active={activeView === 'sales/client-quotes'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('sales/client-quotes');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('sales/client-quotes') && (
+              <NavItem
+                icon="fa-file-invoice"
+                label={t('routes.clientQuotes')}
+                active={activeView === 'sales/client-quotes'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('sales/client-quotes');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'accounting':
         return (
           <>
-            <NavItem
-              icon="fa-cart-shopping"
-              label={t('routes.clientsOrders')}
-              active={activeView === 'accounting/clients-orders'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('accounting/clients-orders');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-file-invoice-dollar"
-              label={t('routes.clientsInvoices')}
-              active={activeView === 'accounting/clients-invoices'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('accounting/clients-invoices');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('accounting/clients-orders') && (
+              <NavItem
+                icon="fa-cart-shopping"
+                label={t('routes.clientsOrders')}
+                active={activeView === 'accounting/clients-orders'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('accounting/clients-orders');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('accounting/clients-invoices') && (
+              <NavItem
+                icon="fa-file-invoice-dollar"
+                label={t('routes.clientsInvoices')}
+                active={activeView === 'accounting/clients-invoices'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('accounting/clients-invoices');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'catalog':
         return (
           <>
-            <NavItem
-              icon="fa-box"
-              label={t('routes.internalListing')}
-              active={activeView === 'catalog/internal-listing'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('catalog/internal-listing');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-boxes-stacked"
-              label={t('routes.externalProducts')}
-              active={activeView === 'catalog/external-listing'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('catalog/external-listing');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-tags"
-              label={t('routes.externalListing')}
-              active={activeView === 'catalog/special-bids'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('catalog/special-bids');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('catalog/internal-listing') && (
+              <NavItem
+                icon="fa-box"
+                label={t('routes.internalListing')}
+                active={activeView === 'catalog/internal-listing'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('catalog/internal-listing');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('catalog/external-listing') && (
+              <NavItem
+                icon="fa-boxes-stacked"
+                label={t('routes.externalProducts')}
+                active={activeView === 'catalog/external-listing'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('catalog/external-listing');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('catalog/special-bids') && (
+              <NavItem
+                icon="fa-tags"
+                label={t('routes.externalListing')}
+                active={activeView === 'catalog/special-bids'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('catalog/special-bids');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'hr':
         return (
           <>
-            <NavItem
-              icon="fa-user-tie"
-              label={t('routes.internalEmployees')}
-              active={activeView === 'hr/internal'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('hr/internal');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-user-clock"
-              label={t('routes.externalEmployees')}
-              active={activeView === 'hr/external'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('hr/external');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('hr/internal') && (
+              <NavItem
+                icon="fa-user-tie"
+                label={t('routes.internalEmployees')}
+                active={activeView === 'hr/internal'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('hr/internal');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('hr/external') && (
+              <NavItem
+                icon="fa-user-clock"
+                label={t('routes.externalEmployees')}
+                active={activeView === 'hr/external'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('hr/external');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'projects':
         return (
           <>
-            <NavItem
-              icon="fa-folder-tree"
-              label={t('routes.projects')}
-              active={activeView === 'projects/manage'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('projects/manage');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('projects/manage') && (
+              <NavItem
+                icon="fa-folder-tree"
+                label={t('routes.projects')}
+                active={activeView === 'projects/manage'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('projects/manage');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
 
-            <NavItem
-              icon="fa-tasks"
-              label={t('routes.tasks')}
-              active={activeView === 'projects/tasks'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('projects/tasks');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('projects/tasks') && (
+              <NavItem
+                icon="fa-tasks"
+                label={t('routes.tasks')}
+                active={activeView === 'projects/tasks'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('projects/tasks');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'finances':
         return (
           <>
-            <NavItem
-              icon="fa-money-bill-wave"
-              label={t('routes.payments')}
-              active={activeView === 'finances/payments'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('finances/payments');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-receipt"
-              label={t('routes.expenses')}
-              active={activeView === 'finances/expenses'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('finances/expenses');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('finances/payments') && (
+              <NavItem
+                icon="fa-money-bill-wave"
+                label={t('routes.payments')}
+                active={activeView === 'finances/payments'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('finances/payments');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('finances/expenses') && (
+              <NavItem
+                icon="fa-receipt"
+                label={t('routes.expenses')}
+                active={activeView === 'finances/expenses'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('finances/expenses');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'suppliers':
         return (
           <>
-            <NavItem
-              icon="fa-industry"
-              label={t('routes.suppliers')}
-              active={activeView === 'suppliers/manage'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('suppliers/manage');
-                setIsMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon="fa-file-invoice"
-              label={t('routes.supplierQuotes')}
-              active={activeView === 'suppliers/quotes'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('suppliers/quotes');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('suppliers/manage') && (
+              <NavItem
+                icon="fa-industry"
+                label={t('routes.suppliers')}
+                active={activeView === 'suppliers/manage'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('suppliers/manage');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('suppliers/quotes') && (
+              <NavItem
+                icon="fa-file-invoice"
+                label={t('routes.supplierQuotes')}
+                active={activeView === 'suppliers/quotes'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('suppliers/quotes');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'configuration':
         return (
           <>
-            <NavItem
-              icon="fa-shield-halved"
-              label={t('routes.authentication')}
-              active={activeView === 'configuration/authentication'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('configuration/authentication');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('configuration/authentication') && (
+              <NavItem
+                icon="fa-shield-halved"
+                label={t('routes.authentication')}
+                active={activeView === 'configuration/authentication'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('configuration/authentication');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
 
-            <NavItem
-              icon="fa-sliders"
-              label={t('routes.general')}
-              active={activeView === 'configuration/general'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('configuration/general');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('configuration/general') && (
+              <NavItem
+                icon="fa-sliders"
+                label={t('routes.general')}
+                active={activeView === 'configuration/general'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('configuration/general');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
 
-            <NavItem
-              icon="fa-users"
-              label={t('routes.userManagement')}
-              active={activeView === 'configuration/user-management'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('configuration/user-management');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('configuration/user-management') && (
+              <NavItem
+                icon="fa-users"
+                label={t('routes.userManagement')}
+                active={activeView === 'configuration/user-management'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('configuration/user-management');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
 
-            {isManagement && (
+            {canAccessView('configuration/work-units') && (
               <NavItem
                 icon="fa-sitemap"
                 label={t('routes.workUnits')}
@@ -443,24 +485,37 @@ const Layout: React.FC<LayoutProps> = ({
               />
             )}
 
-            <NavItem
-              icon="fa-envelope"
-              label={t('routes.email')}
-              active={activeView === 'configuration/email'}
-              isCollapsed={isCollapsed}
-              onClick={() => {
-                onViewChange('configuration/email');
-                setIsMobileMenuOpen(false);
-              }}
-            />
+            {canAccessView('configuration/roles') && (
+              <NavItem
+                icon="fa-user-shield"
+                label={t('routes.roles')}
+                active={activeView === 'configuration/roles'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('configuration/roles');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+
+            {canAccessView('configuration/email') && (
+              <NavItem
+                icon="fa-envelope"
+                label={t('routes.email')}
+                active={activeView === 'configuration/email'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('configuration/email');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       default:
         return null;
     }
   };
-
-  const isManagement = currentUser.role === 'admin' || currentUser.role === 'manager';
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-slate-50 overflow-hidden">
@@ -502,7 +557,7 @@ const Layout: React.FC<LayoutProps> = ({
         {!isCollapsed && (
           <div className="px-6 mb-4 animate-in fade-in duration-300 hidden md:block">
             <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">
-              {t(`roles.${currentUser.role}`, { ns: 'hr' })} {t('workspace')}
+              {roleLabel} {t('workspace')}
             </div>
           </div>
         )}
@@ -580,33 +635,35 @@ const Layout: React.FC<LayoutProps> = ({
                 ? t('titles.authSettings')
                 : activeView === 'configuration/general'
                   ? t('titles.generalAdmin')
-                  : activeView === 'projects/manage'
-                    ? t('titles.projects')
-                    : activeView === 'projects/tasks'
-                      ? t('titles.tasks')
-                      : activeView === 'catalog/external-listing'
-                        ? t('titles.externalProducts')
-                        : activeView === 'catalog/special-bids'
-                          ? t('titles.externalListing')
-                          : activeView === 'suppliers/manage'
-                            ? t('titles.suppliers')
-                            : activeView === 'suppliers/quotes'
-                              ? t('titles.supplierQuotes')
-                              : activeView === 'hr/internal'
-                                ? t('titles.internalEmployees')
-                                : activeView === 'hr/external'
-                                  ? t('titles.externalEmployees')
-                                  : t(
-                                      `routes.${activeView
-                                        .split('/')
-                                        .pop()
-                                        ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
-                                      {
-                                        defaultValue:
-                                          activeView.split('/').pop()?.replace('-', ' ') ||
-                                          activeView,
-                                      },
-                                    )}
+                  : activeView === 'configuration/roles'
+                    ? t('titles.roles')
+                    : activeView === 'projects/manage'
+                      ? t('titles.projects')
+                      : activeView === 'projects/tasks'
+                        ? t('titles.tasks')
+                        : activeView === 'catalog/external-listing'
+                          ? t('titles.externalProducts')
+                          : activeView === 'catalog/special-bids'
+                            ? t('titles.externalListing')
+                            : activeView === 'suppliers/manage'
+                              ? t('titles.suppliers')
+                              : activeView === 'suppliers/quotes'
+                                ? t('titles.supplierQuotes')
+                                : activeView === 'hr/internal'
+                                  ? t('titles.internalEmployees')
+                                  : activeView === 'hr/external'
+                                    ? t('titles.externalEmployees')
+                                    : t(
+                                        `routes.${activeView
+                                          .split('/')
+                                          .pop()
+                                          ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
+                                        {
+                                          defaultValue:
+                                            activeView.split('/').pop()?.replace('-', ' ') ||
+                                            activeView,
+                                        },
+                                      )}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">
@@ -617,8 +674,8 @@ const Layout: React.FC<LayoutProps> = ({
               })}
             </span>
 
-            {/* Notification Bell - only for managers */}
-            {currentUser.role === 'manager' &&
+            {/* Notification Bell */}
+            {canViewNotifications &&
               onMarkNotificationAsRead &&
               onMarkAllNotificationsAsRead &&
               onDeleteNotification && (
@@ -641,7 +698,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </div>
                 <div className="text-left hidden sm:block">
                   <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-0.5">
-                    {t(`roles.${currentUser.role}`, { ns: 'hr' })}
+                    {roleLabel}
                   </p>
                   <p className="text-xs font-bold text-slate-700 leading-none">
                     {currentUser.name}
@@ -656,9 +713,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-30 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                   <div className="px-4 py-3 border-b border-slate-100 mb-1 sm:hidden">
                     <p className="text-sm font-bold text-slate-800">{currentUser.name}</p>
-                    <p className="text-xs text-slate-500 capitalize">
-                      {t(`roles.${currentUser.role}`, { ns: 'hr' })}
-                    </p>
+                    <p className="text-xs text-slate-500 capitalize">{roleLabel}</p>
                   </div>
 
                   <button

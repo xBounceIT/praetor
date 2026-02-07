@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   parseLocalizedNonNegativeNumber,
@@ -76,14 +76,21 @@ const productUpdateBodySchema = {
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All product routes require manager role
+  // All product routes require authentication
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all products
   fastify.get(
     '/',
     {
+      onRequest: [
+        requireAnyPermission(
+          'catalog.internal_listing.view',
+          'catalog.external_listing.view',
+          'catalog.special_bids.view',
+          'suppliers.quotes.view',
+        ),
+      ],
       schema: {
         tags: ['products'],
         summary: 'List products',
@@ -108,6 +115,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [
+        requireAnyPermission('catalog.internal_listing.create', 'catalog.external_listing.create'),
+      ],
       schema: {
         tags: ['products'],
         summary: 'Create product',
@@ -261,6 +271,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [
+        requireAnyPermission('catalog.internal_listing.update', 'catalog.external_listing.update'),
+      ],
       schema: {
         tags: ['products'],
         summary: 'Update product',
@@ -489,6 +502,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [
+        requireAnyPermission('catalog.internal_listing.delete', 'catalog.external_listing.delete'),
+      ],
       schema: {
         tags: ['products'],
         summary: 'Delete product',

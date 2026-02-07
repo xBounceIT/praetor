@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import emailService from '../services/email.ts';
 import { encrypt } from '../utils/crypto.ts';
 import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
@@ -82,7 +82,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/config',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.email.view')],
       schema: {
         tags: ['email'],
         summary: 'Get email configuration',
@@ -126,7 +126,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/config',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.email.update')],
       schema: {
         tags: ['email'],
         summary: 'Update email configuration',
@@ -215,7 +215,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.email.update')],
       schema: {
         tags: ['email'],
         summary: 'Send test email',
@@ -260,7 +260,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test-connection',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.email.update')],
       schema: {
         tags: ['email'],
         summary: 'Test SMTP connection',

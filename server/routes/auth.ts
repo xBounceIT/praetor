@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { generateToken, authenticateToken } from '../middleware/auth.ts';
+import { getRolePermissions } from '../utils/permissions.ts';
 import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 
@@ -13,8 +14,9 @@ const authUserSchema = {
     username: { type: 'string' },
     role: { type: 'string' },
     avatarInitials: { type: 'string' },
+    permissions: { type: 'array', items: { type: 'string' } },
   },
-  required: ['id', 'name', 'username', 'role', 'avatarInitials'],
+  required: ['id', 'name', 'username', 'role', 'avatarInitials', 'permissions'],
 } as const;
 
 const loginBodySchema = {
@@ -105,6 +107,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const token = generateToken(user.id);
+      const permissions = await getRolePermissions(user.role);
 
       return {
         token,
@@ -114,6 +117,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           username: user.username,
           role: user.role,
           avatarInitials: user.avatar_initials,
+          permissions,
         },
       };
     },
@@ -140,6 +144,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         username: request.user!.username,
         role: request.user!.role,
         avatarInitials: request.user!.avatar_initials,
+        permissions: request.user!.permissions || [],
       };
     },
   );

@@ -1,18 +1,19 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProjectTask, Project, Client, UserRole, User } from '../../types';
+import { ProjectTask, Project, Client, User } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 import StandardTable, { Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { tasksApi } from '../../services/api';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
+import { buildPermission, hasPermission } from '../../utils/permissions';
 
 interface TasksViewProps {
   tasks: ProjectTask[];
   projects: Project[];
   clients: Client[];
-  role: UserRole;
+  permissions: string[];
   users: User[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onAddTask: (name: string, projectId: string, recurringConfig?: any, description?: string) => void;
@@ -24,13 +25,16 @@ const TasksView: React.FC<TasksViewProps> = ({
   tasks,
   projects,
   clients,
-  role,
+  permissions,
   users,
   onAddTask,
   onUpdateTask,
   onDeleteTask,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
+  const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
+  const canUpdateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'update'));
+  const canDeleteTasks = hasPermission(permissions, buildPermission('projects.tasks', 'delete'));
   const [name, setName] = useState('');
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
@@ -70,12 +74,57 @@ const TasksView: React.FC<TasksViewProps> = ({
     [projects, clients],
   );
 
+  const openAddModal = useCallback(() => {
+    if (!canCreateTasks) return;
+    setEditingTask(null);
+    setName('');
+    setProjectId('');
+    setDescription('');
+    setTempIsDisabled(false);
+    setIsModalOpen(true);
+  }, [canCreateTasks]);
+
+  const openEditModal = useCallback(
+    (task: ProjectTask) => {
+      if (!canUpdateTasks) return;
+      setEditingTask(task);
+      setName(task.name);
+      setProjectId(task.projectId);
+      setDescription(task.description || '');
+      setTempIsDisabled(task.isDisabled || false);
+      setIsModalOpen(true);
+    },
+    [canUpdateTasks],
+  );
+
+  const confirmDelete = useCallback(() => {
+    if (!canDeleteTasks) return;
+    setIsDeleteConfirmOpen(true);
+  }, [canDeleteTasks]);
+
+  const openAssignments = useCallback(
+    async (taskId: string) => {
+      if (!canUpdateTasks) return;
+      setManagingTaskId(taskId);
+      setIsLoadingAssignments(true);
+      setAssignedUserIds([]);
+      try {
+        const userIds = await tasksApi.getUsers(taskId);
+        setAssignedUserIds(userIds);
+      } catch (err) {
+        console.error('Failed to load task users', err);
+        // Optional: show error notification
+      } finally {
+        setIsLoadingAssignments(false);
+      }
+    },
+    [canUpdateTasks],
+  );
+
   // Pagination Logic
   const totalPages = Math.ceil(tasks.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedTasks = tasks.slice(startIndex, startIndex + rowsPerPage);
-
-  const isManagement = role === 'admin' || role === 'manager';
 
   // Column definitions for StandardTable
   const columns: Column<ProjectTask>[] = useMemo(
@@ -195,7 +244,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          if (!isManagement) return null;
+          if (!canUpdateTasks && !canDeleteTasks) return null;
           const project = projects.find((p) => p.id === row.projectId);
           const client = clients.find((c) => c.id === project?.clientId);
           const isInheritedDisabled = project?.isDisabled || client?.isDisabled;
@@ -203,79 +252,100 @@ const TasksView: React.FC<TasksViewProps> = ({
 
           return (
             <div className="flex items-center justify-end gap-2">
-              <Tooltip label={t('tasks.manageMembers')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openAssignments(row.id);
-                    }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-users"></i>
-                  </button>
-                )}
-              </Tooltip>
-              <Tooltip label={t('tasks.editTask')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModal(row);
-                    }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-pen-to-square"></i>
-                  </button>
-                )}
-              </Tooltip>
-              {!isInheritedDisabled && (
-                <Tooltip
-                  label={
-                    isTaskDisabled ? t('projects.enableProject') : t('projects.disableProject')
-                  }
-                >
+              {canUpdateTasks && (
+                <>
+                  <Tooltip label={t('tasks.manageMembers')}>
+                    {() => (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAssignments(row.id);
+                        }}
+                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                      >
+                        <i className="fa-solid fa-users"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  <Tooltip label={t('tasks.editTask')}>
+                    {() => (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(row);
+                        }}
+                        className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                      >
+                        <i className="fa-solid fa-pen-to-square"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  {!isInheritedDisabled && (
+                    <Tooltip
+                      label={
+                        isTaskDisabled ? t('projects.enableProject') : t('projects.disableProject')
+                      }
+                    >
+                      {() => (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
+                          }}
+                          className={`p-2 rounded-lg transition-all ${
+                            isTaskDisabled
+                              ? 'text-praetor hover:bg-slate-100'
+                              : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                          }`}
+                        >
+                          <i
+                            className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}
+                          ></i>
+                        </button>
+                      )}
+                    </Tooltip>
+                  )}
+                </>
+              )}
+              {canDeleteTasks && (
+                <Tooltip label={t('common:buttons.delete')}>
                   {() => (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
+                        setEditingTask(row);
+                        confirmDelete();
                       }}
-                      className={`p-2 rounded-lg transition-all ${
-                        isTaskDisabled
-                          ? 'text-praetor hover:bg-slate-100'
-                          : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                      }`}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
-                      <i className={`fa-solid ${isTaskDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                      <i className="fa-solid fa-trash-can"></i>
                     </button>
                   )}
                 </Tooltip>
               )}
-              <Tooltip label={t('common:buttons.delete')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingTask(row);
-                      confirmDelete();
-                    }}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
-                )}
-              </Tooltip>
             </div>
           );
         },
       },
     ],
-    [t, projects, clients, isManagement, onUpdateTask, checkInheritedDisabled],
+    [
+      t,
+      projects,
+      clients,
+      canUpdateTasks,
+      canDeleteTasks,
+      onUpdateTask,
+      checkInheritedDisabled,
+      confirmDelete,
+      openAssignments,
+      openEditModal,
+    ],
   );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingTask && !canUpdateTasks) return;
+    if (!editingTask && !canCreateTasks) return;
     if (name && projectId) {
       if (editingTask) {
         onUpdateTask(editingTask.id, { name, projectId, description, isDisabled: tempIsDisabled });
@@ -284,24 +354,6 @@ const TasksView: React.FC<TasksViewProps> = ({
       }
       closeModal();
     }
-  };
-
-  const openAddModal = () => {
-    setEditingTask(null);
-    setName('');
-    setProjectId('');
-    setDescription('');
-    setTempIsDisabled(false);
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (task: ProjectTask) => {
-    setEditingTask(task);
-    setName(task.name);
-    setProjectId(task.projectId);
-    setDescription(task.description || '');
-    setTempIsDisabled(task.isDisabled || false);
-    setIsModalOpen(true);
   };
 
   const closeModal = () => {
@@ -313,37 +365,21 @@ const TasksView: React.FC<TasksViewProps> = ({
     setDescription('');
   };
 
-  const confirmDelete = () => {
-    setIsDeleteConfirmOpen(true);
-  };
-
   const cancelDelete = () => {
     setIsDeleteConfirmOpen(false);
   };
 
   const handleDelete = () => {
+    if (!canDeleteTasks) return;
     if (editingTask) {
       onDeleteTask(editingTask.id);
       closeModal();
     }
   };
 
-  // Assignment Handlers
-  const openAssignments = async (taskId: string) => {
-    setManagingTaskId(taskId);
-    setIsLoadingAssignments(true);
-    setAssignedUserIds([]);
-    try {
-      const userIds = await tasksApi.getUsers(taskId);
-      setAssignedUserIds(userIds);
-    } catch (err) {
-      console.error('Failed to load task users', err);
-      // Optional: show error notification
-    } finally {
-      setIsLoadingAssignments(false);
-    }
-  };
+  const canSubmit = editingTask ? canUpdateTasks : canCreateTasks;
 
+  // Assignment Handlers
   const closeAssignments = () => {
     setManagingTaskId(null);
     setAssignedUserIds([]);
@@ -351,12 +387,14 @@ const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const toggleUserAssignment = (userId: string) => {
+    if (!canUpdateTasks) return;
     setAssignedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
   };
 
   const saveAssignments = async () => {
+    if (!canUpdateTasks) return;
     if (!managingTaskId) return;
     try {
       await tasksApi.updateUsers(managingTaskId, assignedUserIds);
@@ -524,7 +562,12 @@ const TasksView: React.FC<TasksViewProps> = ({
             </button>
             <button
               onClick={saveAssignments}
-              className="px-8 py-2.5 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg shadow-slate-200 active:scale-95 text-sm"
+              disabled={!canUpdateTasks}
+              className={`px-8 py-2.5 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 text-sm ${
+                canUpdateTasks
+                  ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
+                  : 'bg-slate-300 shadow-none cursor-not-allowed'
+              }`}
             >
               {t('common:buttons.save')}
             </button>
@@ -647,7 +690,7 @@ const TasksView: React.FC<TasksViewProps> = ({
             })()}
 
             <div className="pt-6 flex items-center justify-between gap-4 border-t border-slate-100 mt-2">
-              {editingTask && (
+              {editingTask && canDeleteTasks && (
                 <button
                   type="button"
                   onClick={confirmDelete}
@@ -668,7 +711,12 @@ const TasksView: React.FC<TasksViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all bg-praetor shadow-slate-200 hover:bg-slate-700"
+                  disabled={!canSubmit}
+                  className={`px-8 py-2.5 rounded-xl text-white text-sm font-bold shadow-lg transform active:scale-95 transition-all ${
+                    canSubmit
+                      ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
+                      : 'bg-slate-300 shadow-none cursor-not-allowed'
+                  }`}
                 >
                   {editingTask ? t('projects.saveChanges') : t('tasks.addTask')}
                 </button>
@@ -686,7 +734,7 @@ const TasksView: React.FC<TasksViewProps> = ({
             <p className="text-slate-500 text-sm">{t('tasks.subtitle')}</p>
           </div>
           <div className="flex items-center gap-3">
-            {isManagement && (
+            {canCreateTasks && (
               <button
                 onClick={openAddModal}
                 className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"

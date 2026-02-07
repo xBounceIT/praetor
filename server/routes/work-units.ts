@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   requireNonEmptyArrayOfStrings,
@@ -69,6 +69,9 @@ const workUnitUsersBodySchema = {
   required: ['userIds'],
 } as const;
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 // Helper to fetch unit with managers and user count
 const fetchUnitDetails = async (unitId: string) => {
   const result = await query(
@@ -94,7 +97,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken],
+      onRequest: [authenticateToken, requirePermission('configuration.work_units.view')],
       schema: {
         tags: ['work-units'],
         summary: 'List work units',
@@ -104,9 +107,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       let result;
-      if (request.user!.role === 'admin') {
+      if (hasPermission(request, 'configuration.work_units_all.view')) {
         result = await query(`
                 SELECT w.*,
                     (
@@ -119,7 +122,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 FROM work_units w
                 ORDER BY w.name
             `);
-      } else if (request.user!.role === 'manager') {
+      } else {
         result = await query(
           `
                 SELECT w.*,
@@ -139,8 +142,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             `,
           [request.user!.id],
         );
-      } else {
-        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       const workUnits = result.rows.map((w) => ({
@@ -160,7 +161,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.work_units.create')],
       schema: {
         tags: ['work-units'],
         summary: 'Create work unit',
@@ -228,7 +229,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.work_units.update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit',
@@ -350,7 +351,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.work_units.delete')],
       schema: {
         tags: ['work-units'],
         summary: 'Delete work unit',
@@ -382,7 +383,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken],
+      onRequest: [authenticateToken, requirePermission('configuration.work_units.view')],
       schema: {
         tags: ['work-units'],
         summary: 'Get users in work unit',
@@ -399,7 +400,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check permissions
-      if (request.user!.role !== 'admin') {
+      if (!hasPermission(request, 'configuration.work_units_all.view')) {
         // Check if user is a manager of this unit
         const check = await query(
           'SELECT 1 FROM work_unit_managers WHERE work_unit_id = $1 AND user_id = $2',
@@ -428,7 +429,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.work_units.update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit users',

@@ -1,19 +1,14 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
-import {
-  parseBoolean,
-  requireNonEmptyString,
-  validateEnum,
-  badRequest,
-} from '../utils/validation.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { parseBoolean, requireNonEmptyString, badRequest } from '../utils/validation.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 
 const roleMappingSchema = {
   type: 'object',
   properties: {
     ldapGroup: { type: 'string' },
-    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+    role: { type: 'string' },
   },
   required: ['ldapGroup', 'role'],
 } as const;
@@ -73,7 +68,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/config',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.authentication.view')],
       schema: {
         tags: ['ldap'],
         summary: 'Get LDAP configuration',
@@ -123,7 +118,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/config',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.authentication.update')],
       schema: {
         tags: ['ldap'],
         summary: 'Update LDAP configuration',
@@ -188,6 +183,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(roleMappings)) {
           return badRequest(reply, 'roleMappings must be an array');
         }
+        const roleIds: string[] = [];
         for (let i = 0; i < roleMappings.length; i++) {
           const mapping = roleMappings[i];
           if (typeof mapping !== 'object' || mapping === null) {
@@ -198,12 +194,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             `roleMappings[${i}].ldapGroup`,
           );
           if (!ldapGroupResult.ok) return badRequest(reply, ldapGroupResult.message);
-          const roleResult = validateEnum(
-            mapping.role,
-            ['admin', 'manager', 'user'],
-            `roleMappings[${i}].role`,
-          );
+          const roleResult = requireNonEmptyString(mapping.role, `roleMappings[${i}].role`);
           if (!roleResult.ok) return badRequest(reply, roleResult.message);
+          roleIds.push(roleResult.value);
+        }
+
+        if (roleIds.length > 0) {
+          const uniqueRoleIds = Array.from(new Set(roleIds));
+          const roleResult = await query('SELECT id FROM roles WHERE id = ANY($1::text[])', [
+            uniqueRoleIds,
+          ]);
+          const roleSet = new Set(roleResult.rows.map((row) => row.id));
+          for (const roleId of uniqueRoleIds) {
+            if (!roleSet.has(roleId)) {
+              return badRequest(reply, `roleMappings role '${roleId}' does not exist`);
+            }
+          }
         }
       }
 
@@ -253,7 +259,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/sync',
     {
-      onRequest: [authenticateToken, requireRole('admin')],
+      onRequest: [authenticateToken, requirePermission('configuration.authentication.update')],
       schema: {
         tags: ['ldap'],
         summary: 'Trigger LDAP sync',

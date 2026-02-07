@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -88,11 +88,11 @@ const specialBidUpdateBodySchema = {
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('catalog.special_bids.view')],
       schema: {
         tags: ['special-bids'],
         summary: 'List special bids',
@@ -126,6 +126,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('catalog.special_bids.create')],
       schema: {
         tags: ['special-bids'],
         summary: 'Create special bid',
@@ -257,6 +258,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('catalog.special_bids.update')],
       schema: {
         tags: ['special-bids'],
         summary: 'Update special bid',
@@ -473,6 +475,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('catalog.special_bids.delete')],
       schema: {
         tags: ['special-bids'],
         summary: 'Delete special bid',

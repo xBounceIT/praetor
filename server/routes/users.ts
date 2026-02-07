@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -27,7 +27,7 @@ const userSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     username: { type: 'string' },
-    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+    role: { type: 'string' },
     avatarInitials: { type: 'string' },
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
@@ -51,7 +51,7 @@ const userCreateBodySchema = {
     name: { type: 'string' },
     username: { type: 'string' },
     password: { type: 'string' },
-    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+    role: { type: 'string' },
     costPerHour: { type: 'number' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
   },
@@ -64,7 +64,7 @@ const userUpdateBodySchema = {
     name: { type: 'string' },
     isDisabled: { type: 'boolean' },
     costPerHour: { type: 'number' },
-    role: { type: 'string', enum: ['admin', 'manager', 'user'] },
+    role: { type: 'string' },
   },
 } as const;
 
@@ -87,37 +87,13 @@ const assignmentsUpdateBodySchema = {
   },
 } as const;
 
+const hasPermission = (request: FastifyRequest, permission: string) =>
+  request.user?.permissions?.includes(permission) ?? false;
+
 interface DatabaseError extends Error {
   code?: string;
   constraint?: string;
   detail?: string;
-}
-
-// Helper function to auto-assign all clients, projects, and tasks to a manager user
-async function assignAllItemsToManager(userId: string): Promise<void> {
-  // Assign all clients
-  await query(
-    `INSERT INTO user_clients (user_id, client_id)
-     SELECT $1, id FROM clients
-     ON CONFLICT (user_id, client_id) DO NOTHING`,
-    [userId],
-  );
-
-  // Assign all projects
-  await query(
-    `INSERT INTO user_projects (user_id, project_id)
-     SELECT $1, id FROM projects
-     ON CONFLICT (user_id, project_id) DO NOTHING`,
-    [userId],
-  );
-
-  // Assign all tasks
-  await query(
-    `INSERT INTO user_tasks (user_id, task_id)
-     SELECT $1, id FROM tasks
-     ON CONFLICT (user_id, task_id) DO NOTHING`,
-    [userId],
-  );
 }
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -125,7 +101,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'configuration.user_management.view',
+          'configuration.user_management_all.view',
+          'hr.internal.view',
+          'hr.external.view',
+          'timesheets.tracker.view',
+          'projects.manage.view',
+          'projects.tasks.view',
+          'configuration.work_units.view',
+        ),
+      ],
       schema: {
         tags: ['users'],
         summary: 'List users',
@@ -136,34 +124,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      let result;
+      const canViewAllUsers = hasPermission(request, 'configuration.user_management_all.view');
+      const canViewUserManagement = hasPermission(request, 'configuration.user_management.view');
+      const canViewManagedUsers =
+        hasPermission(request, 'timesheets.tracker.view') ||
+        hasPermission(request, 'configuration.work_units.view') ||
+        canViewUserManagement;
+      const canViewInternal = hasPermission(request, 'hr.internal.view');
+      const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      if (request.user!.role === 'admin') {
-        // Admin sees all users
+      let result;
+      if (canViewAllUsers) {
         result = await query(
           'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
         );
-      } else if (request.user!.role === 'manager') {
-        // Manager sees themselves AND users in work units they manage AND all internal/external employees
+      } else {
+        const conditions: string[] = ['u.id = $1'];
+        if (canViewManagedUsers) {
+          conditions.push('wum.user_id = $1');
+        }
+        if (canViewInternal) {
+          conditions.push("u.employee_type = 'internal'");
+        }
+        if (canViewExternal) {
+          conditions.push("u.employee_type = 'external'");
+        }
+
         result = await query(
           `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
                  FROM users u
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-                 WHERE u.id = $1  -- The manager themselves
-                    OR wum.user_id = $1 -- Users in work units managed by this user
-                    OR u.employee_type IN ('internal', 'external') -- All internal/external employees
+                 WHERE ${conditions.join(' OR ')}
                  ORDER BY u.name`,
           [request.user!.id],
         );
-      } else {
-        // Regular users only see themselves
-        result = await query(
-          'SELECT id, name, username, role, avatar_initials, is_disabled, employee_type FROM users WHERE id = $1',
-          [request.user!.id],
-        );
       }
-
       const users = result.rows.map((u) => ({
         id: u.id,
         name: u.name,
@@ -183,7 +179,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireRole('admin', 'manager')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'configuration.user_management.create',
+          'hr.internal.create',
+          'hr.external.create',
+        ),
+      ],
       schema: {
         tags: ['users'],
         summary: 'Create user',
@@ -213,11 +216,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const effectiveEmployeeType = (employeeTypeResult as { ok: true; value: string }).value;
 
-      // Managers can only create internal/external employees
-      if (request.user!.role === 'manager' && effectiveEmployeeType === 'app_user') {
-        return reply
-          .code(403)
-          .send({ error: 'Managers can only create internal or external employees' });
+      const canCreateAppUser = hasPermission(request, 'configuration.user_management.create');
+      const canCreateInternal = hasPermission(request, 'hr.internal.create');
+      const canCreateExternal = hasPermission(request, 'hr.external.create');
+
+      if (effectiveEmployeeType === 'app_user' && !canCreateAppUser) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
+
+      if (effectiveEmployeeType === 'internal' && !canCreateInternal) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
+
+      if (effectiveEmployeeType === 'external' && !canCreateExternal) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -245,9 +257,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
         passwordHash = await bcrypt.hash(passwordResult.value, 12);
 
-        const roleResult = validateEnum(role, ['admin', 'manager', 'user'], 'role');
+        const roleResult = requireNonEmptyString(role, 'role');
         if (!roleResult.ok) return badRequest(reply, roleResult.message);
         roleValue = roleResult.value;
+
+        const roleCheck = await query('SELECT id FROM roles WHERE id = $1', [roleValue]);
+        if (roleCheck.rows.length === 0) {
+          return badRequest(reply, 'Invalid role');
+        }
 
         // Check username uniqueness for app users
         const existingUser = await query('SELECT id FROM users WHERE username = $1', [
@@ -283,11 +300,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
-        // If the new user is a manager, auto-assign all items to them
-        if (roleValue === 'manager') {
-          await assignAllItemsToManager(id);
-        }
-
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -313,7 +325,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('admin', 'manager')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'configuration.user_management.delete',
+          'hr.internal.delete',
+          'hr.external.delete',
+        ),
+      ],
       schema: {
         tags: ['users'],
         summary: 'Delete user',
@@ -339,9 +358,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const employeeType = userCheck.rows[0].employee_type || 'app_user';
 
-      // Managers can only delete internal/external employees, not app_users
-      if (request.user!.role === 'manager' && employeeType === 'app_user') {
-        return reply.code(403).send({ error: 'App users can only be deleted by administrators' });
+      if (employeeType === 'app_user') {
+        if (!hasPermission(request, 'configuration.user_management.delete')) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
+      }
+
+      if (employeeType === 'internal') {
+        if (!hasPermission(request, 'hr.internal.delete')) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
+      }
+
+      if (employeeType === 'external') {
+        if (!hasPermission(request, 'hr.external.delete')) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
       }
 
       const result = await query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
@@ -358,7 +390,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requireRole('admin', 'manager')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'configuration.user_management.update',
+          'hr.internal.update',
+          'hr.external.update',
+        ),
+      ],
       schema: {
         tags: ['users'],
         summary: 'Update user',
@@ -393,32 +432,63 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, (costPerHourResult as { ok: false; message: string }).message);
       }
 
-      let roleValue: string | null = null;
-      if (role !== undefined) {
-        if (request.user!.role !== 'admin') {
+      const targetUserResult = await query(
+        'SELECT id, role, employee_type FROM users WHERE id = $1',
+        [idResult.value],
+      );
+      if (targetUserResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'User not found' });
+      }
+
+      const targetEmployeeType = targetUserResult.rows[0].employee_type || 'app_user';
+
+      if (targetEmployeeType === 'app_user') {
+        if (!hasPermission(request, 'configuration.user_management.update')) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
         }
+
+        if (
+          !hasPermission(request, 'configuration.user_management_all.view') &&
+          idResult.value !== request.user!.id
+        ) {
+          const managedCheck = await query(
+            `SELECT 1
+               FROM user_work_units uw
+               JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
+               WHERE uw.user_id = $1 AND wum.user_id = $2
+               LIMIT 1`,
+            [idResult.value, request.user!.id],
+          );
+          if (managedCheck.rows.length === 0) {
+            return reply.code(403).send({ error: 'Insufficient permissions' });
+          }
+        }
+      }
+
+      if (targetEmployeeType === 'internal') {
+        if (!hasPermission(request, 'hr.internal.update')) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
+      }
+
+      if (targetEmployeeType === 'external') {
+        if (!hasPermission(request, 'hr.external.update')) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
+      }
+
+      let roleValue: string | null = null;
+      if (role !== undefined) {
         if (idResult.value === request.user!.id) {
-          return reply.code(403).send({ error: 'Admins cannot change their own role' });
+          return reply.code(403).send({ error: 'Cannot change your own role' });
         }
-        const roleResult = validateEnum(role, ['admin', 'manager', 'user'], 'role');
-        if (!roleResult.ok)
-          return badRequest(reply, (roleResult as { ok: false; message: string }).message);
-        roleValue = (roleResult as { ok: true; value: string }).value;
-      }
+        const roleResult = requireNonEmptyString(role, 'role');
+        if (!roleResult.ok) return badRequest(reply, roleResult.message);
+        roleValue = roleResult.value;
 
-      if (request.user!.role === 'admin' && costPerHour !== undefined) {
-        return reply.code(403).send({ error: 'Admins cannot update cost per hour' });
-      }
-
-      // Managers can only edit users with role 'user'
-      if (request.user!.role === 'manager') {
-        const userCheck = await query('SELECT role FROM users WHERE id = $1', [idResult.value]);
-        if (userCheck.rows.length === 0) {
-          return reply.code(404).send({ error: 'User not found' });
-        }
-        if (userCheck.rows[0].role !== 'user' && idResult.value !== request.user!.id) {
-          return reply.code(403).send({ error: 'Managers can only edit users' });
+        const roleCheck = await query('SELECT id FROM roles WHERE id = $1', [roleValue]);
+        if (roleCheck.rows.length === 0) {
+          return badRequest(reply, 'Invalid role');
         }
       }
 
@@ -452,23 +522,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      // Track if the user is being promoted to manager
-      let promotingToManager = false;
       if (role !== undefined) {
         updates.push(`role = $${paramIdx++}`);
         values.push(roleValue);
-
-        // Check if promoting to manager from a non-manager role
-        const currentRoleCheck = await query('SELECT role FROM users WHERE id = $1', [
-          idResult.value,
-        ]);
-        if (
-          currentRoleCheck.rows.length > 0 &&
-          currentRoleCheck.rows[0].role !== 'manager' &&
-          roleValue === 'manager'
-        ) {
-          promotingToManager = true;
-        }
       }
 
       if (updates.length === 0) {
@@ -486,11 +542,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const u = result.rows[0];
-
-      // If the user was promoted to manager, auto-assign all items
-      if (promotingToManager) {
-        await assignAllItemsToManager(idResult.value);
-      }
 
       return {
         id: u.id,
@@ -525,13 +576,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      // Only admins, managers, or the user themselves can view assignments
-      if (
-        request.user!.role !== 'admin' &&
-        request.user!.role !== 'manager' &&
-        request.user!.id !== id
-      ) {
+      const canViewAllUsers = hasPermission(request, 'configuration.user_management_all.view');
+      const canViewAssignments =
+        request.user!.id === id ||
+        hasPermission(request, 'configuration.user_management.view') ||
+        hasPermission(request, 'configuration.user_management.update') ||
+        hasPermission(request, 'timesheets.tracker.view');
+
+      if (!canViewAssignments) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
+      }
+
+      if (request.user!.id !== id && !canViewAllUsers) {
+        const managedCheck = await query(
+          `SELECT 1
+             FROM user_work_units uw
+             JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
+             WHERE uw.user_id = $1 AND wum.user_id = $2
+             LIMIT 1`,
+          [idResult.value, request.user!.id],
+        );
+        if (managedCheck.rows.length === 0) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
       }
 
       const clientsRes = await query('SELECT client_id FROM user_clients WHERE user_id = $1', [
@@ -556,7 +623,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/assignments',
     {
-      onRequest: [authenticateToken, requireRole('manager')],
+      onRequest: [authenticateToken, requirePermission('configuration.user_management.update')],
       schema: {
         tags: ['users'],
         summary: 'Update user assignments',
@@ -577,6 +644,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (
+        !hasPermission(request, 'configuration.user_management_all.view') &&
+        idResult.value !== request.user!.id
+      ) {
+        const managedCheck = await query(
+          `SELECT 1
+             FROM user_work_units uw
+             JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
+             WHERE uw.user_id = $1 AND wum.user_id = $2
+             LIMIT 1`,
+          [idResult.value, request.user!.id],
+        );
+        if (managedCheck.rows.length === 0) {
+          return reply.code(403).send({ error: 'Insufficient permissions' });
+        }
+      }
 
       const clientIdsResult = optionalArrayOfStrings(clientIds, 'clientIds');
       if (!clientIdsResult.ok)

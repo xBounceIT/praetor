@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requireRole } from '../middleware/auth.ts';
+import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import {
   requireNonEmptyString,
   optionalNonEmptyString,
@@ -64,14 +64,14 @@ const expenseUpdateBodySchema = {
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
-  // All expenses routes require manager role
+  // All expenses routes require authentication
   fastify.addHook('onRequest', authenticateToken);
-  fastify.addHook('onRequest', requireRole('manager'));
 
   // GET / - List all expenses
   fastify.get(
     '/',
     {
+      onRequest: [requirePermission('finances.expenses.view')],
       schema: {
         tags: ['expenses'],
         summary: 'List expenses',
@@ -111,6 +111,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
+      onRequest: [requirePermission('finances.expenses.create')],
       schema: {
         tags: ['expenses'],
         summary: 'Create expense',
@@ -196,6 +197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
+      onRequest: [requirePermission('finances.expenses.update')],
       schema: {
         tags: ['expenses'],
         summary: 'Update expense',
@@ -333,6 +335,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
+      onRequest: [requirePermission('finances.expenses.delete')],
       schema: {
         tags: ['expenses'],
         summary: 'Delete expense',

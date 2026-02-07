@@ -53,6 +53,7 @@ const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise
 // Types for API responses
 import type {
   User,
+  Role,
   Client,
   Project,
   ProjectTask,
@@ -81,6 +82,7 @@ import type {
 // Normalization Helpers
 const normalizeUser = (u: User): User => ({
   ...u,
+  permissions: u.permissions || [],
   costPerHour: u.costPerHour ? Number(u.costPerHour) : 0,
   employeeType: u.employeeType || 'app_user',
 });
@@ -203,6 +205,29 @@ export const authApi = {
     }),
 
   me: (): Promise<User> => fetchApi<User>('/auth/me').then(normalizeUser),
+};
+
+export const rolesApi = {
+  list: (): Promise<Role[]> => fetchApi('/roles'),
+  create: (name: string, permissions: string[] = []): Promise<Role> =>
+    fetchApi('/roles', {
+      method: 'POST',
+      body: JSON.stringify({ name, permissions }),
+    }),
+  rename: (id: string, name: string): Promise<Role> =>
+    fetchApi(`/roles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    }),
+  updatePermissions: (id: string, permissions: string[]): Promise<Role> =>
+    fetchApi(`/roles/${id}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissions }),
+    }),
+  delete: (id: string): Promise<{ message: string }> =>
+    fetchApi(`/roles/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Users API
@@ -690,6 +715,7 @@ export default {
   ldap: ldapApi,
   generalSettings: generalSettingsApi,
   email: emailApi,
+  roles: rolesApi,
   setAuthToken,
   getAuthToken,
 };
