@@ -98,7 +98,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('accounting/')) return 'accounting';
   if (view.startsWith('finances/')) return 'finances';
   if (view.startsWith('suppliers/')) return 'suppliers';
-  if (view.startsWith('configuration/')) return 'configuration';
+  if (view.startsWith('administration/')) return 'administration';
   if (view === 'settings') return 'settings';
   return null;
 };
@@ -648,12 +648,12 @@ const App: React.FC = () => {
     () => [
       'timesheets/tracker',
       'timesheets/recurring',
-      'configuration/user-management',
-      'configuration/work-units',
-      'configuration/roles',
-      'configuration/authentication',
-      'configuration/general',
-      'configuration/email',
+      'administration/user-management',
+      'administration/work-units',
+      'administration/roles',
+      'administration/authentication',
+      'administration/general',
+      'administration/email',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -695,12 +695,12 @@ const App: React.FC = () => {
     const validViews: View[] = [
       'timesheets/tracker',
       'timesheets/recurring',
-      'configuration/user-management',
-      'configuration/work-units',
-      'configuration/roles',
-      'configuration/authentication',
-      'configuration/general',
-      'configuration/email',
+      'administration/user-management',
+      'administration/work-units',
+      'administration/roles',
+      'administration/authentication',
+      'administration/general',
+      'administration/email',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -2731,9 +2731,9 @@ const App: React.FC = () => {
 
             {hasPermission(
               currentUser.permissions,
-              VIEW_PERMISSION_MAP['configuration/user-management'],
+              VIEW_PERMISSION_MAP['administration/user-management'],
             ) &&
-              activeView === 'configuration/user-management' && (
+              activeView === 'administration/user-management' && (
                 <UserManagement
                   users={users}
                   clients={clients}
@@ -2751,9 +2751,9 @@ const App: React.FC = () => {
 
             {hasPermission(
               currentUser.permissions,
-              VIEW_PERMISSION_MAP['configuration/work-units'],
+              VIEW_PERMISSION_MAP['administration/work-units'],
             ) &&
-              activeView === 'configuration/work-units' && (
+              activeView === 'administration/work-units' && (
                 <WorkUnitsView
                   workUnits={workUnits}
                   users={users}
@@ -2765,8 +2765,11 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['configuration/general']) &&
-              activeView === 'configuration/general' && (
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['administration/general'],
+            ) &&
+              activeView === 'administration/general' && (
                 <GeneralSettings
                   settings={generalSettings}
                   onUpdate={handleUpdateGeneralSettings}
@@ -2775,14 +2778,14 @@ const App: React.FC = () => {
 
             {hasPermission(
               currentUser.permissions,
-              VIEW_PERMISSION_MAP['configuration/authentication'],
+              VIEW_PERMISSION_MAP['administration/authentication'],
             ) &&
-              activeView === 'configuration/authentication' && (
+              activeView === 'administration/authentication' && (
                 <AuthSettings config={ldapConfig} onSave={handleSaveLdapConfig} roles={roles} />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['configuration/roles']) &&
-              activeView === 'configuration/roles' && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&
+              activeView === 'administration/roles' && (
                 <RolesView
                   roles={roles}
                   permissions={currentUser.permissions || []}
@@ -2793,8 +2796,8 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['configuration/email']) &&
-              activeView === 'configuration/email' && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/email']) &&
+              activeView === 'administration/email' && (
                 <EmailSettings
                   config={emailConfig}
                   onSave={handleSaveEmailConfig}

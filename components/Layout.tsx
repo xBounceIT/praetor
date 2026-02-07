@@ -22,13 +22,13 @@ const moduleRoutes: Record<string, View[]> = {
   finances: ['finances/payments', 'finances/expenses'],
   suppliers: ['suppliers/manage', 'suppliers/quotes'],
   hr: ['hr/internal', 'hr/external'],
-  configuration: [
-    'configuration/authentication',
-    'configuration/general',
-    'configuration/user-management',
-    'configuration/work-units',
-    'configuration/roles',
-    'configuration/email',
+  administration: [
+    'administration/authentication',
+    'administration/general',
+    'administration/user-management',
+    'administration/work-units',
+    'administration/roles',
+    'administration/email',
   ],
 };
 
@@ -43,7 +43,7 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('accounting/')) return 'accounting';
   if (route.startsWith('finances/')) return 'finances';
   if (route.startsWith('suppliers/')) return 'suppliers';
-  if (route.startsWith('configuration/')) return 'configuration';
+  if (route.startsWith('administration/')) return 'administration';
   return 'timesheets'; // default
 };
 
@@ -94,7 +94,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
       { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
       { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
-      { id: 'configuration', name: t('modules.administration'), icon: 'fa-gears', active: false },
+      { id: 'administration', name: t('modules.administration'), icon: 'fa-gears', active: false },
     ],
     [t],
   ).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
@@ -430,82 +430,82 @@ const Layout: React.FC<LayoutProps> = ({
             )}
           </>
         );
-      case 'configuration':
+      case 'administration':
         return (
           <>
-            {canAccessView('configuration/authentication') && (
+            {canAccessView('administration/authentication') && (
               <NavItem
                 icon="fa-shield-halved"
                 label={t('routes.authentication')}
-                active={activeView === 'configuration/authentication'}
+                active={activeView === 'administration/authentication'}
                 isCollapsed={isCollapsed}
                 onClick={() => {
-                  onViewChange('configuration/authentication');
+                  onViewChange('administration/authentication');
                   setIsMobileMenuOpen(false);
                 }}
               />
             )}
 
-            {canAccessView('configuration/general') && (
+            {canAccessView('administration/general') && (
               <NavItem
                 icon="fa-sliders"
                 label={t('routes.general')}
-                active={activeView === 'configuration/general'}
+                active={activeView === 'administration/general'}
                 isCollapsed={isCollapsed}
                 onClick={() => {
-                  onViewChange('configuration/general');
+                  onViewChange('administration/general');
                   setIsMobileMenuOpen(false);
                 }}
               />
             )}
 
-            {canAccessView('configuration/user-management') && (
+            {canAccessView('administration/user-management') && (
               <NavItem
                 icon="fa-users"
                 label={t('routes.userManagement')}
-                active={activeView === 'configuration/user-management'}
+                active={activeView === 'administration/user-management'}
                 isCollapsed={isCollapsed}
                 onClick={() => {
-                  onViewChange('configuration/user-management');
+                  onViewChange('administration/user-management');
                   setIsMobileMenuOpen(false);
                 }}
               />
             )}
 
-            {canAccessView('configuration/work-units') && (
+            {canAccessView('administration/work-units') && (
               <NavItem
                 icon="fa-sitemap"
                 label={t('routes.workUnits')}
-                active={activeView === 'configuration/work-units'}
+                active={activeView === 'administration/work-units'}
                 isCollapsed={isCollapsed}
                 onClick={() => {
-                  onViewChange('configuration/work-units');
+                  onViewChange('administration/work-units');
                   setIsMobileMenuOpen(false);
                 }}
               />
             )}
 
-            {canAccessView('configuration/roles') && (
+            {canAccessView('administration/roles') && (
               <NavItem
                 icon="fa-user-shield"
                 label={t('routes.roles')}
-                active={activeView === 'configuration/roles'}
+                active={activeView === 'administration/roles'}
                 isCollapsed={isCollapsed}
                 onClick={() => {
-                  onViewChange('configuration/roles');
+                  onViewChange('administration/roles');
                   setIsMobileMenuOpen(false);
                 }}
               />
             )}
 
-            {canAccessView('configuration/email') && (
+            {canAccessView('administration/email') && (
               <NavItem
                 icon="fa-envelope"
                 label={t('routes.email')}
-                active={activeView === 'configuration/email'}
+                active={activeView === 'administration/email'}
                 isCollapsed={isCollapsed}
                 onClick={() => {
-                  onViewChange('configuration/email');
+                  onViewChange('administration/email');
                   setIsMobileMenuOpen(false);
                 }}
               />
@@ -631,11 +631,11 @@ const Layout: React.FC<LayoutProps> = ({
             <span className="md:hidden w-2 h-6 bg-praetor rounded-full"></span>
             {isNotFound
               ? t('notFound')
-              : activeView === 'configuration/authentication'
+              : activeView === 'administration/authentication'
                 ? t('titles.authSettings')
-                : activeView === 'configuration/general'
+                : activeView === 'administration/general'
                   ? t('titles.generalAdmin')
-                  : activeView === 'configuration/roles'
+                  : activeView === 'administration/roles'
                     ? t('titles.roles')
                     : activeView === 'projects/manage'
                       ? t('titles.projects')
