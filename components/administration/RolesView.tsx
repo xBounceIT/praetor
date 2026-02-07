@@ -130,7 +130,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   };
 
   const openPermissionsModal = (role: Role) => {
-    if (!canUpdateRoles) return;
+    if (!canUpdateRoles || role.isAdmin) return;
     setActiveRole(role);
     setSelectedPermissions(role.permissions || []);
     setFormErrors({});
@@ -409,7 +409,7 @@ const RolesView: React.FC<RolesViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedRoles.map((role) => {
             const canRenameRole = canUpdateRoles && !role.isAdmin && !role.isSystem;
-            const canEditPermissions = canUpdateRoles;
+            const canEditPermissions = canUpdateRoles && !role.isAdmin;
             const canRemoveRole = canDeleteRoles && !role.isAdmin && !role.isSystem;
             return (
               <div

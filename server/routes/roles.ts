@@ -302,6 +302,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (roleResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Role not found' });
       }
+      if (roleResult.rows[0].is_admin) {
+        return reply.code(403).send({ error: 'Admin role permissions are locked' });
+      }
 
       try {
         await query('BEGIN');
