@@ -82,7 +82,8 @@
     "supplierQuotes": "Supplier Quotes",
     "internalEmployees": "Internal Employees",
     "externalEmployees": "External Employees",
-    "emailSettings": "Email Settings"
+    "emailSettings": "Email Settings",
+    "roles": "Roles"
   },
   "notifications": {
     "title": "Notifications",

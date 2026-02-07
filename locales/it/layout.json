@@ -82,7 +82,8 @@
     "supplierQuotes": "Preventivi Fornitore",
     "internalEmployees": "Dipendenti Interni",
     "externalEmployees": "Dipendenti Esterni",
-    "emailSettings": "Impostazioni Email"
+    "emailSettings": "Impostazioni Email",
+    "roles": "Ruoli"
   },
   "notifications": {
     "title": "Notifiche",
