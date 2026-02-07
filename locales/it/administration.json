@@ -13,5 +13,63 @@
     "permissionCount": "{{count}} permessi",
     "permissions": "Permessi",
     "scope": "Ambito"
+  },
+  "permissions": {
+    "timesheets": {
+      "tracker": "Tracker",
+      "recurring": "Ricorrenti",
+      "tracker_all": "Tracker (Tutti)"
+    },
+    "crm": {
+      "clients": "Clienti",
+      "clients_all": "Clienti (Tutti)",
+      "suppliers": "Fornitori",
+      "suppliers_all": "Fornitori (Tutti)"
+    },
+    "sales": {
+      "client_quotes": "Preventivi Clienti"
+    },
+    "catalog": {
+      "internal_listing": "Listino Interno",
+      "external_listing": "Listino Esterno",
+      "special_bids": "Offerte Speciali"
+    },
+    "accounting": {
+      "clients_orders": "Ordini Clienti",
+      "clients_invoices": "Fatture Clienti"
+    },
+    "finances": {
+      "payments": "Pagamenti",
+      "expenses": "Spese"
+    },
+    "projects": {
+      "manage": "Progetti",
+      "manage_all": "Progetti (Tutti)",
+      "tasks": "Attività",
+      "tasks_all": "Attività (Tutte)"
+    },
+    "suppliers": {
+      "quotes": "Preventivi"
+    },
+    "hr": {
+      "internal": "Interni",
+      "external": "Esterni"
+    },
+    "configuration": {
+      "authentication": "Autenticazione",
+      "general": "Generale",
+      "user_management": "Gestione Utenti",
+      "user_management_all": "Gestione Utenti (Tutti)",
+      "work_units": "Unità di Lavoro",
+      "work_units_all": "Unità di Lavoro (Tutte)",
+      "email": "Email",
+      "roles": "Ruoli"
+    },
+    "settings": "Impostazioni",
+    "docs": {
+      "api": "Documentazione API",
+      "frontend": "Documentazione Frontend"
+    },
+    "notifications": "Notifiche"
   }
 }

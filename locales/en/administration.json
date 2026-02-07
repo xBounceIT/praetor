@@ -13,5 +13,63 @@
     "permissionCount": "{{count}} permissions",
     "permissions": "Permissions",
     "scope": "Scope"
+  },
+  "permissions": {
+    "timesheets": {
+      "tracker": "Tracker",
+      "recurring": "Recurring",
+      "tracker_all": "Tracker (All)"
+    },
+    "crm": {
+      "clients": "Clients",
+      "clients_all": "Clients (All)",
+      "suppliers": "Suppliers",
+      "suppliers_all": "Suppliers (All)"
+    },
+    "sales": {
+      "client_quotes": "Client Quotes"
+    },
+    "catalog": {
+      "internal_listing": "Internal Listing",
+      "external_listing": "External Listing",
+      "special_bids": "Special Bids"
+    },
+    "accounting": {
+      "clients_orders": "Client Orders",
+      "clients_invoices": "Client Invoices"
+    },
+    "finances": {
+      "payments": "Payments",
+      "expenses": "Expenses"
+    },
+    "projects": {
+      "manage": "Projects",
+      "manage_all": "Projects (All)",
+      "tasks": "Tasks",
+      "tasks_all": "Tasks (All)"
+    },
+    "suppliers": {
+      "quotes": "Quotes"
+    },
+    "hr": {
+      "internal": "Internal",
+      "external": "External"
+    },
+    "configuration": {
+      "authentication": "Authentication",
+      "general": "General",
+      "user_management": "User Management",
+      "user_management_all": "User Management (All)",
+      "work_units": "Work Units",
+      "work_units_all": "Work Units (All)",
+      "email": "Email",
+      "roles": "Roles"
+    },
+    "settings": "Settings",
+    "docs": {
+      "api": "API Documentation",
+      "frontend": "Frontend Documentation"
+    },
+    "notifications": "Notifications"
   }
 }

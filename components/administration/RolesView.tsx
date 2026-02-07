@@ -307,7 +307,9 @@ const RolesView: React.FC<RolesViewProps> = ({
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-slate-700">
-                            {formatPermissionLabel(definition.id)}
+                            {t(`administration:permissions.${definition.id}`, {
+                              defaultValue: formatPermissionLabel(definition.id),
+                            })}
                           </span>
                           {definition.isScope && (
                             <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-700 rounded-full">
