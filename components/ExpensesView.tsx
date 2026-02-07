@@ -382,7 +382,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 ]}
                 value={rowsPerPage.toString()}
                 onChange={(val) => {
-                  setRowsPerPage(parseInt(val as string));
+                  setRowsPerPage(parseInt(val as string, 10));
                   setCurrentPage(1);
                 }}
                 className="w-20"

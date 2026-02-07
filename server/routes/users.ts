@@ -133,7 +133,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      let result;
+      let result: Awaited<ReturnType<typeof query>>;
       if (canViewAllUsers) {
         result = await query(
           'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
@@ -157,7 +157,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE ${conditions.join(' OR ')}
                  ORDER BY u.name`,
-          [request.user!.id],
+          [request.user?.id],
         );
       }
       const users = result.rows.map((u) => ({
@@ -346,7 +346,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
 
-      if (id === request.user!.id) {
+      if (id === request.user?.id) {
         return badRequest(reply, 'Cannot delete your own account');
       }
 
@@ -449,7 +449,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         if (
           !hasPermission(request, 'administration.user_management_all.view') &&
-          idResult.value !== request.user!.id
+          idResult.value !== request.user?.id
         ) {
           const managedCheck = await query(
             `SELECT 1
@@ -457,7 +457,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                WHERE uw.user_id = $1 AND wum.user_id = $2
                LIMIT 1`,
-            [idResult.value, request.user!.id],
+            [idResult.value, request.user?.id],
           );
           if (managedCheck.rows.length === 0) {
             return reply.code(403).send({ error: 'Insufficient permissions' });
@@ -479,7 +479,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let roleValue: string | null = null;
       if (role !== undefined) {
-        if (idResult.value === request.user!.id) {
+        if (idResult.value === request.user?.id) {
           return reply.code(403).send({ error: 'Cannot change your own role' });
         }
         const roleResult = requireNonEmptyString(role, 'role');
@@ -492,7 +492,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      if (idResult.value === request.user!.id && isDisabled === true) {
+      if (idResult.value === request.user?.id && isDisabled === true) {
         return badRequest(reply, 'Cannot disable your own account');
       }
 
@@ -578,7 +578,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
       const canViewAssignments =
-        request.user!.id === id ||
+        request.user?.id === id ||
         hasPermission(request, 'administration.user_management.view') ||
         hasPermission(request, 'administration.user_management.update') ||
         hasPermission(request, 'timesheets.tracker.view');
@@ -587,14 +587,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
-      if (request.user!.id !== id && !canViewAllUsers) {
+      if (request.user?.id !== id && !canViewAllUsers) {
         const managedCheck = await query(
           `SELECT 1
              FROM user_work_units uw
              JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
              WHERE uw.user_id = $1 AND wum.user_id = $2
              LIMIT 1`,
-          [idResult.value, request.user!.id],
+          [idResult.value, request.user?.id],
         );
         if (managedCheck.rows.length === 0) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
@@ -647,7 +647,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (
         !hasPermission(request, 'administration.user_management_all.view') &&
-        idResult.value !== request.user!.id
+        idResult.value !== request.user?.id
       ) {
         const managedCheck = await query(
           `SELECT 1
@@ -655,7 +655,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
              WHERE uw.user_id = $1 AND wum.user_id = $2
              LIMIT 1`,
-          [idResult.value, request.user!.id],
+          [idResult.value, request.user?.id],
         );
         if (managedCheck.rows.length === 0) {
           return reply.code(403).send({ error: 'Insufficient permissions' });

@@ -57,7 +57,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const result = await query(
         `SELECT full_name, email, language
        FROM settings WHERE user_id = $1`,
-        [request.user!.id],
+        [request.user?.id],
       );
 
       if (result.rows.length === 0) {
@@ -66,7 +66,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `INSERT INTO settings (user_id, full_name, email)
          VALUES ($1, $2, $3)
          RETURNING *`,
-          [request.user!.id, request.user!.name, `${request.user!.username}@example.com`],
+          [request.user?.id, request.user?.name, `${request.user?.username}@example.com`],
         );
 
         const s = insertResult.rows[0];
@@ -136,7 +136,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          updated_at = CURRENT_TIMESTAMP
        RETURNING full_name, email, language`,
         [
-          request.user!.id,
+          request.user?.id,
           (fullNameResult as { ok: true; value: string | null }).value,
           (emailResult as { ok: true; value: string | null }).value,
           language || 'auto',
@@ -186,7 +186,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Get user's current password hash
       const userRes = await query('SELECT password_hash FROM users WHERE id = $1', [
-        request.user!.id,
+        request.user?.id,
       ]);
       if (userRes.rows.length === 0) {
         return reply.code(404).send({ error: 'User not found' });
@@ -209,7 +209,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       // Update password
-      await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, request.user!.id]);
+      await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, request.user?.id]);
 
       return { message: 'Password updated successfully' };
     },

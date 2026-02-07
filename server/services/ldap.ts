@@ -106,7 +106,7 @@ class LDAPService {
 
       // Bind with service account first to find the user's DN
       await new Promise<void>((resolve, reject) => {
-        client!.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
+        client?.bind(this.config?.bind_dn, this.config?.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -143,14 +143,14 @@ class LDAPService {
   }
 
   async findUserDn(client: LdapClient, username: string): Promise<string | null> {
-    const filter = this.config!.user_filter.replace('{0}', username);
+    const filter = this.config?.user_filter.replace('{0}', username);
     const searchOptions = {
       scope: 'sub',
       filter: filter,
     };
 
     return new Promise((resolve, reject) => {
-      client.search(this.config!.base_dn, searchOptions, (err, res) => {
+      client.search(this.config?.base_dn, searchOptions, (err, res) => {
         if (err) return reject(err);
 
         let foundDn: string | null = null;
@@ -191,7 +191,7 @@ class LDAPService {
       }
 
       await new Promise<void>((resolve, reject) => {
-        client!.bind(this.config!.bind_dn, this.config!.bind_password, (err) => {
+        client?.bind(this.config?.bind_dn, this.config?.bind_password, (err) => {
           if (err) reject(err);
           else resolve();
         });

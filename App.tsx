@@ -1446,7 +1446,7 @@ const App: React.FC = () => {
           const parts = task.recurrencePattern.split(':');
           if (parts.length === 3) {
             const type = parts[1]; // 'first' or 'last'
-            const targetDay = parseInt(parts[2]); // 0-6 (Sun-Sat) or 1-7 depending on UI, my modal uses 0=Sun, 1=Mon... match JS getDay()
+            const targetDay = parseInt(parts[2], 10); // 0-6 (Sun-Sat) or 1-7 depending on UI, my modal uses 0=Sun, 1=Mon... match JS getDay()
 
             // Adjust for UI mapping: My modal uses 0=Sun, 1=Mon...6=Sat which matches getDay() perfectly.
             // Wait, in modal I used 0=Sunday, 1=Monday. JS getDay() returns 0=Sunday, 1=Monday. So it matches.

@@ -99,7 +99,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setIsModalOpen(true);
   };
 
-  const openEditModal = (order: ClientsOrder) => {
+  const openEditModal = useCallback((order: ClientsOrder) => {
     setEditingOrder(order);
     setFormData({
       linkedQuoteId: order.linkedQuoteId,
@@ -113,7 +113,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     });
     setErrors({});
     setIsModalOpen(true);
-  };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,10 +180,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setIsModalOpen(false);
   };
 
-  const confirmDelete = (order: ClientsOrder) => {
+  const confirmDelete = useCallback((order: ClientsOrder) => {
     setOrderToDelete(order);
     setIsDeleteConfirmOpen(true);
-  };
+  }, []);
 
   const handleDelete = () => {
     if (orderToDelete) {
@@ -507,7 +507,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onViewQuote(row.linkedQuoteId!);
+                      const linkedQuoteId = row.linkedQuoteId;
+                      if (!linkedQuoteId) return;
+                      onViewQuote(linkedQuoteId);
                     }}
                     className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
                   >
@@ -614,7 +616,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    [currency, onUpdateClientsOrder, onViewQuote, t, calculateTotals],
+    [currency, onUpdateClientsOrder, onViewQuote, t, calculateTotals, confirmDelete, openEditModal],
   );
 
   return (
@@ -673,7 +675,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 {onViewQuote && (
                   <button
                     type="button"
-                    onClick={() => onViewQuote(formData.linkedQuoteId!)}
+                    onClick={() => {
+                      const linkedQuoteId = formData.linkedQuoteId;
+                      if (!linkedQuoteId) return;
+                      onViewQuote(linkedQuoteId);
+                    }}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
                     {t('crm:quotes.viewQuote')}
@@ -990,7 +996,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           </span>
                         </div>
 
-                        {formData.discount! > 0 && (
+                        {formData.discount !== undefined && formData.discount > 0 && (
                           <div className="flex justify-between items-center px-2">
                             <span className="text-sm font-bold text-slate-500">
                               {t('crm:quotes.discountAmount', { discount: formData.discount })}:

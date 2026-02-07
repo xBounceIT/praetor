@@ -139,7 +139,7 @@ try {
     setInterval(async () => {
       try {
         await ldapService.loadConfig();
-        if (ldapService.config && ldapService.config.enabled) {
+        if (ldapService.config?.enabled) {
           console.log('Running periodic LDAP sync...');
           await ldapService.syncUsers();
         }

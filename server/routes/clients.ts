@@ -131,7 +131,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE uc.user_id = $1
                 ORDER BY c.name
             `;
-        queryParams.push(request.user!.id);
+        queryParams.push(request.user?.id);
       }
 
       const result = await query(queryText, queryParams);
@@ -294,7 +294,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             return badRequest(reply, 'Client ID already exists');
           }
           // Fallback or generic unique error
-          if (error.detail && error.detail.includes('client_code')) {
+          if (error.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'VAT number already exists');
@@ -476,7 +476,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (error.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          if (error.detail && error.detail.includes('client_code')) {
+          if (error.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
           return badRequest(reply, 'VAT number already exists');

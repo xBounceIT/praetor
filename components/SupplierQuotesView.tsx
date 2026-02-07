@@ -8,6 +8,15 @@ import StandardTable from './shared/StandardTable';
 import Tooltip from './shared/Tooltip';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
+const getExpirationTimestamp = (expirationDate: string) => {
+  if (!expirationDate) return 0;
+  const normalizedDate = expirationDate.includes('T')
+    ? expirationDate
+    : `${expirationDate}T00:00:00`;
+  const timestamp = new Date(normalizedDate).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
 interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
   suppliers: Supplier[];
@@ -97,7 +106,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterSupplierId, filterStatus, expirationSort]);
+  }, []);
 
   const hasActiveFilters =
     searchTerm.trim() !== '' || filterSupplierId !== 'all' || filterStatus !== 'all';
@@ -316,15 +325,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const activeSuppliers = suppliers.filter((s) => !s.isDisabled);
   const activeProducts = products.filter((p) => !p.isDisabled);
-
-  const getExpirationTimestamp = (expirationDate: string) => {
-    if (!expirationDate) return 0;
-    const normalizedDate = expirationDate.includes('T')
-      ? expirationDate
-      : `${expirationDate}T00:00:00`;
-    const timestamp = new Date(normalizedDate).getTime();
-    return Number.isNaN(timestamp) ? 0 : timestamp;
-  };
 
   const isExpired = (expirationDate: string) => {
     const normalizedDate = expirationDate.includes('T')
@@ -645,9 +645,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             {formData.items && formData.items.length > 0 && (
               <div className="pt-8 border-t border-slate-100">
                 {(() => {
+                  const discountValue = formData.discount ?? 0;
                   const { subtotal, discountAmount, total, taxGroups } = calculateTotals(
                     formData.items,
-                    formData.discount || 0,
+                    discountValue,
                   );
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
@@ -660,10 +661,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             {subtotal.toFixed(2)} {currency}
                           </span>
                         </div>
-                        {formData.discount! > 0 && (
+                        {discountValue > 0 && (
                           <div className="flex justify-between items-center px-2">
                             <span className="text-sm font-bold text-slate-500">
-                              {t('quotes.discount')} ({formData.discount}%):
+                              {t('quotes.discount')} ({discountValue}%):
                             </span>
                             <span className="text-sm font-black text-amber-600">
                               -{discountAmount.toFixed(2)} {currency}
@@ -993,7 +994,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           ? t('quotes.expired', { defaultValue: 'Expired' })
                           : t('quotes.expiresIn', {
                               days: Math.ceil(
-                                (new Date(quote.expirationDate).getTime() - new Date().getTime()) /
+                                (new Date(quote.expirationDate).getTime() - Date.now()) /
                                   (1000 * 3600 * 24),
                               ),
                             })}

@@ -108,7 +108,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      let result;
+      let result: Awaited<ReturnType<typeof query>>;
       if (hasPermission(request, 'administration.work_units_all.view')) {
         result = await query(`
                 SELECT w.*,
@@ -140,7 +140,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 )
                 ORDER BY w.name
             `,
-          [request.user!.id],
+          [request.user?.id],
         );
       }
 
@@ -150,7 +150,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         managers: w.managers,
         description: w.description,
         isDisabled: !!w.is_disabled,
-        userCount: parseInt(w.user_count),
+        userCount: parseInt(w.user_count, 10),
       }));
 
       return workUnits;
@@ -338,7 +338,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           managers: w.managers,
           description: w.description,
           isDisabled: !!w.is_disabled,
-          userCount: parseInt(w.user_count),
+          userCount: parseInt(w.user_count, 10),
         };
       } catch (err) {
         await query('ROLLBACK');
@@ -404,7 +404,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Check if user is a manager of this unit
         const check = await query(
           'SELECT 1 FROM work_unit_managers WHERE work_unit_id = $1 AND user_id = $2',
-          [idResult.value, request.user!.id],
+          [idResult.value, request.user?.id],
         );
         if (check.rows.length === 0) {
           return reply.code(403).send({ error: 'Access denied' });

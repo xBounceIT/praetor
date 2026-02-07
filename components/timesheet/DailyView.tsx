@@ -58,7 +58,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       const parts = pattern.split(':');
       if (parts.length === 3) {
         const type = parts[1]; // first/second/third/fourth/last
-        const day = parseInt(parts[2]);
+        const day = parseInt(parts[2], 10);
         const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const dayName = days[day];
         const typeKey =
@@ -118,7 +118,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       setDate(selectedDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate]);
+  }, [selectedDate, date]);
 
   // Init client selection when clients load
   useEffect(() => {
@@ -126,7 +126,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       setSelectedClientId(clients[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients]);
+  }, [clients, selectedClientId]);
 
   // Filter projects when client changes
   const filteredProjects = projects.filter((p) => p.clientId === selectedClientId);
@@ -144,7 +144,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       setSelectedProjectId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, projects]);
+  }, [filteredProjects.length, filteredProjects[0].id, selectedProjectId]);
 
   useEffect(() => {
     if (filteredTasks.length > 0) {
@@ -157,7 +157,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       setSelectedTaskId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProjectId, projectTasks]);
+  }, [filteredTasks.length, filteredTasks[0].id, filteredTasks[0].name, selectedTaskId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +167,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
     // Validate duration
     const durationVal = parseFloat(duration);
-    if (!duration || isNaN(durationVal) || durationVal <= 0) {
+    if (!duration || Number.isNaN(durationVal) || durationVal <= 0) {
       newErrors.hours = t('entry.hoursRequired');
     }
 
@@ -289,7 +289,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const isExceedingGoal = useMemo(() => {
     const val = parseFloat(duration);
-    if (isNaN(val) || val <= 0) return false;
+    if (Number.isNaN(val) || val <= 0) return false;
     return currentDayTotal + val > dailyGoal;
   }, [duration, currentDayTotal, dailyGoal]);
 

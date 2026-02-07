@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
@@ -39,23 +39,26 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
 
   // Default categories per type
-  const defaultCategoriesMap: Record<string, string[]> = {
-    supply: [
-      t('crm:internalListing.defaultCategories.hardware'),
-      t('crm:internalListing.defaultCategories.license'),
-      t('crm:internalListing.defaultCategories.subscription'),
-    ],
-    consulting: [
-      t('crm:internalListing.defaultCategories.specialistic'),
-      t('crm:internalListing.defaultCategories.technical'),
-      t('crm:internalListing.defaultCategories.governance'),
-    ],
-    service: [
-      t('crm:internalListing.defaultCategories.reports'),
-      t('crm:internalListing.defaultCategories.monitoring'),
-      t('crm:internalListing.defaultCategories.maintenance'),
-    ],
-  };
+  const defaultCategoriesMap = useMemo<Record<string, string[]>>(
+    () => ({
+      supply: [
+        t('crm:internalListing.defaultCategories.hardware'),
+        t('crm:internalListing.defaultCategories.license'),
+        t('crm:internalListing.defaultCategories.subscription'),
+      ],
+      consulting: [
+        t('crm:internalListing.defaultCategories.specialistic'),
+        t('crm:internalListing.defaultCategories.technical'),
+        t('crm:internalListing.defaultCategories.governance'),
+      ],
+      service: [
+        t('crm:internalListing.defaultCategories.reports'),
+        t('crm:internalListing.defaultCategories.monitoring'),
+        t('crm:internalListing.defaultCategories.maintenance'),
+      ],
+    }),
+    [t],
+  );
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -271,12 +274,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
     // Also include categories currently used by products of this type
     const used = products
-      .filter((p) => (p.type === 'item' ? 'supply' : p.type) === normalizedType && p.category)
-      .map((p) => p.category!);
+      .filter((p) => (p.type === 'item' ? 'supply' : p.type) === normalizedType)
+      .map((p) => p.category)
+      .filter((category): category is string => Boolean(category));
 
     return Array.from(new Set([...defaults, ...used])).sort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.type, products]);
+  }, [formData.type, products, defaultCategoriesMap]);
 
   const categoryOptions: Option[] = availableCategories.map((c) => ({ id: c, name: c }));
 
@@ -287,8 +290,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
     // Include subcategories currently used by products with this category
     const used = products
-      .filter((p) => p.category === category && p.subcategory)
-      .map((p) => p.subcategory!);
+      .filter((p) => p.category === category)
+      .map((p) => p.subcategory)
+      .filter((subcategory): subcategory is string => Boolean(subcategory));
 
     return Array.from(new Set(used)).sort();
   }, [formData.category, products]);
@@ -340,6 +344,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     formData.molPercentage !== undefined &&
     formData.molPercentage !== null &&
     !Number.isNaN(formData.molPercentage);
+  const pricing = hasPricing
+    ? { cost: Number(formData.costo), mol: Number(formData.molPercentage) }
+    : null;
 
   const showTaxRateWarning =
     formData.taxRate !== undefined &&
@@ -694,8 +701,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     {t('crm:internalListing.salePriceCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
-                    {hasPricing
-                      ? `${calcSalePrice(formData.costo!, formData.molPercentage!).toFixed(2)} ${currency}`
+                    {pricing
+                      ? `${calcSalePrice(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
                       : '--'}
                   </div>
                 </div>
@@ -705,8 +712,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     {t('crm:internalListing.marginCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
-                    {hasPricing
-                      ? `${calcMargine(formData.costo!, formData.molPercentage!).toFixed(2)} ${currency}`
+                    {pricing
+                      ? `${calcMargine(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
                       : '--'}
                   </div>
                 </div>

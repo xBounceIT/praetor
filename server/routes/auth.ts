@@ -139,12 +139,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       return {
-        id: request.user!.id,
-        name: request.user!.name,
-        username: request.user!.username,
-        role: request.user!.role,
-        avatarInitials: request.user!.avatar_initials,
-        permissions: request.user!.permissions || [],
+        id: request.user?.id,
+        name: request.user?.name,
+        username: request.user?.username,
+        role: request.user?.role,
+        avatarInitials: request.user?.avatar_initials,
+        permissions: request.user?.permissions || [],
       };
     },
   );

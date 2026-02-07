@@ -11,6 +11,9 @@ import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
+const isExpired = (endDate: string) => new Date(endDate) < new Date();
+const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
+
 interface SpecialBidsViewProps {
   bids: SpecialBid[];
   clients: Client[];
@@ -22,10 +25,8 @@ interface SpecialBidsViewProps {
 }
 
 const getBidStatus = (bid: SpecialBid) => {
-  const isExpired = new Date(bid.endDate) < new Date();
-  const isNotStarted = new Date(bid.startDate) > new Date();
-  if (isExpired) return 'expired';
-  if (isNotStarted) return 'notStarted';
+  if (isExpired(bid.endDate)) return 'expired';
+  if (isNotStarted(bid.startDate)) return 'notStarted';
   return 'active';
 };
 
@@ -45,8 +46,6 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   const [bidToDelete, setBidToDelete] = useState<SpecialBid | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const isExpired = (endDate: string) => new Date(endDate) < new Date();
-  const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
   const isActiveBid = (bid: SpecialBid) => !isExpired(bid.endDate) && !isNotStarted(bid.startDate);
 
   const [formData, setFormData] = useState<Partial<SpecialBid>>({
@@ -275,7 +274,10 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     formData.molPercentage !== undefined && !Number.isNaN(formData.molPercentage)
       ? Number(formData.molPercentage)
       : undefined;
-  const hasBidPricing = bidCostValue !== undefined && bidMolValue !== undefined;
+  const bidPricing =
+    bidCostValue !== undefined && bidMolValue !== undefined
+      ? { cost: bidCostValue, mol: bidMolValue }
+      : null;
 
   // Table columns definition with TableFilter support
   const columns = useMemo(
@@ -559,8 +561,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                     {t('crm:internalListing.salePriceCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold">
-                    {hasBidPricing
-                      ? `${calcSalePrice(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
+                    {bidPricing
+                      ? `${calcSalePrice(bidPricing.cost, bidPricing.mol).toFixed(2)} ${currency}`
                       : '--'}
                   </div>
                 </div>
@@ -570,8 +572,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                     {t('crm:internalListing.marginCalculated')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-emerald-600 font-semibold">
-                    {hasBidPricing
-                      ? `${calcMargin(bidCostValue!, bidMolValue!).toFixed(2)} ${currency}`
+                    {bidPricing
+                      ? `${calcMargin(bidPricing.cost, bidPricing.mol).toFixed(2)} ${currency}`
                       : '--'}
                   </div>
                 </div>

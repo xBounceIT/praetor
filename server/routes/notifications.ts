@@ -55,7 +55,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      const userId = request.user!.id;
+      const userId = request.user?.id;
 
       const result = await query(
         `SELECT 
@@ -104,7 +104,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const userId = request.user!.id;
+      const userId = request.user?.id;
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -140,7 +140,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      const userId = request.user!.id;
+      const userId = request.user?.id;
 
       await query(`UPDATE notifications SET is_read = TRUE WHERE user_id = $1`, [userId]);
 
@@ -165,7 +165,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const userId = request.user!.id;
+      const userId = request.user?.id;
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);

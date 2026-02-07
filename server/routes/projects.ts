@@ -94,7 +94,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE up.user_id = $1
                 ORDER BY p.name
             `;
-        queryParams = [request.user!.id];
+        queryParams = [request.user?.id];
       }
 
       const result = await query(queryText, queryParams);

@@ -221,7 +221,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                 type="number"
                 value={formData.smtpPort}
                 onChange={(e) => {
-                  setFormData({ ...formData, smtpPort: parseInt(e.target.value) || 587 });
+                  setFormData({ ...formData, smtpPort: parseInt(e.target.value, 10) || 587 });
                   if (errors.smtpPort) setErrors({ ...errors, smtpPort: '' });
                 }}
                 min={1}

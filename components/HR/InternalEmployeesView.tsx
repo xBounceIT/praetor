@@ -18,6 +18,11 @@ interface InternalEmployeesViewProps {
   currency: string;
 }
 
+const getSurname = (name: string): string => {
+  const parts = name.trim().split(' ');
+  return parts.length > 1 ? parts[parts.length - 1] : name;
+};
+
 const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   users,
   onAddEmployee,
@@ -32,12 +37,6 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   const [employeeToDelete, setEmployeeToDelete] = useState<User | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Helper to extract surname from full name for sorting
-  const getSurname = (name: string): string => {
-    const parts = name.trim().split(' ');
-    return parts.length > 1 ? parts[parts.length - 1] : name;
-  };
 
   // Combine and sort all employees by surname ascending
   const allEmployees = useMemo(() => {

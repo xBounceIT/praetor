@@ -102,7 +102,6 @@ const RolesView: React.FC<RolesViewProps> = ({
         return t('common:buttons.update');
       case 'delete':
         return t('common:buttons.delete');
-      case 'view':
       default:
         return t('common:buttons.view');
     }
@@ -156,7 +155,9 @@ const RolesView: React.FC<RolesViewProps> = ({
     const definitions = groupedPermissions[module] || [];
     const actionsSet = new Set<PermissionAction>();
     definitions.forEach((def) => {
-      def.actions.forEach((action) => actionsSet.add(action));
+      def.actions.forEach((action) => {
+        actionsSet.add(action);
+      });
     });
     const canonicalOrder: PermissionAction[] = ['view', 'create', 'update', 'delete'];
     return canonicalOrder.filter((action) => actionsSet.has(action));

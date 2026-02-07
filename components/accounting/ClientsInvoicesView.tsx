@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientsOrder, Invoice, InvoiceItem, Product } from '../../types';
 import { roundToTwoDecimals } from '../../utils/numbers';
@@ -101,14 +101,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     setIsModalOpen(true);
   };
 
-  const openEditModal = (invoice: Invoice) => {
+  const openEditModal = useCallback((invoice: Invoice) => {
     setEditingInvoice(invoice);
     setFormData({
       ...invoice,
     });
     setErrors({});
     setIsModalOpen(true);
-  };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,10 +159,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     setIsModalOpen(false);
   };
 
-  const confirmDelete = (invoice: Invoice) => {
+  const confirmDelete = useCallback((invoice: Invoice) => {
     setInvoiceToDelete(invoice);
     setIsDeleteConfirmOpen(true);
-  };
+  }, []);
 
   const handleDelete = () => {
     if (invoiceToDelete) {
@@ -361,7 +361,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         ),
       },
     ],
-    [currency, statusOptions, t],
+    [currency, statusOptions, t, confirmDelete, openEditModal],
   );
 
   return (

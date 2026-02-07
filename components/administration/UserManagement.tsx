@@ -177,11 +177,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   React.useEffect(() => {
     setActiveCurrentPage(1);
-  }, [activeSearch]);
+  }, []);
 
   React.useEffect(() => {
     setDisabledCurrentPage(1);
-  }, [disabledSearch]);
+  }, []);
 
   React.useEffect(() => {
     if (filterClientId === 'all' || filterProjectId === 'all') return;
@@ -376,7 +376,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         updates.costPerHour = parseFloat(editCostPerHour) || 0;
       }
 
-      onUpdateUser(editingUser!.id, updates);
+      onUpdateUser(editingUser?.id, updates);
       setEditingUser(null);
     }
   };

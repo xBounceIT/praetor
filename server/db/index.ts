@@ -7,7 +7,7 @@ const { Pool } = pg;
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
+  port: parseInt(process.env.DB_PORT || '5432', 10),
   database: process.env.DB_NAME || 'tempo',
   user: process.env.DB_USER || 'tempo',
   password: process.env.DB_PASSWORD || 'tempo',
@@ -25,7 +25,6 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const query = (text: string, params?: any[]) => pool.query(text, params);
+export const query = (text: string, params?: unknown[]) => pool.query(text, params);
 
 export default pool;

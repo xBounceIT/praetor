@@ -11,8 +11,8 @@ type SessionJwtPayload = JwtPayload & {
 };
 
 export const authenticateToken = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authHeader = request.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const authHeader = request.headers.authorization;
+  const token = authHeader?.split(' ')[1];
 
   if (!token) {
     return reply.code(401).send({ error: 'Access token required' });

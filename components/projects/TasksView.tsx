@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -10,14 +10,20 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
+type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
+
 interface TasksViewProps {
   tasks: ProjectTask[];
   projects: Project[];
   clients: Client[];
   permissions: string[];
   users: User[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onAddTask: (name: string, projectId: string, recurringConfig?: any, description?: string) => void;
+  onAddTask: (
+    name: string,
+    projectId: string,
+    recurringConfig?: RecurringConfig,
+    description?: string,
+  ) => void;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void;
   onDeleteTask: (id: string) => void;
 }
@@ -430,10 +436,11 @@ const TasksView: React.FC<TasksViewProps> = ({
             <div>
               <h3 className="text-lg font-black text-slate-800">{t('tasks.deleteTaskTitle')}</h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: t('tasks.deleteConfirmDesc', { name: editingTask?.name }),
-                  }}
+                <Trans
+                  i18nKey="tasks.deleteConfirmDesc"
+                  ns="projects"
+                  values={{ name: editingTask?.name }}
+                  components={{ span: <span className="font-bold text-slate-800" /> }}
                 />
               </p>
             </div>

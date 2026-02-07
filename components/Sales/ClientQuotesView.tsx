@@ -1253,11 +1253,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       </div>
 
                       {/* Sconto */}
-                      {formData.discount! > 0 && (
+                      {discountValue > 0 && (
                         <div className="flex items-center gap-4">
                           <span className="text-sm font-bold text-slate-500">
                             {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
-                            {formData.discount}%):
+                            {discountValue}%):
                           </span>
                           <span className="text-sm font-black text-amber-600">
                             -{discountAmount.toFixed(2)} {currency}

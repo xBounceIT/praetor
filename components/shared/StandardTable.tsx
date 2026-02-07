@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 import CustomSelect from './CustomSelect';
 import TableFilter from './TableFilter';
 
+const getStorageKey = (t: string) =>
+  `praetor_table_rows_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+
 export type Column<T> = {
   header: string;
   accessorKey?: keyof T;
   accessorFn?: (row: T) => string | number | boolean | null | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  cell?: (info: { getValue: () => any; row: T; value: any }) => ReactNode;
+  cell?: (info: { getValue: () => unknown; row: T; value: unknown }) => ReactNode;
   id?: string; // Unique ID for the column, required if accessorKey is missing
   className?: string;
   headerClassName?: string;
@@ -19,8 +21,7 @@ export type Column<T> = {
   align?: 'left' | 'center' | 'right';
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type StandardTableProps<T = any> = {
+type StandardTableProps<T = Record<string, unknown>> = {
   title: string;
   totalCount?: number;
   totalLabel?: string;
@@ -40,8 +41,7 @@ type StandardTableProps<T = any> = {
   onRowClick?: (row: T) => void;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const StandardTable = <T extends Record<string, any>>({
+const StandardTable = <T extends Record<string, unknown>>({
   title,
   totalCount: externalTotalCount,
   totalLabel,
@@ -64,10 +64,6 @@ const StandardTable = <T extends Record<string, any>>({
   const popupRef = useRef<HTMLDivElement>(null); // Ref for the Portal popup
 
   // Internal State for Data Mode
-  // Helper for key generation
-  const getStorageKey = (t: string) =>
-    `praetor_table_rows_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
-
   const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
   const [filterState, setFilterState] = useState<Record<string, string[]>>({});
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
@@ -396,7 +392,7 @@ const StandardTable = <T extends Record<string, any>>({
                 paginatedData.map((row, idx) => (
                   <tr
                     key={idx}
-                    onClick={() => onRowClick && onRowClick(row)}
+                    onClick={() => onRowClick?.(row)}
                     className={`transition-colors text-sm ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
                   >
                     {columns.map((col, colIdx) => {

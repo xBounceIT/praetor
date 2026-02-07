@@ -122,7 +122,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE ut.user_id = $1
                 ORDER BY t.name
             `;
-        queryParams = [request.user!.id];
+        queryParams = [request.user?.id];
       }
 
       const result = await query(queryText, queryParams);
@@ -420,6 +420,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
+      const validUserIds = userIdsResult.value;
 
       try {
         await query('BEGIN');
@@ -427,7 +428,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Delete existing assignments
         await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
 
-        for (const userId of userIdsResult.value!) {
+        for (const userId of validUserIds) {
           await query(
             'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [userId, idResult.value],

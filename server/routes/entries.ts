@@ -123,7 +123,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      let result;
+      let result: Awaited<ReturnType<typeof query>>;
       const { userId } = request.query as { userId?: string };
       const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
 
@@ -142,13 +142,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            FROM time_entries ORDER BY created_at DESC`,
           );
         }
-      } else if (userId && userId !== request.user!.id) {
+      } else if (userId && userId !== request.user?.id) {
         const managedCheck = await query(
           `SELECT 1
                  FROM user_work_units uwu
                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                  WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-          [request.user!.id, userId],
+          [request.user?.id, userId],
         );
 
         if (managedCheck.rows.length === 0) {
@@ -181,7 +181,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE wum.user_id = $1
             )
          ORDER BY created_at DESC`,
-          [request.user!.id],
+          [request.user?.id],
         );
       }
 
@@ -283,14 +283,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const isPlaceholderValue = parseBoolean(isPlaceholder);
 
-      let targetUserId = request.user!.id;
+      let targetUserId = request.user?.id;
       if (userId) {
         const targetUserIdResult = requireNonEmptyString(userId, 'userId');
         if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
         targetUserId = targetUserIdResult.value;
 
         if (
-          targetUserId !== request.user!.id &&
+          targetUserId !== request.user?.id &&
           !hasPermission(request, 'timesheets.tracker_all.view')
         ) {
           const managedCheck = await query(
@@ -298,7 +298,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user!.id, targetUserId],
+            [request.user?.id, targetUserId],
           );
           if (managedCheck.rows.length === 0) {
             return reply
@@ -402,14 +402,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (existing.rows[0].user_id !== request.user!.id) {
+      if (existing.rows[0].user_id !== request.user?.id) {
         if (!hasPermission(request, 'timesheets.tracker_all.view')) {
           const managedCheck = await query(
             `SELECT 1
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user!.id, existing.rows[0].user_id],
+            [request.user?.id, existing.rows[0].user_id],
           );
           if (managedCheck.rows.length === 0) {
             return reply.code(403).send({ error: 'Not authorized to update this entry' });
@@ -476,14 +476,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
-      if (existing.rows[0].user_id !== request.user!.id) {
+      if (existing.rows[0].user_id !== request.user?.id) {
         if (!hasPermission(request, 'timesheets.tracker_all.view')) {
           const managedCheck = await query(
             `SELECT 1 
                      FROM user_work_units uwu
                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                      WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-            [request.user!.id, existing.rows[0].user_id],
+            [request.user?.id, existing.rows[0].user_id],
           );
           if (managedCheck.rows.length === 0) {
             return reply.code(403).send({ error: 'Not authorized to delete this entry' });
@@ -543,7 +543,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                   WHERE wum.user_id = $${paramIndex}
               ))`;
-        params.push(request.user!.id);
+        params.push(request.user?.id);
         paramIndex++;
       }
 

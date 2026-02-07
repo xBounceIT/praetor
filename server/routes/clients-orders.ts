@@ -842,7 +842,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            WHERE u.id != $1
              AND u.is_disabled = FALSE
              AND rp.permission IS NOT NULL`,
-          [request.user!.id],
+          [request.user?.id],
         );
 
         // Create a notification for each manager

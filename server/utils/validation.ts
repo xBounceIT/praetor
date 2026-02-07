@@ -55,7 +55,7 @@ export function parseNumber(
   value: unknown,
   fieldName: string = 'value',
 ): { ok: true; value: number } | { ok: false; message: string } {
-  if (typeof value === 'number' && !isNaN(value)) {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
     return { ok: true, value };
   }
   if (typeof value === 'string') {
@@ -64,7 +64,7 @@ export function parseNumber(
       return { ok: false, message: `${fieldName} cannot be an empty string` };
     }
     const parsed = parseFloat(trimmed);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       return { ok: true, value: parsed };
     }
   }
@@ -266,7 +266,7 @@ export function parseBoolean(value: unknown): boolean {
     const trimmed = value.trim().toLowerCase();
     return trimmed === 'true';
   }
-  return value ? true : false;
+  return !!value;
 }
 
 /**
@@ -295,7 +295,7 @@ export function parseDateString(
     return { ok: false, message: `${fieldName} must be in YYYY-MM-DD format` };
   }
   const date = new Date(result.value);
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return { ok: false, message: `${fieldName} must be a valid date` };
   }
   return result;
