@@ -42,6 +42,11 @@ const MODULE_ICONS: Record<string, string> = {
   notifications: 'fa-bell',
 };
 
+const ALWAYS_GRANTED_MODULES = ['docs', 'settings'];
+const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
+  ALWAYS_GRANTED_MODULES.includes(def.module),
+).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));
+
 const RolesView: React.FC<RolesViewProps> = ({
   roles,
   permissions,
@@ -65,6 +70,7 @@ const RolesView: React.FC<RolesViewProps> = ({
     const grouped: Record<string, typeof PERMISSION_DEFINITIONS> = {};
     const order: string[] = [];
     PERMISSION_DEFINITIONS.forEach((definition) => {
+      if (ALWAYS_GRANTED_MODULES.includes(definition.module)) return;
       if (!grouped[definition.module]) {
         grouped[definition.module] = [];
         order.push(definition.module);
@@ -195,7 +201,10 @@ const RolesView: React.FC<RolesViewProps> = ({
       return;
     }
     try {
-      await onCreateRole(roleName.trim(), selectedPermissions);
+      const finalPermissions = Array.from(
+        new Set([...selectedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
+      );
+      await onCreateRole(roleName.trim(), finalPermissions);
       setIsCreateOpen(false);
     } catch (err) {
       console.error('Failed to create role', err);
@@ -225,7 +234,10 @@ const RolesView: React.FC<RolesViewProps> = ({
     setFormErrors({});
     if (!activeRole) return;
     try {
-      await onUpdateRolePermissions(activeRole.id, selectedPermissions);
+      const finalPermissions = Array.from(
+        new Set([...selectedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
+      );
+      await onUpdateRolePermissions(activeRole.id, finalPermissions);
       setIsPermissionsOpen(false);
       setActiveRole(null);
     } catch (err) {
