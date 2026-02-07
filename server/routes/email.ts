@@ -82,7 +82,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/config',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.email.view')],
+      onRequest: [authenticateToken, requirePermission('administration.email.view')],
       schema: {
         tags: ['email'],
         summary: 'Get email configuration',

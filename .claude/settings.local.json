@@ -18,7 +18,8 @@
       "WebSearch",
       "Bash(bun run lint:fix:*)",
       "Bash(git push)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(bunx tsc:*)"
     ]
   }
 }

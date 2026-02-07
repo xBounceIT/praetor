@@ -104,14 +104,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         authenticateToken,
         requireAnyPermission(
-          'configuration.user_management.view',
-          'configuration.user_management_all.view',
+          'administration.user_management.view',
+          'administration.user_management_all.view',
           'hr.internal.view',
           'hr.external.view',
           'timesheets.tracker.view',
           'projects.manage.view',
           'projects.tasks.view',
-          'configuration.work_units.view',
+          'administration.work_units.view',
         ),
       ],
       schema: {
@@ -124,11 +124,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      const canViewAllUsers = hasPermission(request, 'configuration.user_management_all.view');
-      const canViewUserManagement = hasPermission(request, 'configuration.user_management.view');
+      const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
+      const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
         hasPermission(request, 'timesheets.tracker.view') ||
-        hasPermission(request, 'configuration.work_units.view') ||
+        hasPermission(request, 'administration.work_units.view') ||
         canViewUserManagement;
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
@@ -182,7 +182,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         authenticateToken,
         requireAnyPermission(
-          'configuration.user_management.create',
+          'administration.user_management.create',
           'hr.internal.create',
           'hr.external.create',
         ),
@@ -216,7 +216,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const effectiveEmployeeType = (employeeTypeResult as { ok: true; value: string }).value;
 
-      const canCreateAppUser = hasPermission(request, 'configuration.user_management.create');
+      const canCreateAppUser = hasPermission(request, 'administration.user_management.create');
       const canCreateInternal = hasPermission(request, 'hr.internal.create');
       const canCreateExternal = hasPermission(request, 'hr.external.create');
 
@@ -328,7 +328,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         authenticateToken,
         requireAnyPermission(
-          'configuration.user_management.delete',
+          'administration.user_management.delete',
           'hr.internal.delete',
           'hr.external.delete',
         ),
@@ -359,7 +359,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const employeeType = userCheck.rows[0].employee_type || 'app_user';
 
       if (employeeType === 'app_user') {
-        if (!hasPermission(request, 'configuration.user_management.delete')) {
+        if (!hasPermission(request, 'administration.user_management.delete')) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
         }
       }
@@ -393,7 +393,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         authenticateToken,
         requireAnyPermission(
-          'configuration.user_management.update',
+          'administration.user_management.update',
           'hr.internal.update',
           'hr.external.update',
         ),
@@ -443,12 +443,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const targetEmployeeType = targetUserResult.rows[0].employee_type || 'app_user';
 
       if (targetEmployeeType === 'app_user') {
-        if (!hasPermission(request, 'configuration.user_management.update')) {
+        if (!hasPermission(request, 'administration.user_management.update')) {
           return reply.code(403).send({ error: 'Insufficient permissions' });
         }
 
         if (
-          !hasPermission(request, 'configuration.user_management_all.view') &&
+          !hasPermission(request, 'administration.user_management_all.view') &&
           idResult.value !== request.user!.id
         ) {
           const managedCheck = await query(
@@ -576,11 +576,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const canViewAllUsers = hasPermission(request, 'configuration.user_management_all.view');
+      const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
       const canViewAssignments =
         request.user!.id === id ||
-        hasPermission(request, 'configuration.user_management.view') ||
-        hasPermission(request, 'configuration.user_management.update') ||
+        hasPermission(request, 'administration.user_management.view') ||
+        hasPermission(request, 'administration.user_management.update') ||
         hasPermission(request, 'timesheets.tracker.view');
 
       if (!canViewAssignments) {
@@ -623,7 +623,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/assignments',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.user_management.update')],
+      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
       schema: {
         tags: ['users'],
         summary: 'Update user assignments',
@@ -646,7 +646,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (
-        !hasPermission(request, 'configuration.user_management_all.view') &&
+        !hasPermission(request, 'administration.user_management_all.view') &&
         idResult.value !== request.user!.id
       ) {
         const managedCheck = await query(

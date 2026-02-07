@@ -35,7 +35,7 @@ const MODULE_ICONS: Record<string, string> = {
   accounting: 'fa-calculator',
   finances: 'fa-coins',
   hr: 'fa-users-gear',
-  configuration: 'fa-gears',
+  administration: 'fa-gears',
   suppliers: 'fa-truck',
   settings: 'fa-sliders',
   docs: 'fa-book',
@@ -82,15 +82,15 @@ const RolesView: React.FC<RolesViewProps> = ({
 
   const canCreateRoles = hasPermission(
     permissions,
-    buildPermission('configuration.roles', 'create'),
+    buildPermission('administration.roles', 'create'),
   );
   const canUpdateRoles = hasPermission(
     permissions,
-    buildPermission('configuration.roles', 'update'),
+    buildPermission('administration.roles', 'update'),
   );
   const canDeleteRoles = hasPermission(
     permissions,
-    buildPermission('configuration.roles', 'delete'),
+    buildPermission('administration.roles', 'delete'),
   );
 
   const actionLabel = (action: PermissionAction) => {

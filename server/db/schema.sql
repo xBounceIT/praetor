@@ -99,9 +99,9 @@ BEGIN
             ('manager', 'hr.external.create'),
             ('manager', 'hr.external.update'),
             ('manager', 'hr.external.delete'),
-            ('manager', 'configuration.user_management.view'),
-            ('manager', 'configuration.user_management.update'),
-            ('manager', 'configuration.work_units.view'),
+            ('manager', 'administration.user_management.view'),
+            ('manager', 'administration.user_management.update'),
+            ('manager', 'administration.work_units.view'),
             ('manager', 'settings.view'),
             ('manager', 'settings.update'),
             ('manager', 'docs.api.view'),
@@ -127,7 +127,7 @@ BEGIN
 END $$;
 
 -- Migration: Remove previously-seeded admin permissions so admin only has
--- configuration access (from is_admin flag). Other modules must be added
+-- Administration access (from is_admin flag). Other modules must be added
 -- explicitly via the permissions UI.
 DELETE FROM role_permissions WHERE role_id = 'admin';
 
@@ -382,7 +382,7 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- LDAP configuration table (single row)
+-- LDAP administration table (single row)
 CREATE TABLE IF NOT EXISTS ldap_config (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     enabled BOOLEAN DEFAULT FALSE,
@@ -852,7 +852,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
 
--- Email configuration table (single row)
+-- Email administration table (single row)
 CREATE TABLE IF NOT EXISTS email_config (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     enabled BOOLEAN DEFAULT FALSE,

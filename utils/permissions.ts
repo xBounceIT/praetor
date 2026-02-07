@@ -59,25 +59,25 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.internal', actions: CRUD, module: 'hr' },
   { id: 'hr.external', actions: CRUD, module: 'hr' },
 
-  // Configuration
-  { id: 'configuration.authentication', actions: VIEW_UPDATE, module: 'configuration' },
-  { id: 'configuration.general', actions: VIEW_UPDATE, module: 'configuration' },
-  { id: 'configuration.user_management', actions: CRUD, module: 'configuration' },
+  // Administration
+  { id: 'administration.authentication', actions: VIEW_UPDATE, module: 'administration' },
+  { id: 'administration.general', actions: VIEW_UPDATE, module: 'administration' },
+  { id: 'administration.user_management', actions: CRUD, module: 'administration' },
   {
-    id: 'configuration.user_management_all',
+    id: 'administration.user_management_all',
     actions: VIEW_ONLY,
     isScope: true,
-    module: 'configuration',
+    module: 'administration',
   },
-  { id: 'configuration.work_units', actions: CRUD, module: 'configuration' },
+  { id: 'administration.work_units', actions: CRUD, module: 'administration' },
   {
-    id: 'configuration.work_units_all',
+    id: 'administration.work_units_all',
     actions: VIEW_ONLY,
     isScope: true,
-    module: 'configuration',
+    module: 'administration',
   },
-  { id: 'configuration.email', actions: VIEW_UPDATE, module: 'configuration' },
-  { id: 'configuration.roles', actions: CRUD, module: 'configuration' },
+  { id: 'administration.email', actions: VIEW_UPDATE, module: 'administration' },
+  { id: 'administration.roles', actions: CRUD, module: 'administration' },
 
   // Standalone
   { id: 'settings', actions: VIEW_UPDATE, module: getModuleId('settings') },
@@ -97,7 +97,7 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.flatMap((def
 );
 
 export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.filter((def) =>
-  def.id.startsWith('configuration.'),
+  def.id.startsWith('administration.'),
 ).flatMap((def) => buildPermissions(def.id, def.actions));
 
 export const formatPermissionLabel = (resource: string) => {
@@ -125,12 +125,12 @@ export const hasAnyPermission = (permissions: Permission[] | undefined, required
 export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'timesheets/tracker': buildPermission('timesheets.tracker', 'view'),
   'timesheets/recurring': buildPermission('timesheets.recurring', 'view'),
-  'configuration/authentication': buildPermission('configuration.authentication', 'view'),
-  'configuration/general': buildPermission('configuration.general', 'view'),
-  'configuration/user-management': buildPermission('configuration.user_management', 'view'),
-  'configuration/work-units': buildPermission('configuration.work_units', 'view'),
-  'configuration/email': buildPermission('configuration.email', 'view'),
-  'configuration/roles': buildPermission('configuration.roles', 'view'),
+  'administration/authentication': buildPermission('administration.authentication', 'view'),
+  'administration/general': buildPermission('administration.general', 'view'),
+  'administration/user-management': buildPermission('administration.user_management', 'view'),
+  'administration/work-units': buildPermission('administration.work_units', 'view'),
+  'administration/email': buildPermission('administration.email', 'view'),
+  'administration/roles': buildPermission('administration.roles', 'view'),
   'crm/clients': buildPermission('crm.clients', 'view'),
   'crm/suppliers': buildPermission('crm.suppliers', 'view'),
   'sales/client-quotes': buildPermission('sales.client_quotes', 'view'),

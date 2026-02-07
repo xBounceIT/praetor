@@ -269,13 +269,13 @@ export type View =
   // Timesheets module
   | 'timesheets/tracker'
   | 'timesheets/recurring'
-  // Configuration module (admin/manager)
-  | 'configuration/authentication'
-  | 'configuration/general'
-  | 'configuration/user-management'
-  | 'configuration/work-units'
-  | 'configuration/email'
-  | 'configuration/roles'
+  // Administration module (admin/manager)
+  | 'administration/authentication'
+  | 'administration/general'
+  | 'administration/user-management'
+  | 'administration/work-units'
+  | 'administration/email'
+  | 'administration/roles'
   // CRM module
   | 'crm/clients'
   | 'crm/suppliers'

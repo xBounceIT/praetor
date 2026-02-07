@@ -109,7 +109,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       let result;
-      if (hasPermission(request, 'configuration.work_units_all.view')) {
+      if (hasPermission(request, 'administration.work_units_all.view')) {
         result = await query(`
                 SELECT w.*,
                     (
@@ -161,7 +161,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.work_units.create')],
+      onRequest: [authenticateToken, requirePermission('administration.work_units.create')],
       schema: {
         tags: ['work-units'],
         summary: 'Create work unit',
@@ -351,7 +351,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.work_units.delete')],
+      onRequest: [authenticateToken, requirePermission('administration.work_units.delete')],
       schema: {
         tags: ['work-units'],
         summary: 'Delete work unit',
@@ -400,7 +400,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check permissions
-      if (!hasPermission(request, 'configuration.work_units_all.view')) {
+      if (!hasPermission(request, 'administration.work_units_all.view')) {
         // Check if user is a manager of this unit
         const check = await query(
           'SELECT 1 FROM work_unit_managers WHERE work_unit_id = $1 AND user_id = $2',

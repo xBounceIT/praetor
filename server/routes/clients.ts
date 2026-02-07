@@ -104,8 +104,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'finances.payments.view',
           'finances.expenses.view',
           'suppliers.quotes.view',
-          'configuration.user_management.view',
-          'configuration.user_management.update',
+          'administration.user_management.view',
+          'administration.user_management.update',
         ),
       ],
       schema: {

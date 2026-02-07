@@ -83,7 +83,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const s = result.rows[0];
       // Only return API key to admins
-      const geminiApiKey = hasPermission(request, 'configuration.general.update')
+      const geminiApiKey = hasPermission(request, 'administration.general.update')
         ? s.gemini_api_key || ''
         : s.gemini_api_key
           ? '********'
@@ -106,7 +106,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.general.update')],
+      onRequest: [authenticateToken, requirePermission('administration.general.update')],
       schema: {
         tags: ['general-settings'],
         summary: 'Update global settings',

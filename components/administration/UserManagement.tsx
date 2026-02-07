@@ -115,15 +115,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const canCreateUsers = hasPermission(
     permissions,
-    buildPermission('configuration.user_management', 'create'),
+    buildPermission('administration.user_management', 'create'),
   );
   const canUpdateUsers = hasPermission(
     permissions,
-    buildPermission('configuration.user_management', 'update'),
+    buildPermission('administration.user_management', 'update'),
   );
   const canDeleteUsers = hasPermission(
     permissions,
-    buildPermission('configuration.user_management', 'delete'),
+    buildPermission('administration.user_management', 'delete'),
   );
   const canManageAssignments = canUpdateUsers;
   React.useEffect(() => {

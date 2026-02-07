@@ -68,7 +68,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/config',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.authentication.view')],
+      onRequest: [authenticateToken, requirePermission('administration.authentication.view')],
       schema: {
         tags: ['ldap'],
         summary: 'Get LDAP configuration',
