@@ -42,7 +42,7 @@ const MODULE_ICONS: Record<string, string> = {
   notifications: 'fa-bell',
 };
 
-const ALWAYS_GRANTED_MODULES = ['docs', 'settings'];
+const ALWAYS_GRANTED_MODULES = ['docs', 'settings', 'notifications'];
 const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
   ALWAYS_GRANTED_MODULES.includes(def.module),
 ).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));
