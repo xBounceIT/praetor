@@ -11,6 +11,7 @@
     "badges": { "system": "System", "admin": "Admin" },
     "allPermissions": "All permissions",
     "permissionCount": "{{count}} permissions",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "scope": "Scope"
   }
 }
