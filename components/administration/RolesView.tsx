@@ -44,9 +44,15 @@ const MODULE_ICONS: Record<string, string> = {
 };
 
 const ALWAYS_GRANTED_MODULES = ['docs', 'settings', 'notifications'];
+const ADMINISTRATION_MODULE = 'administration';
+const ROLE_EDITOR_EXCLUDED_MODULES = [...ALWAYS_GRANTED_MODULES, ADMINISTRATION_MODULE];
 const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
   ALWAYS_GRANTED_MODULES.includes(def.module),
 ).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));
+const isAdministrationPermission = (permission: string) =>
+  permission.startsWith('administration.') || permission.startsWith('configuration.');
+const sanitizeNonAdminRolePermissions = (rolePermissions: string[]) =>
+  rolePermissions.filter((permission) => !isAdministrationPermission(permission));
 
 const RolesView: React.FC<RolesViewProps> = ({
   roles,
@@ -71,7 +77,7 @@ const RolesView: React.FC<RolesViewProps> = ({
     const grouped: Record<string, typeof PERMISSION_DEFINITIONS> = {};
     const order: string[] = [];
     PERMISSION_DEFINITIONS.forEach((definition) => {
-      if (ALWAYS_GRANTED_MODULES.includes(definition.module)) return;
+      if (ROLE_EDITOR_EXCLUDED_MODULES.includes(definition.module)) return;
       if (!grouped[definition.module]) {
         grouped[definition.module] = [];
         order.push(definition.module);
@@ -132,7 +138,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   const openPermissionsModal = (role: Role) => {
     if (!canUpdateRoles || role.isAdmin) return;
     setActiveRole(role);
-    setSelectedPermissions(role.permissions || []);
+    setSelectedPermissions(sanitizeNonAdminRolePermissions(role.permissions || []));
     setFormErrors({});
     setActiveModuleTab(moduleOrder[0] || '');
     setIsPermissionsOpen(true);
@@ -203,8 +209,9 @@ const RolesView: React.FC<RolesViewProps> = ({
       return;
     }
     try {
+      const sanitizedPermissions = sanitizeNonAdminRolePermissions(selectedPermissions);
       const finalPermissions = Array.from(
-        new Set([...selectedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
+        new Set([...sanitizedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
       );
       await onCreateRole(roleName.trim(), finalPermissions);
       setIsCreateOpen(false);
@@ -236,8 +243,9 @@ const RolesView: React.FC<RolesViewProps> = ({
     setFormErrors({});
     if (!activeRole) return;
     try {
+      const sanitizedPermissions = sanitizeNonAdminRolePermissions(selectedPermissions);
       const finalPermissions = Array.from(
-        new Set([...selectedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
+        new Set([...sanitizedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
       );
       await onUpdateRolePermissions(activeRole.id, finalPermissions);
       setIsPermissionsOpen(false);

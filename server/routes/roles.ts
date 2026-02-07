@@ -83,6 +83,12 @@ const mapRoleRow = async (row: {
   };
 };
 
+const isForbiddenAdministrationPermissionForNonAdmin = (permission: string) =>
+  permission.startsWith('administration.') || permission.startsWith('configuration.');
+
+const findForbiddenAdministrationPermission = (permissions: string[]) =>
+  permissions.find(isForbiddenAdministrationPermissionForNonAdmin);
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List roles
   fastify.get(
@@ -135,6 +141,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (invalidPermission) {
         return badRequest(reply, `Unknown permission: ${invalidPermission}`);
+      }
+      const forbiddenPermission = findForbiddenAdministrationPermission(permissionsResult.value);
+      if (forbiddenPermission) {
+        return badRequest(
+          reply,
+          `Non-admin roles cannot include administration permissions: ${forbiddenPermission}`,
+        );
       }
 
       const id = `role-${randomUUID()}`;
@@ -304,6 +317,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       if (roleResult.rows[0].is_admin) {
         return reply.code(403).send({ error: 'Admin role permissions are locked' });
+      }
+      const forbiddenPermission = findForbiddenAdministrationPermission(permissionsResult.value);
+      if (forbiddenPermission) {
+        return badRequest(
+          reply,
+          `Non-admin roles cannot include administration permissions: ${forbiddenPermission}`,
+        );
       }
 
       try {

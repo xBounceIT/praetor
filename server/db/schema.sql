@@ -99,9 +99,6 @@ BEGIN
             ('manager', 'hr.external.create'),
             ('manager', 'hr.external.update'),
             ('manager', 'hr.external.delete'),
-            ('manager', 'administration.user_management.view'),
-            ('manager', 'administration.user_management.update'),
-            ('manager', 'administration.work_units.view'),
             ('manager', 'settings.view'),
             ('manager', 'settings.update'),
             ('manager', 'docs.api.view'),
@@ -130,6 +127,17 @@ END $$;
 -- Administration access (from is_admin flag). Other modules must be added
 -- explicitly via the permissions UI.
 DELETE FROM role_permissions WHERE role_id = 'admin';
+
+-- Migration: Enforce admin-only access to Administration permissions.
+-- Remove any administration/configuration permissions from non-admin roles.
+DELETE FROM role_permissions rp
+USING roles r
+WHERE rp.role_id = r.id
+  AND r.is_admin = FALSE
+  AND (
+    rp.permission LIKE 'administration.%'
+    OR rp.permission LIKE 'configuration.%'
+  );
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
