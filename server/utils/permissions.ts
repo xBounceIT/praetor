@@ -56,15 +56,15 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.internal', actions: CRUD },
   { id: 'hr.external', actions: CRUD },
 
-  // Configuration
-  { id: 'configuration.authentication', actions: VIEW_UPDATE },
-  { id: 'configuration.general', actions: VIEW_UPDATE },
-  { id: 'configuration.user_management', actions: CRUD },
-  { id: 'configuration.user_management_all', actions: VIEW_ONLY, isScope: true },
-  { id: 'configuration.work_units', actions: CRUD },
-  { id: 'configuration.work_units_all', actions: VIEW_ONLY, isScope: true },
-  { id: 'configuration.email', actions: VIEW_UPDATE },
-  { id: 'configuration.roles', actions: CRUD },
+  // Administration
+  { id: 'administration.authentication', actions: VIEW_UPDATE },
+  { id: 'administration.general', actions: VIEW_UPDATE },
+  { id: 'administration.user_management', actions: CRUD },
+  { id: 'administration.user_management_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'administration.work_units', actions: CRUD },
+  { id: 'administration.work_units_all', actions: VIEW_ONLY, isScope: true },
+  { id: 'administration.email', actions: VIEW_UPDATE },
+  { id: 'administration.roles', actions: CRUD },
 
   // Standalone
   { id: 'settings', actions: VIEW_UPDATE },
@@ -83,9 +83,21 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.flatMap((def
   buildPermissions(definition.id, definition.actions),
 );
 
-export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.filter((def) =>
-  def.id.startsWith('configuration.'),
+export const ADMINISTRATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.filter((def) =>
+  def.id.startsWith('administration.'),
 ).flatMap((def) => buildPermissions(def.id, def.actions));
+
+const ADMIN_BASE_PERMISSIONS: Permission[] = [
+  ...buildPermissions('settings', VIEW_UPDATE),
+  ...buildPermissions('docs.api', VIEW_ONLY),
+  ...buildPermissions('docs.frontend', VIEW_ONLY),
+  ...buildPermissions('notifications', VIEW_UPDATE_DELETE),
+];
+
+export const normalizePermission = (permission: string): Permission =>
+  (permission.startsWith('configuration.')
+    ? permission.replace('configuration.', 'administration.')
+    : permission) as Permission;
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   manager: [
@@ -110,9 +122,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('suppliers.quotes', CRUD),
     ...buildPermissions('hr.internal', CRUD),
     ...buildPermissions('hr.external', CRUD),
-    buildPermission('configuration.user_management', 'view'),
-    buildPermission('configuration.user_management', 'update'),
-    buildPermission('configuration.work_units', 'view'),
+    buildPermission('administration.user_management', 'view'),
+    buildPermission('administration.user_management', 'update'),
+    buildPermission('administration.work_units', 'view'),
     buildPermission('settings', 'view'),
     buildPermission('settings', 'update'),
     buildPermission('docs.api', 'view'),
@@ -135,7 +147,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
 };
 
 export const isPermissionKnown = (permission: string) =>
-  ALL_PERMISSIONS.includes(permission as Permission);
+  ALL_PERMISSIONS.includes(normalizePermission(permission));
 
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
   const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
@@ -145,14 +157,16 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
     const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
       roleId,
     ]);
-    const explicit = permResult.rows.map((r) => r.permission) as Permission[];
-    return Array.from(new Set([...CONFIGURATION_PERMISSIONS, ...explicit]));
+    const explicit = permResult.rows.map((r) => normalizePermission(r.permission)) as Permission[];
+    return Array.from(
+      new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...explicit]),
+    );
   }
 
   const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
     roleId,
   ]);
-  return permResult.rows.map((row) => row.permission) as Permission[];
+  return permResult.rows.map((row) => normalizePermission(row.permission)) as Permission[];
 };
 
 export const hasPermission = (permissions: string[] | undefined, permission: Permission) =>

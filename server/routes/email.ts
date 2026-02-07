@@ -126,7 +126,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/config',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.email.update')],
+      onRequest: [authenticateToken, requirePermission('administration.email.update')],
       schema: {
         tags: ['email'],
         summary: 'Update email configuration',
@@ -215,7 +215,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.email.update')],
+      onRequest: [authenticateToken, requirePermission('administration.email.update')],
       schema: {
         tags: ['email'],
         summary: 'Send test email',
@@ -260,7 +260,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test-connection',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.email.update')],
+      onRequest: [authenticateToken, requirePermission('administration.email.update')],
       schema: {
         tags: ['email'],
         summary: 'Test SMTP connection',

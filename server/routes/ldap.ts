@@ -118,7 +118,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/config',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.authentication.update')],
+      onRequest: [authenticateToken, requirePermission('administration.authentication.update')],
       schema: {
         tags: ['ldap'],
         summary: 'Update LDAP configuration',
@@ -259,7 +259,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/sync',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.authentication.update')],
+      onRequest: [authenticateToken, requirePermission('administration.authentication.update')],
       schema: {
         tags: ['ldap'],
         summary: 'Trigger LDAP sync',

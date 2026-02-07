@@ -97,7 +97,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.work_units.view')],
+      onRequest: [authenticateToken, requirePermission('administration.work_units.view')],
       schema: {
         tags: ['work-units'],
         summary: 'List work units',
@@ -229,7 +229,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.work_units.update')],
+      onRequest: [authenticateToken, requirePermission('administration.work_units.update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit',
@@ -383,7 +383,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.work_units.view')],
+      onRequest: [authenticateToken, requirePermission('administration.work_units.view')],
       schema: {
         tags: ['work-units'],
         summary: 'Get users in work unit',
@@ -429,7 +429,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.work_units.update')],
+      onRequest: [authenticateToken, requirePermission('administration.work_units.update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit users',

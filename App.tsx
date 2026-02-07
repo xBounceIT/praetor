@@ -920,15 +920,15 @@ const App: React.FC = () => {
           buildPermission('hr.external', 'view'),
         ]);
         const canViewConfiguration = hasAnyPermission(permissions, [
-          buildPermission('configuration.user_management', 'view'),
-          buildPermission('configuration.user_management_all', 'view'),
-          buildPermission('configuration.user_management', 'update'),
-          buildPermission('configuration.work_units', 'view'),
-          buildPermission('configuration.work_units_all', 'view'),
-          buildPermission('configuration.roles', 'view'),
-          buildPermission('configuration.authentication', 'view'),
-          buildPermission('configuration.general', 'view'),
-          buildPermission('configuration.email', 'view'),
+          buildPermission('administration.user_management', 'view'),
+          buildPermission('administration.user_management_all', 'view'),
+          buildPermission('administration.user_management', 'update'),
+          buildPermission('administration.work_units', 'view'),
+          buildPermission('administration.work_units_all', 'view'),
+          buildPermission('administration.roles', 'view'),
+          buildPermission('administration.authentication', 'view'),
+          buildPermission('administration.general', 'view'),
+          buildPermission('administration.email', 'view'),
         ]);
         const canViewCrm = hasAnyPermission(permissions, [
           buildPermission('crm.clients', 'view'),
@@ -978,8 +978,8 @@ const App: React.FC = () => {
           buildPermission('finances.payments', 'view'),
           buildPermission('finances.expenses', 'view'),
           buildPermission('suppliers.quotes', 'view'),
-          buildPermission('configuration.user_management', 'view'),
-          buildPermission('configuration.user_management', 'update'),
+          buildPermission('administration.user_management', 'view'),
+          buildPermission('administration.user_management', 'update'),
         ]);
         const canListProjects = hasAnyPermission(permissions, [
           buildPermission('projects.manage', 'view'),
@@ -994,15 +994,15 @@ const App: React.FC = () => {
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListUsers = hasAnyPermission(permissions, [
-          buildPermission('configuration.user_management', 'view'),
-          buildPermission('configuration.user_management_all', 'view'),
-          buildPermission('configuration.user_management', 'update'),
+          buildPermission('administration.user_management', 'view'),
+          buildPermission('administration.user_management_all', 'view'),
+          buildPermission('administration.user_management', 'update'),
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
           buildPermission('timesheets.tracker', 'view'),
           buildPermission('projects.manage', 'view'),
           buildPermission('projects.tasks', 'view'),
-          buildPermission('configuration.work_units', 'view'),
+          buildPermission('administration.work_units', 'view'),
         ]);
         const canListQuotes = hasPermission(
           permissions,
@@ -1045,32 +1045,32 @@ const App: React.FC = () => {
           buildPermission('finances.expenses', 'view'),
         );
         const canListWorkUnits = hasAnyPermission(permissions, [
-          buildPermission('configuration.work_units', 'view'),
-          buildPermission('configuration.work_units_all', 'view'),
+          buildPermission('administration.work_units', 'view'),
+          buildPermission('administration.work_units_all', 'view'),
         ]);
         const canViewUserManagement = hasAnyPermission(permissions, [
-          buildPermission('configuration.user_management', 'view'),
-          buildPermission('configuration.user_management', 'update'),
-          buildPermission('configuration.user_management', 'create'),
-          buildPermission('configuration.user_management_all', 'view'),
+          buildPermission('administration.user_management', 'view'),
+          buildPermission('administration.user_management', 'update'),
+          buildPermission('administration.user_management', 'create'),
+          buildPermission('administration.user_management_all', 'view'),
         ]);
         const canViewWorkUnits = hasAnyPermission(permissions, [
-          buildPermission('configuration.work_units', 'view'),
-          buildPermission('configuration.work_units', 'update'),
-          buildPermission('configuration.work_units', 'create'),
-          buildPermission('configuration.work_units_all', 'view'),
+          buildPermission('administration.work_units', 'view'),
+          buildPermission('administration.work_units', 'update'),
+          buildPermission('administration.work_units', 'create'),
+          buildPermission('administration.work_units_all', 'view'),
         ]);
         const canViewRoles = hasPermission(
           permissions,
-          buildPermission('configuration.roles', 'view'),
+          buildPermission('administration.roles', 'view'),
         );
         const canViewAuthentication = hasPermission(
           permissions,
-          buildPermission('configuration.authentication', 'view'),
+          buildPermission('administration.authentication', 'view'),
         );
         const canViewEmail = hasPermission(
           permissions,
-          buildPermission('configuration.email', 'view'),
+          buildPermission('administration.email', 'view'),
         );
         const canViewCrmClients = hasAnyPermission(permissions, [
           buildPermission('crm.clients', 'view'),
@@ -1121,7 +1121,7 @@ const App: React.FC = () => {
             await loadGeneralSettings();
             break;
           }
-          case 'configuration': {
+          case 'administration': {
             if (!canViewConfiguration) return;
             const shouldLoadUsers = canViewUserManagement || canViewWorkUnits;
             const shouldLoadAssignments = canViewUserManagement;
@@ -1296,9 +1296,9 @@ const App: React.FC = () => {
     const loadAssignments = async () => {
       try {
         const canViewAssignments = hasAnyPermission(currentUser.permissions, [
-          buildPermission('configuration.user_management', 'view'),
-          buildPermission('configuration.user_management', 'update'),
-          buildPermission('configuration.user_management_all', 'view'),
+          buildPermission('administration.user_management', 'view'),
+          buildPermission('administration.user_management', 'update'),
+          buildPermission('administration.user_management_all', 'view'),
           buildPermission('timesheets.tracker', 'view'),
           buildPermission('timesheets.tracker_all', 'view'),
         ]);

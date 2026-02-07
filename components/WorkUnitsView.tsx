@@ -175,15 +175,15 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const canCreateWorkUnits = hasPermission(
     permissions,
-    buildPermission('configuration.work_units', 'create'),
+    buildPermission('administration.work_units', 'create'),
   );
   const canUpdateWorkUnits = hasPermission(
     permissions,
-    buildPermission('configuration.work_units', 'update'),
+    buildPermission('administration.work_units', 'update'),
   );
   const canDeleteWorkUnits = hasPermission(
     permissions,
-    buildPermission('configuration.work_units', 'delete'),
+    buildPermission('administration.work_units', 'delete'),
   );
   const canManageMembers = canUpdateWorkUnits;
 

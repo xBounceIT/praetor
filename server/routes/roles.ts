@@ -3,7 +3,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
-import { CONFIGURATION_PERMISSIONS, isPermissionKnown } from '../utils/permissions.ts';
+import {
+  ADMINISTRATION_PERMISSIONS,
+  isPermissionKnown,
+  normalizePermission,
+} from '../utils/permissions.ts';
 import { badRequest, ensureArrayOfStrings, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleSchema = {
@@ -64,10 +68,10 @@ const mapRoleRow = async (row: {
 }) => {
   const explicitPerms = (
     await query('SELECT permission FROM role_permissions WHERE role_id = $1', [row.id])
-  ).rows.map((perm) => perm.permission);
+  ).rows.map((perm) => normalizePermission(perm.permission));
 
   const permissions = row.is_admin
-    ? Array.from(new Set([...CONFIGURATION_PERMISSIONS, ...explicitPerms]))
+    ? Array.from(new Set([...ADMINISTRATION_PERMISSIONS, ...explicitPerms]))
     : explicitPerms;
 
   return {
@@ -84,7 +88,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.roles.view')],
+      onRequest: [authenticateToken, requirePermission('administration.roles.view')],
       schema: {
         tags: ['roles'],
         summary: 'List roles',
@@ -105,7 +109,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.roles.create')],
+      onRequest: [authenticateToken, requirePermission('administration.roles.create')],
       schema: {
         tags: ['roles'],
         summary: 'Create role',
@@ -169,7 +173,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.roles.update')],
+      onRequest: [authenticateToken, requirePermission('administration.roles.update')],
       schema: {
         tags: ['roles'],
         summary: 'Rename role',
@@ -218,7 +222,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.roles.delete')],
+      onRequest: [authenticateToken, requirePermission('administration.roles.delete')],
       schema: {
         tags: ['roles'],
         summary: 'Delete role',
@@ -262,7 +266,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id/permissions',
     {
-      onRequest: [authenticateToken, requirePermission('configuration.roles.update')],
+      onRequest: [authenticateToken, requirePermission('administration.roles.update')],
       schema: {
         tags: ['roles'],
         summary: 'Update role permissions',

@@ -10,9 +10,9 @@ Praetor is an AI-enhanced ERP application for time tracking, project management,
 ```bash
 bun run dev          # Start dev server (port 3000)
 bun run build        # Production build
-bun run lint         # ESLint check
+bun run lint         # Biome check
 bun run lint:fix     # Auto-fix lint issues
-bun run format       # Prettier formatting
+bun run format       # Biome formatting
 ```
 
 ### Backend (server directory)
