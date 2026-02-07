@@ -27,6 +27,8 @@ import itSettings from './locales/it/settings.json';
 import itNotifications from './locales/it/notifications.json';
 import itAccounting from './locales/it/accounting.json';
 import itSales from './locales/it/sales.json';
+import enAdministration from './locales/en/administration.json';
+import itAdministration from './locales/it/administration.json';
 
 const resources = {
   en: {
@@ -44,6 +46,7 @@ const resources = {
     notifications: enNotifications,
     accounting: enAccounting,
     sales: enSales,
+    administration: enAdministration,
   },
   it: {
     common: itCommon,
@@ -60,6 +63,7 @@ const resources = {
     notifications: itNotifications,
     accounting: itAccounting,
     sales: itSales,
+    administration: itAdministration,
   },
 };
 
@@ -84,6 +88,7 @@ i18n
       'notifications',
       'accounting',
       'sales',
+      'administration',
     ],
     resources,
     detection: {

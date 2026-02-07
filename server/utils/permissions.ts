@@ -83,6 +83,10 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.flatMap((def
   buildPermissions(definition.id, definition.actions),
 );
 
+export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.filter((def) =>
+  def.id.startsWith('configuration.'),
+).flatMap((def) => buildPermissions(def.id, def.actions));
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   manager: [
     ...buildPermissions('timesheets.tracker', CRUD),
@@ -137,7 +141,13 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
   const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
   if (roleResult.rows.length === 0) return [];
 
-  if (roleResult.rows[0].is_admin) return ALL_PERMISSIONS;
+  if (roleResult.rows[0].is_admin) {
+    const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
+      roleId,
+    ]);
+    const explicit = permResult.rows.map((r) => r.permission) as Permission[];
+    return Array.from(new Set([...CONFIGURATION_PERMISSIONS, ...explicit]));
+  }
 
   const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
     roleId,

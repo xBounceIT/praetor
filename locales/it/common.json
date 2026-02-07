@@ -25,7 +25,8 @@
     "done": "Fatto",
     "copy": "Copia",
     "paste": "Incolla",
-    "print": "Stampa"
+    "print": "Stampa",
+    "view": "Visualizza"
   },
   "labels": {
     "name": "Nome",

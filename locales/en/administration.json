@@ -1,0 +1,16 @@
+{
+  "roles": {
+    "title": "Roles",
+    "subtitle": "Manage role access and permissions.",
+    "createRole": "Create role",
+    "createRoleSubtitle": "Define role name and permissions.",
+    "renameRole": "Rename role",
+    "renameRoleSubtitle": "Update the role display name.",
+    "editPermissions": "Edit permissions",
+    "deleteRole": "Delete role",
+    "badges": { "system": "System", "admin": "Admin" },
+    "allPermissions": "All permissions",
+    "permissionCount": "{{count}} permissions",
+    "permissions": "Permissions"
+  }
+}

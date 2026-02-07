@@ -96,6 +96,10 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.flatMap((def
   buildPermissions(definition.id, definition.actions),
 );
 
+export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.filter((def) =>
+  def.id.startsWith('configuration.'),
+).flatMap((def) => buildPermissions(def.id, def.actions));
+
 export const formatPermissionLabel = (resource: string) => {
   const parts = resource.split('.');
   const resourceName = parts.length > 1 ? parts.slice(1).join('.') : parts[0];

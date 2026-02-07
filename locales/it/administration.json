@@ -1,0 +1,16 @@
+{
+  "roles": {
+    "title": "Ruoli",
+    "subtitle": "Gestisci l'accesso e i permessi dei ruoli.",
+    "createRole": "Crea ruolo",
+    "createRoleSubtitle": "Definisci il nome del ruolo e i permessi.",
+    "renameRole": "Rinomina ruolo",
+    "renameRoleSubtitle": "Aggiorna il nome visualizzato del ruolo.",
+    "editPermissions": "Modifica permessi",
+    "deleteRole": "Elimina ruolo",
+    "badges": { "system": "Sistema", "admin": "Admin" },
+    "allPermissions": "Tutti i permessi",
+    "permissionCount": "{{count}} permessi",
+    "permissions": "Permessi"
+  }
+}

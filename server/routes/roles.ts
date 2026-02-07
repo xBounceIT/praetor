@@ -4,7 +4,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { requireNonEmptyString, ensureArrayOfStrings, badRequest } from '../utils/validation.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
-import { ALL_PERMISSIONS, isPermissionKnown } from '../utils/permissions.ts';
+import { CONFIGURATION_PERMISSIONS, isPermissionKnown } from '../utils/permissions.ts';
 
 const roleSchema = {
   type: 'object',
@@ -62,11 +62,13 @@ const mapRoleRow = async (row: {
   is_system: boolean;
   is_admin: boolean;
 }) => {
+  const explicitPerms = (
+    await query('SELECT permission FROM role_permissions WHERE role_id = $1', [row.id])
+  ).rows.map((perm) => perm.permission);
+
   const permissions = row.is_admin
-    ? ALL_PERMISSIONS
-    : (
-        await query('SELECT permission FROM role_permissions WHERE role_id = $1', [row.id])
-      ).rows.map((perm) => perm.permission);
+    ? Array.from(new Set([...CONFIGURATION_PERMISSIONS, ...explicitPerms]))
+    : explicitPerms;
 
   return {
     id: row.id,
@@ -295,10 +297,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ]);
       if (roleResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Role not found' });
-      }
-
-      if (roleResult.rows[0].is_admin) {
-        return reply.code(403).send({ error: 'Admin role permissions cannot be modified' });
       }
 
       try {

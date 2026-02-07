@@ -25,7 +25,8 @@
     "done": "Done",
     "copy": "Copy",
     "paste": "Paste",
-    "print": "Print"
+    "print": "Print",
+    "view": "View"
   },
   "labels": {
     "name": "Name",

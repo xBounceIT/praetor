@@ -841,7 +841,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              ON rp.role_id = r.id AND rp.permission = 'projects.manage.view'
            WHERE u.id != $1
              AND u.is_disabled = FALSE
-             AND (r.is_admin = TRUE OR rp.permission IS NOT NULL)`,
+             AND rp.permission IS NOT NULL`,
           [request.user!.id],
         );
 

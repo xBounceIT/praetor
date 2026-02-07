@@ -10,7 +10,10 @@
     "finances": "Finances",
     "suppliers": "Suppliers",
     "configuration": "Configuration",
-    "administration": "Administration"
+    "administration": "Administration",
+    "settings": "Settings",
+    "docs": "Documentation",
+    "notifications": "Notifications"
   },
   "routes": {
     "timeTracker": "Time Tracker",
@@ -43,7 +46,8 @@
     "suppliers": "Suppliers",
     "supplierQuotes": "Supplier Quotes",
     "internalEmployees": "Internal Employees",
-    "externalEmployees": "External Employees"
+    "externalEmployees": "External Employees",
+    "roles": "Roles"
   },
   "menu": {
     "settings": "Settings",

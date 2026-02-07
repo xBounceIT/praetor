@@ -34,7 +34,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   onUpdateRolePermissions,
   onDeleteRole,
 }) => {
-  const { t } = useTranslation(['common', 'layout']);
+  const { t } = useTranslation(['common', 'layout', 'administration']);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
@@ -43,6 +43,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   const [roleName, setRoleName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [activeModuleTab, setActiveModuleTab] = useState<string>('');
 
   const { groupedPermissions, moduleOrder } = useMemo(() => {
     const grouped: Record<string, typeof PERMISSION_DEFINITIONS> = {};
@@ -80,7 +81,7 @@ const RolesView: React.FC<RolesViewProps> = ({
         return t('common:buttons.delete');
       case 'view':
       default:
-        return t('common:buttons.view', { defaultValue: 'View' });
+        return t('common:buttons.view');
     }
   };
 
@@ -94,6 +95,7 @@ const RolesView: React.FC<RolesViewProps> = ({
     setRoleName('');
     setSelectedPermissions([]);
     setFormErrors({});
+    setActiveModuleTab(moduleOrder[0] || '');
     setIsCreateOpen(true);
   };
 
@@ -106,10 +108,11 @@ const RolesView: React.FC<RolesViewProps> = ({
   };
 
   const openPermissionsModal = (role: Role) => {
-    if (!canUpdateRoles || role.isAdmin) return;
+    if (!canUpdateRoles) return;
     setActiveRole(role);
     setSelectedPermissions(role.permissions || []);
     setFormErrors({});
+    setActiveModuleTab(moduleOrder[0] || '');
     setIsPermissionsOpen(true);
   };
 
@@ -186,12 +189,66 @@ const RolesView: React.FC<RolesViewProps> = ({
     }
   };
 
+  const renderPermissionTabs = () => (
+    <div className="space-y-4">
+      <div className="flex border-b border-slate-200 gap-1 overflow-x-auto">
+        {moduleOrder.map((module) => (
+          <button
+            key={module}
+            type="button"
+            onClick={() => setActiveModuleTab(module)}
+            className={`pb-3 px-3 text-sm font-bold transition-all relative whitespace-nowrap ${activeModuleTab === module ? 'text-praetor' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
+            {activeModuleTab === module && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+            )}
+          </button>
+        ))}
+      </div>
+      {activeModuleTab && groupedPermissions[activeModuleTab] && (
+        <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
+          {groupedPermissions[activeModuleTab].map((definition) => (
+            <div key={definition.id} className="border border-slate-200 rounded-xl p-4">
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-semibold text-slate-500">
+                  {formatPermissionLabel(definition.id)}
+                </span>
+                <div className="flex flex-wrap gap-4">
+                  {definition.actions.map((action) => {
+                    const permission = buildPermission(definition.id, action);
+                    return (
+                      <label
+                        key={permission}
+                        className="flex items-center gap-2 text-sm text-slate-600"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissions.includes(permission)}
+                          onChange={() => togglePermission(permission)}
+                          className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
+                        />
+                        {actionLabel(action)}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Roles</h2>
-          <p className="text-slate-500 font-medium">Manage role access and permissions.</p>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+            {t('administration:roles.title')}
+          </h2>
+          <p className="text-slate-500 font-medium">{t('administration:roles.subtitle')}</p>
         </div>
         {canCreateRoles && (
           <button
@@ -211,7 +268,7 @@ const RolesView: React.FC<RolesViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedRoles.map((role) => {
             const canRenameRole = canUpdateRoles && !role.isAdmin && !role.isSystem;
-            const canEditPermissions = canUpdateRoles && !role.isAdmin;
+            const canEditPermissions = canUpdateRoles;
             const canRemoveRole = canDeleteRoles && !role.isAdmin && !role.isSystem;
             return (
               <div
@@ -237,7 +294,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                         </Tooltip>
                       )}
                       {canEditPermissions && (
-                        <Tooltip label="Permissions">
+                        <Tooltip label={t('administration:roles.permissions')}>
                           {() => (
                             <button
                               onClick={() => openPermissionsModal(role)}
@@ -268,19 +325,19 @@ const RolesView: React.FC<RolesViewProps> = ({
                 <div className="flex flex-wrap gap-2 mb-4">
                   {role.isSystem && (
                     <span className="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">
-                      System
+                      {t('administration:roles.badges.system')}
                     </span>
                   )}
                   {role.isAdmin && (
                     <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
-                      Admin
+                      {t('administration:roles.badges.admin')}
                     </span>
                   )}
                 </div>
                 <div className="text-sm text-slate-500">
-                  {role.isAdmin
-                    ? 'All permissions'
-                    : `${role.permissions?.length || 0} permissions`}
+                  {t('administration:roles.permissionCount', {
+                    count: role.permissions?.length || 0,
+                  })}
                 </div>
               </div>
             );
@@ -293,8 +350,12 @@ const RolesView: React.FC<RolesViewProps> = ({
           <form onSubmit={handleCreate}>
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-black text-slate-800">Create role</h3>
-                <p className="text-sm text-slate-500">Define role name and permissions.</p>
+                <h3 className="text-lg font-black text-slate-800">
+                  {t('administration:roles.createRole')}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {t('administration:roles.createRoleSubtitle')}
+                </p>
               </div>
               <button
                 type="button"
@@ -321,44 +382,10 @@ const RolesView: React.FC<RolesViewProps> = ({
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-700">Permissions</h4>
-                <div className="max-h-[45vh] overflow-y-auto space-y-4 pr-2">
-                  {moduleOrder.map((module) => (
-                    <div key={module} className="border border-slate-200 rounded-xl p-4">
-                      <h5 className="text-sm font-bold text-slate-700 mb-3">
-                        {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
-                      </h5>
-                      <div className="space-y-3">
-                        {groupedPermissions[module].map((definition) => (
-                          <div key={definition.id} className="flex flex-col gap-2">
-                            <span className="text-xs font-semibold text-slate-500">
-                              {formatPermissionLabel(definition.id)}
-                            </span>
-                            <div className="flex flex-wrap gap-4">
-                              {definition.actions.map((action) => {
-                                const permission = buildPermission(definition.id, action);
-                                return (
-                                  <label
-                                    key={permission}
-                                    className="flex items-center gap-2 text-sm text-slate-600"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedPermissions.includes(permission)}
-                                      onChange={() => togglePermission(permission)}
-                                      className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                                    />
-                                    {actionLabel(action)}
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <h4 className="text-sm font-bold text-slate-700">
+                  {t('administration:roles.permissions')}
+                </h4>
+                {renderPermissionTabs()}
               </div>
               {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
             </div>
@@ -387,8 +414,12 @@ const RolesView: React.FC<RolesViewProps> = ({
           <form onSubmit={handleRename}>
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-black text-slate-800">Rename role</h3>
-                <p className="text-sm text-slate-500">Update the role display name.</p>
+                <h3 className="text-lg font-black text-slate-800">
+                  {t('administration:roles.renameRole')}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {t('administration:roles.renameRoleSubtitle')}
+                </p>
               </div>
               <button
                 type="button"
@@ -437,7 +468,9 @@ const RolesView: React.FC<RolesViewProps> = ({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <div>
-              <h3 className="text-lg font-black text-slate-800">Edit permissions</h3>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('administration:roles.editPermissions')}
+              </h3>
               <p className="text-sm text-slate-500">{activeRole?.name}</p>
             </div>
             <button
@@ -449,43 +482,7 @@ const RolesView: React.FC<RolesViewProps> = ({
             </button>
           </div>
           <div className="p-6 space-y-4">
-            <div className="max-h-[55vh] overflow-y-auto space-y-4 pr-2">
-              {moduleOrder.map((module) => (
-                <div key={module} className="border border-slate-200 rounded-xl p-4">
-                  <h5 className="text-sm font-bold text-slate-700 mb-3">
-                    {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
-                  </h5>
-                  <div className="space-y-3">
-                    {groupedPermissions[module].map((definition) => (
-                      <div key={definition.id} className="flex flex-col gap-2">
-                        <span className="text-xs font-semibold text-slate-500">
-                          {formatPermissionLabel(definition.id)}
-                        </span>
-                        <div className="flex flex-wrap gap-4">
-                          {definition.actions.map((action) => {
-                            const permission = buildPermission(definition.id, action);
-                            return (
-                              <label
-                                key={permission}
-                                className="flex items-center gap-2 text-sm text-slate-600"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedPermissions.includes(permission)}
-                                  onChange={() => togglePermission(permission)}
-                                  className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300"
-                                />
-                                {actionLabel(action)}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {renderPermissionTabs()}
             {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
           </div>
           <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
@@ -517,7 +514,9 @@ const RolesView: React.FC<RolesViewProps> = ({
               <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800">Delete role</h3>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('administration:roles.deleteRole')}
+              </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                 {t('common:messages.deleteConfirmNamed', { name: activeRole?.name })}
               </p>
