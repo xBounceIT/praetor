@@ -130,34 +130,37 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   // Filter projects when client changes
   const filteredProjects = projects.filter((p) => p.clientId === selectedClientId);
+  const firstFilteredProjectId = filteredProjects[0]?.id ?? '';
 
   // Filter tasks when project changes
   const filteredTasks = projectTasks.filter((t) => t.projectId === selectedProjectId);
+  const firstFilteredTaskId = filteredTasks[0]?.id ?? '';
+  const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
 
   // Auto-select first project/task when lists change
   useEffect(() => {
     if (filteredProjects.length > 0) {
-      if (selectedProjectId !== filteredProjects[0].id) {
-        setSelectedProjectId(filteredProjects[0].id);
+      if (selectedProjectId !== firstFilteredProjectId) {
+        setSelectedProjectId(firstFilteredProjectId);
       }
     } else if (selectedProjectId !== '') {
       setSelectedProjectId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredProjects.length, filteredProjects[0].id, selectedProjectId]);
+  }, [filteredProjects.length, firstFilteredProjectId, selectedProjectId]);
 
   useEffect(() => {
     if (filteredTasks.length > 0) {
-      if (selectedTaskId !== filteredTasks[0].id) {
-        setSelectedTaskName(filteredTasks[0].name);
-        setSelectedTaskId(filteredTasks[0].id);
+      if (selectedTaskId !== firstFilteredTaskId) {
+        setSelectedTaskName(firstFilteredTaskName);
+        setSelectedTaskId(firstFilteredTaskId);
       }
     } else if (selectedTaskId !== '') {
       setSelectedTaskName('');
       setSelectedTaskId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredTasks.length, filteredTasks[0].id, filteredTasks[0].name, selectedTaskId]);
+  }, [filteredTasks.length, firstFilteredTaskId, firstFilteredTaskName, selectedTaskId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
