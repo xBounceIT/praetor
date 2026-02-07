@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, WorkUnit } from '../types';
-import CustomSelect from './shared/CustomSelect';
 import { workUnitsApi } from '../services/api';
+import type { User, WorkUnit } from '../types';
+import { buildPermission, hasPermission } from '../utils/permissions';
+import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
-import { buildPermission, hasPermission } from '../utils/permissions';
 
 interface WorkUnitPayload {
   name: string;

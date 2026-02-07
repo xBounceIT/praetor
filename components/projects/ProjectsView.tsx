@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Project, Client } from '../../types';
 import { COLORS } from '../../constants';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable, { Column } from '../shared/StandardTable';
-import StatusBadge from '../shared/StatusBadge';
-import Modal from '../shared/Modal';
-import Tooltip from '../shared/Tooltip';
+import type { Client, Project } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import CustomSelect from '../shared/CustomSelect';
+import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 
 interface ProjectsViewProps {
   projects: Project[];

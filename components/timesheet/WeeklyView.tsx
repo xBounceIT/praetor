@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Project, ProjectTask, TimeEntry, User, TimeEntryLocation } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation, User } from '../../types';
 import { isItalianHoliday } from '../../utils/holidays';
+import CustomSelect from '../shared/CustomSelect';
 import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface WeeklyViewProps {
   entries: TimeEntry[];

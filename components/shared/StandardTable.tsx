@@ -1,8 +1,8 @@
-import { ReactNode, useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import TableFilter from './TableFilter';
 import CustomSelect from './CustomSelect';
+import TableFilter from './TableFilter';
 
 export type Column<T> = {
   header: string;

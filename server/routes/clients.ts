@@ -1,14 +1,14 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
-import {
-  requireNonEmptyString,
-  optionalEmail,
-  badRequest,
-  validateClientIdentifier,
-  optionalNonEmptyString,
-} from '../utils/validation.ts';
+import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import {
+  badRequest,
+  optionalEmail,
+  optionalNonEmptyString,
+  requireNonEmptyString,
+  validateClientIdentifier,
+} from '../utils/validation.ts';
 
 const idParamSchema = {
   type: 'object',
@@ -348,10 +348,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingCode: unknown;
       };
       const body = request.body ?? {};
-      const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
-      const hasClientCode = Object.prototype.hasOwnProperty.call(body, 'clientCode');
-      const hasVatNumber = Object.prototype.hasOwnProperty.call(body, 'vatNumber');
-      const hasTaxCode = Object.prototype.hasOwnProperty.call(body, 'taxCode');
+      const hasName = Object.hasOwn(body, 'name');
+      const hasClientCode = Object.hasOwn(body, 'clientCode');
+      const hasVatNumber = Object.hasOwn(body, 'vatNumber');
+      const hasTaxCode = Object.hasOwn(body, 'taxCode');
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 

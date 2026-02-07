@@ -1,17 +1,17 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
-import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.ts';
-import {
-  requireNonEmptyString,
-  optionalNonEmptyString,
-  validateEnum,
-  optionalLocalizedNonNegativeNumber,
-  optionalArrayOfStrings,
-  badRequest,
-} from '../utils/validation.ts';
+import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import {
+  badRequest,
+  optionalArrayOfStrings,
+  optionalLocalizedNonNegativeNumber,
+  optionalNonEmptyString,
+  requireNonEmptyString,
+  validateEnum,
+} from '../utils/validation.ts';
 
 const idParamSchema = {
   type: 'object',

@@ -63,7 +63,6 @@ class EmailService {
           ignoreTLS: true,
         };
         break;
-      case 'tls':
       default:
         // TLS/STARTTLS: upgrades connection (typically port 587)
         transportOptions = {

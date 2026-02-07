@@ -1,14 +1,14 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcryptjs';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken } from '../middleware/auth.ts';
-import {
-  requireNonEmptyString,
-  optionalNonEmptyString,
-  optionalEmail,
-  badRequest,
-} from '../utils/validation.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import {
+  badRequest,
+  optionalEmail,
+  optionalNonEmptyString,
+  requireNonEmptyString,
+} from '../utils/validation.ts';
 
 const settingsSchema = {
   type: 'object',

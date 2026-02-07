@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import type React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
-import { getLocalDateString } from '../../utils/date';
 import { parseSmartEntry } from '../../services/geminiService';
-import CustomSelect from '../shared/CustomSelect';
-import CustomRepeatModal from '../shared/CustomRepeatModal';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
+import { getLocalDateString } from '../../utils/date';
 import { buildPermission, hasAnyPermission } from '../../utils/permissions';
+import CustomRepeatModal from '../shared/CustomRepeatModal';
+import CustomSelect from '../shared/CustomSelect';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface DailyViewProps {
   clients: Client[];

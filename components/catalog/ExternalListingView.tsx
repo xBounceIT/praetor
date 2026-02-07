@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Product, Supplier } from '../../types';
-import CustomSelect, { Option } from '../shared/CustomSelect';
-import StandardTable from '../shared/StandardTable';
-import StatusBadge, { StatusType } from '../shared/StatusBadge';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import type { Product, Supplier } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable from '../shared/StandardTable';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface ExternalListingViewProps {
   products: Product[];

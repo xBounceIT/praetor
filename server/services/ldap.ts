@@ -1,7 +1,7 @@
-import ldap from 'ldapjs';
 import fs from 'fs';
-import { query } from '../db/index.ts';
+import ldap from 'ldapjs';
 import { v4 as uuidv4 } from 'uuid';
+import { query } from '../db/index.ts';
 
 type LdapConfig = {
   enabled: boolean;

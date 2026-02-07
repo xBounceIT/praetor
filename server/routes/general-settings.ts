@@ -1,13 +1,13 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import {
-  optionalNonEmptyString,
-  optionalLocalizedNonNegativeNumber,
-  parseBoolean,
-  badRequest,
-} from '../utils/validation.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
+import {
+  badRequest,
+  optionalLocalizedNonNegativeNumber,
+  optionalNonEmptyString,
+  parseBoolean,
+} from '../utils/validation.ts';
 
 const generalSettingsSchema = {
   type: 'object',

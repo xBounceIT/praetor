@@ -1,14 +1,15 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Product, SpecialBid } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable from '../shared/StandardTable';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import type { Client, Product, SpecialBid } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Calendar from '../shared/Calendar';
-import StatusBadge from '../shared/StatusBadge';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface SpecialBidsViewProps {
   bids: SpecialBid[];

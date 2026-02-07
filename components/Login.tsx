@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { User } from '../types';
-import api from '../services/api';
+import type React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../services/api';
+import type { User } from '../types';
 
 interface LoginProps {
   users: User[];

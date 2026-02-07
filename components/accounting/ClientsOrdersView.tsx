@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ClientsOrder, ClientsOrderItem, Client, Product, SpecialBid } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable from '../shared/StandardTable';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import StatusBadge, { StatusType } from '../shared/StatusBadge';
+import type { Client, ClientsOrder, ClientsOrderItem, Product, SpecialBid } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable from '../shared/StandardTable';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const getPaymentTermsOptions = (t: (key: string) => string) => [
   { id: 'immediate', name: t('crm:paymentTerms.immediate') },

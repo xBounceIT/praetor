@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import emailService from '../services/email.ts';
 import { encrypt } from '../utils/crypto.ts';
-import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 
 const emailConfigSchema = {
   type: 'object',

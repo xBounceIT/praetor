@@ -1,15 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Role } from '../../types';
-import Modal from '../shared/Modal';
-import Tooltip from '../shared/Tooltip';
+import type { Role } from '../../types';
 import {
-  PERMISSION_DEFINITIONS,
-  PermissionAction,
   buildPermission,
   formatPermissionLabel,
   hasPermission,
+  PERMISSION_DEFINITIONS,
+  type PermissionAction,
 } from '../../utils/permissions';
+import Modal from '../shared/Modal';
+import Tooltip from '../shared/Tooltip';
 
 interface RolesViewProps {
   roles: Role[];

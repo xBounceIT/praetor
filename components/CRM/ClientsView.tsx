@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client } from '../../types';
-import StandardTable, { Column } from '../shared/StandardTable';
-import StatusBadge from '../shared/StatusBadge';
-import Modal from '../shared/Modal';
-import Tooltip from '../shared/Tooltip';
+import type { Client } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 
 interface ClientsViewProps {
   clients: Client[];

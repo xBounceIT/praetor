@@ -1,78 +1,76 @@
-import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getTheme, applyTheme } from './utils/theme';
-import {
-  Client,
-  Project,
-  ProjectTask,
-  TimeEntry,
-  View,
-  User,
-  Role,
-  LdapConfig,
-  GeneralSettings as IGeneralSettings,
-  Product,
-  Quote,
-  ClientsOrder,
-  WorkUnit,
-  Invoice,
-  Payment,
-  Expense,
-  Supplier,
-  SupplierQuote,
-  SpecialBid,
-  Notification,
-  EmailConfig,
-  TimeEntryLocation,
-} from './types';
-import { COLORS } from './constants';
-import i18n from './i18n';
-import Layout from './components/Layout';
-import DailyView from './components/timesheet/DailyView';
-
-import Calendar from './components/shared/Calendar';
-import Tooltip from './components/shared/Tooltip';
-import UserSettings from './components/UserSettings';
-import Login from './components/Login';
+import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
+import ClientsOrdersView from './components/accounting/ClientsOrdersView';
+import AuthSettings from './components/administration/AuthSettings';
+import EmailSettings from './components/administration/EmailSettings';
+import GeneralSettings from './components/administration/GeneralSettings';
+import RolesView from './components/administration/RolesView';
 import UserManagement from './components/administration/UserManagement';
-import RecurringManager from './components/RecurringManager';
 import ClientsView from './components/CRM/ClientsView';
+import SuppliersView from './components/CRM/SuppliersView';
+import ExternalListingView from './components/catalog/ExternalListingView';
+import InternalListingView from './components/catalog/InternalListingView';
+import SpecialBidsView from './components/catalog/SpecialBidsView';
+import ApiDocsView from './components/docs/ApiDocsView';
+import FrontendDocsView from './components/docs/FrontendDocsView';
+import ExpensesView from './components/ExpensesView';
+import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
+import InternalEmployeesView from './components/HR/InternalEmployeesView';
+import Layout from './components/Layout';
+import Login from './components/Login';
+import NotFound from './components/NotFound';
+import PaymentsView from './components/PaymentsView';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
-import AuthSettings from './components/administration/AuthSettings';
-import GeneralSettings from './components/administration/GeneralSettings';
+import RecurringManager from './components/RecurringManager';
+import ClientQuotesView from './components/Sales/ClientQuotesView';
+import SessionTimeoutHandler from './components/SessionTimeoutHandler';
+import SupplierQuotesView from './components/SupplierQuotesView';
+import Calendar from './components/shared/Calendar';
 import CustomSelect from './components/shared/CustomSelect';
+import Tooltip from './components/shared/Tooltip';
+import DailyView from './components/timesheet/DailyView';
 import WeeklyView from './components/timesheet/WeeklyView';
+import UserSettings from './components/UserSettings';
+import WorkUnitsView from './components/WorkUnitsView';
+import { COLORS } from './constants';
+import i18n from './i18n';
+import api, { getAuthToken, type Settings, setAuthToken } from './services/api';
 import { getInsights } from './services/geminiService';
-import { isItalianHoliday } from './utils/holidays';
+import type {
+  Client,
+  ClientsOrder,
+  EmailConfig,
+  Expense,
+  GeneralSettings as IGeneralSettings,
+  Invoice,
+  LdapConfig,
+  Notification,
+  Payment,
+  Product,
+  Project,
+  ProjectTask,
+  Quote,
+  Role,
+  SpecialBid,
+  Supplier,
+  SupplierQuote,
+  TimeEntry,
+  TimeEntryLocation,
+  User,
+  View,
+  WorkUnit,
+} from './types';
 import { getLocalDateString } from './utils/date';
-import api, { setAuthToken, getAuthToken, Settings } from './services/api';
+import { isItalianHoliday } from './utils/holidays';
 import {
   buildPermission,
   hasAnyPermission,
   hasPermission,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
-
-import NotFound from './components/NotFound';
-import ApiDocsView from './components/docs/ApiDocsView';
-import FrontendDocsView from './components/docs/FrontendDocsView';
-import InternalListingView from './components/catalog/InternalListingView';
-import ExternalListingView from './components/catalog/ExternalListingView';
-import ClientQuotesView from './components/Sales/ClientQuotesView';
-import WorkUnitsView from './components/WorkUnitsView';
-import ClientsOrdersView from './components/accounting/ClientsOrdersView';
-import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
-import PaymentsView from './components/PaymentsView';
-import ExpensesView from './components/ExpensesView';
-import SessionTimeoutHandler from './components/SessionTimeoutHandler';
-import SuppliersView from './components/CRM/SuppliersView';
-import SupplierQuotesView from './components/SupplierQuotesView';
-import SpecialBidsView from './components/catalog/SpecialBidsView';
-import InternalEmployeesView from './components/HR/InternalEmployeesView';
-import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
-import EmailSettings from './components/administration/EmailSettings';
-import RolesView from './components/administration/RolesView';
+import { applyTheme, getTheme } from './utils/theme';
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -1800,9 +1798,9 @@ const App: React.FC = () => {
       const currentQuote = quotes.find((quote) => quote.id === id);
       const isRestore = Boolean(
         updates.status === 'draft' &&
-        updates.isExpired === false &&
-        currentQuote &&
-        (currentQuote.status !== 'draft' || currentQuote.isExpired),
+          updates.isExpired === false &&
+          currentQuote &&
+          (currentQuote.status !== 'draft' || currentQuote.isExpired),
       );
       if (isRestore) {
         // Sales functionality removed - linked sales cleanup handled by backend

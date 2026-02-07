@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useId, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import Tooltip from './Tooltip';

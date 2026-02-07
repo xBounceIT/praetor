@@ -1,8 +1,8 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
 import { standardErrorResponses, successResponseSchema } from '../schemas/common.ts';
+import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const idParamSchema = {
   type: 'object',

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
-import CustomSelect, { Option } from '../shared/CustomSelect';
+import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
+import CustomSelect, { type Option } from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface GeneralSettingsProps {

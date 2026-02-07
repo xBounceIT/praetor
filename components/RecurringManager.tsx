@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Client, Project, ProjectTask } from '../types';
+import type { Client, Project, ProjectTask } from '../types';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
 

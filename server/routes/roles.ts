@@ -1,10 +1,10 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { requireNonEmptyString, ensureArrayOfStrings, badRequest } from '../utils/validation.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import { CONFIGURATION_PERMISSIONS, isPermissionKnown } from '../utils/permissions.ts';
+import { badRequest, ensureArrayOfStrings, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleSchema = {
   type: 'object',

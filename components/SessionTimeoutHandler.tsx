@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import api from '../services/api';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../services/api';
 import Modal from './shared/Modal';
 
 interface SessionTimeoutHandlerProps {

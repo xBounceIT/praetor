@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Notification } from '../../types';
+import type { Notification } from '../../types';
 import Tooltip from './Tooltip';
 
 interface NotificationBellProps {

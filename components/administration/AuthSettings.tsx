@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LdapConfig, LdapRoleMapping, Role } from '../../types';
+import type { LdapConfig, LdapRoleMapping, Role } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 
 interface AuthSettingsProps {

@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, Client, Project, ProjectTask, Role } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable from '../shared/StandardTable';
-
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { usersApi } from '../../services/api';
-import Modal from '../shared/Modal';
-import Tooltip from '../shared/Tooltip';
+import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import CustomSelect from '../shared/CustomSelect';
+import Modal from '../shared/Modal';
+import StandardTable from '../shared/StandardTable';
+import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface UserManagementProps {
   users: User[];

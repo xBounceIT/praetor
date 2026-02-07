@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Settings } from '../services/api';
-import { getTheme, applyTheme, Theme } from '../utils/theme';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
+import type { Settings } from '../services/api';
+import { applyTheme, getTheme, type Theme } from '../utils/theme';
 
 interface UserSettingsProps {
   settings: Settings;

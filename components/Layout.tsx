@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, User, Notification, Role } from '../types';
+import type { Notification, Role, User, View } from '../types';
+import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 import NotificationBell from './shared/NotificationBell';
 import Tooltip from './shared/Tooltip';
-import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 
 interface Module {
   id: string;

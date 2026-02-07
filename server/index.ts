@@ -66,8 +66,9 @@ try {
       const { migrate: addLanguageToSettings } = await import('./db/add_language_to_settings.ts');
       await addLanguageToSettings();
       // Run update language constraint migration
-      const { migrate: updateLanguageConstraint } =
-        await import('./db/update_language_constraint.ts');
+      const { migrate: updateLanguageConstraint } = await import(
+        './db/update_language_constraint.ts'
+      );
       await updateLanguageConstraint();
     } catch (err) {
       console.error('Failed to run settings language migration:', err);
@@ -91,8 +92,9 @@ try {
 
     // Run products structure update migration
     try {
-      const { migrate: updateProductsStructure } =
-        await import('./db/update_products_structure.ts');
+      const { migrate: updateProductsStructure } = await import(
+        './db/update_products_structure.ts'
+      );
       await updateProductsStructure();
     } catch (err) {
       console.error('Failed to run products structure update migration:', err);
@@ -108,8 +110,9 @@ try {
 
     // Run migration to update currency precision
     try {
-      const { migrate: updateCurrencyPrecision } =
-        await import('./db/update_currency_precision.ts');
+      const { migrate: updateCurrencyPrecision } = await import(
+        './db/update_currency_precision.ts'
+      );
       await updateCurrencyPrecision();
     } catch (err) {
       console.error('Failed to run currency precision update migration:', err);

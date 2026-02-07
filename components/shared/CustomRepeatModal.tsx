@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import CustomSelect from './CustomSelect';
+import type React from 'react';
+import { useState } from 'react';
 import Modal from '../shared/Modal';
+import CustomSelect from './CustomSelect';
 
 interface CustomRepeatModalProps {
   isOpen: boolean;

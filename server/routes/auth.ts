@@ -1,10 +1,10 @@
 import bcrypt from 'bcryptjs';
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
-import { generateToken, authenticateToken } from '../middleware/auth.ts';
-import { getRolePermissions } from '../utils/permissions.ts';
-import { requireNonEmptyString, badRequest } from '../utils/validation.ts';
+import { authenticateToken, generateToken } from '../middleware/auth.ts';
 import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { getRolePermissions } from '../utils/permissions.ts';
+import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const authUserSchema = {
   type: 'object',

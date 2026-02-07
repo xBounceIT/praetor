@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TimeEntry } from '../../types';
-import { isItalianHoliday } from '../../utils/holidays';
+import type { TimeEntry } from '../../types';
 import { getLocalDateString } from '../../utils/date';
+import { isItalianHoliday } from '../../utils/holidays';
 import Tooltip from './Tooltip';
 
 interface CalendarProps {

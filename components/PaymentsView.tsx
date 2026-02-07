@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Payment, Client, Invoice } from '../types';
+import type { Client, Invoice, Payment } from '../types';
 import CustomSelect from './shared/CustomSelect';
-import StandardTable from './shared/StandardTable';
-import ValidatedNumberInput from './shared/ValidatedNumberInput';
-import StatusBadge, { StatusType } from './shared/StatusBadge';
 import Modal from './shared/Modal';
+import StandardTable from './shared/StandardTable';
+import StatusBadge, { type StatusType } from './shared/StatusBadge';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
 interface PaymentsViewProps {
   payments: Payment[];

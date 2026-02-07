@@ -1,5 +1,5 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-import type { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../db/index.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 

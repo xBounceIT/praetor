@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Quote, QuoteItem, Client, Product, SpecialBid, ClientsOrder } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable, { Column } from '../shared/StandardTable';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import StatusBadge, { StatusType } from '../shared/StatusBadge';
+import type { Client, ClientsOrder, Product, Quote, QuoteItem, SpecialBid } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface ClientQuotesViewProps {
   quotes: Quote[];
@@ -189,9 +190,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   });
   const isReadOnly = Boolean(
     editingQuote &&
-    (editingQuote.status === 'sent' ||
-      editingQuote.status === 'accepted' ||
-      editingQuote.status === 'denied'),
+      (editingQuote.status === 'sent' ||
+        editingQuote.status === 'accepted' ||
+        editingQuote.status === 'denied'),
   );
 
   const openAddModal = () => {

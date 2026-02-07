@@ -1,9 +1,9 @@
-import { cpSync, existsSync, mkdirSync } from 'fs';
-import path from 'path';
+import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
 import sirv from 'sirv';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import pkg from './package.json';
 
 // Generate build date in yyyymmdd format

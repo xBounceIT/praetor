@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SupplierQuote, SupplierQuoteItem, Supplier, Product } from '../types';
-import CustomSelect from './shared/CustomSelect';
-import StandardTable from './shared/StandardTable';
-import ValidatedNumberInput from './shared/ValidatedNumberInput';
+import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../types';
 import { roundToTwoDecimals } from '../utils/numbers';
+import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
+import StandardTable from './shared/StandardTable';
 import Tooltip from './shared/Tooltip';
+import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
 interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];

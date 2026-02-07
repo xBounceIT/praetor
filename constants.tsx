@@ -1,4 +1,4 @@
-import { Client, Project, ProjectTask, User } from './types';
+import type { Client, Project, ProjectTask, User } from './types';
 
 export const DEFAULT_USERS: User[] = [
   {

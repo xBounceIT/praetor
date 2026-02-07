@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import buildApp from '../app.ts';
 
 const __filename = fileURLToPath(import.meta.url);

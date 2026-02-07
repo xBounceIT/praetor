@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProjectTask, Project, Client, User } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable, { Column } from '../shared/StandardTable';
-import StatusBadge from '../shared/StatusBadge';
 import { tasksApi } from '../../services/api';
-import Modal from '../shared/Modal';
-import Tooltip from '../shared/Tooltip';
+import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import CustomSelect from '../shared/CustomSelect';
+import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 
 interface TasksViewProps {
   tasks: ProjectTask[];

@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Invoice, InvoiceItem, Client, Product, ClientsOrder } from '../../types';
-import CustomSelect from '../shared/CustomSelect';
-import StandardTable from '../shared/StandardTable';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import type { Client, ClientsOrder, Invoice, InvoiceItem, Product } from '../../types';
 import { roundToTwoDecimals } from '../../utils/numbers';
-import StatusBadge, { StatusType } from '../shared/StatusBadge';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable from '../shared/StandardTable';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 interface ClientsInvoicesViewProps {
   invoices: Invoice[];
