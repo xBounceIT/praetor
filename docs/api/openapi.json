@@ -6616,6 +6616,9 @@
                             "productCost": {
                               "type": "number"
                             },
+                            "productTaxRate": {
+                              "type": "number"
+                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -6652,6 +6655,7 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
+                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -6794,6 +6798,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -6810,6 +6817,9 @@
                           "type": "number"
                         },
                         "productCost": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
                           "type": "number"
                         },
                         "productMolPercentage": {
@@ -6948,6 +6958,9 @@
                           "productCost": {
                             "type": "number"
                           },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -6984,6 +6997,7 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
+                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -7127,6 +7141,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -7143,6 +7160,9 @@
                           "type": "number"
                         },
                         "productCost": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
                           "type": "number"
                         },
                         "productMolPercentage": {
@@ -7286,6 +7306,9 @@
                           "productCost": {
                             "type": "number"
                           },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -7322,6 +7345,7 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
+                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -8566,6 +8590,9 @@
                             "productCost": {
                               "type": "number"
                             },
+                            "productTaxRate": {
+                              "type": "number"
+                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -8601,6 +8628,7 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
+                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -8738,6 +8766,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -8754,6 +8785,9 @@
                           "type": "number"
                         },
                         "productCost": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
                           "type": "number"
                         },
                         "productMolPercentage": {
@@ -8884,6 +8918,9 @@
                           "productCost": {
                             "type": "number"
                           },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -8919,6 +8956,7 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
+                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -9054,6 +9092,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -9070,6 +9111,9 @@
                           "type": "number"
                         },
                         "productCost": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
                           "type": "number"
                         },
                         "productMolPercentage": {
@@ -9204,6 +9248,9 @@
                           "productCost": {
                             "type": "number"
                           },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -9239,6 +9286,7 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
+                          "productTaxRate",
                           "discount"
                         ]
                       }
