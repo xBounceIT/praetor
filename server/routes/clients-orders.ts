@@ -143,6 +143,7 @@ const clientOrderUpdateBodySchema = {
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All clients_orders routes require authentication
   fastify.addHook('onRequest', authenticateToken);
+  // API path is clients-orders for backward compatibility; data is stored in sales/sale_items.
 
   // GET / - List all clients_orders with their items
   fastify.get(
@@ -172,7 +173,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-            FROM clients_orders
+            FROM sales
             ORDER BY created_at DESC`,
       );
 
@@ -180,7 +181,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const itemsResult = await query(
         `SELECT
                 id,
-                order_id as "orderId",
+                sale_id as "orderId",
                 product_id as "productId",
                 product_name as "productName",
                 special_bid_id as "specialBidId",
@@ -193,7 +194,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 special_bid_mol_percentage as "specialBidMolPercentage",
                 note,
                 discount
-            FROM clients_order_items
+            FROM sale_items
             ORDER BY created_at ASC`,
       );
 
@@ -304,7 +305,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Insert order
       const orderResult = await query(
-        `INSERT INTO clients_orders (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
+        `INSERT INTO sales (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING
                 id,
@@ -334,11 +335,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
-          `INSERT INTO clients_order_items (id, order_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                  RETURNING
                     id,
-                    order_id as "orderId",
+                    sale_id as "orderId",
                     product_id as "productId",
                     product_name as "productName",
                     special_bid_id as "specialBidId",
@@ -561,7 +562,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     discount,
                     status,
                     notes
-                FROM clients_orders
+                FROM sales
                 WHERE id = $1`,
         [idResult.value],
       );
@@ -637,7 +638,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemsResult = await query(
             `SELECT
                             id,
-                            order_id as "orderId",
+                            sale_id as "orderId",
                             product_id as "productId",
                             product_name as "productName",
                             special_bid_id as "specialBidId",
@@ -650,8 +651,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                             special_bid_mol_percentage as "specialBidMolPercentage",
                             discount,
                             note
-                        FROM clients_order_items
-                        WHERE order_id = $1`,
+                        FROM sale_items
+                        WHERE sale_id = $1`,
             [idResult.value],
           );
           existingItems = itemsResult.rows;
@@ -677,7 +678,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Update order
       const orderResult = await query(
-        `UPDATE clients_orders
+        `UPDATE sales
              SET client_id = COALESCE($1, client_id),
                  client_name = COALESCE($2, client_name),
                  payment_terms = COALESCE($3, payment_terms),
@@ -721,7 +722,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemsResult = await query(
             `SELECT
                         id,
-                        order_id as "orderId",
+                        sale_id as "orderId",
                         product_id as "productId",
                         product_name as "productName",
                         special_bid_id as "specialBidId",
@@ -734,8 +735,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         special_bid_mol_percentage as "specialBidMolPercentage",
                         discount,
                         note
-                    FROM clients_order_items
-                    WHERE order_id = $1`,
+                    FROM sale_items
+                    WHERE sale_id = $1`,
             [idResult.value],
           );
           updatedItems = itemsResult.rows;
@@ -743,17 +744,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } else if (items !== undefined) {
         if (!normalizedItems) return;
         // Delete existing items
-        await query('DELETE FROM clients_order_items WHERE order_id = $1', [idResult.value]);
+        await query('DELETE FROM sale_items WHERE sale_id = $1', [idResult.value]);
 
         // Insert new items
         for (const item of normalizedItems) {
           const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
           const itemResult = await query(
-            `INSERT INTO clients_order_items (id, order_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
+            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                      RETURNING
                         id,
-                        order_id as "orderId",
+                        sale_id as "orderId",
                         product_id as "productId",
                         product_name as "productName",
                         special_bid_id as "specialBidId",
@@ -790,7 +791,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemsResult = await query(
           `SELECT
                     id,
-                    order_id as "orderId",
+                    sale_id as "orderId",
                     product_id as "productId",
                     product_name as "productName",
                     special_bid_id as "specialBidId",
@@ -803,8 +804,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     special_bid_mol_percentage as "specialBidMolPercentage",
                     discount,
                     note
-                FROM clients_order_items
-                WHERE order_id = $1`,
+                FROM sale_items
+                WHERE sale_id = $1`,
           [idResult.value],
         );
         updatedItems = itemsResult.rows;
@@ -815,9 +816,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Fetch order items with notes and product codes for project creation
         const orderItemsResult = await query(
           `SELECT si.product_id, si.product_name, si.note, p.product_code
-         FROM clients_order_items si
+         FROM sale_items si
          LEFT JOIN products p ON si.product_id = p.id
-         WHERE si.order_id = $1`,
+         WHERE si.sale_id = $1`,
           [idResult.value],
         );
 
@@ -926,7 +927,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check if order exists and is in draft status
-      const orderResult = await query('SELECT id, status FROM clients_orders WHERE id = $1', [
+      const orderResult = await query('SELECT id, status FROM sales WHERE id = $1', [
         idResult.value,
       ]);
 
@@ -943,7 +944,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Items will be deleted automatically via CASCADE
-      await query('DELETE FROM clients_orders WHERE id = $1', [idResult.value]);
+      await query('DELETE FROM sales WHERE id = $1', [idResult.value]);
 
       return reply.code(204).send();
     },
