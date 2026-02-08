@@ -1,9 +1,12 @@
 import buildApp from './app.ts';
+import { query } from './db/index.ts';
 import { closeRedis } from './services/redis.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
 
 const fastify = await buildApp();
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const shutdown = async (signal: string) => {
   try {
@@ -22,6 +25,22 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 // Start server
 try {
+  // One-time probe to confirm DB connectivity without logging on every pooled connection.
+  // Retry briefly to handle container startup ordering.
+  let dbReady = false;
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      await query('SELECT 1');
+      dbReady = true;
+      break;
+    } catch (err) {
+      if (attempt === 10) throw err;
+      console.error(`PostgreSQL not ready (attempt ${attempt}/10). Retrying...`, err);
+      await sleep(1000);
+    }
+  }
+  if (dbReady) console.log('PostgreSQL ready.');
+
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
 
   // Run automatic migration on startup

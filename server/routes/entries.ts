@@ -2,6 +2,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import {
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+  TTL_ENTRIES_SECONDS,
+} from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   badRequest,
@@ -124,86 +131,105 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       let result: Awaited<ReturnType<typeof query>>;
       const { userId } = request.query as { userId?: string };
       const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
+      const bypass = shouldBypassCache(request);
+      const viewerId = request.user.id;
 
-      if (canViewAll) {
-        if (userId) {
-          result = await query(
-            `SELECT id, user_id, date, client_id, client_name, project_id,
-                  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-           FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-            [userId],
-          );
-        } else {
-          result = await query(
-            `SELECT id, user_id, date, client_id, client_name, project_id,
-                  project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-           FROM time_entries ORDER BY created_at DESC`,
-          );
-        }
-      } else if (userId && userId !== request.user?.id) {
+      // Non-admin access to a specific user requires a check. Do it outside caching so we can 403 cleanly.
+      if (!canViewAll && userId && userId !== viewerId) {
         const managedCheck = await query(
           `SELECT 1
                  FROM user_work_units uwu
                  JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                  WHERE wum.user_id = $1 AND uwu.user_id = $2`,
-          [request.user?.id, userId],
+          [viewerId, userId],
         );
 
         if (managedCheck.rows.length === 0) {
           return reply.code(403).send({ error: 'Not authorized to view entries for this user' });
         }
-
-        result = await query(
-          `SELECT id, user_id, date, client_id, client_name, project_id,
-                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-         FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-          [userId],
-        );
-      } else if (userId) {
-        result = await query(
-          `SELECT id, user_id, date, client_id, client_name, project_id,
-                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-         FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
-          [userId],
-        );
-      } else {
-        result = await query(
-          `SELECT id, user_id, date, client_id, client_name, project_id,
-                project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
-         FROM time_entries
-         WHERE user_id = $1
-           OR user_id IN (
-                SELECT uwu.user_id
-                FROM user_work_units uwu
-                JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
-                WHERE wum.user_id = $1
-            )
-         ORDER BY created_at DESC`,
-          [request.user?.id],
-        );
       }
 
-      const entries = result.rows.map((e) => ({
-        id: e.id,
-        userId: e.user_id,
-        date: e.date.toISOString().split('T')[0],
-        clientId: e.client_id,
-        clientName: e.client_name,
-        projectId: e.project_id,
-        projectName: e.project_name,
-        task: e.task,
-        notes: e.notes,
-        duration: parseFloat(e.duration),
-        hourlyCost: parseFloat(e.hourly_cost || 0),
-        isPlaceholder: e.is_placeholder,
-        location: e.location || 'remote',
-        createdAt: new Date(e.created_at).getTime(),
-      }));
+      const scopeKey = canViewAll
+        ? userId
+          ? `all:user:${userId}`
+          : 'all:allUsers'
+        : userId
+          ? userId === viewerId
+            ? `self:${viewerId}`
+            : `mgr:${viewerId}:user:${userId}`
+          : `self+managed:${viewerId}`;
 
-      return entries;
+      const { status, value } = await cacheGetSetJson(
+        `entries:user:${viewerId}`,
+        `v=1:scope=${scopeKey}`,
+        TTL_ENTRIES_SECONDS,
+        async () => {
+          if (canViewAll) {
+            if (userId) {
+              result = await query(
+                `SELECT id, user_id, date, client_id, client_name, project_id,
+                      project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+                 FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
+                [userId],
+              );
+            } else {
+              result = await query(
+                `SELECT id, user_id, date, client_id, client_name, project_id,
+                      project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+                 FROM time_entries ORDER BY created_at DESC`,
+              );
+            }
+          } else if (userId) {
+            result = await query(
+              `SELECT id, user_id, date, client_id, client_name, project_id,
+                    project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+               FROM time_entries WHERE user_id = $1 ORDER BY created_at DESC`,
+              [userId],
+            );
+          } else {
+            result = await query(
+              `SELECT id, user_id, date, client_id, client_name, project_id,
+                    project_name, task, notes, duration, hourly_cost, is_placeholder, location, created_at
+               FROM time_entries
+               WHERE user_id = $1
+                 OR user_id IN (
+                      SELECT uwu.user_id
+                      FROM user_work_units uwu
+                      JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+                      WHERE wum.user_id = $1
+                  )
+               ORDER BY created_at DESC`,
+              [viewerId],
+            );
+          }
+
+          return result.rows.map((e) => ({
+            id: e.id,
+            userId: e.user_id,
+            date: e.date.toISOString().split('T')[0],
+            clientId: e.client_id,
+            clientName: e.client_name,
+            projectId: e.project_id,
+            projectName: e.project_name,
+            task: e.task,
+            notes: e.notes,
+            duration: parseFloat(e.duration),
+            hourlyCost: parseFloat(e.hourly_cost || 0),
+            isPlaceholder: e.is_placeholder,
+            location: e.location || 'remote',
+            createdAt: new Date(e.created_at).getTime(),
+          }));
+        },
+        { bypass },
+      );
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -339,7 +365,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ],
       );
 
-      return reply.code(201).send({
+      const created = {
         id,
         userId: targetUserId,
         date: dateResult.value,
@@ -354,7 +380,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isPlaceholder: isPlaceholderValue,
         location: locationValue,
         createdAt: Date.now(),
-      });
+      };
+
+      await bumpNamespaceVersion(`entries:user:${targetUserId}`);
+      const viewerId = request.user?.id;
+      if (viewerId && viewerId !== targetUserId) {
+        await bumpNamespaceVersion(`entries:user:${viewerId}`);
+      }
+
+      return reply.code(201).send(created);
     },
   );
 
@@ -430,6 +464,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const e = result.rows[0];
+      const targetUserId = e.user_id as string;
+      await bumpNamespaceVersion(`entries:user:${targetUserId}`);
+      const viewerId = request.user?.id;
+      if (viewerId && viewerId !== targetUserId) {
+        await bumpNamespaceVersion(`entries:user:${viewerId}`);
+      }
       return {
         id: e.id,
         userId: e.user_id,
@@ -477,6 +517,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Entry not found' });
       }
 
+      const targetUserId = existing.rows[0].user_id as string;
+
       if (existing.rows[0].user_id !== request.user?.id) {
         if (!hasPermission(request, 'timesheets.tracker_all.view')) {
           const managedCheck = await query(
@@ -493,6 +535,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await query('DELETE FROM time_entries WHERE id = $1', [idResult.value]);
+      await bumpNamespaceVersion(`entries:user:${targetUserId}`);
+      const viewerId = request.user?.id;
+      if (viewerId && viewerId !== targetUserId) {
+        await bumpNamespaceVersion(`entries:user:${viewerId}`);
+      }
       return { message: 'Entry deleted' };
     },
   );
@@ -560,6 +607,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const result = await query(sql + ' RETURNING id', params);
+      await bumpNamespaceVersion(`entries:user:${request.user.id}`);
       return { message: `Deleted ${result.rows.length} entries` };
     },
   );

@@ -5,20 +5,22 @@ dotenv.config();
 
 const { Pool } = pg;
 
+const envInt = (key: string, fallback: number) => {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432', 10),
   database: process.env.DB_NAME || 'tempo',
   user: process.env.DB_USER || 'tempo',
   password: process.env.DB_PASSWORD || 'tempo',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
-// Test connection on startup
-pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database');
+  max: envInt('PG_POOL_MAX', 10),
+  idleTimeoutMillis: envInt('PG_POOL_IDLE_TIMEOUT_MS', 300_000),
+  connectionTimeoutMillis: envInt('PG_POOL_CONN_TIMEOUT_MS', 2_000),
 });
 
 pool.on('error', (err) => {
