@@ -70,7 +70,10 @@ export const shouldBypassCache = (request: FastifyRequest) => {
   return false;
 };
 
-export const setCacheHeader = (reply: { header: (k: string, v: string) => void }, status: CacheStatus) => {
+export const setCacheHeader = (
+  reply: { header: (k: string, v: string) => void },
+  status: CacheStatus,
+) => {
   reply.header('x-praetor-cache', status);
 };
 

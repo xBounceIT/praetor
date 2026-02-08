@@ -7,6 +7,7 @@
 - Aggiunto tooltip custom su ciascun pulsante
 - RBAC 2.0: Profili personalizzati, permessi granulari, nuova pagina Ruoli nel modulo Amministrazione (stile glpi)
 - Migrato da ESLint + Prettier a Biome (AIO)
+- Aggiunto Redis come cache layer tra backend e DB
 
 ## 20260202 - Operativo
 

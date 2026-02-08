@@ -1,5 +1,5 @@
 import { query } from '../db/index.ts';
-import { TTL_PERMISSIONS_SECONDS, cacheGetSetJson } from '../services/cache.ts';
+import { cacheGetSetJson, TTL_PERMISSIONS_SECONDS } from '../services/cache.ts';
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 export type PermissionResource = string;
@@ -159,7 +159,9 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
       const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
         roleId,
       ]);
-      const explicit = permResult.rows.map((r) => normalizePermission(r.permission)) as Permission[];
+      const explicit = permResult.rows.map((r) =>
+        normalizePermission(r.permission),
+      ) as Permission[];
 
       if (roleResult.rows[0].is_admin) {
         return Array.from(

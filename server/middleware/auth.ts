@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { query } from '../db/index.ts';
-import { TTL_AUTH_USER_SECONDS, cacheGetSetJson } from '../services/cache.ts';
+import { cacheGetSetJson, TTL_AUTH_USER_SECONDS } from '../services/cache.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';

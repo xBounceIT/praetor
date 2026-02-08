@@ -17,6 +17,7 @@ package-lock.json
 .bun-tmp/
 .bun-install/
 server/.tmp/
+.tmp/
 
 # Editor directories and files
 .vscode/*

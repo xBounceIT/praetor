@@ -3,11 +3,11 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import {
-  TTL_SETTINGS_SECONDS,
   bumpNamespaceVersion,
   cacheGetSetJson,
   setCacheHeader,
   shouldBypassCache,
+  TTL_SETTINGS_SECONDS,
 } from '../services/cache.ts';
 import {
   badRequest,
@@ -97,7 +97,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
           const s = result.rows[0];
-          const geminiApiKey = apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
+          const geminiApiKey =
+            apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
 
           return {
             currency: s.currency,

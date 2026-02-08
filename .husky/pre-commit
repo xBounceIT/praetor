@@ -1,8 +1,20 @@
 #!/usr/bin/env sh
 set -eu
 
+mkdir -p .tmp
+export TMPDIR="$PWD/.tmp"
+
+# If dependencies were installed on a different OS (Windows vs WSL/Linux),
+# Rollup's platform-specific optional dependency may be missing. Ensure it is present
+# so `vite build` doesn't fail and force `--no-verify`.
+if ! bun -e "require('rollup')" >/dev/null 2>&1; then
+  echo "pre-commit: rollup native module missing for this platform; running bun install..."
+  bun install
+fi
+
 bun run build
+cd server && bun run build && cd ..
 bun run docs
 git add docs bun.lock
 bunx lint-staged
-bun run lint:fix
+bun run lint
