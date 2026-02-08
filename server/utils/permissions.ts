@@ -56,6 +56,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // HR
   { id: 'hr.internal', actions: CRUD },
   { id: 'hr.external', actions: CRUD },
+  { id: 'hr.costs', actions: VIEW_UPDATE },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE },
@@ -128,6 +129,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('suppliers.quotes', CRUD),
     ...buildPermissions('hr.internal', CRUD),
     ...buildPermissions('hr.external', CRUD),
+    ...buildPermissions('hr.costs', VIEW_UPDATE),
     buildPermission('settings', 'view'),
     buildPermission('settings', 'update'),
     buildPermission('docs.api', 'view'),

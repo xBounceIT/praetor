@@ -162,11 +162,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
+      const canViewCosts = hasPermission(request, 'hr.costs.view');
+
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
-        ? 'v=1:scope=all'
-        : `v=1:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}`;
+        ? `v=2:scope=all:costs=${canViewCosts ? 1 : 0}`
+        : `v=2:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
 
       const { status, value } = await cacheGetSetJson(
         'users',
@@ -206,7 +208,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             username: u.username,
             role: u.role,
             avatarInitials: u.avatar_initials,
-            costPerHour: parseFloat(u.cost_per_hour || 0),
+            costPerHour: canViewCosts ? parseFloat(u.cost_per_hour || 0) : 0,
             isDisabled: !!u.is_disabled,
             employeeType: u.employee_type || 'app_user',
           }));
@@ -562,7 +564,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(isDisabled);
       }
 
-      if (costPerHour !== undefined) {
+      if (costPerHour !== undefined && hasPermission(request, 'hr.costs.update')) {
         updates.push(`cost_per_hour = $${paramIdx++}`);
         values.push(
           (
@@ -626,7 +628,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         username: u.username,
         role: u.role,
         avatarInitials: u.avatar_initials,
-        costPerHour: parseFloat(u.cost_per_hour || 0),
+        costPerHour: hasPermission(request, 'hr.costs.view') ? parseFloat(u.cost_per_hour || 0) : 0,
         isDisabled: !!u.is_disabled,
         employeeType: u.employee_type || 'app_user',
       };

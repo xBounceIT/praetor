@@ -132,6 +132,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
     permissions,
     buildPermission('administration.user_management', 'delete'),
   );
+  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
   const canManageAssignments = canUpdateUsers;
   React.useEffect(() => {
     if (!newRole && roleOptions[0]?.id) {
@@ -450,7 +451,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         }
       }
 
-      if (canUpdateUsers) {
+      if (canViewCosts && canUpdateUsers) {
         updates.costPerHour = parseFloat(editCostPerHour) || 0;
       }
 
@@ -472,7 +473,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
     !!editingUser &&
     (editName !== editingUser.name ||
       editIsDisabled !== !!editingUser.isDisabled ||
-      (canUpdateUsers && parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
+      (canViewCosts &&
+        canUpdateUsers &&
+        parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
       (canEditRole && editRole !== editingUser.role) ||
       hasAssignedRoleChanges);
 
@@ -783,7 +786,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
               )}
 
-              {canUpdateUsers && (
+              {canViewCosts && canUpdateUsers && (
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}
@@ -1034,14 +1037,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
               const canEdit = canUpdateUsers;
               const role = roleLookup.get(user.role);
               const isAdminRole = role?.isAdmin || user.role === 'admin';
+              const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
               const roleBadgeClass = isAdminRole
                 ? 'bg-slate-800 text-white border-slate-700'
-                : role?.isSystem
+                : isManagerRole
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                  : role?.isSystem
+                    ? 'bg-slate-100 text-slate-600 border-slate-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
               const roleIcon = isAdminRole
                 ? 'fa-shield-halved'
-                : role?.isSystem
+                : isManagerRole
                   ? 'fa-briefcase'
                   : 'fa-user';
 
@@ -1268,14 +1274,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 const canEdit = canUpdateUsers;
                 const role = roleLookup.get(user.role);
                 const isAdminRole = role?.isAdmin || user.role === 'admin';
+                const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
                 const roleBadgeClass = isAdminRole
                   ? 'bg-slate-800 text-white border-slate-700'
-                  : role?.isSystem
+                  : isManagerRole
                     ? 'bg-blue-50 text-blue-700 border-blue-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    : role?.isSystem
+                      ? 'bg-slate-100 text-slate-600 border-slate-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
                 const roleIcon = isAdminRole
                   ? 'fa-shield-halved'
-                  : role?.isSystem
+                  : isManagerRole
                     ? 'fa-briefcase'
                     : 'fa-user';
                 return (

@@ -58,6 +58,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // HR
   { id: 'hr.internal', actions: CRUD, module: 'hr' },
   { id: 'hr.external', actions: CRUD, module: 'hr' },
+  { id: 'hr.costs', actions: VIEW_UPDATE, module: 'hr' },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE, module: 'administration' },

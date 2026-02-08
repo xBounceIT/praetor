@@ -939,3 +939,10 @@ INSERT INTO email_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- Add default_location to general_settings
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_location VARCHAR(20) DEFAULT 'remote';
+
+-- Seed hr.costs permissions for manager role
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'hr.costs.view'),
+    ('manager', 'hr.costs.update')
+ON CONFLICT DO NOTHING;

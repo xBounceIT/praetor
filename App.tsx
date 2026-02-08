@@ -2753,6 +2753,7 @@ const App: React.FC = () => {
                   onUpdateEmployee={handleUpdateEmployee}
                   onDeleteEmployee={handleDeleteEmployee}
                   currency={generalSettings.currency}
+                  permissions={currentUser.permissions || []}
                 />
               )}
 
@@ -2764,6 +2765,7 @@ const App: React.FC = () => {
                   onUpdateEmployee={handleUpdateEmployee}
                   onDeleteEmployee={handleDeleteEmployee}
                   currency={generalSettings.currency}
+                  permissions={currentUser.permissions || []}
                 />
               )}
 

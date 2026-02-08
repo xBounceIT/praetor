@@ -2,6 +2,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { User } from '../../types';
+import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
 
@@ -14,6 +15,7 @@ export interface ExternalEmployeesViewProps {
   onUpdateEmployee: (id: string, updates: Partial<User>) => void;
   onDeleteEmployee: (id: string) => void;
   currency: string;
+  permissions: string[];
 }
 
 const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
@@ -22,8 +24,11 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   onUpdateEmployee,
   onDeleteEmployee,
   currency,
+  permissions,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
+  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
+  const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs', 'update'));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -164,25 +169,28 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
               {errors.name && <p className="text-xs text-red-500 mt-1 ml-1">{errors.name}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('externalEmployees.costPerHour')}
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
-                  {currency}
-                </span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.costPerHour}
-                  onChange={(e) => setFormData({ ...formData, costPerHour: e.target.value })}
-                  className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-slate-50/50"
-                  placeholder="0.00"
-                />
+            {canViewCosts && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('externalEmployees.costPerHour')}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                    {currency}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.costPerHour}
+                    onChange={(e) => setFormData({ ...formData, costPerHour: e.target.value })}
+                    className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-slate-50/50"
+                    placeholder="0.00"
+                    disabled={!canUpdateCosts}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex gap-3 pt-4">
               <button
@@ -283,9 +291,11 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
                   {t('externalEmployees.name')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('externalEmployees.costPerHour')}
-                </th>
+                {canViewCosts && (
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    {t('externalEmployees.costPerHour')}
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
                   {t('externalEmployees.status')}
                 </th>
@@ -313,10 +323,12 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-medium text-slate-600">
-                    {currency}
-                    {(employee.costPerHour || 0).toFixed(2)}
-                  </td>
+                  {canViewCosts && (
+                    <td className="px-6 py-4 font-medium text-slate-600">
+                      {currency}
+                      {(employee.costPerHour || 0).toFixed(2)}
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
                       {t('externalEmployees.active')}

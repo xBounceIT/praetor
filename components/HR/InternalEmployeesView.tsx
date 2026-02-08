@@ -2,6 +2,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { User } from '../../types';
+import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -16,6 +17,7 @@ export interface InternalEmployeesViewProps {
   onUpdateEmployee: (id: string, updates: Partial<User>) => void;
   onDeleteEmployee: (id: string) => void;
   currency: string;
+  permissions: string[];
 }
 
 const getSurname = (name: string): string => {
@@ -29,8 +31,11 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   onUpdateEmployee,
   onDeleteEmployee,
   currency,
+  permissions,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
+  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
+  const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs', 'update'));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -161,17 +166,21 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         />
       ),
     },
-    {
-      header: t('internalEmployees.costPerHour'),
-      accessorKey: 'costPerHour',
-      align: 'right',
-      cell: ({ value }) => (
-        <span className="font-medium text-slate-600">
-          {currency}
-          {Number(value ?? 0).toFixed(2)}
-        </span>
-      ),
-    },
+    ...(canViewCosts
+      ? [
+          {
+            header: t('internalEmployees.costPerHour'),
+            accessorKey: 'costPerHour' as keyof User,
+            align: 'right' as const,
+            cell: ({ value }: { value: unknown }) => (
+              <span className="font-medium text-slate-600">
+                {currency}
+                {Number(value ?? 0).toFixed(2)}
+              </span>
+            ),
+          },
+        ]
+      : []),
     {
       header: t('internalEmployees.status'),
       accessorFn: () => 'active',
@@ -274,25 +283,28 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               {errors.name && <p className="text-xs text-red-500 mt-1 ml-1">{errors.name}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('internalEmployees.costPerHour')}
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
-                  {currency}
-                </span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.costPerHour}
-                  onChange={(e) => setFormData({ ...formData, costPerHour: e.target.value })}
-                  className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-slate-50/50"
-                  placeholder="0.00"
-                />
+            {canViewCosts && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('internalEmployees.costPerHour')}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                    {currency}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.costPerHour}
+                    onChange={(e) => setFormData({ ...formData, costPerHour: e.target.value })}
+                    className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all bg-slate-50/50"
+                    placeholder="0.00"
+                    disabled={!canUpdateCosts}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex gap-3 pt-4">
               <button
