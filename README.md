@@ -22,6 +22,7 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
 ## Tech Stack
 
 - **Frontend**: React 19, TypeScript
+- **Backend**: Fastify (API), Redis (cache)
 - **Styling**: Tailwind CSS
 - **Charts**: Recharts
 - **AI Integration**: Google Gemini API (`@google/genai`)

@@ -1,87 +1,49 @@
-# AGENTS.md
+# Repository Guidelines
 
-## Project Overview
+## Project Structure & Module Organization
 
-Praetor is an AI-enhanced ERP application for time tracking, project management, CRM, and financial operations. React 19 + Vite frontend with Fastify + PostgreSQL backend.
+- Frontend (Vite + React/TS) lives at repo root.
+- Entry points: `index.html`, `index.tsx`, `App.tsx`.
+- UI modules: `components/` (feature folders like `components/HR/`, shared primitives in `components/shared/`).
+- Client-side helpers: `services/` (API + Gemini integration), `utils/`, shared types in `types.ts` and `constants.tsx`.
+- Static assets: `public/`, translations in `locales/`.
+- Backend API (Fastify + TS) is in `server/`.
+- API entry/build: `server/index.ts`, app wiring in `server/app.ts`, routes in `server/routes/`, DB schema/seed in `server/db/`.
+- Generated docs are committed under `docs/` (`docs/frontend/`, `docs/api/openapi.json`).
 
-## Development Commands
+## Build, Test, and Development Commands
 
-### Frontend (root directory)
-```bash
-bun run dev          # Start dev server (port 3000)
-bun run build        # Production build
-bun run lint         # Biome check
-bun run lint:fix     # Auto-fix lint issues
-bun run format       # Biome formatting
-```
+- `bun install` (and `cd server && bun install`): install deps.
+- `bun run dev`: run frontend dev server (defaults to `http://localhost:3000`).
+- `bun run build`: production frontend build to `dist/`.
+- `bun run preview`: serve the production build.
+- `cd server && bun run dev`: run API with watch.
+- `cd server && bun run build`: typecheck/compile API (`tsc`).
+- `cd server && bun run start`: run the built API (defaults to `http://localhost:3001`).
+- `bun run docs`: generate TypeDoc + OpenAPI into `docs/`.
+- `docker compose up -d --build`: run full stack (Postgres/Redis/API/Caddy).
 
-### Backend (server directory)
-```bash
-cd server
-bun run dev          # Dev server with hot reload (port 3001)
-bun run build        # TypeScript compilation
-bun run start        # Run compiled server
-```
+## Coding Style & Naming Conventions
 
-### Docker (full stack)
-```bash
-docker compose up -d --build    # Build and start all services
-```
+- TypeScript throughout; prefer explicit types at module boundaries.
+- Formatting/linting is Biome: 2-space indent, 100 char line width, single quotes, semicolons.
+- Use `bun run lint` and `bun run format` (or `bun run lint:fix`) before pushing.
+- Naming: React components `PascalCase.tsx`, helpers `camelCase`, constants `SCREAMING_SNAKE_CASE`.
 
-## Architecture
+## Testing Guidelines
 
-### State Management
-- No Redux/MobX - uses React hooks with centralized state in `App.tsx`
-- `App.tsx` (~83KB) manages all application state and passes via props
-- Components receive data through props, not global stores
+- No dedicated unit/integration test runner is configured currently.
+- Treat `bun run build`, `cd server && bun run build`, and `bun run lint` as the minimum CI-quality gate.
+- For changes touching UI flows, do a manual smoke test against `server/index.ts` and key routes under `server/routes/`.
+- If you introduce tests, prefer `*.test.ts` / `*.test.tsx` (co-located or under `__tests__/`).
 
-### API Layer
-- `/services/api.ts` - Custom fetch wrapper with token management
-- RESTful endpoints at `/api/*`
-- Sliding window JWT auth (30min idle timeout, 8hr max session)
-- Server returns new token in `x-auth-token` header on each request
+## Commit & Pull Request Guidelines
 
-### Database
-- Direct PostgreSQL via `pg` driver (no ORM)
-- Connection pool in `/server/db/index.ts`
-- Raw SQL queries with parameterized inputs
-- Schema in `/server/db/schema.sql`, migrations in `/server/db/*.ts`
-- Snake_case in DB → camelCase in API responses
+- Prefer Conventional Commits as seen in history: `feat:`, `fix(scope):`, `refactor:`, `docs:`, `perf:`.
+- Husky pre-commit runs build, server build, docs generation, lint-staged, and lint. Expect `docs/` and `bun.lock` to update and be staged.
+- PRs should include: what/why, screenshots for UI changes, and notes for any DB/schema/migration changes in `server/db/`.
 
-### Authentication
-- JWT (HS256) with optional LDAP/AD fallback
-- Roles: admin (full access), manager (CRM/reports), user (personal tracking)
-- Middleware: `/server/middleware/auth.ts`
+## Security & Configuration Tips
 
-### Internationalization
-- i18next with English (en) and Italian (it)
-- Translations in `/locales/{en,it}/*.json`
-- Namespaces: common, layout, auth, timesheets, crm, hr, projects, finances, suppliers, settings, notifications
-
-## Key Patterns
-
-### Route Organization
-Backend routes in `/server/routes/` with prefix-based registration:
-- `auth.ts` → `/api/auth`
-- `clients.ts` → `/api/clients`
-- Pattern: `fastify.get('/', { onRequest: [authenticateToken, requireRole('manager')] }, handler)`
-
-### Component Naming
-- Views: PascalCase `*View.tsx` (e.g., `ClientsView.tsx`, `SalesView.tsx`)
-- Utilities: camelCase (e.g., `geminiService.ts`)
-- Routes: kebab-case (e.g., `general-settings.ts`)
-
-### Types
-- Central type definitions in `/types.ts`
-- Fastify extensions in `/server/types/fastify.d.ts`
-
-## Important Notes
-
-- **Environment**: Windows - avoid Linux-specific commands
-- **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
-- **CDN dependencies**: React, Recharts
-- **Test accounts**: admin/password, manager/password, user/password
-- **No automated tests**: Manual testing only
-- **Ports**: Frontend 3000, Backend 3001, PostgreSQL 5432
-- **Remote Testing**: App runs on remote Docker containers - do not run commands locally for testing
-- **Docs**: Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+- Do not commit secrets. Use `.env.example` and `server/.env.example` as templates.
+- If running frontend + API locally (not via Docker), set `VITE_API_URL=http://localhost:3001/api` and set `FRONTEND_URL` to match your dev server origin.
