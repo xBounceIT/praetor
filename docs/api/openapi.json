@@ -531,6 +531,474 @@
         }
       }
     },
+    "/api/ai/validate-model": {
+      "post": {
+        "summary": "Validate that a model exists on the selected provider",
+        "tags": [
+          "ai"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "modelId": {
+                    "type": "string"
+                  },
+                  "apiKey": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "provider",
+                  "modelId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "normalizedModelId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/parse-smart-entry": {
+      "post": {
+        "summary": "Parse natural language time entry into structured fields",
+        "tags": [
+          "ai"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "input"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "task": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "task",
+                    "duration"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/insights": {
+      "post": {
+        "summary": "Generate short productivity insights from recent time entries",
+        "tags": [
+          "ai"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string"
+                        },
+                        "clientName": {
+                          "type": "string"
+                        },
+                        "projectName": {
+                          "type": "string"
+                        },
+                        "task": {
+                          "type": "string"
+                        },
+                        "duration": {
+                          "type": "number"
+                        },
+                        "notes": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "clientName",
+                        "projectName",
+                        "task",
+                        "duration"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "entries"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users/": {
       "get": {
         "summary": "List users",
@@ -5973,6 +6441,18 @@
                     "geminiApiKey": {
                       "type": "string"
                     },
+                    "aiProvider": {
+                      "type": "string"
+                    },
+                    "openrouterApiKey": {
+                      "type": "string"
+                    },
+                    "geminiModelId": {
+                      "type": "string"
+                    },
+                    "openrouterModelId": {
+                      "type": "string"
+                    },
                     "allowWeekendSelection": {
                       "type": "boolean"
                     },
@@ -5987,6 +6467,10 @@
                     "treatSaturdayAsHoliday",
                     "enableAiInsights",
                     "geminiApiKey",
+                    "aiProvider",
+                    "openrouterApiKey",
+                    "geminiModelId",
+                    "openrouterModelId",
                     "allowWeekendSelection",
                     "defaultLocation"
                   ]
@@ -6115,6 +6599,18 @@
                   "geminiApiKey": {
                     "type": "string"
                   },
+                  "aiProvider": {
+                    "type": "string"
+                  },
+                  "openrouterApiKey": {
+                    "type": "string"
+                  },
+                  "geminiModelId": {
+                    "type": "string"
+                  },
+                  "openrouterModelId": {
+                    "type": "string"
+                  },
                   "allowWeekendSelection": {
                     "type": "boolean"
                   },
@@ -6152,6 +6648,18 @@
                     "geminiApiKey": {
                       "type": "string"
                     },
+                    "aiProvider": {
+                      "type": "string"
+                    },
+                    "openrouterApiKey": {
+                      "type": "string"
+                    },
+                    "geminiModelId": {
+                      "type": "string"
+                    },
+                    "openrouterModelId": {
+                      "type": "string"
+                    },
                     "allowWeekendSelection": {
                       "type": "boolean"
                     },
@@ -6166,6 +6674,10 @@
                     "treatSaturdayAsHoliday",
                     "enableAiInsights",
                     "geminiApiKey",
+                    "aiProvider",
+                    "openrouterApiKey",
+                    "geminiModelId",
+                    "openrouterModelId",
                     "allowWeekendSelection",
                     "defaultLocation"
                   ]

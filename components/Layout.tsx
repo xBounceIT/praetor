@@ -81,6 +81,8 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isRoleSubmenuOpen, setIsRoleSubmenuOpen] = useState(false);
+  const roleSubmenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   /* Removed module switcher state and refs */
@@ -133,6 +135,7 @@ const Layout: React.FC<LayoutProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
+        setIsRoleSubmenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -695,7 +698,10 @@ const Layout: React.FC<LayoutProps> = ({
 
             <div className="relative" ref={menuRef}>
               <button
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                onClick={() => {
+                  setIsProfileMenuOpen(!isProfileMenuOpen);
+                  setIsRoleSubmenuOpen(false);
+                }}
                 className="group flex items-center gap-3 p-1 pr-3 rounded-full bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-white transition-all focus:outline-none"
               >
                 <div className="w-8 h-8 rounded-full bg-praetor text-white flex items-center justify-center font-bold text-xs shadow-md group-hover:scale-105 transition-transform">
@@ -722,38 +728,55 @@ const Layout: React.FC<LayoutProps> = ({
                   </div>
 
                   {!!currentUser.availableRoles && currentUser.availableRoles.length > 1 && (
-                    <div className="px-2 pb-2 border-b border-slate-100 mb-1">
-                      <div className="px-2 pt-2 pb-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          {t('menu.switchRole')}
-                        </p>
-                      </div>
-                      <div className="space-y-1">
-                        {currentUser.availableRoles.map((r) => {
-                          const isActive = r.id === currentUser.role;
-                          return (
-                            <button
-                              key={r.id}
-                              onClick={() => {
-                                if (isActive) return;
-                                setIsProfileMenuOpen(false);
-                                onSwitchRole(r.id);
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-3 rounded-xl transition-colors ${
-                                isActive
-                                  ? 'bg-slate-100 text-praetor'
-                                  : 'text-slate-700 hover:bg-slate-50'
-                              }`}
-                              disabled={isActive}
-                            >
-                              <span className="font-semibold truncate">{r.name}</span>
-                              {isActive && (
-                                <i className="fa-solid fa-check text-[12px] text-praetor"></i>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
+                    <div
+                      className="relative"
+                      onMouseEnter={() => {
+                        if (roleSubmenuTimeout.current) clearTimeout(roleSubmenuTimeout.current);
+                        setIsRoleSubmenuOpen(true);
+                      }}
+                      onMouseLeave={() => {
+                        roleSubmenuTimeout.current = setTimeout(
+                          () => setIsRoleSubmenuOpen(false),
+                          150,
+                        );
+                      }}
+                    >
+                      <button
+                        className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${isRoleSubmenuOpen ? 'bg-slate-50' : 'text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        <i className="fa-solid fa-id-badge w-4 text-center"></i>
+                        <span className="flex-1">{t('menu.switchRole')}</span>
+                        <i className="fa-solid fa-chevron-left text-[10px] text-slate-400"></i>
+                      </button>
+                      {isRoleSubmenuOpen && (
+                        <div className="absolute right-full top-0 mr-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                          {currentUser.availableRoles.map((r) => {
+                            const isActive = r.id === currentUser.role;
+                            return (
+                              <button
+                                key={r.id}
+                                onClick={() => {
+                                  if (isActive) return;
+                                  setIsRoleSubmenuOpen(false);
+                                  setIsProfileMenuOpen(false);
+                                  onSwitchRole(r.id);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-2 transition-colors ${
+                                  isActive
+                                    ? 'bg-slate-100 text-praetor'
+                                    : 'text-slate-700 hover:bg-slate-50 cursor-pointer'
+                                }`}
+                                disabled={isActive}
+                              >
+                                <span className="font-semibold truncate">{r.name}</span>
+                                {isActive && (
+                                  <i className="fa-solid fa-check text-[12px] text-praetor"></i>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
 
