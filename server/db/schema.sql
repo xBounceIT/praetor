@@ -666,6 +666,23 @@ ALTER TABLE settings ALTER COLUMN enable_ai_insights SET DEFAULT FALSE;
 -- Migration: Add gemini_api_key to general_settings
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemini_api_key VARCHAR(255);
 
+-- Migration: Add AI provider + OpenRouter support
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(20) DEFAULT 'gemini';
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS openrouter_api_key VARCHAR(255);
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemini_model_id VARCHAR(255);
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS openrouter_model_id VARCHAR(255);
+
+-- Migration: Ensure ai_provider values are restricted (safe for existing installations)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'general_settings_ai_provider_check') THEN
+        ALTER TABLE general_settings DROP CONSTRAINT general_settings_ai_provider_check;
+    END IF;
+END $$;
+
+ALTER TABLE general_settings ADD CONSTRAINT general_settings_ai_provider_check
+    CHECK (ai_provider IN ('gemini', 'openrouter'));
+
 -- Sales table (safe for existing installations)
 CREATE TABLE IF NOT EXISTS sales (
     id VARCHAR(50) PRIMARY KEY,

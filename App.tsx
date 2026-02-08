@@ -37,7 +37,6 @@ import WorkUnitsView from './components/WorkUnitsView';
 import { COLORS } from './constants';
 import i18n from './i18n';
 import api, { getAuthToken, type Settings, setAuthToken } from './services/api';
-import { getInsights } from './services/geminiService';
 import type {
   Client,
   ClientsOrder,
@@ -131,7 +130,6 @@ const TrackerView: React.FC<{
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   enableAiInsights: boolean;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
-  geminiApiKey?: string;
   defaultLocation?: TimeEntryLocation;
 }> = ({
   entries,
@@ -157,7 +155,6 @@ const TrackerView: React.FC<{
   onAddBulkEntries,
   enableAiInsights,
   onRecurringAction,
-  geminiApiKey,
   defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
@@ -296,7 +293,6 @@ const TrackerView: React.FC<{
               dailyGoal={dailyGoal}
               currentDayTotal={dailyTotal}
               enableAiInsights={enableAiInsights}
-              geminiApiKey={geminiApiKey}
               defaultLocation={defaultLocation}
             />
 
@@ -605,6 +601,10 @@ const App: React.FC = () => {
     allowWeekendSelection: true,
     enableAiInsights: false,
     geminiApiKey: '',
+    aiProvider: 'gemini' as 'gemini' | 'openrouter',
+    openrouterApiKey: '',
+    geminiModelId: '',
+    openrouterModelId: '',
     defaultLocation: 'remote' as TimeEntryLocation,
   });
   const [userSettings, setUserSettings] = useState<Settings>({
@@ -882,6 +882,10 @@ const App: React.FC = () => {
       setGeneralSettings({
         ...genSettings,
         geminiApiKey: genSettings.geminiApiKey || '',
+        aiProvider: genSettings.aiProvider || 'gemini',
+        openrouterApiKey: genSettings.openrouterApiKey || '',
+        geminiModelId: genSettings.geminiModelId || '',
+        openrouterModelId: genSettings.openrouterModelId || '',
         defaultLocation: genSettings.defaultLocation || 'remote',
       });
       setHasLoadedGeneralSettings(true);
@@ -2197,6 +2201,10 @@ const App: React.FC = () => {
       setGeneralSettings({
         ...updated,
         geminiApiKey: updated.geminiApiKey || '',
+        aiProvider: updated.aiProvider || 'gemini',
+        openrouterApiKey: updated.openrouterApiKey || '',
+        geminiModelId: updated.geminiModelId || '',
+        openrouterModelId: updated.openrouterModelId || '',
         defaultLocation: updated.defaultLocation || 'remote',
       });
     } catch (err) {
@@ -2232,9 +2240,15 @@ const App: React.FC = () => {
     if (entries.length < 3) return;
     setIsInsightLoading(true);
     const userEntries = entries.filter((e) => e.userId === viewingUserId);
-    const result = await getInsights(userEntries.slice(0, 10), generalSettings.geminiApiKey);
-    setInsights(result);
-    setIsInsightLoading(false);
+    try {
+      const { text } = await api.ai.getInsights(userEntries.slice(0, 10));
+      setInsights(text);
+    } catch (err) {
+      console.error('Failed to generate insights:', err);
+      setInsights('Keep up the great work! Consistent tracking is the first step to optimization.');
+    } finally {
+      setIsInsightLoading(false);
+    }
   };
 
   const getDefaultViewForPermissions = (permissions: string[]): View => {
@@ -2571,7 +2585,6 @@ const App: React.FC = () => {
                 onAddBulkEntries={handleAddBulkEntries}
                 enableAiInsights={generalSettings.enableAiInsights}
                 onRecurringAction={handleRecurringAction}
-                geminiApiKey={generalSettings.geminiApiKey}
                 defaultLocation={generalSettings.defaultLocation}
               />
             )}

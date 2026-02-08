@@ -544,6 +544,53 @@ export const generalSettingsApi = {
     }).then(normalizeGeneralSettings),
 };
 
+// AI API (server-side provider calls)
+export const aiApi = {
+  validateModel: (data: {
+    provider: 'gemini' | 'openrouter';
+    modelId: string;
+    apiKey?: string;
+  }): Promise<{
+    ok: boolean;
+    code?: string;
+    message?: string;
+    normalizedModelId?: string;
+    name?: string;
+  }> =>
+    fetchApi('/ai/validate-model', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  parseSmartEntry: (
+    input: string,
+  ): Promise<{
+    project: string;
+    task: string;
+    duration: number;
+    notes?: string;
+  }> =>
+    fetchApi('/ai/parse-smart-entry', {
+      method: 'POST',
+      body: JSON.stringify({ input }),
+    }),
+
+  getInsights: (
+    entries: Array<{
+      date: string;
+      clientName: string;
+      projectName: string;
+      task: string;
+      duration: number;
+      notes?: string;
+    }>,
+  ): Promise<{ text: string }> =>
+    fetchApi('/ai/insights', {
+      method: 'POST',
+      body: JSON.stringify({ entries }),
+    }),
+};
+
 // Client Quotes API (Sales module)
 export const clientQuotesApi = {
   list: (): Promise<Quote[]> =>
@@ -749,6 +796,7 @@ export const emailApi = {
 
 export default {
   auth: authApi,
+  ai: aiApi,
   users: usersApi,
   employees: employeesApi,
   clients: clientsApi,

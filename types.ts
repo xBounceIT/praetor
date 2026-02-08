@@ -61,6 +61,10 @@ export interface GeneralSettings {
   treatSaturdayAsHoliday: boolean;
   enableAiInsights: boolean;
   geminiApiKey?: string;
+  aiProvider?: 'gemini' | 'openrouter';
+  openrouterApiKey?: string;
+  geminiModelId?: string;
+  openrouterModelId?: string;
   allowWeekendSelection: boolean;
   defaultLocation?: TimeEntryLocation;
 }

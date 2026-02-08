@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { parseSmartEntry } from '../../services/geminiService';
+import api from '../../services/api';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { buildPermission, hasAnyPermission } from '../../utils/permissions';
@@ -26,7 +26,6 @@ export interface DailyViewProps {
   dailyGoal: number;
   currentDayTotal: number;
   enableAiInsights: boolean;
-  geminiApiKey?: string;
   defaultLocation?: TimeEntryLocation;
 }
 
@@ -43,7 +42,6 @@ const DailyView: React.FC<DailyViewProps> = ({
   dailyGoal,
   currentDayTotal,
   enableAiInsights,
-  geminiApiKey,
   defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
@@ -247,31 +245,36 @@ const DailyView: React.FC<DailyViewProps> = ({
     setIsLoading(true);
     setSmartError('');
 
-    const parsed = await parseSmartEntry(smartInput, geminiApiKey);
-    setIsLoading(false);
+    try {
+      const parsed = await api.ai.parseSmartEntry(smartInput);
+      setIsLoading(false);
 
-    if (parsed && parsed.duration > 0) {
-      const projectMatch = projects.find((p) =>
-        p.name.toLowerCase().includes(parsed.project.toLowerCase()),
-      );
-      const clientMatch = projectMatch
-        ? clients.find((c) => c.id === projectMatch.clientId)
-        : clients[0];
+      if (parsed && parsed.duration > 0) {
+        const projectMatch = projects.find((p) =>
+          p.name.toLowerCase().includes(parsed.project.toLowerCase()),
+        );
+        const clientMatch = projectMatch
+          ? clients.find((c) => c.id === projectMatch.clientId)
+          : clients[0];
 
-      onAdd({
-        date: date,
-        clientId: clientMatch?.id || 'c1',
-        clientName: clientMatch?.name || 'General',
-        projectId: projectMatch?.id || projects[0]?.id || 'p1',
-        projectName: projectMatch?.name || projects[0]?.name || 'General',
-        task: parsed.task,
-        notes: parsed.notes || '',
-        duration: parsed.duration,
-      });
-      setSmartInput('');
-      setIsSmartMode(false);
-    } else {
-      setSmartError(t('entry.couldntParse'));
+        onAdd({
+          date: date,
+          clientId: clientMatch?.id || 'c1',
+          clientName: clientMatch?.name || 'General',
+          projectId: projectMatch?.id || projects[0]?.id || 'p1',
+          projectName: projectMatch?.name || projects[0]?.name || 'General',
+          task: parsed.task,
+          notes: parsed.notes || '',
+          duration: parsed.duration,
+        });
+        setSmartInput('');
+        setIsSmartMode(false);
+      } else {
+        setSmartError(t('entry.couldntParse'));
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setSmartError((err as Error).message || t('entry.couldntParse'));
     }
   };
 

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../../services/api';
 import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -33,8 +34,14 @@ const CURRENCY_OPTIONS: Option[] = [
   { id: 'zł', name: 'Polish Zloty (zł)' },
 ];
 
+type ModelCheckState = 'idle' | 'checking' | 'ok' | 'not_found' | 'error';
+
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate }) => {
   const { t } = useTranslation('settings');
+  const AI_PROVIDER_OPTIONS: Option[] = [
+    { id: 'gemini', name: t('general.aiProviders.gemini') },
+    { id: 'openrouter', name: t('general.aiProviders.openrouter') },
+  ];
   const [currency, setCurrency] = useState(settings.currency);
   const [dailyLimit, setDailyLimit] = useState(settings.dailyLimit);
   const [startOfWeek, setStartOfWeek] = useState(settings.startOfWeek);
@@ -49,6 +56,15 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   );
   const [enableAiInsights, setEnableAiInsights] = useState(settings.enableAiInsights);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>(
+    settings.aiProvider || 'gemini',
+  );
+  const [openrouterApiKey, setOpenrouterApiKey] = useState(settings.openrouterApiKey || '');
+  const [geminiModelId, setGeminiModelId] = useState(settings.geminiModelId || '');
+  const [openrouterModelId, setOpenrouterModelId] = useState(settings.openrouterModelId || '');
+  const [modelCheck, setModelCheck] = useState<{ state: ModelCheckState; message?: string }>({
+    state: 'idle',
+  });
   const [activeTab, setActiveTab] = useState<'localization' | 'tracking' | 'ai'>('localization');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -62,13 +78,44 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setDefaultLocation(settings.defaultLocation || 'remote');
     setEnableAiInsights(settings.enableAiInsights);
     setGeminiApiKey(settings.geminiApiKey || '');
+    setAiProvider(settings.aiProvider || 'gemini');
+    setOpenrouterApiKey(settings.openrouterApiKey || '');
+    setGeminiModelId(settings.geminiModelId || '');
+    setOpenrouterModelId(settings.openrouterModelId || '');
+    setModelCheck({ state: 'idle' });
   }, [settings]);
 
-  const isApiKeyMissing = () => enableAiInsights && !geminiApiKey.trim();
+  const currentApiKey = aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey;
+  const currentModelId = aiProvider === 'gemini' ? geminiModelId : openrouterModelId;
+
+  const isApiKeyMissing = () => enableAiInsights && !currentApiKey.trim();
+  const isModelMissing = () => enableAiInsights && !currentModelId.trim();
+  const isModelNotFound = () => enableAiInsights && modelCheck.state === 'not_found';
+
+  const handleCheckModel = async () => {
+    if (!currentApiKey.trim() || !currentModelId.trim()) return;
+    setModelCheck({ state: 'checking' });
+    try {
+      const res = await api.ai.validateModel({
+        provider: aiProvider,
+        modelId: currentModelId,
+        apiKey: currentApiKey,
+      });
+      if (res.ok) {
+        setModelCheck({ state: 'ok' });
+      } else if (res.code === 'NOT_FOUND') {
+        setModelCheck({ state: 'not_found', message: res.message || '' });
+      } else {
+        setModelCheck({ state: 'error', message: res.message || '' });
+      }
+    } catch (err) {
+      setModelCheck({ state: 'error', message: (err as Error).message });
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isApiKeyMissing()) return;
+    if (isApiKeyMissing() || isModelMissing() || isModelNotFound) return;
     setIsSaving(true);
     try {
       await onUpdate({
@@ -80,6 +127,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         defaultLocation,
         enableAiInsights,
         geminiApiKey,
+        aiProvider,
+        openrouterApiKey,
+        geminiModelId,
+        openrouterModelId,
       });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -98,7 +149,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     defaultLocation !== (settings.defaultLocation || 'remote') ||
     enableAiInsights !== settings.enableAiInsights ||
-    geminiApiKey !== (settings.geminiApiKey || '');
+    geminiApiKey !== (settings.geminiApiKey || '') ||
+    aiProvider !== (settings.aiProvider || 'gemini') ||
+    openrouterApiKey !== (settings.openrouterApiKey || '') ||
+    geminiModelId !== (settings.geminiModelId || '') ||
+    openrouterModelId !== (settings.openrouterModelId || '');
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -310,44 +365,195 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
               {enableAiInsights && (
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    {t('general.geminiApiKey')}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={geminiApiKey}
-                      onChange={(e) => setGeminiApiKey(e.target.value)}
-                      placeholder={t('general.apiKeyPlaceholder')}
-                      className={`w-full px-4 py-2 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-sm font-semibold pr-10 ${isApiKeyMissing() ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                    />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                      <i className="fa-brands fa-google"></i>
+                  {/* Provider */}
+                  <div className="max-w-md">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {t('general.aiProviderLabel')}
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                        <i
+                          className={
+                            aiProvider === 'gemini' ? 'fa-brands fa-google' : 'fa-solid fa-route'
+                          }
+                        ></i>
+                      </div>
+                      <CustomSelect
+                        options={AI_PROVIDER_OPTIONS}
+                        value={aiProvider}
+                        onChange={(val) => {
+                          setAiProvider(val as 'gemini' | 'openrouter');
+                          setModelCheck({ state: 'idle' });
+                        }}
+                        buttonClassName="pl-10"
+                      />
                     </div>
-                  </div>
-                  {isApiKeyMissing() && (
-                    <p className="text-red-500 text-[10px] font-bold mt-1">
-                      {t('general.apiKeyRequired')}
+                    <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                      {t('general.aiProviderDescription')}
                     </p>
-                  )}
-                  <p
-                    className={`mt-2 text-[10px] italic leading-relaxed ${isApiKeyMissing() ? 'text-red-400' : 'text-slate-500'}`}
-                  >
-                    {t('general.apiKeyDescription')}{' '}
-                    <a
-                      href="https://makersuite.google.com/app/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={
-                        isApiKeyMissing()
-                          ? 'text-red-400 hover:underline'
-                          : 'text-praetor hover:underline'
-                      }
+                  </div>
+
+                  {/* API Key */}
+                  <div className="mt-6">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {aiProvider === 'gemini'
+                        ? t('general.geminiApiKey')
+                        : t('general.openrouterApiKey')}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="password"
+                        value={aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey}
+                        onChange={(e) => {
+                          if (aiProvider === 'gemini') {
+                            setGeminiApiKey(e.target.value);
+                          } else {
+                            setOpenrouterApiKey(e.target.value);
+                          }
+                          setModelCheck({ state: 'idle' });
+                        }}
+                        placeholder={
+                          aiProvider === 'gemini'
+                            ? t('general.apiKeyPlaceholder')
+                            : t('general.openrouterApiKeyPlaceholder')
+                        }
+                        className={`w-full px-4 py-2 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-sm font-semibold pr-10 ${
+                          isApiKeyMissing()
+                            ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                            : 'border-slate-200 focus:ring-praetor'
+                        }`}
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                        <i
+                          className={
+                            aiProvider === 'gemini' ? 'fa-brands fa-google' : 'fa-solid fa-route'
+                          }
+                        ></i>
+                      </div>
+                    </div>
+                    {isApiKeyMissing() && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1">
+                        {t('general.apiKeyRequired')}
+                      </p>
+                    )}
+                    <p
+                      className={`mt-2 text-[10px] italic leading-relaxed ${
+                        isApiKeyMissing() ? 'text-red-400' : 'text-slate-500'
+                      }`}
                     >
-                      {t('general.googleAiStudio')}
-                    </a>
-                    .
-                  </p>
+                      {aiProvider === 'gemini'
+                        ? t('general.apiKeyDescription')
+                        : t('general.openrouterApiKeyDescription')}{' '}
+                      <a
+                        href={
+                          aiProvider === 'gemini'
+                            ? 'https://makersuite.google.com/app/apikey'
+                            : 'https://openrouter.ai/keys'
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={
+                          isApiKeyMissing()
+                            ? 'text-red-400 hover:underline'
+                            : 'text-praetor hover:underline'
+                        }
+                      >
+                        {aiProvider === 'gemini'
+                          ? t('general.googleAiStudio')
+                          : t('general.openrouterDashboard')}
+                      </a>
+                      .
+                    </p>
+                  </div>
+
+                  {/* Model */}
+                  <div className="mt-6">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {t('general.modelIdLabel')}
+                    </label>
+                    <div className="flex items-stretch gap-2">
+                      <input
+                        type="text"
+                        value={currentModelId}
+                        onChange={(e) => {
+                          if (aiProvider === 'gemini') {
+                            setGeminiModelId(e.target.value);
+                          } else {
+                            setOpenrouterModelId(e.target.value);
+                          }
+                          setModelCheck({ state: 'idle' });
+                        }}
+                        placeholder={t('general.modelIdPlaceholder')}
+                        className={`flex-1 px-4 py-2 bg-white border rounded-lg focus:ring-2 outline-none transition-all text-sm font-semibold ${
+                          isModelMissing()
+                            ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                            : modelCheck.state === 'ok'
+                              ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-200'
+                              : modelCheck.state === 'not_found'
+                                ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                                : modelCheck.state === 'error'
+                                  ? 'border-amber-500 bg-amber-50 focus:ring-amber-200'
+                                  : 'border-slate-200 focus:ring-praetor'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCheckModel}
+                        disabled={
+                          modelCheck.state === 'checking' ||
+                          !currentApiKey.trim() ||
+                          !currentModelId.trim()
+                        }
+                        className={`px-4 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                          modelCheck.state === 'checking' ||
+                          !currentApiKey.trim() ||
+                          !currentModelId.trim()
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                            : 'bg-white text-praetor border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {modelCheck.state === 'checking'
+                          ? t('general.checkingModel')
+                          : t('general.checkModel')}
+                      </button>
+                    </div>
+                    {isModelMissing() && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1">
+                        {t('general.modelIdRequired')}
+                      </p>
+                    )}
+                    {modelCheck.state === 'ok' && (
+                      <p className="text-emerald-600 text-[10px] font-bold mt-1">
+                        {t('general.modelVerified')}
+                      </p>
+                    )}
+                    {modelCheck.state === 'not_found' && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1">
+                        {t('general.modelNotFound')}
+                      </p>
+                    )}
+                    {modelCheck.state === 'error' && (
+                      <p className="text-amber-600 text-[10px] font-bold mt-1">
+                        {t('general.modelCheckError')}
+                      </p>
+                    )}
+                    <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
+                      {t('general.modelIdDescription')}{' '}
+                      <a
+                        href={
+                          aiProvider === 'gemini'
+                            ? 'https://ai.google.dev/gemini-api/docs/models/gemini'
+                            : 'https://openrouter.ai/models'
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-praetor hover:underline"
+                      >
+                        {t('general.modelIdHelpLink')}
+                      </a>
+                      .
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -357,11 +563,21 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         <div className="flex justify-end pt-4">
           <button
             type="submit"
-            disabled={isSaving || isApiKeyMissing() || (!hasChanges && !isSaved)}
+            disabled={
+              isSaving ||
+              isApiKeyMissing() ||
+              isModelMissing() ||
+              isModelNotFound ||
+              (!hasChanges && !isSaved)
+            }
             className={`px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 ease-in-out active:scale-95 flex items-center gap-2 ${
               isSaved
                 ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
-                : isSaving || isApiKeyMissing() || !hasChanges
+                : isSaving ||
+                    isApiKeyMissing() ||
+                    isModelMissing() ||
+                    isModelNotFound ||
+                    !hasChanges
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                   : 'bg-praetor text-white shadow-lg shadow-slate-200 hover:bg-slate-700'
             }`}

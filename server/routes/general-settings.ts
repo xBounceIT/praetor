@@ -11,6 +11,7 @@ import {
 } from '../services/cache.ts';
 import {
   badRequest,
+  optionalEnum,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseBoolean,
@@ -25,6 +26,10 @@ const generalSettingsSchema = {
     treatSaturdayAsHoliday: { type: 'boolean' },
     enableAiInsights: { type: 'boolean' },
     geminiApiKey: { type: 'string' },
+    aiProvider: { type: 'string' },
+    openrouterApiKey: { type: 'string' },
+    geminiModelId: { type: 'string' },
+    openrouterModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
   },
@@ -35,6 +40,10 @@ const generalSettingsSchema = {
     'treatSaturdayAsHoliday',
     'enableAiInsights',
     'geminiApiKey',
+    'aiProvider',
+    'openrouterApiKey',
+    'geminiModelId',
+    'openrouterModelId',
     'allowWeekendSelection',
     'defaultLocation',
   ],
@@ -49,6 +58,10 @@ const generalSettingsUpdateBodySchema = {
     treatSaturdayAsHoliday: { type: 'boolean' },
     enableAiInsights: { type: 'boolean' },
     geminiApiKey: { type: 'string' },
+    aiProvider: { type: 'string' },
+    openrouterApiKey: { type: 'string' },
+    geminiModelId: { type: 'string' },
+    openrouterModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
   },
@@ -78,11 +91,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { status, value } = await cacheGetSetJson(
         'general-settings',
-        `v=1:apiKeyVisible=${apiKeyVisible}`,
+        `v=2:apiKeyVisible=${apiKeyVisible}`,
         TTL_SETTINGS_SECONDS,
         async () => {
           const result = await query(
-            'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
+            'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
           );
           if (result.rows.length === 0) {
             return {
@@ -92,6 +105,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               treatSaturdayAsHoliday: true,
               enableAiInsights: false,
               geminiApiKey: '',
+              aiProvider: 'gemini',
+              openrouterApiKey: '',
+              geminiModelId: '',
+              openrouterModelId: '',
               allowWeekendSelection: true,
               defaultLocation: 'remote',
             };
@@ -99,6 +116,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const s = result.rows[0];
           const geminiApiKey =
             apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
+          const openrouterApiKey =
+            apiKeyVisible === 'yes'
+              ? s.openrouter_api_key || ''
+              : s.openrouter_api_key
+                ? '********'
+                : '';
 
           return {
             currency: s.currency,
@@ -107,6 +130,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
             enableAiInsights: s.enable_ai_insights,
             geminiApiKey,
+            aiProvider: s.ai_provider || 'gemini',
+            openrouterApiKey,
+            geminiModelId: s.gemini_model_id || '',
+            openrouterModelId: s.openrouter_model_id || '',
             allowWeekendSelection: s.allow_weekend_selection ?? true,
             defaultLocation: s.default_location || 'remote',
           };
@@ -142,6 +169,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         treatSaturdayAsHoliday,
         enableAiInsights,
         geminiApiKey,
+        aiProvider,
+        openrouterApiKey,
+        geminiModelId,
+        openrouterModelId,
         allowWeekendSelection,
         defaultLocation,
       } = request.body as {
@@ -151,6 +182,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         treatSaturdayAsHoliday?: boolean;
         enableAiInsights?: boolean;
         geminiApiKey?: string;
+        aiProvider?: string;
+        openrouterApiKey?: string;
+        geminiModelId?: string;
+        openrouterModelId?: string;
         allowWeekendSelection?: boolean;
         defaultLocation?: string;
       };
@@ -161,6 +196,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const dailyLimitResult = optionalLocalizedNonNegativeNumber(dailyLimit, 'dailyLimit');
       if (!dailyLimitResult.ok)
         return badRequest(reply, (dailyLimitResult as { ok: false; message: string }).message);
+
+      const aiProviderResult = optionalEnum(aiProvider, ['gemini', 'openrouter'], 'aiProvider');
+      if (!aiProviderResult.ok)
+        return badRequest(reply, (aiProviderResult as { ok: false; message: string }).message);
+
+      if (
+        geminiModelId !== undefined &&
+        geminiModelId !== null &&
+        typeof geminiModelId !== 'string'
+      )
+        return badRequest(reply, 'geminiModelId must be a string');
+      if (
+        openrouterModelId !== undefined &&
+        openrouterModelId !== null &&
+        typeof openrouterModelId !== 'string'
+      )
+        return badRequest(reply, 'openrouterModelId must be a string');
+      if (
+        openrouterApiKey !== undefined &&
+        openrouterApiKey !== null &&
+        typeof openrouterApiKey !== 'string'
+      )
+        return badRequest(reply, 'openrouterApiKey must be a string');
+      if (geminiApiKey !== undefined && geminiApiKey !== null && typeof geminiApiKey !== 'string')
+        return badRequest(reply, 'geminiApiKey must be a string');
 
       const treatSaturdayAsHolidayValue = parseBoolean(treatSaturdayAsHoliday);
       const enableAiInsightsValue = parseBoolean(enableAiInsights);
@@ -174,11 +234,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  treat_saturday_as_holiday = COALESCE($4, treat_saturday_as_holiday),
                  enable_ai_insights = COALESCE($5, enable_ai_insights),
                  gemini_api_key = COALESCE($6, gemini_api_key),
-                 allow_weekend_selection = COALESCE($7, allow_weekend_selection),
-                 default_location = COALESCE($8, default_location),
+                 ai_provider = COALESCE($7, ai_provider),
+                 openrouter_api_key = COALESCE($8, openrouter_api_key),
+                 gemini_model_id = COALESCE($9, gemini_model_id),
+                 openrouter_model_id = COALESCE($10, openrouter_model_id),
+                 allow_weekend_selection = COALESCE($11, allow_weekend_selection),
+                 default_location = COALESCE($12, default_location),
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = 1
-             RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection, default_location`,
+             RETURNING currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location`,
         [
           (currencyResult as { ok: true; value: string | null }).value,
           (dailyLimitResult as { ok: true; value: number | null }).value,
@@ -186,6 +250,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           treatSaturdayAsHolidayValue,
           enableAiInsightsValue,
           geminiApiKey,
+          (aiProviderResult as { ok: true; value: string | null }).value,
+          openrouterApiKey,
+          geminiModelId,
+          openrouterModelId,
           allowWeekendSelectionValue,
           defaultLocation,
         ],
@@ -200,6 +268,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
         enableAiInsights: s.enable_ai_insights,
         geminiApiKey: s.gemini_api_key || '',
+        aiProvider: s.ai_provider || 'gemini',
+        openrouterApiKey: s.openrouter_api_key || '',
+        geminiModelId: s.gemini_model_id || '',
+        openrouterModelId: s.openrouter_model_id || '',
         allowWeekendSelection: s.allow_weekend_selection ?? true,
         defaultLocation: s.default_location || 'remote',
       };

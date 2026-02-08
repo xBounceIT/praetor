@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
+import aiRoutes from './routes/ai.ts';
 import authRoutes from './routes/auth.ts';
 import clientQuotesRoutes from './routes/client-quotes.ts';
 import clientsRoutes from './routes/clients.ts';
@@ -56,6 +57,7 @@ export const buildApp = async () => {
   });
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
+  await fastify.register(aiRoutes, { prefix: '/api/ai' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
   await fastify.register(clientsRoutes, { prefix: '/api/clients' });
   await fastify.register(projectsRoutes, { prefix: '/api/projects' });
