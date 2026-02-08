@@ -88,12 +88,17 @@ export const ADMINISTRATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.f
   def.id.startsWith('administration.'),
 ).flatMap((def) => buildPermissions(def.id, def.actions));
 
-const ADMIN_BASE_PERMISSIONS: Permission[] = [
+export const ADMIN_BASE_PERMISSIONS: Permission[] = [
   ...buildPermissions('settings', VIEW_UPDATE),
   ...buildPermissions('docs.api', VIEW_ONLY),
   ...buildPermissions('docs.frontend', VIEW_ONLY),
   ...buildPermissions('notifications', VIEW_UPDATE_DELETE),
 ];
+
+export const ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS: Permission[] = buildPermissions(
+  'notifications',
+  VIEW_UPDATE_DELETE,
+);
 
 export const normalizePermission = (permission: string): Permission =>
   (permission.startsWith('configuration.')
@@ -150,7 +155,7 @@ export const isPermissionKnown = (permission: string) =>
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
   const { value } = await cacheGetSetJson<Permission[]>(
     'roles',
-    `perms:role:${roleId}`,
+    `perms:v2:role:${roleId}`,
     TTL_PERMISSIONS_SECONDS,
     async () => {
       const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
@@ -163,13 +168,17 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
         normalizePermission(r.permission),
       ) as Permission[];
 
+      const withNotifications = Array.from(
+        new Set([...explicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]),
+      );
+
       if (roleResult.rows[0].is_admin) {
         return Array.from(
-          new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...explicit]),
+          new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...withNotifications]),
         );
       }
 
-      return explicit;
+      return withNotifications;
     },
   );
 

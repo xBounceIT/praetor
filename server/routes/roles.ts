@@ -11,7 +11,9 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import {
+  ADMIN_BASE_PERMISSIONS,
   ADMINISTRATION_PERMISSIONS,
+  ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
   isPermissionKnown,
   normalizePermission,
 } from '../utils/permissions.ts';
@@ -78,8 +80,15 @@ const mapRoleRow = async (row: {
   ).rows.map((perm) => normalizePermission(perm.permission));
 
   const permissions = row.is_admin
-    ? Array.from(new Set([...ADMINISTRATION_PERMISSIONS, ...explicitPerms]))
-    : explicitPerms;
+    ? Array.from(
+        new Set([
+          ...ADMINISTRATION_PERMISSIONS,
+          ...ADMIN_BASE_PERMISSIONS,
+          ...explicitPerms,
+          ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
+        ]),
+      )
+    : Array.from(new Set([...explicitPerms, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]));
 
   return {
     id: row.id,

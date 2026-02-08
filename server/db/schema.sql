@@ -119,7 +119,10 @@ BEGIN
             ('user', 'settings.view'),
             ('user', 'settings.update'),
             ('user', 'docs.api.view'),
-            ('user', 'docs.frontend.view');
+            ('user', 'docs.frontend.view'),
+            ('user', 'notifications.view'),
+            ('user', 'notifications.update'),
+            ('user', 'notifications.delete');
     END IF;
 END $$;
 
