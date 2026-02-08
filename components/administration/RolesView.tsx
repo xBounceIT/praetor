@@ -280,21 +280,23 @@ const RolesView: React.FC<RolesViewProps> = ({
     const currentActions = activeModuleTab ? getModuleActions(activeModuleTab) : [];
 
     return (
-      <div className="flex h-[50vh] border border-slate-200 rounded-xl overflow-hidden">
+      <div className="flex h-[60vh] border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/30">
         {/* Sidebar */}
-        <div className="w-52 shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto">
+        <div className="w-56 shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto">
           {moduleOrder.map((module) => (
             <button
               key={module}
               type="button"
               onClick={() => setActiveModuleTab(module)}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold transition-all text-left ${
+              className={`w-full flex items-center gap-3 px-5 py-4 text-sm font-bold transition-all text-left ${
                 activeModuleTab === module
-                  ? 'bg-white text-praetor border-l-[3px] border-l-praetor'
-                  : 'text-slate-600 hover:bg-slate-100 border-l-[3px] border-l-transparent'
+                  ? 'bg-white text-praetor border-l-4 border-l-praetor shadow-sm'
+                  : 'text-slate-500 hover:bg-slate-100 border-l-4 border-l-transparent'
               }`}
             >
-              <i className={`fa-solid ${MODULE_ICONS[module] || 'fa-circle'} w-5 text-center`}></i>
+              <i
+                className={`fa-solid ${MODULE_ICONS[module] || 'fa-circle'} w-5 text-center text-base`}
+              ></i>
               {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
             </button>
           ))}
@@ -303,26 +305,26 @@ const RolesView: React.FC<RolesViewProps> = ({
         {/* Content */}
         <div className="flex-1 overflow-y-auto bg-white">
           {activeModuleTab && currentDefinitions.length > 0 && (
-            <table className="w-full">
-              <thead className="sticky top-0 bg-slate-50 z-10">
+            <table className="w-full border-separate border-spacing-0">
+              <thead className="sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">
                 <tr className="border-b border-slate-200">
-                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-600">
+                  <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500 border-b border-slate-200">
                     {t('common:labels.name')}
                   </th>
                   {currentActions.map((action) => (
                     <th
                       key={action}
-                      className="px-2 py-3 text-center text-xs font-bold text-slate-600 w-16"
+                      className="px-2 py-4 text-center text-xs font-black uppercase tracking-wider text-slate-500 w-20 border-b border-slate-200"
                     >
                       {actionLabel(action)}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-center text-xs font-bold text-slate-600 w-24">
+                  <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider text-slate-500 w-28 border-b border-slate-200">
                     {t('common:table.selectAll')}
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {currentDefinitions.map((definition) => {
                   const isAllSelected = isAllSelectedForDefinition(definition);
                   const selectedCount = definition.actions.filter((action) =>
@@ -331,16 +333,16 @@ const RolesView: React.FC<RolesViewProps> = ({
                   const hasPartial = selectedCount > 0 && !isAllSelected;
 
                   return (
-                    <tr key={definition.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3">
+                    <tr key={definition.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-700">
+                          <span className="text-sm font-bold text-slate-700">
                             {t(`administration:permissions.${definition.id}`, {
                               defaultValue: formatPermissionLabel(definition.id),
                             })}
                           </span>
                           {definition.isScope && (
-                            <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-700 rounded-full">
+                            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-700 rounded-md">
                               {t('administration:roles.scope')}
                             </span>
                           )}
@@ -351,30 +353,30 @@ const RolesView: React.FC<RolesViewProps> = ({
                         const isAvailable = definition.actions.includes(action);
 
                         return (
-                          <td key={action} className="px-2 py-3 text-center">
+                          <td key={action} className="px-2 py-4 text-center">
                             {isAvailable ? (
                               <input
                                 type="checkbox"
                                 checked={selectedPermissions.includes(permission)}
                                 onChange={() => togglePermission(permission)}
-                                className="w-4 h-4 text-praetor rounded focus:ring-praetor border-gray-300 cursor-pointer"
+                                className="w-4 h-4 text-praetor rounded focus:ring-praetor border-slate-300 cursor-pointer transition-all"
                               />
                             ) : (
-                              <span className="text-slate-300">—</span>
+                              <span className="text-slate-200">—</span>
                             )}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-6 py-4 text-center">
                         <button
                           type="button"
                           onClick={() => toggleAllForDefinition(definition)}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2 ${
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2 ${
                             isAllSelected
                               ? 'bg-praetor'
                               : hasPartial
                                 ? 'bg-praetor/50'
-                                : 'bg-slate-200'
+                                : 'bg-slate-200 hover:bg-slate-300'
                           }`}
                           title={t('common:table.selectAll')}
                         >
@@ -501,9 +503,9 @@ const RolesView: React.FC<RolesViewProps> = ({
       )}
 
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200">
-          <form onSubmit={handleCreate}>
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-in zoom-in duration-200 flex flex-col">
+          <form onSubmit={handleCreate} className="flex flex-col flex-1 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-lg font-black text-slate-800">
                   {t('administration:roles.createRole')}
@@ -515,13 +517,13 @@ const RolesView: React.FC<RolesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-8 space-y-6 overflow-y-auto flex-1">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
                   {t('common:labels.name')}
@@ -531,12 +533,12 @@ const RolesView: React.FC<RolesViewProps> = ({
                   value={roleName}
                   onChange={(event) => setRoleName(event.target.value)}
                   placeholder={t('common:form.placeholderName')}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                 />
                 {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h4 className="text-sm font-bold text-slate-700">
                   {t('administration:roles.permissions')}
                 </h4>
@@ -545,7 +547,7 @@ const RolesView: React.FC<RolesViewProps> = ({
               {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
             </div>
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+            <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
@@ -567,7 +569,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       <Modal isOpen={isRenameOpen && !!activeRole} onClose={() => setIsRenameOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <form onSubmit={handleRename}>
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-black text-slate-800">
                   {t('administration:roles.renameRole')}
@@ -579,12 +581,12 @@ const RolesView: React.FC<RolesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsRenameOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-8 space-y-4">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
                   {t('common:labels.name')}
@@ -594,13 +596,13 @@ const RolesView: React.FC<RolesViewProps> = ({
                   value={roleName}
                   onChange={(event) => setRoleName(event.target.value)}
                   placeholder={t('common:form.placeholderName')}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                 />
                 {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
               </div>
               {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
             </div>
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+            <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setIsRenameOpen(false)}
@@ -619,28 +621,28 @@ const RolesView: React.FC<RolesViewProps> = ({
         </div>
       </Modal>
 
-      <Modal isOpen={isPermissionsOpen && !!activeRole} onClose={() => setIsPermissionsOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+      <Modal isOpen={isPermissionsOpen} onClose={() => setIsPermissionsOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-in zoom-in duration-200 flex flex-col">
+          <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
             <div>
               <h3 className="text-lg font-black text-slate-800">
                 {t('administration:roles.editPermissions')}
               </h3>
-              <p className="text-sm text-slate-500">{activeRole?.name}</p>
+              <p className="text-sm text-slate-500 font-bold text-praetor">{activeRole?.name}</p>
             </div>
             <button
               type="button"
               onClick={() => setIsPermissionsOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-slate-400 hover:text-slate-600 transition-colors"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-8 space-y-6 overflow-y-auto flex-1">
             {renderPermissionTabs()}
             {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
           </div>
-          <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+          <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
             <button
               type="button"
               onClick={() => setIsPermissionsOpen(false)}
@@ -664,7 +666,7 @@ const RolesView: React.FC<RolesViewProps> = ({
         onClose={() => setIsDeleteConfirmOpen(false)}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
+          <div className="p-8 text-center space-y-4">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
               <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
             </div>
@@ -677,7 +679,7 @@ const RolesView: React.FC<RolesViewProps> = ({
               </p>
             </div>
             {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-4">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
