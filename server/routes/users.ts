@@ -5,6 +5,13 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import {
+  TTL_LIST_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
+import {
   badRequest,
   optionalArrayOfStrings,
   optionalLocalizedNonNegativeNumber,
@@ -123,7 +130,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
       const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
@@ -133,45 +140,60 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      let result: Awaited<ReturnType<typeof query>>;
-      if (canViewAllUsers) {
-        result = await query(
-          'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
-        );
-      } else {
-        const conditions: string[] = ['u.id = $1'];
-        if (canViewManagedUsers) {
-          conditions.push('wum.user_id = $1');
-        }
-        if (canViewInternal) {
-          conditions.push("u.employee_type = 'internal'");
-        }
-        if (canViewExternal) {
-          conditions.push("u.employee_type = 'external'");
-        }
+      const bypass = shouldBypassCache(request);
+      const scopeKey = canViewAllUsers ? 'all' : 'filtered';
+      const keySuffix = canViewAllUsers
+        ? 'v=1:scope=all'
+        : `v=1:scope=${scopeKey}:user=${request.user!.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}`;
 
-        result = await query(
-          `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
+      const { status, value } = await cacheGetSetJson(
+        'users',
+        keySuffix,
+        TTL_LIST_SECONDS,
+        async () => {
+          let result: Awaited<ReturnType<typeof query>>;
+          if (canViewAllUsers) {
+            result = await query(
+              'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
+            );
+          } else {
+            const conditions: string[] = ['u.id = $1'];
+            if (canViewManagedUsers) {
+              conditions.push('wum.user_id = $1');
+            }
+            if (canViewInternal) {
+              conditions.push("u.employee_type = 'internal'");
+            }
+            if (canViewExternal) {
+              conditions.push("u.employee_type = 'external'");
+            }
+
+            result = await query(
+              `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
                  FROM users u
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE ${conditions.join(' OR ')}
                  ORDER BY u.name`,
-          [request.user?.id],
-        );
-      }
-      const users = result.rows.map((u) => ({
-        id: u.id,
-        name: u.name,
-        username: u.username,
-        role: u.role,
-        avatarInitials: u.avatar_initials,
-        costPerHour: parseFloat(u.cost_per_hour || 0),
-        isDisabled: !!u.is_disabled,
-        employeeType: u.employee_type || 'app_user',
-      }));
+              [request.user?.id],
+            );
+          }
+          return result.rows.map((u) => ({
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            role: u.role,
+            avatarInitials: u.avatar_initials,
+            costPerHour: parseFloat(u.cost_per_hour || 0),
+            isDisabled: !!u.is_disabled,
+            employeeType: u.employee_type || 'app_user',
+          }));
+        },
+        { bypass },
+      );
 
-      return users;
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -300,6 +322,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
+        await bumpNamespaceVersion('users');
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -382,6 +405,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
+      await bumpNamespaceVersion('users');
       return { message: 'User deleted' };
     },
   );
@@ -543,6 +567,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const u = result.rows[0];
 
+      await bumpNamespaceVersion('users');
       return {
         id: u.id,
         name: u.name,
@@ -714,6 +739,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         await query('COMMIT');
+        if (clientIds) await bumpNamespaceVersion('clients');
+        if (projectIds) await bumpNamespaceVersion('projects');
+        if (taskIds) await bumpNamespaceVersion('tasks');
         return { message: 'Assignments updated' };
       } catch (err) {
         await query('ROLLBACK');

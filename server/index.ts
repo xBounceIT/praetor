@@ -1,8 +1,24 @@
 import buildApp from './app.ts';
+import { closeRedis } from './services/redis.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
 
 const fastify = await buildApp();
+
+const shutdown = async (signal: string) => {
+  try {
+    console.log(`Shutting down (${signal})...`);
+    await closeRedis();
+    await fastify.close();
+  } catch (err) {
+    console.error('Shutdown error:', err);
+  } finally {
+    process.exit(0);
+  }
+};
+
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 // Start server
 try {

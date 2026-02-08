@@ -3,6 +3,13 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import {
+  TTL_SETTINGS_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
+import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -65,40 +72,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      const result = await query(
-        'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
-      );
-      if (result.rows.length === 0) {
-        return {
-          currency: 'EUR',
-          dailyLimit: 8.0,
-          startOfWeek: 'Monday',
-          treatSaturdayAsHoliday: true,
-          enableAiInsights: false,
-          geminiApiKey: '',
-          allowWeekendSelection: true,
-          defaultLocation: 'remote',
-        };
-      }
-      const s = result.rows[0];
-      // Only return API key to admins
-      const geminiApiKey = hasPermission(request, 'administration.general.update')
-        ? s.gemini_api_key || ''
-        : s.gemini_api_key
-          ? '********'
-          : '';
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const apiKeyVisible = hasPermission(request, 'administration.general.update') ? 'yes' : 'no';
+      const bypass = shouldBypassCache(request);
 
-      return {
-        currency: s.currency,
-        dailyLimit: parseFloat(s.daily_limit),
-        startOfWeek: s.start_of_week,
-        treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-        enableAiInsights: s.enable_ai_insights,
-        geminiApiKey,
-        allowWeekendSelection: s.allow_weekend_selection ?? true,
-        defaultLocation: s.default_location || 'remote',
-      };
+      const { status, value } = await cacheGetSetJson(
+        'general-settings',
+        `v=1:apiKeyVisible=${apiKeyVisible}`,
+        TTL_SETTINGS_SECONDS,
+        async () => {
+          const result = await query(
+            'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_insights, gemini_api_key, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
+          );
+          if (result.rows.length === 0) {
+            return {
+              currency: 'EUR',
+              dailyLimit: 8.0,
+              startOfWeek: 'Monday',
+              treatSaturdayAsHoliday: true,
+              enableAiInsights: false,
+              geminiApiKey: '',
+              allowWeekendSelection: true,
+              defaultLocation: 'remote',
+            };
+          }
+          const s = result.rows[0];
+          const geminiApiKey = apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
+
+          return {
+            currency: s.currency,
+            dailyLimit: parseFloat(s.daily_limit),
+            startOfWeek: s.start_of_week,
+            treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
+            enableAiInsights: s.enable_ai_insights,
+            geminiApiKey,
+            allowWeekendSelection: s.allow_weekend_selection ?? true,
+            defaultLocation: s.default_location || 'remote',
+          };
+        },
+        { bypass },
+      );
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -175,6 +191,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const s = result.rows[0];
+      await bumpNamespaceVersion('general-settings');
       return {
         currency: s.currency,
         dailyLimit: parseFloat(s.daily_limit),

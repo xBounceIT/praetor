@@ -11,6 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
+package-lock.json
+
+# Bun temp/work dirs (helpful on Windows/WSL mounts)
+.bun-tmp/
+.bun-install/
+server/.tmp/
 
 # Editor directories and files
 .vscode/*

@@ -1,4 +1,5 @@
 import { query } from '../db/index.ts';
+import { TTL_PERMISSIONS_SECONDS, cacheGetSetJson } from '../services/cache.ts';
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 export type PermissionResource = string;
@@ -147,23 +148,30 @@ export const isPermissionKnown = (permission: string) =>
   ALL_PERMISSIONS.includes(normalizePermission(permission));
 
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
-  const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
-  if (roleResult.rows.length === 0) return [];
+  const { value } = await cacheGetSetJson<Permission[]>(
+    'roles',
+    `perms:role:${roleId}`,
+    TTL_PERMISSIONS_SECONDS,
+    async () => {
+      const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
+      if (roleResult.rows.length === 0) return [];
 
-  if (roleResult.rows[0].is_admin) {
-    const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
-      roleId,
-    ]);
-    const explicit = permResult.rows.map((r) => normalizePermission(r.permission)) as Permission[];
-    return Array.from(
-      new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...explicit]),
-    );
-  }
+      const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
+        roleId,
+      ]);
+      const explicit = permResult.rows.map((r) => normalizePermission(r.permission)) as Permission[];
 
-  const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
-    roleId,
-  ]);
-  return permResult.rows.map((row) => normalizePermission(row.permission)) as Permission[];
+      if (roleResult.rows[0].is_admin) {
+        return Array.from(
+          new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...explicit]),
+        );
+      }
+
+      return explicit;
+    },
+  );
+
+  return value;
 };
 
 export const hasPermission = (permissions: string[] | undefined, permission: Permission) =>

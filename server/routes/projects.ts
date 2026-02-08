@@ -2,6 +2,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import {
+  TTL_LIST_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
 import { badRequest, requireNonEmptyString, validateHexColor } from '../utils/validation.ts';
 
 const idParamSchema = {
@@ -79,36 +86,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      let queryText = `
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const canViewAll = hasPermission(request, 'projects.manage_all.view');
+      const scopeKey = canViewAll ? 'all' : `user:${request.user!.id}`;
+      const bypass = shouldBypassCache(request);
+
+      const { status, value } = await cacheGetSetJson(
+        'projects',
+        `v=1:scope=${scopeKey}`,
+        TTL_LIST_SECONDS,
+        async () => {
+          let queryText = `
             SELECT id, name, client_id, color, description, is_disabled 
             FROM projects ORDER BY name
         `;
-      let queryParams: string[] = [];
+          let queryParams: string[] = [];
 
-      if (!hasPermission(request, 'projects.manage_all.view')) {
-        queryText = `
+          if (!canViewAll) {
+            queryText = `
                 SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled 
                 FROM projects p
                 INNER JOIN user_projects up ON p.id = up.project_id
                 WHERE up.user_id = $1
                 ORDER BY p.name
             `;
-        queryParams = [request.user!.id];
-      }
+            queryParams = [request.user!.id];
+          }
 
-      const result = await query(queryText, queryParams);
+          const result = await query(queryText, queryParams);
+          return result.rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            clientId: p.client_id,
+            color: p.color,
+            description: p.description,
+            isDisabled: p.is_disabled,
+          }));
+        },
+        { bypass },
+      );
 
-      const projects = result.rows.map((p) => ({
-        id: p.id,
-        name: p.name,
-        clientId: p.client_id,
-        color: p.color,
-        description: p.description,
-        isDisabled: p.is_disabled,
-      }));
-
-      return projects;
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -155,6 +174,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [id, nameResult.value, clientIdResult.value, projectColor, description || null, false],
         );
 
+        await bumpNamespaceVersion('projects');
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -201,6 +221,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Project not found' });
       }
 
+      await bumpNamespaceVersion('projects');
       return { message: 'Project deleted' };
     },
   );
@@ -264,6 +285,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const updated = result.rows[0];
 
+        await bumpNamespaceVersion('projects');
         return {
           id: updated.id,
           name: updated.name,

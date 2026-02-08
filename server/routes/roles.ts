@@ -4,6 +4,13 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import {
+  TTL_LIST_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
+import {
   ADMINISTRATION_PERMISSIONS,
   isPermissionKnown,
   normalizePermission,
@@ -104,10 +111,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (_request: FastifyRequest, _reply: FastifyReply) => {
-      const result = await query('SELECT id, name, is_system, is_admin FROM roles ORDER BY name');
-      const roles = await Promise.all(result.rows.map(mapRoleRow));
-      return roles;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const bypass = shouldBypassCache(request);
+      const { status, value } = await cacheGetSetJson(
+        'roles',
+        'v=1',
+        TTL_LIST_SECONDS,
+        async () => {
+          const result = await query(
+            'SELECT id, name, is_system, is_admin FROM roles ORDER BY name',
+          );
+          return Promise.all(result.rows.map(mapRoleRow));
+        },
+        { bypass },
+      );
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -174,6 +194,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
+      await bumpNamespaceVersion('roles');
       const roleRow = await query('SELECT id, name, is_system, is_admin FROM roles WHERE id = $1', [
         id,
       ]);
@@ -221,6 +242,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await query('UPDATE roles SET name = $1 WHERE id = $2', [nameResult.value, idResult.value]);
+      await bumpNamespaceVersion('roles');
 
       const updatedRoleResult = await query(
         'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
@@ -271,6 +293,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await query('DELETE FROM roles WHERE id = $1', [idResult.value]);
+      await bumpNamespaceVersion('roles');
       return { message: 'Role deleted' };
     },
   );
@@ -341,6 +364,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
+      await bumpNamespaceVersion('roles');
       const updatedRoleResult = await query(
         'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
         [idResult.value],

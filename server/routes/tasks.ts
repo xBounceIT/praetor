@@ -3,6 +3,13 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import {
+  TTL_LIST_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
+import {
   badRequest,
   optionalDateString,
   optionalLocalizedNonNegativeNumber,
@@ -105,16 +112,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      let queryText = `
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const canViewAll = hasPermission(request, 'projects.tasks_all.view');
+      const scopeKey = canViewAll ? 'all' : `user:${request.user!.id}`;
+      const bypass = shouldBypassCache(request);
+
+      const { status, value } = await cacheGetSetJson(
+        'tasks',
+        `v=1:scope=${scopeKey}`,
+        TTL_LIST_SECONDS,
+        async () => {
+          let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
             FROM tasks ORDER BY name
         `;
-      let queryParams: string[] = [];
+          let queryParams: string[] = [];
 
-      if (!hasPermission(request, 'projects.tasks_all.view')) {
-        queryText = `
+          if (!canViewAll) {
+            queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
                 FROM tasks t
@@ -122,27 +138,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE ut.user_id = $1
                 ORDER BY t.name
             `;
-        queryParams = [request.user!.id];
-      }
+            queryParams = [request.user!.id];
+          }
 
-      const result = await query(queryText, queryParams);
+          const result = await query(queryText, queryParams);
+          return result.rows.map((t) => ({
+            id: t.id,
+            name: t.name,
+            projectId: t.project_id,
+            description: t.description,
+            isRecurring: t.is_recurring,
+            recurrencePattern: t.recurrence_pattern,
+            recurrenceStart: t.recurrence_start
+              ? t.recurrence_start.toISOString().split('T')[0]
+              : undefined,
+            recurrenceEnd: t.recurrence_end
+              ? t.recurrence_end.toISOString().split('T')[0]
+              : undefined,
+            recurrenceDuration: parseFloat(t.recurrence_duration || 0),
+            isDisabled: t.is_disabled,
+          }));
+        },
+        { bypass },
+      );
 
-      const tasks = result.rows.map((t) => ({
-        id: t.id,
-        name: t.name,
-        projectId: t.project_id,
-        description: t.description,
-        isRecurring: t.is_recurring,
-        recurrencePattern: t.recurrence_pattern,
-        recurrenceStart: t.recurrence_start
-          ? t.recurrence_start.toISOString().split('T')[0]
-          : undefined,
-        recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
-        recurrenceDuration: parseFloat(t.recurrence_duration || 0),
-        isDisabled: t.is_disabled,
-      }));
-
-      return tasks;
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -214,6 +235,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
+        await bumpNamespaceVersion('tasks');
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -325,6 +347,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const t = result.rows[0];
+      await bumpNamespaceVersion('tasks');
       return {
         id: t.id,
         name: t.name,
@@ -366,6 +389,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
+      await bumpNamespaceVersion('tasks');
       return { message: 'Task deleted' };
     },
   );
@@ -436,6 +460,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         await query('COMMIT');
+        await bumpNamespaceVersion('tasks');
         return { message: 'Task assignments updated' };
       } catch (err) {
         await query('ROLLBACK');

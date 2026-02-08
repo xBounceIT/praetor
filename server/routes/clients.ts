@@ -3,6 +3,13 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import {
+  TTL_LIST_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
+import {
   badRequest,
   optionalEmail,
   optionalNonEmptyString,
@@ -117,49 +124,63 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const canViewClientDetails = hasPermission(request, 'crm.clients.view');
-      let queryText = 'SELECT * FROM clients ORDER BY name';
-      const queryParams: (string | null)[] = [];
+      const scopeKey = canViewAllClients ? 'all' : `user:${request.user!.id}`;
+      const detailsKey = canViewClientDetails ? 'full' : 'nameOnly';
+      const bypass = shouldBypassCache(request);
 
-      if (!canViewAllClients) {
-        queryText = `
+      const { status, value } = await cacheGetSetJson(
+        'clients',
+        `v=1:scope=${scopeKey}:details=${detailsKey}`,
+        TTL_LIST_SECONDS,
+        async () => {
+          let queryText = 'SELECT * FROM clients ORDER BY name';
+          const queryParams: (string | null)[] = [];
+
+          if (!canViewAllClients) {
+            queryText = `
                 SELECT c.id, c.name
                 FROM clients c
                 INNER JOIN user_clients uc ON c.id = uc.client_id
                 WHERE uc.user_id = $1
                 ORDER BY c.name
             `;
-        queryParams.push(request.user!.id);
-      }
+            queryParams.push(request.user!.id);
+          }
 
-      const result = await query(queryText, queryParams);
-      const clients = result.rows.map((c) => {
-        if (!canViewClientDetails) {
-          return {
-            id: c.id,
-            name: c.name,
-            description: null,
-          };
-        }
+          const result = await query(queryText, queryParams);
+          return result.rows.map((c) => {
+            if (!canViewClientDetails) {
+              return {
+                id: c.id,
+                name: c.name,
+                description: null,
+              };
+            }
 
-        return {
-          id: c.id,
-          name: c.name,
-          isDisabled: c.is_disabled,
-          type: c.type,
-          contactName: c.contact_name,
-          clientCode: c.client_code,
-          email: c.email,
-          phone: c.phone,
-          address: c.address,
-          vatNumber: c.vat_number,
-          taxCode: c.tax_code,
-          billingCode: c.billing_code,
-        };
-      });
-      return clients;
+            return {
+              id: c.id,
+              name: c.name,
+              isDisabled: c.is_disabled,
+              type: c.type,
+              contactName: c.contact_name,
+              clientCode: c.client_code,
+              email: c.email,
+              phone: c.phone,
+              address: c.address,
+              vatNumber: c.vat_number,
+              taxCode: c.tax_code,
+              billingCode: c.billing_code,
+            };
+          });
+        },
+        { bypass },
+      );
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -269,6 +290,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
+        await bumpNamespaceVersion('clients');
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -452,6 +474,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const c = result.rows[0];
 
+        await bumpNamespaceVersion('clients');
         return {
           id: c.id,
           name: c.name,
@@ -512,6 +535,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Client not found' });
       }
 
+      await bumpNamespaceVersion('clients');
       return { message: 'Client deleted' };
     },
   );

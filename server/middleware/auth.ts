@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { query } from '../db/index.ts';
+import { TTL_AUTH_USER_SECONDS, cacheGetSetJson } from '../services/cache.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
@@ -29,19 +30,40 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       return reply.code(401).send({ error: 'Session expired (max duration exceeded)' });
     }
 
-    // Fetch fresh user data from database
-    const result = await query(
-      `SELECT u.id, u.name, u.username, u.role, u.avatar_initials
-       FROM users u
-       WHERE u.id = $1`,
-      [decoded.userId],
+    // Fetch user data (cached briefly in Redis to avoid hitting Postgres on every request)
+    type AuthUserRow = {
+      id: string;
+      name: string;
+      username: string;
+      role: string;
+      avatar_initials: string | null;
+      is_disabled: boolean;
+    };
+
+    const { value: user } = await cacheGetSetJson<AuthUserRow | null>(
+      'users',
+      `auth:user:${decoded.userId}`,
+      TTL_AUTH_USER_SECONDS,
+      async () => {
+        const result = await query(
+          `SELECT u.id, u.name, u.username, u.role, u.avatar_initials, u.is_disabled
+           FROM users u
+           WHERE u.id = $1`,
+          [decoded.userId],
+        );
+        if (result.rows.length === 0) return null;
+        return result.rows[0] as AuthUserRow;
+      },
     );
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return reply.code(401).send({ error: 'User not found' });
     }
 
-    const user = result.rows[0];
+    if (user.is_disabled) {
+      return reply.code(401).send({ error: 'Invalid or expired token' });
+    }
+
     const permissions = await getRolePermissions(user.role);
     request.user = { ...user, permissions };
 

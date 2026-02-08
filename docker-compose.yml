@@ -21,6 +21,19 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Redis (cache)
+  redis:
+    image: redis:7-alpine
+    container_name: praetor-redis
+    expose:
+      - '6379'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   # Backend API Server
   backend:
     build:
@@ -34,6 +47,7 @@ services:
       DB_NAME: ${POSTGRES_DB:-praetor}
       DB_USER: ${POSTGRES_USER:-praetor}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-praetor-encryption-key-change-in-production}
       FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
@@ -43,6 +57,8 @@ services:
       - '3001'
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 

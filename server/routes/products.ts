@@ -3,6 +3,13 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import {
+  TTL_LIST_SECONDS,
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+} from '../services/cache.ts';
+import {
   badRequest,
   parseBoolean,
   parseLocalizedNonNegativeNumber,
@@ -100,14 +107,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (_request, _reply) => {
-      const result = await query(
-        `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const bypass = shouldBypassCache(request);
+      const { status, value } = await cacheGetSetJson(
+        'products',
+        'v=1',
+        TTL_LIST_SECONDS,
+        async () => {
+          const result = await query(
+            `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
              FROM products p 
              LEFT JOIN suppliers s ON p.supplier_id = s.id 
              ORDER BY p.name ASC`,
+          );
+          return result.rows;
+        },
+        { bypass },
       );
-      return result.rows;
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -263,6 +282,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      await bumpNamespaceVersion('products');
       return reply.code(201).send(result.rows[0]);
     },
   );
@@ -494,6 +514,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      await bumpNamespaceVersion('products');
       return result.rows[0];
     },
   );
@@ -528,6 +549,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Product not found' });
       }
 
+      await bumpNamespaceVersion('products');
       return reply.code(204).send();
     },
   );
