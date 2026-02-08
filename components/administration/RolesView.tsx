@@ -399,9 +399,6 @@ const RolesView: React.FC<RolesViewProps> = ({
                               {hasPartial && !isAllSelected && (
                                 <span className="w-2.5 h-0.5 bg-praetor/60 rounded-full" />
                               )}
-                              {isAllSelected && (
-                                <i className="fa-solid fa-check text-praetor text-[10px]" />
-                              )}
                             </span>
                           </button>
                         </div>
