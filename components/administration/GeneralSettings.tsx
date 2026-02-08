@@ -370,24 +370,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                       {t('general.aiProviderLabel')}
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                        <i
-                          className={
-                            aiProvider === 'gemini' ? 'fa-brands fa-google' : 'fa-solid fa-route'
-                          }
-                        ></i>
-                      </div>
-                      <CustomSelect
-                        options={AI_PROVIDER_OPTIONS}
-                        value={aiProvider}
-                        onChange={(val) => {
-                          setAiProvider(val as 'gemini' | 'openrouter');
-                          setModelCheck({ state: 'idle' });
-                        }}
-                        buttonClassName="pl-10"
-                      />
-                    </div>
+                    <CustomSelect
+                      options={AI_PROVIDER_OPTIONS}
+                      value={aiProvider}
+                      onChange={(val) => {
+                        setAiProvider(val as 'gemini' | 'openrouter');
+                        setModelCheck({ state: 'idle' });
+                      }}
+                    />
                     <p className="mt-2 text-[10px] text-slate-500 italic leading-relaxed">
                       {t('general.aiProviderDescription')}
                     </p>
