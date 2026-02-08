@@ -62,7 +62,14 @@
     "noProjectsFound": "No projects found.",
     "noTasksFound": "No tasks found.",
     "unknownClient": "Unknown Client",
-    "unknownProject": "Unknown Project"
+    "unknownProject": "Unknown Project",
+    "assignedRoles": "Assigned Roles",
+    "primaryRole": "Primary Role",
+    "primary": "Primary",
+    "primaryRoleHelp": "Primary role is used as the default on login; you can switch roles from the top-right menu.",
+    "loadingRoles": "Loading roles...",
+    "assignedRolesRequired": "At least one role must be assigned.",
+    "primaryRoleMustBeAssigned": "Primary role must be included in assigned roles."
   },
   "workUnits": {
     "title": "Work Units",

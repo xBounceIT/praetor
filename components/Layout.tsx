@@ -54,6 +54,7 @@ export interface LayoutProps {
   onViewChange: (view: View) => void;
   currentUser: User;
   onLogout: () => void;
+  onSwitchRole: (roleId: string) => void;
   roles: Role[];
   isNotFound?: boolean;
   notifications?: Notification[];
@@ -69,6 +70,7 @@ const Layout: React.FC<LayoutProps> = ({
   onViewChange,
   currentUser,
   onLogout,
+  onSwitchRole,
   roles,
   isNotFound,
   notifications = [],
@@ -106,11 +108,13 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   const roleLabel = useMemo(() => {
+    const fromAvailable = currentUser.availableRoles?.find((r) => r.id === currentUser.role);
+    if (fromAvailable?.name) return fromAvailable.name;
     const role = roles.find((item) => item.id === currentUser.role);
     return (
       role?.name || t(`roles.${currentUser.role}`, { ns: 'hr', defaultValue: currentUser.role })
     );
-  }, [currentUser.role, roles, t]);
+  }, [currentUser.availableRoles, currentUser.role, roles, t]);
 
   const canViewNotifications = hasPermission(
     currentUser.permissions,
@@ -716,6 +720,42 @@ const Layout: React.FC<LayoutProps> = ({
                     <p className="text-sm font-bold text-slate-800">{currentUser.name}</p>
                     <p className="text-xs text-slate-500 capitalize">{roleLabel}</p>
                   </div>
+
+                  {!!currentUser.availableRoles && currentUser.availableRoles.length > 1 && (
+                    <div className="px-2 pb-2 border-b border-slate-100 mb-1">
+                      <div className="px-2 pt-2 pb-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {t('menu.switchRole')}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        {currentUser.availableRoles.map((r) => {
+                          const isActive = r.id === currentUser.role;
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => {
+                                if (isActive) return;
+                                setIsProfileMenuOpen(false);
+                                onSwitchRole(r.id);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-3 rounded-xl transition-colors ${
+                                isActive
+                                  ? 'bg-slate-100 text-praetor'
+                                  : 'text-slate-700 hover:bg-slate-50'
+                              }`}
+                              disabled={isActive}
+                            >
+                              <span className="font-semibold truncate">{r.name}</span>
+                              {isActive && (
+                                <i className="fa-solid fa-check text-[12px] text-praetor"></i>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => {

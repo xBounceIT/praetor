@@ -152,6 +152,21 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User roles table (Many-to-Many)
+-- users.role remains the primary/default role, while user_roles stores all assigned roles.
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
+    role_id VARCHAR(50) REFERENCES roles(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id)
+);
+
+-- Backfill: ensure every user has at least their primary role in user_roles.
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, u.role
+FROM users u
+ON CONFLICT DO NOTHING;
+
 -- Ensure cost_per_hour column exists for existing installations
 ALTER TABLE users ADD COLUMN IF NOT EXISTS cost_per_hour DECIMAL(10, 2) DEFAULT 0;
 

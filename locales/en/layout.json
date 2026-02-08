@@ -51,6 +51,7 @@
   },
   "menu": {
     "settings": "Settings",
+    "switchRole": "Switch role",
     "logout": "Logout",
     "profile": "Profile",
     "help": "Help",

@@ -51,6 +51,7 @@
   },
   "menu": {
     "settings": "Impostazioni",
+    "switchRole": "Cambia ruolo",
     "logout": "Esci",
     "profile": "Profilo",
     "help": "Aiuto",

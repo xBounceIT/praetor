@@ -241,6 +241,12 @@ export const authApi = {
     }),
 
   me: (): Promise<User> => fetchApi<User>('/auth/me').then(normalizeUser),
+
+  switchRole: (roleId: string): Promise<LoginResponse> =>
+    fetchApi('/auth/switch-role', {
+      method: 'POST',
+      body: JSON.stringify({ roleId }),
+    }),
 };
 
 export const rolesApi = {
@@ -305,6 +311,19 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify(updates),
     }).then(normalizeUser),
+
+  getRoles: (id: string): Promise<{ roleIds: string[]; primaryRoleId: string }> =>
+    fetchApi(`/users/${id}/roles`),
+
+  updateRoles: (
+    id: string,
+    roleIds: string[],
+    primaryRoleId: string,
+  ): Promise<{ roleIds: string[]; primaryRoleId: string }> =>
+    fetchApi(`/users/${id}/roles`, {
+      method: 'PUT',
+      body: JSON.stringify({ roleIds, primaryRoleId }),
+    }),
 };
 
 // Employees API (for internal/external employees)

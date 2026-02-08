@@ -62,7 +62,14 @@
     "noProjectsFound": "Nessun progetto trovato.",
     "noTasksFound": "Nessuna attività trovata.",
     "unknownClient": "Cliente Sconosciuto",
-    "unknownProject": "Progetto Sconosciuto"
+    "unknownProject": "Progetto Sconosciuto",
+    "assignedRoles": "Ruoli assegnati",
+    "primaryRole": "Ruolo principale",
+    "primary": "Principale",
+    "primaryRoleHelp": "Il ruolo principale è quello predefinito al login; puoi cambiare ruolo dal menu in alto a destra.",
+    "loadingRoles": "Caricamento ruoli...",
+    "assignedRolesRequired": "Deve essere assegnato almeno un ruolo.",
+    "primaryRoleMustBeAssigned": "Il ruolo principale deve essere incluso tra i ruoli assegnati."
   },
   "workUnits": {
     "title": "Unità di Lavoro",

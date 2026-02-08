@@ -2,6 +2,10 @@ import 'fastify';
 
 declare module 'fastify' {
   interface FastifyRequest {
+    auth?: {
+      userId: string;
+      sessionStart: number;
+    };
     user?: {
       id: string;
       name: string;

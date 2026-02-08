@@ -2180,6 +2180,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateUserRoles = async (id: string, roleIds: string[], primaryRoleId: string) => {
+    try {
+      const updated = await api.users.updateRoles(id, roleIds, primaryRoleId);
+      setUsers(users.map((u) => (u.id === id ? { ...u, role: updated.primaryRoleId } : u)));
+    } catch (err) {
+      console.error('Failed to update user roles:', err);
+      alert('Failed to update user roles: ' + (err as Error).message);
+      throw err;
+    }
+  };
+
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
       const updated = await api.generalSettings.update(updates);
@@ -2242,6 +2253,8 @@ const App: React.FC = () => {
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
     setHasLoadedEmailConfig(false);
+    setHasLoadedRoles(false);
+    setRoles([]);
     setCurrentUser(user);
     setViewingUserId(user.id);
 
@@ -2283,6 +2296,8 @@ const App: React.FC = () => {
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
     setHasLoadedEmailConfig(false);
+    setHasLoadedRoles(false);
+    setRoles([]);
     setUsers([]);
     setClients([]);
     setProjects([]);
@@ -2290,10 +2305,48 @@ const App: React.FC = () => {
     setProducts([]);
     setSpecialBids([]);
     setQuotes([]);
+    setClientsOrders([]);
+    setInvoices([]);
+    setPayments([]);
+    setExpenses([]);
     setSuppliers([]);
     setSupplierQuotes([]);
     setEntries([]);
+    setWorkUnits([]);
     setLogoutReason(reason || null);
+  };
+
+  const handleSwitchRole = async (roleId: string) => {
+    try {
+      // Clear potentially-privileged data to avoid stale UI after dropping permissions.
+      setLoadedModules(new Set());
+      setHasLoadedGeneralSettings(false);
+      setHasLoadedLdapConfig(false);
+      setHasLoadedEmailConfig(false);
+      setHasLoadedRoles(false);
+      setRoles([]);
+      setUsers([]);
+      setClients([]);
+      setProjects([]);
+      setProjectTasks([]);
+      setProducts([]);
+      setSpecialBids([]);
+      setQuotes([]);
+      setClientsOrders([]);
+      setInvoices([]);
+      setPayments([]);
+      setExpenses([]);
+      setSuppliers([]);
+      setSupplierQuotes([]);
+      setEntries([]);
+      setWorkUnits([]);
+
+      const response = await api.auth.switchRole(roleId);
+      await handleLogin(response.user, response.token);
+    } catch (err) {
+      console.error('Failed to switch role:', err);
+      alert('Failed to switch role: ' + (err as Error).message);
+    }
   };
 
   const handleSaveLdapConfig = async (config: LdapConfig) => {
@@ -2480,6 +2533,7 @@ const App: React.FC = () => {
         onViewChange={setActiveView}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
         notifications={notifications}
@@ -2745,6 +2799,7 @@ const App: React.FC = () => {
                   onAddUser={handleAddUser}
                   onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}
+                  onUpdateUserRoles={handleUpdateUserRoles}
                   currentUserId={currentUser.id}
                   permissions={currentUser.permissions || []}
                   roles={roles}

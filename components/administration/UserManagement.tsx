@@ -22,6 +22,7 @@ export interface UserManagementProps {
   ) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
+  onUpdateUserRoles: (id: string, roleIds: string[], primaryRoleId: string) => Promise<void>;
   currentUserId: string;
   permissions: string[];
   roles: Role[];
@@ -36,6 +37,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   onAddUser,
   onDeleteUser,
   onUpdateUser,
+  onUpdateUserRoles,
   currentUserId,
   permissions,
   roles,
@@ -97,6 +99,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<string>('');
+  const [editAssignedRoleIds, setEditAssignedRoleIds] = useState<string[]>([]);
+  const [editPrimaryRoleId, setEditPrimaryRoleId] = useState<string>('');
+  const [initialEditAssignedRoleIds, setInitialEditAssignedRoleIds] = useState<string[]>([]);
+  const [initialEditPrimaryRoleId, setInitialEditPrimaryRoleId] = useState<string>('');
+  const [isLoadingEditRoles, setIsLoadingEditRoles] = useState(false);
+  const [editRolesError, setEditRolesError] = useState('');
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
   const [activeSearch, setActiveSearch] = useState('');
@@ -354,22 +362,92 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setEditRole(user.role);
     setEditCostPerHour(user.costPerHour?.toString() || '0');
     setEditIsDisabled(!!user.isDisabled);
+
+    // Multi-role edit state (admin-only in practice because roles are admin-scoped)
+    setEditRolesError('');
+    if (user.id === currentUserId || roles.length === 0) {
+      const fallback = [user.role];
+      setEditAssignedRoleIds(fallback);
+      setEditPrimaryRoleId(user.role);
+      setInitialEditAssignedRoleIds(fallback);
+      setInitialEditPrimaryRoleId(user.role);
+      return;
+    }
+
+    setIsLoadingEditRoles(true);
+    usersApi
+      .getRoles(user.id)
+      .then(({ roleIds, primaryRoleId }) => {
+        const safeRoleIds = roleIds?.length ? roleIds : [user.role];
+        const safePrimary = primaryRoleId || user.role;
+        setEditAssignedRoleIds(safeRoleIds);
+        setEditPrimaryRoleId(safePrimary);
+        setInitialEditAssignedRoleIds(safeRoleIds);
+        setInitialEditPrimaryRoleId(safePrimary);
+      })
+      .catch((err) => {
+        console.error('Failed to load user roles:', err);
+        setEditRolesError((err as Error).message || 'Failed to load roles');
+        const fallback = [user.role];
+        setEditAssignedRoleIds(fallback);
+        setEditPrimaryRoleId(user.role);
+        setInitialEditAssignedRoleIds(fallback);
+        setInitialEditPrimaryRoleId(user.role);
+      })
+      .finally(() => {
+        setIsLoadingEditRoles(false);
+      });
   };
 
-  const saveEdit = () => {
+  const sameStringSet = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const as = new Set(a);
+    for (const v of b) if (!as.has(v)) return false;
+    return true;
+  };
+
+  const saveEdit = async () => {
     if (editingUser) {
       const updates: Partial<User> = {
         name: editName,
         isDisabled: editIsDisabled,
       };
 
-      if (
-        canUpdateUsers &&
-        editingUser?.id !== currentUserId &&
-        editRole &&
-        editRole !== editingUser?.role
-      ) {
-        updates.role = editRole;
+      const isEditingSelf = editingUser.id === currentUserId;
+      const canEditAssignedRoles = canUpdateUsers && !isEditingSelf && roles.length > 0;
+      const hasRoleAssignmentChanges =
+        canEditAssignedRoles &&
+        (!sameStringSet(editAssignedRoleIds, initialEditAssignedRoleIds) ||
+          editPrimaryRoleId !== initialEditPrimaryRoleId);
+
+      if (!canEditAssignedRoles) {
+        // Legacy single-role edit (kept for fallback / non-admin environments)
+        if (
+          canUpdateUsers &&
+          editingUser?.id !== currentUserId &&
+          editRole &&
+          editRole !== editingUser?.role
+        ) {
+          updates.role = editRole;
+        }
+      } else if (hasRoleAssignmentChanges) {
+        if (!editAssignedRoleIds.includes(editPrimaryRoleId)) {
+          setEditRolesError(t('hr:workforce.primaryRoleMustBeAssigned'));
+          return;
+        }
+        if (editAssignedRoleIds.length < 1) {
+          setEditRolesError(t('hr:workforce.assignedRolesRequired'));
+          return;
+        }
+        setIsLoadingEditRoles(true);
+        try {
+          await onUpdateUserRoles(editingUser.id, editAssignedRoleIds, editPrimaryRoleId);
+        } catch {
+          // onUpdateUserRoles already surfaced an error
+          return;
+        } finally {
+          setIsLoadingEditRoles(false);
+        }
       }
 
       if (canUpdateUsers) {
@@ -384,12 +462,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const managingUser = users.find((u) => u.id === managingUserId);
   const isEditingSelf = editingUser?.id === currentUserId;
   const canEditRole = canUpdateUsers && !isEditingSelf;
+  const canEditAssignedRoles = canUpdateUsers && !isEditingSelf && roles.length > 0;
+  const hasAssignedRoleChanges =
+    !!editingUser &&
+    canEditAssignedRoles &&
+    (!sameStringSet(editAssignedRoleIds, initialEditAssignedRoleIds) ||
+      editPrimaryRoleId !== initialEditPrimaryRoleId);
   const hasEditChanges =
     !!editingUser &&
     (editName !== editingUser.name ||
       editIsDisabled !== !!editingUser.isDisabled ||
       (canUpdateUsers && parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
-      (canEditRole && editRole !== editingUser.role));
+      (canEditRole && editRole !== editingUser.role) ||
+      hasAssignedRoleChanges);
 
   const filteredProjectsForFilter =
     filterClientId === 'all'
@@ -603,18 +688,97 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
               {canUpdateUsers && (
                 <div>
-                  <CustomSelect
-                    label={t('hr:workforce.role')}
-                    options={roleOptions}
-                    value={editRole}
-                    onChange={(val) => setEditRole(val as string)}
-                    buttonClassName="py-2 text-sm"
-                    disabled={isEditingSelf}
-                  />
-                  {isEditingSelf && (
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      {t('hr:workforce.cannotChangeOwnRole')}
-                    </p>
+                  {canEditAssignedRoles ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                          {t('hr:workforce.assignedRoles')}
+                        </label>
+                        <div className="max-h-36 overflow-y-auto bg-slate-50 border border-slate-200 rounded-xl p-2 space-y-1">
+                          {roles
+                            .slice()
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((r) => {
+                              const checked = editAssignedRoleIds.includes(r.id);
+                              const isPrimary = r.id === editPrimaryRoleId;
+                              return (
+                                <label
+                                  key={r.id}
+                                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                                    checked ? 'bg-white' : 'hover:bg-white/60'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      disabled={isPrimary && checked}
+                                      onChange={() => {
+                                        if (isPrimary && checked) return;
+                                        setEditAssignedRoleIds((prev) => {
+                                          if (prev.includes(r.id)) {
+                                            return prev.filter((id) => id !== r.id);
+                                          }
+                                          return [...prev, r.id];
+                                        });
+                                      }}
+                                      className="h-4 w-4 rounded border-slate-300 text-praetor focus:ring-praetor"
+                                    />
+                                    <span className="text-sm font-semibold text-slate-700 truncate">
+                                      {r.name}
+                                    </span>
+                                  </div>
+                                  {isPrimary && (
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
+                                      {t('hr:workforce.primary')}
+                                    </span>
+                                  )}
+                                </label>
+                              );
+                            })}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {t('hr:workforce.primaryRoleHelp')}
+                        </p>
+                      </div>
+
+                      <CustomSelect
+                        label={t('hr:workforce.primaryRole')}
+                        options={editAssignedRoleIds
+                          .map((id) => roles.find((r) => r.id === id))
+                          .filter(Boolean)
+                          .map((r) => ({ id: (r as Role).id, name: (r as Role).name }))}
+                        value={editPrimaryRoleId}
+                        onChange={(val) => setEditPrimaryRoleId(val as string)}
+                        buttonClassName="py-2 text-sm"
+                        disabled={isLoadingEditRoles || editAssignedRoleIds.length < 1}
+                      />
+
+                      {isLoadingEditRoles && (
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          {t('hr:workforce.loadingRoles')}
+                        </p>
+                      )}
+                      {editRolesError && (
+                        <p className="text-[10px] text-red-500 font-bold">{editRolesError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <CustomSelect
+                        label={t('hr:workforce.role')}
+                        options={roleOptions}
+                        value={editRole}
+                        onChange={(val) => setEditRole(val as string)}
+                        buttonClassName="py-2 text-sm"
+                        disabled={isEditingSelf}
+                      />
+                      {isEditingSelf && (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {t('hr:workforce.cannotChangeOwnRole')}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}

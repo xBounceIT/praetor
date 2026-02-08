@@ -3,11 +3,19 @@ export type Permission = string;
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 
+export interface RoleSummary {
+  id: string;
+  name: string;
+  isSystem?: boolean;
+  isAdmin?: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
   role: UserRole;
   permissions?: Permission[];
+  availableRoles?: RoleSummary[];
   avatarInitials: string;
   username: string;
   password?: string;

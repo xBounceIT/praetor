@@ -14,6 +14,7 @@ import {
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   badRequest,
+  ensureArrayOfStrings,
   optionalArrayOfStrings,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -93,6 +94,24 @@ const assignmentsUpdateBodySchema = {
     projectIds: { type: 'array', items: { type: 'string' } },
     taskIds: { type: 'array', items: { type: 'string' } },
   },
+} as const;
+
+const userRolesSchema = {
+  type: 'object',
+  properties: {
+    roleIds: { type: 'array', items: { type: 'string' } },
+    primaryRoleId: { type: 'string' },
+  },
+  required: ['roleIds', 'primaryRoleId'],
+} as const;
+
+const userRolesUpdateBodySchema = {
+  type: 'object',
+  properties: {
+    roleIds: { type: 'array', items: { type: 'string' } },
+    primaryRoleId: { type: 'string' },
+  },
+  required: ['roleIds', 'primaryRoleId'],
 } as const;
 
 const hasPermission = (request: FastifyRequest, permission: string) =>
@@ -323,6 +342,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             false,
             effectiveEmployeeType,
           ],
+        );
+
+        // Keep user_roles in sync with users.role (primary/default role)
+        await query(
+          'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [id, roleValue],
         );
 
         await bumpNamespaceVersion('users');
@@ -558,11 +583,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'No fields to update');
       }
 
-      values.push(idResult.value);
-      const result = await query(
-        `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
-        values,
-      );
+      let result: Awaited<ReturnType<typeof query>>;
+      if (role !== undefined) {
+        // If role changes via the legacy endpoint, reset assigned roles to this single primary role.
+        try {
+          await query('BEGIN');
+          values.push(idResult.value);
+          result = await query(
+            `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
+            values,
+          );
+
+          await query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
+          await query(
+            'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [idResult.value, roleValue],
+          );
+
+          await query('COMMIT');
+        } catch (err) {
+          await query('ROLLBACK');
+          throw err;
+        }
+      } else {
+        values.push(idResult.value);
+        result = await query(
+          `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
+          values,
+        );
+      }
 
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'User not found' });
@@ -581,6 +630,121 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isDisabled: !!u.is_disabled,
         employeeType: u.employee_type || 'app_user',
       };
+    },
+  );
+
+  // GET /:id/roles - Get assigned roles for a user
+  fastify.get(
+    '/:id/roles',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      schema: {
+        tags: ['users'],
+        summary: 'Get user roles',
+        params: idParamSchema,
+        response: {
+          200: userRolesSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const userResult = await query('SELECT id, role FROM users WHERE id = $1', [idResult.value]);
+      if (userResult.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+
+      const primaryRoleId = userResult.rows[0].role as string;
+      const roleRows = await query('SELECT role_id FROM user_roles WHERE user_id = $1', [
+        idResult.value,
+      ]);
+      const roleIds = Array.from(
+        new Set(
+          roleRows.rows
+            .map((r) => r.role_id as string)
+            .concat(primaryRoleId ? [primaryRoleId] : []),
+        ),
+      );
+
+      return { roleIds, primaryRoleId };
+    },
+  );
+
+  // PUT /:id/roles - Replace assigned roles + set primary role
+  fastify.put(
+    '/:id/roles',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      schema: {
+        tags: ['users'],
+        summary: 'Update user roles',
+        params: idParamSchema,
+        body: userRolesUpdateBodySchema,
+        response: {
+          200: userRolesSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (idResult.value === request.user?.id) {
+        return reply.code(403).send({ error: 'Cannot change your own role' });
+      }
+
+      const { roleIds, primaryRoleId } = request.body as {
+        roleIds?: unknown;
+        primaryRoleId?: unknown;
+      };
+
+      const roleIdsResult = ensureArrayOfStrings(roleIds, 'roleIds');
+      if (!roleIdsResult.ok)
+        return badRequest(reply, (roleIdsResult as { ok: false; message: string }).message);
+      if (roleIdsResult.value.length < 1) return badRequest(reply, 'roleIds must not be empty');
+
+      const primaryRoleIdResult = requireNonEmptyString(primaryRoleId, 'primaryRoleId');
+      if (!primaryRoleIdResult.ok) return badRequest(reply, primaryRoleIdResult.message);
+
+      if (!roleIdsResult.value.includes(primaryRoleIdResult.value)) {
+        return badRequest(reply, 'primaryRoleId must be included in roleIds');
+      }
+
+      const userExists = await query('SELECT 1 FROM users WHERE id = $1', [idResult.value]);
+      if (userExists.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+
+      const roleCheck = await query('SELECT id FROM roles WHERE id = ANY($1::varchar[])', [
+        roleIdsResult.value,
+      ]);
+      const found = new Set(roleCheck.rows.map((r) => r.id as string));
+      const missing = roleIdsResult.value.filter((rid) => !found.has(rid));
+      if (missing.length > 0) return badRequest(reply, `Invalid role(s): ${missing.join(', ')}`);
+
+      try {
+        await query('BEGIN');
+        await query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
+        for (const rid of roleIdsResult.value) {
+          await query(
+            'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [idResult.value, rid],
+          );
+        }
+        await query('UPDATE users SET role = $1 WHERE id = $2', [
+          primaryRoleIdResult.value,
+          idResult.value,
+        ]);
+        await query('COMMIT');
+      } catch (err) {
+        await query('ROLLBACK');
+        throw err;
+      }
+
+      await bumpNamespaceVersion('users');
+      return { roleIds: roleIdsResult.value, primaryRoleId: primaryRoleIdResult.value };
     },
   );
 

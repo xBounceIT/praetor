@@ -8,6 +8,13 @@ INSERT INTO users (id, name, username, password_hash, role, avatar_initials) VAL
     ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US')
 ON CONFLICT (id) DO NOTHING;
 
+-- Ensure default users have matching rows in user_roles
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, u.role
+FROM users u
+WHERE u.id IN ('u1', 'u2', 'u3')
+ON CONFLICT DO NOTHING;
+
 -- Default clients
 INSERT INTO clients (id, name) VALUES
     ('c1', 'Acme Corp'),
