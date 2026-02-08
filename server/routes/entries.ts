@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   badRequest,
   isWeekendDate,
@@ -515,6 +516,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const { projectId, task, futureOnly, placeholderOnly } = request.query as {
         projectId: string;
         task: string;
@@ -543,7 +546,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
                   WHERE wum.user_id = $${paramIndex}
               ))`;
-        params.push(request.user!.id);
+        params.push(request.user.id);
         paramIndex++;
       }
 

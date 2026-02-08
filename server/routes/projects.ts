@@ -9,6 +9,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { badRequest, requireNonEmptyString, validateHexColor } from '../utils/validation.ts';
 
 const idParamSchema = {
@@ -87,8 +88,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const canViewAll = hasPermission(request, 'projects.manage_all.view');
-      const scopeKey = canViewAll ? 'all' : `user:${request.user!.id}`;
+      const scopeKey = canViewAll ? 'all' : `user:${request.user.id}`;
       const bypass = shouldBypassCache(request);
 
       const { status, value } = await cacheGetSetJson(
@@ -110,7 +113,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE up.user_id = $1
                 ORDER BY p.name
             `;
-            queryParams = [request.user!.id];
+            queryParams = [request.user.id];
           }
 
           const result = await query(queryText, queryParams);

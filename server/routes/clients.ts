@@ -9,6 +9,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   badRequest,
   optionalEmail,
@@ -125,9 +126,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const canViewClientDetails = hasPermission(request, 'crm.clients.view');
-      const scopeKey = canViewAllClients ? 'all' : `user:${request.user!.id}`;
+      const scopeKey = canViewAllClients ? 'all' : `user:${request.user.id}`;
       const detailsKey = canViewClientDetails ? 'full' : 'nameOnly';
       const bypass = shouldBypassCache(request);
 
@@ -147,7 +150,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE uc.user_id = $1
                 ORDER BY c.name
             `;
-            queryParams.push(request.user!.id);
+            queryParams.push(request.user.id);
           }
 
           const result = await query(queryText, queryParams);

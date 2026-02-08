@@ -11,6 +11,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   badRequest,
   optionalArrayOfStrings,
@@ -131,6 +132,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
       const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
@@ -144,7 +147,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
         ? 'v=1:scope=all'
-        : `v=1:scope=${scopeKey}:user=${request.user!.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}`;
+        : `v=1:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}`;
 
       const { status, value } = await cacheGetSetJson(
         'users',
@@ -175,7 +178,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE ${conditions.join(' OR ')}
                  ORDER BY u.name`,
-              [request.user?.id],
+              [request.user.id],
             );
           }
           return result.rows.map((u) => ({

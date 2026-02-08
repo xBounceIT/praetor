@@ -30,7 +30,8 @@ export const getRedis = async (): Promise<RedisClient | null> => {
   if (!clientPromise) {
     clientPromise = (async () => {
       try {
-        const url = process.env.REDIS_URL!;
+        const url = process.env.REDIS_URL;
+        if (!url) return null;
         const c = createClient({ url });
 
         c.on('error', (err) => {
