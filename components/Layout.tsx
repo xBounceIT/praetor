@@ -48,7 +48,7 @@ const getModuleFromRoute = (route: View): string => {
   return 'timesheets'; // default
 };
 
-interface LayoutProps {
+export interface LayoutProps {
   children: React.ReactNode;
   activeView: View;
   onViewChange: (view: View) => void;

@@ -9,7 +9,7 @@ import CustomRepeatModal from '../shared/CustomRepeatModal';
 import CustomSelect from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface DailyViewProps {
+export interface DailyViewProps {
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];

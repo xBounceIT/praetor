@@ -10,7 +10,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface ClientQuotesViewProps {
+export interface ClientQuotesViewProps {
   quotes: Quote[];
   clients: Client[];
   products: Product[];

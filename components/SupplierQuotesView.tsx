@@ -17,7 +17,7 @@ const getExpirationTimestamp = (expirationDate: string) => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-interface SupplierQuotesViewProps {
+export interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
   suppliers: Supplier[];
   products: Product[];

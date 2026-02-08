@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { LdapConfig, LdapRoleMapping, Role } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 
-interface AuthSettingsProps {
+export interface AuthSettingsProps {
   config: LdapConfig;
   onSave: (config: LdapConfig) => void;
   roles: Role[];

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Tooltip from './Tooltip';
 
-interface TableFilterProps {
+export interface TableFilterProps {
   title: string;
   options: string[];
   selectedValues: string[];

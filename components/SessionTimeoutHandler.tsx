@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import Modal from './shared/Modal';
 
-interface SessionTimeoutHandlerProps {
+export interface SessionTimeoutHandlerProps {
   onLogout: () => void;
   warnAfterMs?: number;
   logoutAfterMs?: number;

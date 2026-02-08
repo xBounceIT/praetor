@@ -8,7 +8,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
-interface SuppliersViewProps {
+export interface SuppliersViewProps {
   suppliers: Supplier[];
   onAddSupplier: (supplierData: Partial<Supplier>) => Promise<void>;
   onUpdateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;

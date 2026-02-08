@@ -6,7 +6,7 @@ import { getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
 import Tooltip from './Tooltip';
 
-interface CalendarProps {
+export interface CalendarProps {
   // Original props
   selectedDate?: string;
   onDateSelect?: (date: string) => void;

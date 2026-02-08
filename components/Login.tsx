@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import type { User } from '../types';
 
-interface LoginProps {
+export interface LoginProps {
   users: User[];
   onLogin: (user: User, token?: string) => void;
   logoutReason?: 'inactivity' | null;

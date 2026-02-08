@@ -8,7 +8,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
-interface ClientsViewProps {
+export interface ClientsViewProps {
   clients: Client[];
   onAddClient: (clientData: Partial<Client>) => Promise<void>;
   onUpdateClient: (id: string, updates: Partial<Client>) => Promise<void>;

@@ -14,7 +14,7 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 const isExpired = (endDate: string) => new Date(endDate) < new Date();
 const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
 
-interface SpecialBidsViewProps {
+export interface SpecialBidsViewProps {
   bids: SpecialBid[];
   clients: Client[];
   products: Product[];

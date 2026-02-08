@@ -8,13 +8,13 @@ import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
 
-interface WorkUnitPayload {
+export interface WorkUnitPayload {
   name: string;
   managerIds: string[];
   description: string;
 }
 
-interface WorkUnitsViewProps {
+export interface WorkUnitsViewProps {
   workUnits: WorkUnit[];
   users: User[];
   permissions: string[];

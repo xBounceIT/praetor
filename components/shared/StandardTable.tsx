@@ -25,7 +25,7 @@ export type Column<T> = {
   align?: 'left' | 'center' | 'right';
 };
 
-type StandardTableProps<T extends object = object> = {
+export type StandardTableProps<T extends object = object> = {
   title: string;
   totalCount?: number;
   totalLabel?: string;

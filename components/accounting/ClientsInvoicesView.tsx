@@ -9,7 +9,7 @@ import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface ClientsInvoicesViewProps {
+export interface ClientsInvoicesViewProps {
   invoices: Invoice[];
   clients: Client[];
   products: Product[];

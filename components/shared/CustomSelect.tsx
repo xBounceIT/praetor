@@ -9,7 +9,7 @@ export interface Option {
   name: string;
 }
 
-interface CustomSelectProps {
+export interface CustomSelectProps {
   options: Option[];
   value: string | string[];
   onChange: (value: string | string[]) => void;

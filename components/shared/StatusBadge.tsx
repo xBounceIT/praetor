@@ -21,7 +21,7 @@ export type StatusType =
   | 'internal'
   | 'app_user';
 
-interface StatusBadgeProps {
+export interface StatusBadgeProps {
   type: StatusType;
   label: string;
   className?: string;

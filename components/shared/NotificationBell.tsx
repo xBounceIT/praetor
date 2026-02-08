@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { Notification } from '../../types';
 import Tooltip from './Tooltip';
 
-interface NotificationBellProps {
+export interface NotificationBellProps {
   notifications: Notification[];
   unreadCount: number;
   onMarkAsRead: (id: string) => void;

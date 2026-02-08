@@ -31,7 +31,7 @@ const getStatusOptions = (t: (key: string) => string) => [
   { id: 'denied', name: t('accounting:clientsOrders.statusDenied') },
 ];
 
-interface ClientsOrdersViewProps {
+export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Modal from '../shared/Modal';
 import CustomSelect from './CustomSelect';
 
-interface CustomRepeatModalProps {
+export interface CustomRepeatModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (pattern: string) => void;

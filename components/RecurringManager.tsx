@@ -5,7 +5,7 @@ import type { Client, Project, ProjectTask } from '../types';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
 
-interface RecurringManagerProps {
+export interface RecurringManagerProps {
   tasks: ProjectTask[];
   projects: Project[];
   clients: Client[];

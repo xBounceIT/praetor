@@ -10,9 +10,9 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
-type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
+export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
-interface TasksViewProps {
+export interface TasksViewProps {
   tasks: ProjectTask[];
   projects: Project[];
   clients: Client[];

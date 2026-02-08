@@ -5,7 +5,7 @@ import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface GeneralSettingsProps {
+export interface GeneralSettingsProps {
   settings: IGeneralSettings;
   onUpdate: (updates: Partial<IGeneralSettings>) => void;
 }

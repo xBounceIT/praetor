@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { EmailConfig, SmtpEncryption } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
 
-interface EmailSettingsProps {
+export interface EmailSettingsProps {
   config: EmailConfig;
   onSave: (config: EmailConfig) => Promise<void>;
   onTestEmail: (

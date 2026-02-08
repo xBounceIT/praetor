@@ -9,7 +9,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface InternalListingViewProps {
+export interface InternalListingViewProps {
   products: Product[];
   onAddProduct: (productData: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
   onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>; // Updated to Promise for error handling

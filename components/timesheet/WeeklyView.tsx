@@ -7,7 +7,7 @@ import CustomSelect from '../shared/CustomSelect';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface WeeklyViewProps {
+export interface WeeklyViewProps {
   entries: TimeEntry[];
   clients: Client[];
   projects: Project[];

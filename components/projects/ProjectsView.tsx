@@ -10,7 +10,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
-interface ProjectsViewProps {
+export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
   permissions: string[];

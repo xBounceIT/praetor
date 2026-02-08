@@ -7,7 +7,7 @@ import Modal from './shared/Modal';
 import StandardTable from './shared/StandardTable';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
-interface ExpensesViewProps {
+export interface ExpensesViewProps {
   expenses: Expense[];
   onAddExpense: (expenseData: Partial<Expense>) => void;
   onUpdateExpense: (id: string, updates: Partial<Expense>) => void;

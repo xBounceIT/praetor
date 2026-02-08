@@ -9,7 +9,7 @@ import StandardTable from '../shared/StandardTable';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-interface UserManagementProps {
+export interface UserManagementProps {
   users: User[];
   clients: Client[];
   projects: Project[];

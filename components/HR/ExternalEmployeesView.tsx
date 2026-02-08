@@ -5,7 +5,7 @@ import type { User } from '../../types';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
 
-interface ExternalEmployeesViewProps {
+export interface ExternalEmployeesViewProps {
   users: User[];
   onAddEmployee: (
     name: string,

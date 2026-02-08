@@ -5,7 +5,7 @@ import i18n from '../i18n';
 import type { Settings } from '../services/api';
 import { applyTheme, getTheme, type Theme } from '../utils/theme';
 
-interface UserSettingsProps {
+export interface UserSettingsProps {
   settings: Settings;
   isLoading?: boolean;
   onUpdate: (updates: Partial<Settings>) => void;

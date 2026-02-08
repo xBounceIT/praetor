@@ -8,7 +8,7 @@ import StandardTable from './shared/StandardTable';
 import StatusBadge, { type StatusType } from './shared/StatusBadge';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
-interface PaymentsViewProps {
+export interface PaymentsViewProps {
   payments: Payment[];
   clients: Client[];
   invoices: Invoice[];

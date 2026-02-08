@@ -12,7 +12,7 @@ import {
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
 
-interface RolesViewProps {
+export interface RolesViewProps {
   roles: Role[];
   permissions: string[];
   onCreateRole: (name: string, permissions: string[]) => Promise<void>;

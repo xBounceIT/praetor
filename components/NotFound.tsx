@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 
-interface NotFoundProps {
+export interface NotFoundProps {
   onReturn: () => void;
 }
 

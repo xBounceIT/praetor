@@ -7,7 +7,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
-interface InternalEmployeesViewProps {
+export interface InternalEmployeesViewProps {
   users: User[];
   onAddEmployee: (
     name: string,
