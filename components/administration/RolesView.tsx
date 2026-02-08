@@ -351,16 +351,26 @@ const RolesView: React.FC<RolesViewProps> = ({
                       {currentActions.map((action) => {
                         const permission = buildPermission(definition.id, action);
                         const isAvailable = definition.actions.includes(action);
+                        const isChecked = selectedPermissions.includes(permission);
 
                         return (
                           <td key={action} className="px-2 py-4 text-center">
                             {isAvailable ? (
-                              <input
-                                type="checkbox"
-                                checked={selectedPermissions.includes(permission)}
-                                onChange={() => togglePermission(permission)}
-                                className="w-4 h-4 text-praetor rounded focus:ring-praetor border-slate-300 cursor-pointer transition-all"
-                              />
+                              <div className="flex items-center justify-center">
+                                <label className="relative flex items-center justify-center cursor-pointer group">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => togglePermission(permission)}
+                                    className="peer sr-only"
+                                  />
+                                  <div className="w-5 h-5 bg-white border-2 border-slate-300 rounded-md transition-all duration-200 peer-checked:bg-praetor peer-checked:border-praetor group-hover:border-praetor/50 peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center">
+                                    <i
+                                      className={`fa-solid fa-check text-white text-[10px] transition-transform duration-200 ${isChecked ? 'scale-100' : 'scale-0'}`}
+                                    ></i>
+                                  </div>
+                                </label>
+                              </div>
                             ) : (
                               <span className="text-slate-200">—</span>
                             )}
@@ -368,24 +378,33 @@ const RolesView: React.FC<RolesViewProps> = ({
                         );
                       })}
                       <td className="px-6 py-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => toggleAllForDefinition(definition)}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2 ${
-                            isAllSelected
-                              ? 'bg-praetor'
-                              : hasPartial
-                                ? 'bg-praetor/50'
-                                : 'bg-slate-200 hover:bg-slate-300'
-                          }`}
-                          title={t('common:table.selectAll')}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              isAllSelected || hasPartial ? 'translate-x-5' : 'translate-x-0.5'
+                        <div className="flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleAllForDefinition(definition)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2 ${
+                              isAllSelected
+                                ? 'bg-praetor'
+                                : hasPartial
+                                  ? 'bg-praetor/40'
+                                  : 'bg-slate-200'
                             }`}
-                          />
-                        </button>
+                            title={t('common:table.selectAll')}
+                          >
+                            <span
+                              className={`pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
+                                isAllSelected || hasPartial ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            >
+                              {hasPartial && !isAllSelected && (
+                                <span className="w-2.5 h-0.5 bg-praetor/60 rounded-full" />
+                              )}
+                              {isAllSelected && (
+                                <i className="fa-solid fa-check text-praetor text-[10px]" />
+                              )}
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
