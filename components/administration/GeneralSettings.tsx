@@ -90,7 +90,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
   const isApiKeyMissing = () => enableAiInsights && !currentApiKey.trim();
   const isModelMissing = () => enableAiInsights && !currentModelId.trim();
-  const isModelNotFound = () => enableAiInsights && modelCheck.state === 'not_found';
+  const isModelNotFound = enableAiInsights && modelCheck.state === 'not_found';
 
   const handleCheckModel = async () => {
     if (!currentApiKey.trim() || !currentModelId.trim()) return;
