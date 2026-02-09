@@ -4,6 +4,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { tasksApi } from '../../services/api';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -530,20 +531,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                         <span className="text-[10px] text-slate-400 font-mono">{user.role}</span>
                       </div>
                     </div>
-                    <div
-                      className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-colors ${
-                        assignedUserIds.includes(user.id)
-                          ? 'bg-praetor border-praetor'
-                          : 'bg-white border-slate-300'
-                      }`}
-                    >
-                      {assignedUserIds.includes(user.id) && (
-                        <i className="fa-solid fa-check text-white text-xs"></i>
-                      )}
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="hidden"
+                    <Checkbox
                       checked={assignedUserIds.includes(user.id)}
                       onChange={() => toggleUserAssignment(user.id)}
                     />

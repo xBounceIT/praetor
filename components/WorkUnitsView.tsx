@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { workUnitsApi } from '../services/api';
 import type { User, WorkUnit } from '../types';
 import { buildPermission, hasPermission } from '../utils/permissions';
+import Checkbox from './shared/Checkbox';
 import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
@@ -542,11 +543,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={assignedUserIds.includes(user.id)}
                       onChange={() => toggleUserAssignment(user.id)}
-                      className="w-5 h-5 text-praetor rounded focus:ring-praetor border-gray-300"
                     />
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-slate-100 text-praetor flex items-center justify-center text-xs font-bold">

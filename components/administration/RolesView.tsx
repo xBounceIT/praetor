@@ -9,6 +9,7 @@ import {
   PERMISSION_DEFINITIONS,
   type PermissionAction,
 } from '../../utils/permissions';
+import Checkbox from '../shared/Checkbox';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
 
@@ -358,19 +359,10 @@ const RolesView: React.FC<RolesViewProps> = ({
                           <td key={action} className="px-2 py-4 text-center">
                             {isAvailable ? (
                               <div className="flex items-center justify-center">
-                                <label className="relative flex items-center justify-center cursor-pointer group">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => togglePermission(permission)}
-                                    className="peer sr-only"
-                                  />
-                                  <div className="w-5 h-5 bg-white border-2 border-slate-300 rounded-md transition-all duration-200 peer-checked:bg-praetor peer-checked:border-praetor group-hover:border-praetor/50 peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center">
-                                    <i
-                                      className={`fa-solid fa-check text-white text-[10px] leading-none transition-transform duration-200 ${isChecked ? 'scale-100' : 'scale-0'}`}
-                                    ></i>
-                                  </div>
-                                </label>
+                                <Checkbox
+                                  checked={isChecked}
+                                  onChange={() => togglePermission(permission)}
+                                />
                               </div>
                             ) : (
                               <span className="text-slate-200">—</span>

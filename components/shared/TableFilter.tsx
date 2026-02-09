@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import Checkbox from './Checkbox';
 import Tooltip from './Tooltip';
 
 export interface TableFilterProps {
@@ -110,14 +111,11 @@ const TableFilter: React.FC<TableFilterProps> = ({
       {/* Options List */}
       <div className="max-h-40 overflow-y-auto p-1.5 space-y-0.5">
         <label className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer">
-          <input
-            type="checkbox"
+          <Checkbox
+            size="sm"
             checked={isAllSelected}
-            ref={(input) => {
-              if (input) input.indeterminate = isIndeterminate;
-            }}
+            indeterminate={isIndeterminate}
             onChange={handleSelectAll}
-            className="w-3.5 h-3.5 rounded text-praetor focus:ring-praetor border-gray-300"
           />
           <span className="text-[11px] text-slate-600 select-none font-semibold">
             ({t('table.selectAll')})
@@ -129,11 +127,10 @@ const TableFilter: React.FC<TableFilterProps> = ({
               key={opt}
               className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
             >
-              <input
-                type="checkbox"
+              <Checkbox
+                size="sm"
                 checked={selectedValues.includes(opt)}
                 onChange={() => handleCheckboxChange(opt)}
-                className="w-3.5 h-3.5 rounded text-praetor focus:ring-praetor border-gray-300"
               />
               <Tooltip label={opt}>
                 {() => (

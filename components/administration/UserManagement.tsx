@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -712,8 +713,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                   }`}
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
-                                    <input
-                                      type="checkbox"
+                                    <Checkbox
                                       checked={checked}
                                       disabled={isPrimary && checked}
                                       onChange={() => {
@@ -725,7 +725,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                           return [...prev, r.id];
                                         });
                                       }}
-                                      className="h-4 w-4 rounded border-slate-300 text-praetor focus:ring-praetor"
                                     />
                                     <span className="text-sm font-semibold text-slate-700 truncate">
                                       {r.name}
