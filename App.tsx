@@ -24,6 +24,7 @@ import PaymentsView from './components/PaymentsView';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
+import AiReportingView from './components/reports/AiReportingView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SupplierQuotesView from './components/SupplierQuotesView';
@@ -95,6 +96,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('accounting/')) return 'accounting';
   if (view.startsWith('finances/')) return 'finances';
   if (view.startsWith('suppliers/')) return 'suppliers';
+  if (view.startsWith('reports/')) return 'reports';
   if (view.startsWith('administration/')) return 'administration';
   if (view === 'settings') return 'settings';
   return null;
@@ -1267,6 +1269,10 @@ const App: React.FC = () => {
             if (canListSupplierQuotes) setSupplierQuotes(supplierQuotesData);
             if (canListProducts) setProducts(productsData);
             await loadGeneralSettings();
+            break;
+          }
+          case 'reports': {
+            // Reports pages fetch their own data as needed.
             break;
           }
         }
@@ -2891,6 +2897,12 @@ const App: React.FC = () => {
                 settings={userSettings}
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
+              />
+            )}
+            {activeView === 'reports/ai-reporting' && (
+              <AiReportingView
+                currentUserId={currentUser.id}
+                permissions={currentUser.permissions || []}
               />
             )}
           </>

@@ -60,6 +60,11 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.external', actions: CRUD, module: 'hr' },
   { id: 'hr.costs', actions: VIEW_UPDATE, module: 'hr' },
 
+  // Reports
+  { id: 'reports.ai_reporting', actions: VIEW_ONLY, module: 'reports' },
+  // "create" here means: create chat sessions / send AI messages.
+  { id: 'reports.ai_reporting_ai', actions: ['create'], module: 'reports' },
+
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE, module: 'administration' },
   { id: 'administration.general', actions: VIEW_UPDATE, module: 'administration' },
@@ -148,6 +153,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'suppliers/quotes': buildPermission('suppliers.quotes', 'view'),
   'hr/internal': buildPermission('hr.internal', 'view'),
   'hr/external': buildPermission('hr.external', 'view'),
+  'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
   settings: buildPermission('settings', 'view'),
   'docs/api': buildPermission('docs.api', 'view'),
   'docs/frontend': buildPermission('docs.frontend', 'view'),

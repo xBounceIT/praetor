@@ -11,6 +11,7 @@ import enHr from './locales/en/hr.json';
 import enLayout from './locales/en/layout.json';
 import enNotifications from './locales/en/notifications.json';
 import enProjects from './locales/en/projects.json';
+import enReports from './locales/en/reports.json';
 import enSales from './locales/en/sales.json';
 import enSettings from './locales/en/settings.json';
 import enSuppliers from './locales/en/suppliers.json';
@@ -25,6 +26,7 @@ import itHr from './locales/it/hr.json';
 import itLayout from './locales/it/layout.json';
 import itNotifications from './locales/it/notifications.json';
 import itProjects from './locales/it/projects.json';
+import itReports from './locales/it/reports.json';
 import itSales from './locales/it/sales.json';
 import itSettings from './locales/it/settings.json';
 import itSuppliers from './locales/it/suppliers.json';
@@ -47,6 +49,7 @@ const resources = {
     accounting: enAccounting,
     sales: enSales,
     administration: enAdministration,
+    reports: enReports,
   },
   it: {
     common: itCommon,
@@ -64,6 +67,7 @@ const resources = {
     accounting: itAccounting,
     sales: itSales,
     administration: itAdministration,
+    reports: itReports,
   },
 };
 
@@ -89,6 +93,7 @@ i18n
       'accounting',
       'sales',
       'administration',
+      'reports',
     ],
     resources,
     detection: {

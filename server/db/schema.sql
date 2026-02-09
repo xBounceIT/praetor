@@ -919,6 +919,32 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
 
+-- Reports: AI Reporting chat sessions (cross-device history)
+CREATE TABLE IF NOT EXISTS report_chat_sessions (
+    id VARCHAR(50) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL DEFAULT 'AI Reporting',
+    is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_chat_sessions_user_updated
+    ON report_chat_sessions(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_report_chat_sessions_user_archived
+    ON report_chat_sessions(user_id, is_archived);
+
+CREATE TABLE IF NOT EXISTS report_chat_messages (
+    id VARCHAR(50) PRIMARY KEY,
+    session_id VARCHAR(50) NOT NULL REFERENCES report_chat_sessions(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_chat_messages_session_created
+    ON report_chat_messages(session_id, created_at ASC);
+
 -- Email administration table (single row)
 CREATE TABLE IF NOT EXISTS email_config (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -945,4 +971,11 @@ INSERT INTO role_permissions (role_id, permission)
 VALUES
     ('manager', 'hr.costs.view'),
     ('manager', 'hr.costs.update')
+ON CONFLICT DO NOTHING;
+
+-- Seed Reports permissions for manager role (safe for existing installations)
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'reports.ai_reporting.view'),
+    ('manager', 'reports.ai_reporting_ai.create')
 ON CONFLICT DO NOTHING;

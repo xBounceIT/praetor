@@ -317,10 +317,27 @@ export type View =
   // HR module
   | 'hr/internal'
   | 'hr/external'
+  // Reports module
+  | 'reports/ai-reporting'
   // Standalone
   | 'settings'
   | 'docs/api'
   | 'docs/frontend';
+
+export interface ReportChatSessionSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ReportChatMessage {
+  id: string;
+  sessionId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: number;
+}
 
 export interface WorkUnit {
   id: string;

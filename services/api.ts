@@ -69,6 +69,8 @@ import type {
   ProjectTask,
   Quote,
   QuoteItem,
+  ReportChatMessage,
+  ReportChatSessionSummary,
   Role,
   SpecialBid,
   Supplier,
@@ -591,6 +593,36 @@ export const aiApi = {
     }),
 };
 
+// Reports API
+export const reportsApi = {
+  listSessions: (): Promise<ReportChatSessionSummary[]> =>
+    fetchApi<ReportChatSessionSummary[]>('/reports/ai-reporting/sessions'),
+
+  createSession: (data: { title?: string } = {}): Promise<{ id: string }> =>
+    fetchApi('/reports/ai-reporting/sessions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getSessionMessages: (sessionId: string): Promise<ReportChatMessage[]> =>
+    fetchApi<ReportChatMessage[]>(`/reports/ai-reporting/sessions/${sessionId}/messages`),
+
+  chat: (data: {
+    sessionId?: string;
+    message: string;
+  }): Promise<{
+    sessionId: string;
+    text: string;
+  }> =>
+    fetchApi('/reports/ai-reporting/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  archiveSession: (sessionId: string): Promise<{ success: boolean }> =>
+    fetchApi(`/reports/ai-reporting/sessions/${sessionId}/archive`, { method: 'POST' }),
+};
+
 // Client Quotes API (Sales module)
 export const clientQuotesApi = {
   list: (): Promise<Quote[]> =>
@@ -797,6 +829,7 @@ export const emailApi = {
 export default {
   auth: authApi,
   ai: aiApi,
+  reports: reportsApi,
   users: usersApi,
   employees: employeesApi,
   clients: clientsApi,

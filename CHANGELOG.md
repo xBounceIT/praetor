@@ -1,3 +1,13 @@
+## 20260216 - Operativo
+- Nuovo modulo Report per reportistica
+- Nuova funzionalità AI Reporting (alpha): 
+  - Interfaccia UI stile ChatGPT per interrogare modello AI ed analizzare i dati di sistema
+  - i dati analizzabili sono solo quelli a cui l'utente ha accesso
+  - Chat persistenti su DB
+  - permessi dedicati necessari per l'utilizzo delle funzioni AI
+  - default: disattivo
+- Aggiunto OpenRouter tra i provider disponibili per le funzioni AI
+
 ## 20260209 - Operativo
 - Aggiunto Swagger (/docs/api) e TypeDoc (/docs/frontend) per documentazione automatica Backend e Frontend durante commit
 - Refactoring completo backend e frontend per supporto documentazione automatica

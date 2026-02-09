@@ -9,6 +9,7 @@
     "accounting": "Accounting",
     "finances": "Finances",
     "suppliers": "Suppliers",
+    "reports": "Reports",
     "configuration": "Configuration",
     "administration": "Administration",
     "settings": "Settings",
@@ -47,7 +48,8 @@
     "supplierQuotes": "Supplier Quotes",
     "internalEmployees": "Internal Employees",
     "externalEmployees": "External Employees",
-    "roles": "Roles"
+    "roles": "Roles",
+    "aiReporting": "AI Reporting"
   },
   "menu": {
     "settings": "Settings",
@@ -84,7 +86,8 @@
     "internalEmployees": "Internal Employees",
     "externalEmployees": "External Employees",
     "emailSettings": "Email Settings",
-    "roles": "Roles"
+    "roles": "Roles",
+    "aiReporting": "AI Reporting"
   },
   "notifications": {
     "title": "Notifications",

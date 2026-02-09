@@ -1,0 +1,281 @@
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import api from '../../services/api';
+import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
+import { buildPermission, hasPermission } from '../../utils/permissions';
+import CustomSelect, { type Option } from '../shared/CustomSelect';
+
+export interface AiReportingViewProps {
+  currentUserId: string;
+  permissions: string[];
+}
+
+const toOptionLabel = (session: ReportChatSessionSummary) => {
+  const title = session.title?.trim() ? session.title.trim() : 'AI Reporting';
+  return title;
+};
+
+const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permissions }) => {
+  const { t } = useTranslation('reports');
+  const [sessions, setSessions] = useState<ReportChatSessionSummary[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [messages, setMessages] = useState<ReportChatMessage[]>([]);
+  const [draft, setDraft] = useState('');
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string>('');
+  const endRef = useRef<HTMLDivElement>(null);
+  const loadTokenRef = useRef(0);
+
+  const canSend = hasPermission(permissions, buildPermission('reports.ai_reporting_ai', 'create'));
+
+  const sessionOptions: Option[] = useMemo(
+    () => sessions.map((s) => ({ id: s.id, name: toOptionLabel(s) })),
+    [sessions],
+  );
+
+  const scrollToBottom = useCallback(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, []);
+
+  const loadSessions = useCallback(async () => {
+    setIsLoadingSessions(true);
+    setError('');
+    try {
+      const data = await api.reports.listSessions();
+      setSessions(data);
+      setActiveSessionId((prev) => prev || data[0]?.id || '');
+    } catch (err) {
+      setError((err as Error).message || t('aiReporting.error'));
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }, [t]);
+
+  const loadMessages = useCallback(
+    async (sessionId: string) => {
+      const token = ++loadTokenRef.current;
+      setIsLoadingMessages(true);
+      setError('');
+      try {
+        const data = await api.reports.getSessionMessages(sessionId);
+        if (token !== loadTokenRef.current) return;
+        setMessages(data);
+        queueMicrotask(scrollToBottom);
+      } catch (err) {
+        if (token !== loadTokenRef.current) return;
+        setError((err as Error).message || t('aiReporting.error'));
+      } finally {
+        if (token === loadTokenRef.current) setIsLoadingMessages(false);
+      }
+    },
+    [t, scrollToBottom],
+  );
+
+  const handleNewChat = async () => {
+    if (!canSend) return;
+    setError('');
+    try {
+      const { id } = await api.reports.createSession({
+        title: t('aiReporting.session', { defaultValue: 'Session' }),
+      });
+      await loadSessions();
+      setActiveSessionId(id);
+      setMessages([]);
+      setDraft('');
+    } catch (err) {
+      setError((err as Error).message || t('aiReporting.error'));
+    }
+  };
+
+  const handleSend = async () => {
+    const content = draft.trim();
+    if (!content || isSending || !canSend) return;
+
+    setIsSending(true);
+    setError('');
+    setDraft('');
+
+    const now = Date.now();
+    const optimisticUser: ReportChatMessage = {
+      id: `tmp-user-${now}`,
+      sessionId: activeSessionId || 'tmp',
+      role: 'user',
+      content,
+      createdAt: now,
+    };
+    const optimisticAssistant: ReportChatMessage = {
+      id: `tmp-asst-${now}`,
+      sessionId: activeSessionId || 'tmp',
+      role: 'assistant',
+      content: t('aiReporting.thinking', { defaultValue: 'Thinking…' }),
+      createdAt: now + 1,
+    };
+    setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
+    queueMicrotask(scrollToBottom);
+
+    try {
+      const res = await api.reports.chat({
+        sessionId: activeSessionId || undefined,
+        message: content,
+      });
+
+      if (!activeSessionId) setActiveSessionId(res.sessionId);
+      await Promise.all([loadSessions(), loadMessages(res.sessionId)]);
+    } catch (err) {
+      setError((err as Error).message || t('aiReporting.error'));
+      // Reload canonical messages if possible.
+      if (activeSessionId) {
+        await loadMessages(activeSessionId);
+      } else {
+        setMessages([]);
+      }
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    setActiveSessionId('');
+    setMessages([]);
+    setDraft('');
+    void loadSessions();
+  }, [currentUserId, loadSessions]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    void loadMessages(activeSessionId);
+  }, [activeSessionId, loadMessages]);
+
+  return (
+    <div className="relative flex flex-col h-[calc(100vh-180px)] min-h-[560px]">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+            <i className="fa-solid fa-chart-simple text-sm"></i>
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              {t('aiReporting.session', { defaultValue: 'Session' })}
+            </div>
+            <div className="text-base font-extrabold text-slate-900 truncate">AI Reporting</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="w-[200px] sm:w-[260px]">
+            <CustomSelect
+              options={sessionOptions}
+              value={activeSessionId}
+              onChange={(value) => setActiveSessionId(String(value))}
+              disabled={isLoadingSessions || sessionOptions.length === 0}
+              placeholder={t('aiReporting.noSessions', { defaultValue: 'No chats yet.' })}
+              searchable
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleNewChat()}
+            disabled={!canSend}
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
+              canSend
+                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'
+                : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {t('aiReporting.newChat', { defaultValue: 'New chat' })}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {!canSend && (
+        <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {t('aiReporting.noPermissionToSend', { defaultValue: 'You do not have permission.' })}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto pr-1 pb-28">
+        {isLoadingMessages && (
+          <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
+        )}
+
+        {!isLoadingMessages && messages.length === 0 && (
+          <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
+        )}
+
+        <div className="space-y-3">
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[820px] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
+                  m.role === 'user'
+                    ? 'bg-slate-900 text-white rounded-br-md'
+                    : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
+                }`}
+              >
+                {m.content}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div ref={endRef} />
+      </div>
+
+      <div className="absolute left-0 right-0 bottom-0">
+        <div className="mx-auto max-w-4xl px-2 pb-6">
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={t('aiReporting.placeholder')}
+                disabled={!canSend || isSending}
+                rows={1}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  if (e.shiftKey) return;
+                  e.preventDefault();
+                  void handleSend();
+                }}
+                className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
+              />
+
+              <button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={!canSend || isSending || !draft.trim()}
+                className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                  !canSend || isSending || !draft.trim()
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : 'bg-slate-900 text-white hover:bg-slate-800'
+                }`}
+                aria-label="Send"
+              >
+                <i className="fa-solid fa-arrow-up text-sm" />
+              </button>
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-2 px-2">
+            {t('aiReporting.footerHint', {
+              defaultValue: 'Enter to send, Shift+Enter for a new line.',
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AiReportingView;

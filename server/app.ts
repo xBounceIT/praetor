@@ -17,6 +17,7 @@ import notificationsRoutes from './routes/notifications.ts';
 import paymentsRoutes from './routes/payments.ts';
 import productsRoutes from './routes/products.ts';
 import projectsRoutes from './routes/projects.ts';
+import reportsRoutes from './routes/reports.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
 import specialBidsRoutes from './routes/special-bids.ts';
@@ -79,6 +80,7 @@ export const buildApp = async () => {
   await fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
   await fastify.register(emailRoutes, { prefix: '/api/email' });
   await fastify.register(rolesRoutes, { prefix: '/api/roles' });
+  await fastify.register(reportsRoutes, { prefix: '/api/reports' });
 
   fastify.get(
     '/api/health',

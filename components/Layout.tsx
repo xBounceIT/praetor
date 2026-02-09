@@ -23,6 +23,7 @@ const moduleRoutes: Record<string, View[]> = {
   finances: ['finances/payments', 'finances/expenses'],
   suppliers: ['suppliers/manage', 'suppliers/quotes'],
   hr: ['hr/internal', 'hr/external'],
+  reports: ['reports/ai-reporting'],
   administration: [
     'administration/authentication',
     'administration/general',
@@ -44,6 +45,7 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('accounting/')) return 'accounting';
   if (route.startsWith('finances/')) return 'finances';
   if (route.startsWith('suppliers/')) return 'suppliers';
+  if (route.startsWith('reports/')) return 'reports';
   if (route.startsWith('administration/')) return 'administration';
   return 'timesheets'; // default
 };
@@ -99,6 +101,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
       { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
       { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
+      { id: 'reports', name: t('modules.reports'), icon: 'fa-chart-simple', active: false },
       { id: 'administration', name: t('modules.administration'), icon: 'fa-gears', active: false },
     ],
     [t],
@@ -514,6 +517,23 @@ const Layout: React.FC<LayoutProps> = ({
                 isCollapsed={isCollapsed}
                 onClick={() => {
                   onViewChange('administration/email');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+          </>
+        );
+      case 'reports':
+        return (
+          <>
+            {canAccessView('reports/ai-reporting') && (
+              <NavItem
+                icon="fa-comment-dots"
+                label={t('routes.aiReporting')}
+                active={activeView === 'reports/ai-reporting'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('reports/ai-reporting');
                   setIsMobileMenuOpen(false);
                 }}
               />

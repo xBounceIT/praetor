@@ -9,6 +9,7 @@
     "accounting": "Contabilità",
     "finances": "Finanze",
     "suppliers": "Fornitori",
+    "reports": "Report",
     "configuration": "Configurazione",
     "administration": "Amministrazione",
     "settings": "Impostazioni",
@@ -47,7 +48,8 @@
     "supplierQuotes": "Preventivi Fornitori",
     "internalEmployees": "Dipendenti Interni",
     "externalEmployees": "Dipendenti Esterni",
-    "roles": "Ruoli"
+    "roles": "Ruoli",
+    "aiReporting": "AI Reporting"
   },
   "menu": {
     "settings": "Impostazioni",
@@ -84,7 +86,8 @@
     "internalEmployees": "Dipendenti Interni",
     "externalEmployees": "Dipendenti Esterni",
     "emailSettings": "Impostazioni Email",
-    "roles": "Ruoli"
+    "roles": "Ruoli",
+    "aiReporting": "AI Reporting"
   },
   "notifications": {
     "title": "Notifiche",

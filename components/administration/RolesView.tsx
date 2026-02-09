@@ -36,6 +36,7 @@ const MODULE_ICONS: Record<string, string> = {
   accounting: 'fa-calculator',
   finances: 'fa-coins',
   hr: 'fa-users-gear',
+  reports: 'fa-chart-simple',
   administration: 'fa-gears',
   suppliers: 'fa-truck',
   settings: 'fa-sliders',
