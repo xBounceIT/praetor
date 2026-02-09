@@ -673,6 +673,8 @@ const App: React.FC = () => {
       'suppliers/quotes',
       'hr/internal',
       'hr/external',
+      // Reports module
+      'reports/ai-reporting',
       'settings',
       'docs/api',
       'docs/frontend',
@@ -720,6 +722,8 @@ const App: React.FC = () => {
       'suppliers/quotes',
       'hr/internal',
       'hr/external',
+      // Reports module
+      'reports/ai-reporting',
       'settings',
       'docs/api',
       'docs/frontend',
