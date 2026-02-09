@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmailConfig, SmtpEncryption } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
+import Toggle from '../shared/Toggle';
 
 export interface EmailSettingsProps {
   config: EmailConfig;
@@ -177,18 +178,15 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                 {t('email.smtpServer', 'SMTP Server Configuration')}
               </h3>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-3">
+              <Toggle
                 checked={formData.enabled}
-                onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                className="sr-only peer"
+                onChange={(checked) => setFormData({ ...formData, enabled: checked })}
               />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
-              <span className="ms-3 text-sm font-medium text-slate-600">
+              <span className="text-sm font-medium text-slate-600">
                 {t('email.enabled', 'Enabled')}
               </span>
-            </label>
+            </div>
           </div>
 
           <div
@@ -280,20 +278,17 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             </div>
 
             <div className="md:col-span-2">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-3">
+                <Toggle
                   checked={formData.smtpRejectUnauthorized}
-                  onChange={(e) =>
-                    setFormData({ ...formData, smtpRejectUnauthorized: e.target.checked })
+                  onChange={(checked) =>
+                    setFormData({ ...formData, smtpRejectUnauthorized: checked })
                   }
-                  className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
-                <span className="ms-3 text-sm font-medium text-slate-600">
+                <span className="text-sm font-medium text-slate-600">
                   {t('email.rejectUnauthorized', 'Reject unauthorized certificates')}
                 </span>
-              </label>
+              </div>
               <p className="text-[10px] text-slate-400 mt-1 ml-14">
                 {t('email.rejectUnauthorizedHint', 'Disable for self-signed certificates')}
               </p>

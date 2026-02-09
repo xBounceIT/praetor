@@ -7,6 +7,7 @@ import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
+import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
@@ -809,14 +810,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <div>
                     <p className="text-sm font-bold text-slate-700">{t('hr:workforce.disabled')}</p>
                   </div>
-                  <button
-                    onClick={() => setEditIsDisabled(!editIsDisabled)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editIsDisabled ? 'bg-red-500' : 'bg-slate-300'}`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editIsDisabled ? 'translate-x-6' : 'translate-x-1'}`}
-                    />
-                  </button>
+                  <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} color="red" />
                 </div>
               )}
             </div>

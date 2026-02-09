@@ -11,6 +11,7 @@ import {
 } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import Modal from '../shared/Modal';
+import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 
 export interface RolesViewProps {
@@ -372,28 +373,11 @@ const RolesView: React.FC<RolesViewProps> = ({
                       })}
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center">
-                          <button
-                            type="button"
-                            onClick={() => toggleAllForDefinition(definition)}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-praetor focus:ring-offset-2 ${
-                              isAllSelected
-                                ? 'bg-praetor'
-                                : hasPartial
-                                  ? 'bg-praetor/40'
-                                  : 'bg-slate-200'
-                            }`}
-                            title={t('common:table.selectAll')}
-                          >
-                            <span
-                              className={`pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
-                                isAllSelected || hasPartial ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            >
-                              {hasPartial && !isAllSelected && (
-                                <span className="w-2.5 h-0.5 bg-praetor/60 rounded-full" />
-                              )}
-                            </span>
-                          </button>
+                          <Toggle
+                            checked={isAllSelected}
+                            onChange={() => toggleAllForDefinition(definition)}
+                            partial={hasPartial && !isAllSelected}
+                          />
                         </div>
                       </td>
                     </tr>

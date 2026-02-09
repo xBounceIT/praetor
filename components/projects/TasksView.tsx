@@ -9,6 +9,7 @@ import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
+import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
@@ -652,24 +653,16 @@ const TasksView: React.FC<TasksViewProps> = ({
                     >
                       {t('tasks.isDisabled')}
                     </p>
-                    <button
-                      type="button"
-                      disabled={isInheritedDisabled}
-                      onClick={() => {
+                    <Toggle
+                      checked={isCurrentlyDisabled}
+                      onChange={() => {
                         if (!isInheritedDisabled) {
                           setTempIsDisabled(!tempIsDisabled);
                         }
                       }}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        isCurrentlyDisabled ? 'bg-red-500' : 'bg-slate-300'
-                      } ${isInheritedDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          isCurrentlyDisabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
+                      color="red"
+                      disabled={isInheritedDisabled}
+                    />
                   </div>
                   {isInheritedDisabled && (
                     <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1.5 px-1 ml-1">

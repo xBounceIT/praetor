@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LdapConfig, LdapRoleMapping, Role } from '../../types';
 import CustomSelect from '../shared/CustomSelect';
+import Toggle from '../shared/Toggle';
 
 export interface AuthSettingsProps {
   config: LdapConfig;
@@ -211,18 +212,13 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
               <i className="fa-solid fa-server text-praetor"></i>
               <h3 className="font-bold text-slate-800">{t('admin.ldap.serverConfig')}</h3>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-3">
+              <Toggle
                 checked={formData.enabled}
-                onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                className="sr-only peer"
+                onChange={(checked) => setFormData({ ...formData, enabled: checked })}
               />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-praetor"></div>
-              <span className="ms-3 text-sm font-medium text-slate-600">
-                {t('admin.ldap.enabled')}
-              </span>
-            </label>
+              <span className="text-sm font-medium text-slate-600">{t('admin.ldap.enabled')}</span>
+            </div>
           </div>
 
           <div
