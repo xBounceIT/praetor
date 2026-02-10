@@ -48,6 +48,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const [draft, setDraft] = useState('');
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string>('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -138,16 +139,36 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   );
 
   const handleNewChat = async () => {
-    if (!canSend) return;
-    // Avoid creating empty sessions: the server will create a session only when the first message is sent.
+    if (!canSend || isCreatingSession || isSending) return;
+
     setError('');
-    setIsNewChat(true);
-    setActiveSessionId('');
-    setMessages([]);
     setDraft('');
     setHasNewText(false);
     setIsAtBottom(true);
     isAtBottomRef.current = true;
+
+    setIsCreatingSession(true);
+    try {
+      const now = Date.now();
+      const res = await api.reports.createSession();
+      const session: ReportChatSessionSummary = {
+        id: res.id,
+        title: 'AI Reporting',
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // Optimistically insert so it shows up immediately in the dropdown, then refresh canonical list.
+      setSessions((prev) => [session, ...prev.filter((s) => s.id !== session.id)]);
+      setMessages([]);
+      setIsNewChat(false);
+      setActiveSessionId(session.id);
+      await loadSessions({ preferredSessionId: session.id });
+    } catch (err) {
+      setError((err as Error).message || t('aiReporting.error'));
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
 
   const handleSend = async () => {
@@ -264,6 +285,17 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const canDeleteActive =
     Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
   const showGoToBottom = messages.length > 0 && (!isAtBottom || hasNewText);
+  const footerHint = t('aiReporting.footerHint', {
+    defaultValue: 'Enter to send, Shift+Enter for a new line.',
+  });
+  const aiWarning = t('aiReporting.aiWarning', {
+    defaultValue: 'AI can make mistakes. Verify important information.',
+  });
+  const footerHintWithPeriod = (() => {
+    const trimmed = footerHint.trim();
+    if (!trimmed) return '';
+    return trimmed.endsWith('.') ? trimmed : `${trimmed}.`;
+  })();
 
   return (
     <div className="flex h-[calc(100vh-180px)] min-h-[560px]">
@@ -333,14 +365,18 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
             <button
               type="button"
               onClick={() => void handleNewChat()}
-              disabled={!canSend}
+              disabled={!canSend || isCreatingSession}
               className={`px-5 py-2.5 rounded-xl text-sm font-black shadow-xl transition-all active:scale-95 flex items-center gap-2 ${
-                canSend
+                canSend && !isCreatingSession
                   ? 'bg-praetor text-white shadow-slate-200 hover:bg-[var(--color-primary-hover)]'
                   : 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
               }`}
             >
-              <i className="fa-solid fa-plus text-xs" />
+              <i
+                className={`${
+                  isCreatingSession ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-plus'
+                } text-xs`}
+              />
               {t('aiReporting.newChat', { defaultValue: 'New chat' })}
             </button>
           </div>
@@ -575,20 +611,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
                 </div>
               </div>
             </div>
-            <div className="mx-auto w-full max-w-[760px] mt-2 px-2 space-y-1">
-              <div className="flex items-start gap-2 text-[11px] leading-snug text-amber-700">
-                <i className="fa-solid fa-triangle-exclamation mt-[1px]" aria-hidden="true" />
-                <div>
-                  {t('aiReporting.aiWarning', {
-                    defaultValue: 'AI can make mistakes. Verify important information.',
-                  })}
-                </div>
-              </div>
-
+            <div className="mx-auto w-full max-w-[760px] mt-2 px-2">
               <div className="text-[11px] text-slate-400">
-                {t('aiReporting.footerHint', {
-                  defaultValue: 'Enter to send, Shift+Enter for a new line.',
-                })}
+                {footerHintWithPeriod ? `${footerHintWithPeriod} ${aiWarning}` : aiWarning}
               </div>
             </div>
           </div>
