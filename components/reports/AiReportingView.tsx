@@ -1,6 +1,9 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -14,6 +17,24 @@ export interface AiReportingViewProps {
 const toOptionLabel = (session: ReportChatSessionSummary) => {
   const title = session.title?.trim() ? session.title.trim() : 'AI Reporting';
   return title;
+};
+
+const safeHref = (href: string | undefined) => {
+  if (!href) return null;
+  try {
+    // Support both absolute and relative URLs.
+    const parsed = new URL(href, window.location.origin);
+    if (
+      parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'mailto:'
+    ) {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permissions }) => {
@@ -219,13 +240,129 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
               className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[820px] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
+                className={`max-w-[820px] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                   m.role === 'user'
-                    ? 'bg-slate-900 text-white rounded-br-md'
+                    ? 'bg-slate-900 text-white rounded-br-md whitespace-pre-wrap'
                     : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
                 }`}
               >
-                {m.content}
+                {m.role === 'user' ? (
+                  m.content
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkBreaks]}
+                    components={{
+                      a: ({ children, href }) => {
+                        const safe = safeHref(href);
+                        if (!safe) return <>{children}</>;
+                        return (
+                          <a
+                            href={safe}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                          >
+                            {children}
+                          </a>
+                        );
+                      },
+                      img: ({ alt, src }) => {
+                        const safe = safeHref(src);
+                        const label = alt?.trim() ? alt.trim() : src || 'image';
+                        if (!safe) return <span className="text-slate-500">[Image: {label}]</span>;
+                        return (
+                          <a
+                            href={safe}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                          >
+                            [Image: {label}]
+                          </a>
+                        );
+                      },
+                      p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
+                      h1: ({ children }) => (
+                        <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                          {children}
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                          {children}
+                        </h3>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="my-2 list-disc pl-5 marker:text-slate-400">{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="my-2 list-decimal pl-5 marker:text-slate-400">{children}</ol>
+                      ),
+                      li: ({ children }) => <li className="my-1">{children}</li>,
+                      blockquote: ({ children }) => (
+                        <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                          {children}
+                        </blockquote>
+                      ),
+                      hr: () => <hr className="my-3 border-slate-200" />,
+                      table: ({ children }) => (
+                        <div className="my-2 overflow-x-auto">
+                          <table className="w-full border-collapse text-left">{children}</table>
+                        </div>
+                      ),
+                      th: ({ children }) => (
+                        <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="border border-slate-200 px-2 py-1">{children}</td>
+                      ),
+                      pre: ({ children }) => (
+                        <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                          {children}
+                        </pre>
+                      ),
+                      code: (props) => {
+                        // react-markdown provides `inline` here, but it is not represented in the
+                        // published `Components` typing (intrinsic `code` props only).
+                        const { inline, className, children } = props as unknown as {
+                          inline?: boolean;
+                          className?: string;
+                          children?: React.ReactNode;
+                        };
+
+                        const value =
+                          typeof children === 'string' ? children.replace(/\n$/, '') : children;
+
+                        if (inline === false) {
+                          return (
+                            <code
+                              className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                className ?? ''
+                              }`}
+                            >
+                              {value}
+                            </code>
+                          );
+                        }
+
+                        return (
+                          <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
+                            {value}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {m.content}
+                  </ReactMarkdown>
+                )}
               </div>
             </div>
           ))}
