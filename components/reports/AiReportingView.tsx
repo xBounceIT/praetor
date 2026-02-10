@@ -84,23 +84,30 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
     requestAnimationFrame(updateAtBottom);
   }, [updateAtBottom]);
 
-  const loadSessions = useCallback(async () => {
-    setIsLoadingSessions(true);
-    setError('');
-    try {
-      const data = await api.reports.listSessions();
-      setSessions(data);
-      setActiveSessionId((prev) => {
-        if (isNewChat) return '';
-        if (prev && data.some((s) => s.id === prev)) return prev;
-        return data[0]?.id || '';
-      });
-    } catch (err) {
-      setError((err as Error).message || t('aiReporting.error'));
-    } finally {
-      setIsLoadingSessions(false);
-    }
-  }, [isNewChat, t]);
+  const loadSessions = useCallback(
+    async (opts: { preferredSessionId?: string } = {}) => {
+      setIsLoadingSessions(true);
+      setError('');
+      try {
+        const data = await api.reports.listSessions();
+        setSessions(data);
+        setActiveSessionId((prev) => {
+          // When a new session is created by the first send, the sessions list can lag behind due
+          // to caching/version bump timing. Pin the UI to the newly created session id so we don't
+          // accidentally "jump" to the most recently updated existing session.
+          if (opts.preferredSessionId) return opts.preferredSessionId;
+          if (isNewChat) return '';
+          if (prev && data.some((s) => s.id === prev)) return prev;
+          return data[0]?.id || '';
+        });
+      } catch (err) {
+        setError((err as Error).message || t('aiReporting.error'));
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    },
+    [isNewChat, t],
+  );
 
   const loadMessages = useCallback(
     async (sessionId: string, opts: { forceScroll?: boolean } = {}) => {
@@ -183,11 +190,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
       });
 
       if (!hadSession) {
-        setActiveSessionId(res.sessionId);
+        const newSessionId = res.sessionId;
+        setActiveSessionId(newSessionId);
         setIsNewChat(false);
       }
       if (!hadSession) {
-        await loadSessions();
+        await loadSessions({ preferredSessionId: res.sessionId });
       } else {
         await Promise.all([loadSessions(), loadMessages(res.sessionId, { forceScroll: false })]);
       }
