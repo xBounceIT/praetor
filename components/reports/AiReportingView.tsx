@@ -149,7 +149,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
   const handleNewChat = async () => {
     if (!enableAiReporting) return;
-    if (!canSend || isCreatingSession || isSending) return;
+    if (!canSend || isCreatingSession || isSending || isLoadingMessages || isEmptySession) return;
 
     setError('');
     setDraft('');
@@ -390,7 +390,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             <button
               type="button"
               onClick={() => void handleNewChat()}
-              disabled={!canSend || isCreatingSession || isEmptySession}
+              disabled={!canSend || isCreatingSession || isEmptySession || isLoadingMessages}
               className={`px-5 py-2.5 rounded-xl text-sm font-black shadow-xl transition-all active:scale-95 flex items-center gap-2 ${
                 canSend && !isCreatingSession && !isEmptySession
                   ? 'bg-praetor text-white shadow-slate-200 hover:bg-[var(--color-primary-hover)]'
