@@ -567,10 +567,21 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
                 </div>
               </div>
             </div>
-            <div className="text-[11px] text-slate-400 mt-2 px-2">
-              {t('aiReporting.footerHint', {
-                defaultValue: 'Enter to send, Shift+Enter for a new line.',
-              })}
+            <div className="mx-auto w-full max-w-[760px] mt-2 px-2 space-y-1">
+              <div className="flex items-start gap-2 text-[11px] leading-snug text-amber-700">
+                <i className="fa-solid fa-triangle-exclamation mt-[1px]" aria-hidden="true" />
+                <div>
+                  {t('aiReporting.aiWarning', {
+                    defaultValue: 'AI can make mistakes. Verify important information.',
+                  })}
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-400">
+                {t('aiReporting.footerHint', {
+                  defaultValue: 'Enter to send, Shift+Enter for a new line.',
+                })}
+              </div>
             </div>
           </div>
         </div>

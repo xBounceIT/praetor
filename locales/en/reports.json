@@ -8,6 +8,7 @@
     "thinking": "Thinking...",
     "noSessions": "No chats yet.",
     "noPermissionToSend": "You do not have permission to use AI Reporting.",
+    "aiWarning": "AI can make mistakes. Verify important information.",
     "footerHint": "Enter to send, Shift+Enter for a new line.",
     "deleteActiveChatAria": "Delete active chat",
     "deleteChatTitle": "Delete chat",
