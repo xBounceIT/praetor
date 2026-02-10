@@ -36,7 +36,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
           <span className="w-2 h-0.5 bg-white rounded-full" />
         ) : (
           <i
-            className={`fa-solid fa-check text-white ${iconSize} leading-none transition-transform duration-200 ${checked ? 'scale-100' : 'scale-0'}`}
+            className={`fa-solid fa-check text-white ${iconSize} leading-none w-full h-full text-center flex items-center justify-center transition-transform duration-200 ${checked ? 'scale-100' : 'scale-0'}`}
           />
         )}
       </div>
