@@ -3,6 +3,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
+import {
+  bumpNamespaceVersion,
+  cacheGetSetJson,
+  setCacheHeader,
+  shouldBypassCache,
+  TTL_ENTRIES_SECONDS,
+  TTL_LIST_SECONDS,
+} from '../services/cache.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
 type AiProvider = 'gemini' | 'openrouter';
@@ -769,26 +777,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.id;
-      const result = await query(
-        `SELECT
-           id,
-           title,
-           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-         FROM report_chat_sessions
-         WHERE user_id = $1 AND is_archived = FALSE
-         ORDER BY updated_at DESC
-         LIMIT 50`,
-        [userId],
+      const bypass = shouldBypassCache(request);
+      const ns = `reports:ai-reporting:user:${userId}`;
+
+      const { status, value } = await cacheGetSetJson(
+        ns,
+        'v=1:listSessions',
+        TTL_LIST_SECONDS,
+        async () => {
+          const result = await query(
+            `SELECT
+               id,
+               title,
+               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
+             FROM report_chat_sessions
+             WHERE user_id = $1 AND is_archived = FALSE
+             ORDER BY updated_at DESC
+             LIMIT 50`,
+            [userId],
+          );
+          return result.rows.map((r) => ({
+            id: String(r.id),
+            title: String(r.title || ''),
+            createdAt: toNumber(r.createdAt),
+            updatedAt: toNumber(r.updatedAt),
+          }));
+        },
+        { bypass },
       );
-      return result.rows.map((r) => ({
-        id: String(r.id),
-        title: String(r.title || ''),
-        createdAt: toNumber(r.createdAt),
-        updatedAt: toNumber(r.updatedAt),
-      }));
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -824,6 +846,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [id, userId, titleResult.value || 'AI Reporting'],
       );
+
+      await bumpNamespaceVersion(`reports:ai-reporting:user:${userId}`);
       return reply.send({ id });
     },
   );
@@ -855,25 +879,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (session.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
 
-      const result = await query(
-        `SELECT
-           id,
-           session_id as "sessionId",
-           role,
-           content,
-           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-         FROM report_chat_messages
-         WHERE session_id = $1
-         ORDER BY created_at ASC`,
-        [idResult.value],
+      const bypass = shouldBypassCache(request);
+      const ns = `reports:ai-reporting:user:${userId}`;
+
+      const { status, value } = await cacheGetSetJson(
+        ns,
+        `v=1:session=${idResult.value}:messages`,
+        TTL_ENTRIES_SECONDS,
+        async () => {
+          const result = await query(
+            `SELECT
+               id,
+               session_id as "sessionId",
+               role,
+               content,
+               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
+             FROM report_chat_messages
+             WHERE session_id = $1
+             ORDER BY created_at ASC`,
+            [idResult.value],
+          );
+          return result.rows.map((r) => ({
+            id: String(r.id),
+            sessionId: String(r.sessionId),
+            role: String(r.role),
+            content: String(r.content || ''),
+            createdAt: toNumber(r.createdAt),
+          }));
+        },
+        { bypass },
       );
-      return result.rows.map((r) => ({
-        id: String(r.id),
-        sessionId: String(r.sessionId),
-        role: String(r.role),
-        content: String(r.content || ''),
-        createdAt: toNumber(r.createdAt),
-      }));
+
+      setCacheHeader(reply, status);
+      return value;
     },
   );
 
@@ -910,6 +948,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [idResult.value, userId],
       );
       if (result.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+
+      await bumpNamespaceVersion(`reports:ai-reporting:user:${userId}`);
       return reply.send({ success: true });
     },
   );
@@ -962,6 +1002,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
+      const ns = `reports:ai-reporting:user:${userId}`;
+      let didMutate = false;
+
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
         const owned = await query(
@@ -976,35 +1019,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           [resolvedSessionId, userId, 'AI Reporting'],
         );
+        didMutate = true;
       }
 
-      const userMessageId = `rpt-msg-${randomUUID()}`;
-      await query(
-        `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-         VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
-        [userMessageId, resolvedSessionId, messageResult.value],
-      );
-
-      const recent = await query(
-        `SELECT role, content
-         FROM report_chat_messages
-         WHERE session_id = $1
-         ORDER BY created_at DESC
-         LIMIT 20`,
-        [resolvedSessionId],
-      );
-      const convo = recent.rows
-        .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
-        .filter((x) => (x.role === 'user' || x.role === 'assistant') && x.content.trim())
-        .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
-        .reverse();
-
-      const { fromDate, toDate } = getReportingRange();
-      const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
-      const datasetJson = JSON.stringify(dataset);
-
-      let text = '';
       try {
+        const userMessageId = `rpt-msg-${randomUUID()}`;
+        await query(
+          `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
+           VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
+          [userMessageId, resolvedSessionId, messageResult.value],
+        );
+        didMutate = true;
+
+        const recent = await query(
+          `SELECT role, content
+           FROM report_chat_messages
+           WHERE session_id = $1
+           ORDER BY created_at DESC
+           LIMIT 20`,
+          [resolvedSessionId],
+        );
+        const convo = recent.rows
+          .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
+          .filter((x) => (x.role === 'user' || x.role === 'assistant') && x.content.trim())
+          .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
+          .reverse();
+
+        const { fromDate, toDate } = getReportingRange();
+        const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
+        const datasetJson = JSON.stringify(dataset);
+
+        let text = '';
         if (provider === 'openrouter') {
           const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
             { role: 'system', content: BUSINESS_ANALYST_SYSTEM },
@@ -1026,34 +1071,41 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ].join('\n');
           text = await geminiGenerateText(apiKey, modelId, prompt);
         }
+
+        const cleaned = String(text || '').trim();
+        const assistantText = cleaned || 'No response.';
+
+        const assistantMessageId = `rpt-msg-${randomUUID()}`;
+        await query(
+          `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
+           VALUES ($1, $2, 'assistant', $3, CURRENT_TIMESTAMP)`,
+          [assistantMessageId, resolvedSessionId, assistantText],
+        );
+        didMutate = true;
+
+        // Update session timestamp and set a title based on the first user message if still default.
+        await query(
+          `UPDATE report_chat_sessions
+           SET updated_at = CURRENT_TIMESTAMP,
+               title = CASE
+                 WHEN title = 'AI Reporting' THEN LEFT($2, 80)
+                 ELSE title
+               END
+           WHERE id = $1 AND user_id = $3`,
+          [resolvedSessionId, messageResult.value, userId],
+        );
+        didMutate = true;
+
+        return reply.send({ sessionId: resolvedSessionId, text: assistantText });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'AI request failed';
         return reply.code(502).send({ error: msg });
+      } finally {
+        if (didMutate) {
+          // Bump only after request completes so concurrent GETs can't cache an incomplete view under the new version.
+          await bumpNamespaceVersion(ns);
+        }
       }
-
-      const cleaned = String(text || '').trim();
-      const assistantText = cleaned || 'No response.';
-
-      const assistantMessageId = `rpt-msg-${randomUUID()}`;
-      await query(
-        `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-         VALUES ($1, $2, 'assistant', $3, CURRENT_TIMESTAMP)`,
-        [assistantMessageId, resolvedSessionId, assistantText],
-      );
-
-      // Update session timestamp and set a title based on the first user message if still default.
-      await query(
-        `UPDATE report_chat_sessions
-         SET updated_at = CURRENT_TIMESTAMP,
-             title = CASE
-               WHEN title = 'AI Reporting' THEN LEFT($2, 80)
-               ELSE title
-             END
-         WHERE id = $1 AND user_id = $3`,
-        [resolvedSessionId, messageResult.value, userId],
-      );
-
-      return reply.send({ sessionId: resolvedSessionId, text: assistantText });
     },
   );
 }
