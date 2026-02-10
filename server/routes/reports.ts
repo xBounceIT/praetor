@@ -17,6 +17,7 @@ type AiProvider = 'gemini' | 'openrouter';
 
 type GeneralAiConfig = {
   enableAiInsights: boolean;
+  enableAiReporting: boolean;
   aiProvider: AiProvider;
   geminiApiKey: string;
   openrouterApiKey: string;
@@ -27,13 +28,14 @@ type GeneralAiConfig = {
 
 const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const result = await query(
-    `SELECT enable_ai_insights, ai_provider, gemini_api_key, openrouter_api_key, gemini_model_id, openrouter_model_id, currency
+    `SELECT enable_ai_insights, enable_ai_reporting, ai_provider, gemini_api_key, openrouter_api_key, gemini_model_id, openrouter_model_id, currency
      FROM general_settings
      WHERE id = 1`,
   );
   const row = result.rows[0];
   return {
     enableAiInsights: row?.enable_ai_insights ?? false,
+    enableAiReporting: row?.enable_ai_reporting ?? false,
     aiProvider: (row?.ai_provider || 'gemini') as AiProvider,
     geminiApiKey: row?.gemini_api_key || '',
     openrouterApiKey: row?.openrouter_api_key || '',
@@ -44,8 +46,8 @@ const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
 };
 
 const ensureAiEnabled = (cfg: GeneralAiConfig, reply: FastifyReply) => {
-  if (!cfg.enableAiInsights) {
-    reply.code(400).send({ error: 'AI features are disabled by administration.' });
+  if (!cfg.enableAiReporting) {
+    reply.code(400).send({ error: 'AI Reporting is disabled by administration.' });
     return false;
   }
   return true;
@@ -837,6 +839,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.id;
+      const cfg = await getGeneralAiConfig();
+      if (!ensureAiEnabled(cfg, reply)) return;
       const bypass = shouldBypassCache(request);
       const ns = `reports:ai-reporting:user:${userId}`;
 
@@ -898,6 +902,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const titleResult = optionalNonEmptyString(title, 'title');
       if (!titleResult.ok) return badRequest(reply, titleResult.message);
 
+      const cfg = await getGeneralAiConfig();
+      if (!ensureAiEnabled(cfg, reply)) return;
+
       const id = `rpt-chat-${randomUUID()}`;
       await query(
         `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
@@ -930,6 +937,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const cfg = await getGeneralAiConfig();
+      if (!ensureAiEnabled(cfg, reply)) return;
 
       const session = await query(
         `SELECT 1 FROM report_chat_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
@@ -997,6 +1007,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const cfg = await getGeneralAiConfig();
+      if (!ensureAiEnabled(cfg, reply)) return;
 
       const result = await query(
         `UPDATE report_chat_sessions

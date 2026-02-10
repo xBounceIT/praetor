@@ -131,6 +131,7 @@ const TrackerView: React.FC<{
   dailyGoal: number;
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
   enableAiInsights: boolean;
+  enableAiSmartEntry: boolean;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
 }> = ({
@@ -156,6 +157,7 @@ const TrackerView: React.FC<{
   dailyGoal,
   onAddBulkEntries,
   enableAiInsights,
+  enableAiSmartEntry,
   onRecurringAction,
   defaultLocation = 'remote',
 }) => {
@@ -294,7 +296,7 @@ const TrackerView: React.FC<{
               permissions={permissions}
               dailyGoal={dailyGoal}
               currentDayTotal={dailyTotal}
-              enableAiInsights={enableAiInsights}
+              enableAiSmartEntry={enableAiSmartEntry}
               defaultLocation={defaultLocation}
             />
 
@@ -602,6 +604,8 @@ const App: React.FC = () => {
     treatSaturdayAsHoliday: true,
     allowWeekendSelection: true,
     enableAiInsights: false,
+    enableAiSmartEntry: false,
+    enableAiReporting: false,
     geminiApiKey: '',
     aiProvider: 'gemini' as 'gemini' | 'openrouter',
     openrouterApiKey: '',
@@ -2247,6 +2251,7 @@ const App: React.FC = () => {
   };
 
   const generateInsights = async () => {
+    if (!generalSettings.enableAiInsights) return;
     if (entries.length < 3) return;
     setIsInsightLoading(true);
     const userEntries = entries.filter((e) => e.userId === viewingUserId);
@@ -2594,6 +2599,7 @@ const App: React.FC = () => {
                 dailyGoal={generalSettings.dailyLimit}
                 onAddBulkEntries={handleAddBulkEntries}
                 enableAiInsights={generalSettings.enableAiInsights}
+                enableAiSmartEntry={generalSettings.enableAiSmartEntry}
                 onRecurringAction={handleRecurringAction}
                 defaultLocation={generalSettings.defaultLocation}
               />
@@ -2907,6 +2913,7 @@ const App: React.FC = () => {
               <AiReportingView
                 currentUserId={currentUser.id}
                 permissions={currentUser.permissions || []}
+                enableAiReporting={generalSettings.enableAiReporting}
               />
             )}
           </>

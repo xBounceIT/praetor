@@ -431,6 +431,8 @@ CREATE TABLE IF NOT EXISTS general_settings (
     start_of_week VARCHAR(10) DEFAULT 'Monday' CHECK (start_of_week IN ('Monday', 'Sunday')),
     treat_saturday_as_holiday BOOLEAN DEFAULT TRUE,
     enable_ai_insights BOOLEAN DEFAULT FALSE,
+    enable_ai_smart_entry BOOLEAN DEFAULT FALSE,
+    enable_ai_reporting BOOLEAN DEFAULT FALSE,
     allow_weekend_selection BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -440,6 +442,8 @@ ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS daily_limit DECIMAL(4, 2) 
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS start_of_week VARCHAR(10) DEFAULT 'Monday';
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS treat_saturday_as_holiday BOOLEAN DEFAULT TRUE;
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS enable_ai_insights BOOLEAN DEFAULT FALSE;
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS enable_ai_smart_entry BOOLEAN;
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS enable_ai_reporting BOOLEAN;
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS allow_weekend_selection BOOLEAN DEFAULT TRUE;
 
 -- Insert default general settings room
@@ -674,6 +678,20 @@ ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(20) DE
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS openrouter_api_key VARCHAR(255);
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemini_model_id VARCHAR(255);
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS openrouter_model_id VARCHAR(255);
+
+-- Migration: Add per-feature AI toggles (safe for existing installations)
+-- Preserve previous behavior (enable_ai_insights controlled everything) only on first run.
+UPDATE general_settings
+SET enable_ai_smart_entry = enable_ai_insights
+WHERE enable_ai_smart_entry IS NULL;
+UPDATE general_settings
+SET enable_ai_reporting = enable_ai_insights
+WHERE enable_ai_reporting IS NULL;
+
+ALTER TABLE general_settings ALTER COLUMN enable_ai_smart_entry SET DEFAULT FALSE;
+ALTER TABLE general_settings ALTER COLUMN enable_ai_reporting SET DEFAULT FALSE;
+UPDATE general_settings SET enable_ai_smart_entry = FALSE WHERE enable_ai_smart_entry IS NULL;
+UPDATE general_settings SET enable_ai_reporting = FALSE WHERE enable_ai_reporting IS NULL;
 
 -- Migration: Ensure ai_provider values are restricted (safe for existing installations)
 DO $$

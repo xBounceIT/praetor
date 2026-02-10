@@ -25,7 +25,7 @@ export interface DailyViewProps {
   permissions: string[];
   dailyGoal: number;
   currentDayTotal: number;
-  enableAiInsights: boolean;
+  enableAiSmartEntry: boolean;
   defaultLocation?: TimeEntryLocation;
 }
 
@@ -41,7 +41,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   permissions,
   dailyGoal,
   currentDayTotal,
-  enableAiInsights,
+  enableAiSmartEntry,
   defaultLocation = 'remote',
 }) => {
   const { t } = useTranslation('timesheets');
@@ -73,10 +73,10 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   // Pivot back to manual mode if AI is disabled
   useEffect(() => {
-    if (!enableAiInsights) {
+    if (!enableAiSmartEntry) {
       setIsSmartMode(false);
     }
-  }, [enableAiInsights]);
+  }, [enableAiSmartEntry]);
 
   // Manual fields
   const [date, setDate] = useState(selectedDate || getLocalDateString());
@@ -335,7 +335,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             </div>
           </div>
         </div>
-        {enableAiInsights && (
+        {enableAiSmartEntry && (
           <button
             onClick={() => setIsSmartMode(!isSmartMode)}
             className="text-xs font-medium text-praetor hover:text-slate-700 underline underline-offset-4"

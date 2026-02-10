@@ -9,6 +9,7 @@ type AiProvider = 'gemini' | 'openrouter';
 
 type GeneralAiConfig = {
   enableAiInsights: boolean;
+  enableAiSmartEntry: boolean;
   aiProvider: AiProvider;
   geminiApiKey: string;
   openrouterApiKey: string;
@@ -18,13 +19,14 @@ type GeneralAiConfig = {
 
 const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const result = await query(
-    `SELECT enable_ai_insights, ai_provider, gemini_api_key, openrouter_api_key, gemini_model_id, openrouter_model_id
+    `SELECT enable_ai_insights, enable_ai_smart_entry, ai_provider, gemini_api_key, openrouter_api_key, gemini_model_id, openrouter_model_id
      FROM general_settings
      WHERE id = 1`,
   );
   const row = result.rows[0];
   return {
     enableAiInsights: row?.enable_ai_insights ?? false,
+    enableAiSmartEntry: row?.enable_ai_smart_entry ?? false,
     aiProvider: (row?.ai_provider || 'gemini') as AiProvider,
     geminiApiKey: row?.gemini_api_key || '',
     openrouterApiKey: row?.openrouter_api_key || '',
@@ -115,9 +117,17 @@ const openrouterModelExists = async (
   return match || null;
 };
 
-const ensureAiEnabled = (cfg: GeneralAiConfig, reply: FastifyReply) => {
+const ensureAiInsightsEnabled = (cfg: GeneralAiConfig, reply: FastifyReply) => {
   if (!cfg.enableAiInsights) {
-    reply.code(400).send({ error: 'AI features are disabled by administration.' });
+    reply.code(400).send({ error: 'AI Coach is disabled by administration.' });
+    return false;
+  }
+  return true;
+};
+
+const ensureAiSmartEntryEnabled = (cfg: GeneralAiConfig, reply: FastifyReply) => {
+  if (!cfg.enableAiSmartEntry) {
+    reply.code(400).send({ error: 'Smart Entry is disabled by administration.' });
     return false;
   }
   return true;
@@ -303,7 +313,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (typeof input !== 'string' || !input.trim()) return badRequest(reply, 'input is required');
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!ensureAiSmartEntryEnabled(cfg, reply)) return;
 
       const { provider, apiKey, modelId } = resolveProviderKeyModel(cfg);
       if (!apiKey.trim())
@@ -394,7 +404,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!Array.isArray(entries)) return badRequest(reply, 'entries must be an array');
 
       const cfg = await getGeneralAiConfig();
-      if (!ensureAiEnabled(cfg, reply)) return;
+      if (!ensureAiInsightsEnabled(cfg, reply)) return;
 
       const { provider, apiKey, modelId } = resolveProviderKeyModel(cfg);
       if (!apiKey.trim())

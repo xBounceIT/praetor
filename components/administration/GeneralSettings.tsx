@@ -56,6 +56,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     settings.defaultLocation || 'remote',
   );
   const [enableAiInsights, setEnableAiInsights] = useState(settings.enableAiInsights);
+  const [enableAiSmartEntry, setEnableAiSmartEntry] = useState(settings.enableAiSmartEntry);
+  const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>(
     settings.aiProvider || 'gemini',
@@ -78,6 +80,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
     setDefaultLocation(settings.defaultLocation || 'remote');
     setEnableAiInsights(settings.enableAiInsights);
+    setEnableAiSmartEntry(settings.enableAiSmartEntry);
+    setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
     setOpenrouterApiKey(settings.openrouterApiKey || '');
@@ -89,9 +93,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const currentApiKey = aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey;
   const currentModelId = aiProvider === 'gemini' ? geminiModelId : openrouterModelId;
 
-  const isApiKeyMissing = () => enableAiInsights && !currentApiKey.trim();
-  const isModelMissing = () => enableAiInsights && !currentModelId.trim();
-  const isModelNotFound = enableAiInsights && modelCheck.state === 'not_found';
+  const isAnyAiEnabled = enableAiInsights || enableAiSmartEntry || enableAiReporting;
+  const isApiKeyMissing = () => isAnyAiEnabled && !currentApiKey.trim();
+  const isModelMissing = () => isAnyAiEnabled && !currentModelId.trim();
+  const isModelNotFound = isAnyAiEnabled && modelCheck.state === 'not_found';
 
   const handleCheckModel = async () => {
     if (!currentApiKey.trim() || !currentModelId.trim()) return;
@@ -127,6 +132,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         allowWeekendSelection,
         defaultLocation,
         enableAiInsights,
+        enableAiSmartEntry,
+        enableAiReporting,
         geminiApiKey,
         aiProvider,
         openrouterApiKey,
@@ -150,6 +157,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     defaultLocation !== (settings.defaultLocation || 'remote') ||
     enableAiInsights !== settings.enableAiInsights ||
+    enableAiSmartEntry !== settings.enableAiSmartEntry ||
+    enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
     openrouterApiKey !== (settings.openrouterApiKey || '') ||
@@ -340,7 +349,31 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 <Toggle checked={enableAiInsights} onChange={setEnableAiInsights} />
               </div>
 
-              {enableAiInsights && (
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="max-w-md">
+                  <p className="text-sm font-bold text-slate-800">
+                    {t('general.enableAiSmartEntryLabel')}
+                  </p>
+                  <p className="text-xs text-slate-500 italic leading-relaxed">
+                    {t('general.enableAiSmartEntryDescription')}
+                  </p>
+                </div>
+                <Toggle checked={enableAiSmartEntry} onChange={setEnableAiSmartEntry} />
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="max-w-md">
+                  <p className="text-sm font-bold text-slate-800">
+                    {t('general.enableAiReportingLabel')}
+                  </p>
+                  <p className="text-xs text-slate-500 italic leading-relaxed">
+                    {t('general.enableAiReportingDescription')}
+                  </p>
+                </div>
+                <Toggle checked={enableAiReporting} onChange={setEnableAiReporting} />
+              </div>
+
+              {isAnyAiEnabled && (
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
                   {/* Provider */}
                   <div className="max-w-md">
