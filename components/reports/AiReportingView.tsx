@@ -78,8 +78,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   }, [getIsAtBottom]);
 
   const scrollToBottom = useCallback(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, []);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    requestAnimationFrame(updateAtBottom);
+  }, [updateAtBottom]);
 
   const loadSessions = useCallback(async () => {
     setIsLoadingSessions(true);
@@ -352,152 +355,152 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
           onScroll={updateAtBottom}
           className="flex-1 overflow-y-auto px-4 md:px-6 pb-52"
         >
-          {isLoadingMessages && (
-            <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
-          )}
+          <div className="mx-auto w-full max-w-[760px]">
+            {isLoadingMessages && (
+              <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
+            )}
 
-          {!isLoadingMessages && messages.length === 0 && (
-            <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
-          )}
+            {!isLoadingMessages && messages.length === 0 && (
+              <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
+            )}
 
-          <div className="space-y-6">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+            <div className="space-y-5">
+              {messages.map((m) => (
                 <div
-                  className={`max-w-[980px] 2xl:max-w-[1100px] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                    m.role === 'user'
-                      ? 'bg-praetor text-white rounded-br-md whitespace-pre-wrap'
-                      : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
-                  }`}
+                  key={m.id}
+                  className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {m.role === 'user' ? (
-                    m.content
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
+                      {m.content}
+                    </div>
                   ) : (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm, remarkBreaks]}
-                      components={{
-                        a: ({ children, href }) => {
-                          const safe = safeHref(href);
-                          if (!safe) return <>{children}</>;
-                          return (
-                            <a
-                              href={safe}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                            >
-                              {children}
-                            </a>
-                          );
-                        },
-                        img: ({ alt, src }) => {
-                          const safe = safeHref(src);
-                          const label = alt?.trim() ? alt.trim() : src || 'image';
-                          if (!safe)
-                            return <span className="text-slate-500">[Image: {label}]</span>;
-                          return (
-                            <a
-                              href={safe}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                            >
-                              [Image: {label}]
-                            </a>
-                          );
-                        },
-                        p: ({ children }) => (
-                          <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-                        ),
-                        h1: ({ children }) => (
-                          <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
-                            {children}
-                          </h1>
-                        ),
-                        h2: ({ children }) => (
-                          <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
-                            {children}
-                          </h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
-                            {children}
-                          </h3>
-                        ),
-                        ul: ({ children }) => (
-                          <ul className="my-2 list-disc pl-5 marker:text-slate-400">{children}</ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
-                            {children}
-                          </ol>
-                        ),
-                        li: ({ children }) => <li className="my-1">{children}</li>,
-                        blockquote: ({ children }) => (
-                          <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
-                            {children}
-                          </blockquote>
-                        ),
-                        hr: () => <hr className="my-3 border-slate-200" />,
-                        table: ({ children }) => (
-                          <div className="my-2 overflow-x-auto">
-                            <table className="w-full border-collapse text-left">{children}</table>
-                          </div>
-                        ),
-                        th: ({ children }) => (
-                          <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children }) => (
-                          <td className="border border-slate-200 px-2 py-1">{children}</td>
-                        ),
-                        pre: ({ children }) => (
-                          <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
-                            {children}
-                          </pre>
-                        ),
-                        code: (props) => {
-                          // react-markdown provides `inline` here, but it is not represented in the
-                          // published `Components` typing (intrinsic `code` props only).
-                          const { inline, className, children } = props as unknown as {
-                            inline?: boolean;
-                            className?: string;
-                            children?: React.ReactNode;
-                          };
-
-                          const value =
-                            typeof children === 'string' ? children.replace(/\n$/, '') : children;
-
-                          if (inline === false) {
+                    <div className="w-full text-sm leading-relaxed text-slate-800">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                        components={{
+                          a: ({ children, href }) => {
+                            const safe = safeHref(href);
+                            if (!safe) return <>{children}</>;
                             return (
-                              <code
-                                className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
-                                  className ?? ''
-                                }`}
+                              <a
+                                href={safe}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
                               >
+                                {children}
+                              </a>
+                            );
+                          },
+                          img: ({ alt, src }) => {
+                            const safe = safeHref(src);
+                            const label = alt?.trim() ? alt.trim() : src || 'image';
+                            if (!safe)
+                              return <span className="text-slate-500">[Image: {label}]</span>;
+                            return (
+                              <a
+                                href={safe}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                              >
+                                [Image: {label}]
+                              </a>
+                            );
+                          },
+                          p: ({ children }) => (
+                            <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+                          ),
+                          h1: ({ children }) => (
+                            <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                              {children}
+                            </h1>
+                          ),
+                          h2: ({ children }) => (
+                            <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                              {children}
+                            </h2>
+                          ),
+                          h3: ({ children }) => (
+                            <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                              {children}
+                            </h3>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="my-2 list-disc pl-5 marker:text-slate-400">
+                              {children}
+                            </ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
+                              {children}
+                            </ol>
+                          ),
+                          li: ({ children }) => <li className="my-1">{children}</li>,
+                          blockquote: ({ children }) => (
+                            <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                              {children}
+                            </blockquote>
+                          ),
+                          hr: () => <hr className="my-3 border-slate-200" />,
+                          table: ({ children }) => (
+                            <div className="my-2 overflow-x-auto">
+                              <table className="w-full border-collapse text-left">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-slate-200 px-2 py-1">{children}</td>
+                          ),
+                          pre: ({ children }) => (
+                            <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                              {children}
+                            </pre>
+                          ),
+                          code: (props) => {
+                            // react-markdown provides `inline` here, but it is not represented in the
+                            // published `Components` typing (intrinsic `code` props only).
+                            const { inline, className, children } = props as unknown as {
+                              inline?: boolean;
+                              className?: string;
+                              children?: React.ReactNode;
+                            };
+
+                            const value =
+                              typeof children === 'string' ? children.replace(/\n$/, '') : children;
+
+                            if (inline === false) {
+                              return (
+                                <code
+                                  className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                    className ?? ''
+                                  }`}
+                                >
+                                  {value}
+                                </code>
+                              );
+                            }
+
+                            return (
+                              <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
                                 {value}
                               </code>
                             );
-                          }
-
-                          return (
-                            <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
-                              {value}
-                            </code>
-                          );
-                        },
-                      }}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
+                          },
+                        }}
+                      >
+                        {m.content}
+                      </ReactMarkdown>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           <div ref={endRef} />
         </div>
@@ -530,36 +533,38 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
 
         <div className="absolute left-0 right-0 bottom-0 z-[2]">
           <div className="w-full px-4 md:px-6 pb-6">
-            <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={t('aiReporting.placeholder')}
-                  disabled={!canSend || isSending}
-                  rows={1}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter') return;
-                    if (e.shiftKey) return;
-                    e.preventDefault();
-                    void handleSend();
-                  }}
-                  className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
-                />
+            <div className="mx-auto w-full max-w-[760px]">
+              <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={t('aiReporting.placeholder')}
+                    disabled={!canSend || isSending}
+                    rows={1}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      if (e.shiftKey) return;
+                      e.preventDefault();
+                      void handleSend();
+                    }}
+                    className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
+                  />
 
-                <button
-                  type="button"
-                  onClick={() => void handleSend()}
-                  disabled={!canSend || isSending || !draft.trim()}
-                  className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                    !canSend || isSending || !draft.trim()
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                      : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
-                  }`}
-                  aria-label="Send"
-                >
-                  <i className="fa-solid fa-arrow-up text-sm" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSend()}
+                    disabled={!canSend || isSending || !draft.trim()}
+                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                      !canSend || isSending || !draft.trim()
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
+                    }`}
+                    aria-label="Send"
+                  >
+                    <i className="fa-solid fa-arrow-up text-sm" />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="text-[11px] text-slate-400 mt-2 px-2">
