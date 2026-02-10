@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -7,7 +7,6 @@ import remarkGfm from 'remark-gfm';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import CustomSelect, { type Option } from '../shared/CustomSelect';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -47,15 +46,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
 
   const canSend = hasPermission(permissions, buildPermission('reports.ai_reporting_ai', 'create'));
-
-  const sessionOptions: Option[] = useMemo(
-    () => sessions.map((s) => ({ id: s.id, name: toOptionLabel(s) })),
-    [sessions],
-  );
 
   const scrollToBottom = useCallback(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -171,243 +166,294 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
     void loadMessages(activeSessionId);
   }, [activeSessionId, loadMessages]);
 
+  const activeTitle = sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
+
   return (
-    <div className="relative flex flex-col h-[calc(100vh-180px)] min-h-[560px]">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+    <div className="relative flex h-[calc(100vh-180px)] min-h-[560px]">
+      {/* Sidebar toggle */}
+      <button
+        type="button"
+        onClick={() => setIsSidebarOpen((v) => !v)}
+        className="absolute top-0 left-0 z-10 w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors shadow-sm"
+        aria-label={isSidebarOpen ? 'Close sessions' : 'Open sessions'}
+      >
+        <i className={`fa-solid ${isSidebarOpen ? 'fa-xmark' : 'fa-clock-rotate-left'} text-sm`} />
+      </button>
+
+      {/* Collapsible session sidebar */}
+      {isSidebarOpen && (
+        <aside className="absolute md:relative z-20 w-72 h-full flex flex-col bg-white rounded-2xl shadow-xl border border-slate-200 mr-3 animate-in fade-in slide-in-from-left-2 duration-200">
+          <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              Sessions
+            </span>
+            <button
+              type="button"
+              onClick={() => void handleNewChat()}
+              disabled={!canSend}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                canSend
+                  ? 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              {t('aiReporting.newChat', { defaultValue: 'New chat' })}
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {isLoadingSessions && <div className="text-xs text-slate-400 px-2 py-3">Loading…</div>}
+            {!isLoadingSessions && sessions.length === 0 && (
+              <div className="text-xs text-slate-400 px-2 py-3">
+                {t('aiReporting.noSessions', { defaultValue: 'No chats yet.' })}
+              </div>
+            )}
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setActiveSessionId(s.id);
+                  setIsSidebarOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold truncate transition-colors ${
+                  s.id === activeSessionId
+                    ? 'bg-praetor text-white'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {toOptionLabel(s)}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
+
+      {/* Main chat column */}
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4 ml-10">
+          <div className="w-10 h-10 rounded-2xl bg-praetor text-white flex items-center justify-center shadow-sm">
             <i className="fa-solid fa-chart-simple text-sm"></i>
           </div>
           <div className="min-w-0">
             <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
               {t('aiReporting.session', { defaultValue: 'Session' })}
             </div>
-            <div className="text-base font-extrabold text-slate-900 truncate">AI Reporting</div>
+            <div className="text-base font-extrabold text-slate-900 truncate">{activeTitle}</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="w-[200px] sm:w-[260px]">
-            <CustomSelect
-              options={sessionOptions}
-              value={activeSessionId}
-              onChange={(value) => setActiveSessionId(String(value))}
-              disabled={isLoadingSessions || sessionOptions.length === 0}
-              placeholder={t('aiReporting.noSessions', { defaultValue: 'No chats yet.' })}
-              searchable
-            />
+        {error && (
+          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
-          <button
-            type="button"
-            onClick={() => void handleNewChat()}
-            disabled={!canSend}
-            className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
-              canSend
-                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'
-                : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            {t('aiReporting.newChat', { defaultValue: 'New chat' })}
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {!canSend && (
-        <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {t('aiReporting.noPermissionToSend', { defaultValue: 'You do not have permission.' })}
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto pr-1 pb-28">
-        {isLoadingMessages && (
-          <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
         )}
 
-        {!isLoadingMessages && messages.length === 0 && (
-          <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
+        {!canSend && (
+          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            {t('aiReporting.noPermissionToSend', { defaultValue: 'You do not have permission.' })}
+          </div>
         )}
 
-        <div className="space-y-3">
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+        <div className="flex-1 overflow-y-auto pr-1 pb-28">
+          {isLoadingMessages && (
+            <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
+          )}
+
+          {!isLoadingMessages && messages.length === 0 && (
+            <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
+          )}
+
+          <div className="space-y-3">
+            {messages.map((m) => (
               <div
-                className={`max-w-[820px] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                  m.role === 'user'
-                    ? 'bg-slate-900 text-white rounded-br-md whitespace-pre-wrap'
-                    : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
-                }`}
+                key={m.id}
+                className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {m.role === 'user' ? (
-                  m.content
-                ) : (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkBreaks]}
-                    components={{
-                      a: ({ children, href }) => {
-                        const safe = safeHref(href);
-                        if (!safe) return <>{children}</>;
-                        return (
-                          <a
-                            href={safe}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                          >
-                            {children}
-                          </a>
-                        );
-                      },
-                      img: ({ alt, src }) => {
-                        const safe = safeHref(src);
-                        const label = alt?.trim() ? alt.trim() : src || 'image';
-                        if (!safe) return <span className="text-slate-500">[Image: {label}]</span>;
-                        return (
-                          <a
-                            href={safe}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                          >
-                            [Image: {label}]
-                          </a>
-                        );
-                      },
-                      p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-                      h1: ({ children }) => (
-                        <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
-                          {children}
-                        </h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
-                          {children}
-                        </h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
-                          {children}
-                        </h3>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="my-2 list-disc pl-5 marker:text-slate-400">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="my-2 list-decimal pl-5 marker:text-slate-400">{children}</ol>
-                      ),
-                      li: ({ children }) => <li className="my-1">{children}</li>,
-                      blockquote: ({ children }) => (
-                        <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
-                          {children}
-                        </blockquote>
-                      ),
-                      hr: () => <hr className="my-3 border-slate-200" />,
-                      table: ({ children }) => (
-                        <div className="my-2 overflow-x-auto">
-                          <table className="w-full border-collapse text-left">{children}</table>
-                        </div>
-                      ),
-                      th: ({ children }) => (
-                        <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
-                          {children}
-                        </th>
-                      ),
-                      td: ({ children }) => (
-                        <td className="border border-slate-200 px-2 py-1">{children}</td>
-                      ),
-                      pre: ({ children }) => (
-                        <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
-                          {children}
-                        </pre>
-                      ),
-                      code: (props) => {
-                        // react-markdown provides `inline` here, but it is not represented in the
-                        // published `Components` typing (intrinsic `code` props only).
-                        const { inline, className, children } = props as unknown as {
-                          inline?: boolean;
-                          className?: string;
-                          children?: React.ReactNode;
-                        };
-
-                        const value =
-                          typeof children === 'string' ? children.replace(/\n$/, '') : children;
-
-                        if (inline === false) {
+                <div
+                  className={`max-w-[820px] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                    m.role === 'user'
+                      ? 'bg-praetor text-white rounded-br-md whitespace-pre-wrap'
+                      : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
+                  }`}
+                >
+                  {m.role === 'user' ? (
+                    m.content
+                  ) : (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      components={{
+                        a: ({ children, href }) => {
+                          const safe = safeHref(href);
+                          if (!safe) return <>{children}</>;
                           return (
-                            <code
-                              className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
-                                className ?? ''
-                              }`}
+                            <a
+                              href={safe}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
                             >
+                              {children}
+                            </a>
+                          );
+                        },
+                        img: ({ alt, src }) => {
+                          const safe = safeHref(src);
+                          const label = alt?.trim() ? alt.trim() : src || 'image';
+                          if (!safe)
+                            return <span className="text-slate-500">[Image: {label}]</span>;
+                          return (
+                            <a
+                              href={safe}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                            >
+                              [Image: {label}]
+                            </a>
+                          );
+                        },
+                        p: ({ children }) => (
+                          <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+                        ),
+                        h1: ({ children }) => (
+                          <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                            {children}
+                          </h3>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="my-2 list-disc pl-5 marker:text-slate-400">{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => <li className="my-1">{children}</li>,
+                        blockquote: ({ children }) => (
+                          <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                            {children}
+                          </blockquote>
+                        ),
+                        hr: () => <hr className="my-3 border-slate-200" />,
+                        table: ({ children }) => (
+                          <div className="my-2 overflow-x-auto">
+                            <table className="w-full border-collapse text-left">{children}</table>
+                          </div>
+                        ),
+                        th: ({ children }) => (
+                          <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="border border-slate-200 px-2 py-1">{children}</td>
+                        ),
+                        pre: ({ children }) => (
+                          <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                            {children}
+                          </pre>
+                        ),
+                        code: (props) => {
+                          // react-markdown provides `inline` here, but it is not represented in the
+                          // published `Components` typing (intrinsic `code` props only).
+                          const { inline, className, children } = props as unknown as {
+                            inline?: boolean;
+                            className?: string;
+                            children?: React.ReactNode;
+                          };
+
+                          const value =
+                            typeof children === 'string' ? children.replace(/\n$/, '') : children;
+
+                          if (inline === false) {
+                            return (
+                              <code
+                                className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                  className ?? ''
+                                }`}
+                              >
+                                {value}
+                              </code>
+                            );
+                          }
+
+                          return (
+                            <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
                               {value}
                             </code>
                           );
-                        }
+                        },
+                      }}
+                    >
+                      {m.content}
+                    </ReactMarkdown>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div ref={endRef} />
+        </div>
 
-                        return (
-                          <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
-                            {value}
-                          </code>
-                        );
-                      },
-                    }}
-                  >
-                    {m.content}
-                  </ReactMarkdown>
-                )}
+        {/* Gradient overlay */}
+        <div
+          className="absolute left-0 right-0 bottom-0 h-32 pointer-events-none z-[1]"
+          style={{
+            background:
+              'linear-gradient(to top, rgb(249 250 251) 0%, rgba(249,250,251,0.8) 40%, transparent 100%)',
+          }}
+        />
+
+        <div className="absolute left-0 right-0 bottom-0 z-[2]">
+          <div className="mx-auto max-w-4xl px-2 pb-6">
+            <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={t('aiReporting.placeholder')}
+                  disabled={!canSend || isSending}
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    if (e.shiftKey) return;
+                    e.preventDefault();
+                    void handleSend();
+                  }}
+                  className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => void handleSend()}
+                  disabled={!canSend || isSending || !draft.trim()}
+                  className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    !canSend || isSending || !draft.trim()
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
+                  }`}
+                  aria-label="Send"
+                >
+                  <i className="fa-solid fa-arrow-up text-sm" />
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-        <div ref={endRef} />
-      </div>
-
-      <div className="absolute left-0 right-0 bottom-0">
-        <div className="mx-auto max-w-4xl px-2 pb-6">
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder={t('aiReporting.placeholder')}
-                disabled={!canSend || isSending}
-                rows={1}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return;
-                  if (e.shiftKey) return;
-                  e.preventDefault();
-                  void handleSend();
-                }}
-                className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
-              />
-
-              <button
-                type="button"
-                onClick={() => void handleSend()}
-                disabled={!canSend || isSending || !draft.trim()}
-                className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                  !canSend || isSending || !draft.trim()
-                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                }`}
-                aria-label="Send"
-              >
-                <i className="fa-solid fa-arrow-up text-sm" />
-              </button>
+            <div className="text-[11px] text-slate-400 mt-2 px-2">
+              {t('aiReporting.footerHint', {
+                defaultValue: 'Enter to send, Shift+Enter for a new line.',
+              })}
             </div>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-2 px-2">
-            {t('aiReporting.footerHint', {
-              defaultValue: 'Enter to send, Shift+Enter for a new line.',
-            })}
           </div>
         </div>
       </div>
