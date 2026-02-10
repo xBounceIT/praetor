@@ -11,6 +11,7 @@ import {
 } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import Modal from '../shared/Modal';
+import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 
@@ -395,9 +396,12 @@ const RolesView: React.FC<RolesViewProps> = ({
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-            {t('administration:roles.title')}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+              {t('administration:roles.title')}
+            </h2>
+            <StatusBadge type="experimental" label="EXPERIMENTAL" />
+          </div>
           <p className="text-slate-500 font-medium">{t('administration:roles.subtitle')}</p>
         </div>
         {canCreateRoles && (

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { Notification, Role, User, View } from '../types';
 import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 import NotificationBell from './shared/NotificationBell';
+import StatusBadge from './shared/StatusBadge';
 import Tooltip from './shared/Tooltip';
 
 interface Module {
@@ -506,6 +507,7 @@ const Layout: React.FC<LayoutProps> = ({
                   onViewChange('administration/roles');
                   setIsMobileMenuOpen(false);
                 }}
+                suffix={<StatusBadge type="experimental" label="EXPERIMENTAL" />}
               />
             )}
 
@@ -837,9 +839,10 @@ interface NavItemProps {
   active: boolean;
   isCollapsed: boolean;
   onClick: () => void;
+  suffix?: React.ReactNode;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onClick }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onClick, suffix }) => (
   <Tooltip label={label} position="right" disabled={!isCollapsed} wrapperClassName="w-full">
     {() => (
       <button
@@ -854,7 +857,10 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onC
           className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
         ></i>
         {!isCollapsed && (
-          <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
+          <>
+            <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
+            {suffix}
+          </>
         )}
       </button>
     )}
