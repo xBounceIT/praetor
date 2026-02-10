@@ -205,7 +205,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const activeTitle = sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
 
   return (
-    <div className="flex h-[calc(100vh-180px)] min-h-[560px] gap-3">
+    <div className="flex h-[calc(100vh-180px)] min-h-[560px] gap-6">
       {/* Sessions sidebar (desktop/tablet) */}
       <aside className="hidden md:flex w-72 shrink-0 h-full flex-col bg-white rounded-2xl shadow-xl border border-slate-200">
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
@@ -223,12 +223,17 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
           {sessions.map((s) => {
             const isActive = s.id === activeSessionId;
             return (
-              <div key={s.id} className="group flex items-center gap-2 w-full">
+              <div
+                key={s.id}
+                className={`group flex items-center gap-2 w-full rounded-xl px-3 py-2.5 transition-colors ${
+                  isActive ? 'bg-praetor' : 'hover:bg-slate-50'
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => setActiveSessionId(s.id)}
-                  className={`flex-1 text-left px-3 py-2.5 rounded-xl text-sm font-semibold truncate transition-colors ${
-                    isActive ? 'bg-praetor text-white' : 'text-slate-700 hover:bg-slate-50'
+                  className={`flex-1 text-left text-sm font-semibold truncate outline-none ${
+                    isActive ? 'text-white' : 'text-slate-700'
                   }`}
                 >
                   {toOptionLabel(s)}
@@ -246,7 +251,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
                     !canArchive || isDeletingSession
                       ? 'opacity-40 cursor-not-allowed'
                       : isActive
-                        ? 'text-white/80 hover:text-white hover:bg-white/10'
+                        ? 'text-white/90 hover:text-white hover:bg-white/10'
                         : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
                   }`}
                 >
@@ -261,7 +266,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
       {/* Main chat column */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-start justify-between gap-4 mb-4 px-4 md:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-praetor text-white flex items-center justify-center shadow-sm">
               <i className="fa-solid fa-wand-magic-sparkles text-sm"></i>
@@ -295,18 +300,18 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
         </div>
 
         {error && (
-          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mx-4 md:mx-6">
             {error}
           </div>
         )}
 
         {!canSend && (
-          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 mx-4 md:mx-6">
             {t('aiReporting.noPermissionToSend', { defaultValue: 'You do not have permission.' })}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pr-1 pb-28">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-52">
           {isLoadingMessages && (
             <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
           )}
@@ -315,14 +320,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
             <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-6">
             {messages.map((m) => (
               <div
                 key={m.id}
                 className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[820px] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                  className={`max-w-[980px] 2xl:max-w-[1100px] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                     m.role === 'user'
                       ? 'bg-praetor text-white rounded-br-md whitespace-pre-wrap'
                       : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
@@ -467,7 +472,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
         />
 
         <div className="absolute left-0 right-0 bottom-0 z-[2]">
-          <div className="mx-auto max-w-4xl px-2 pb-6">
+          <div className="w-full px-4 md:px-6 pb-6">
             <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 p-3">
               <div className="flex items-end gap-2">
                 <textarea
