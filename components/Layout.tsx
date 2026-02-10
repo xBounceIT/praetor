@@ -507,7 +507,6 @@ const Layout: React.FC<LayoutProps> = ({
                   onViewChange('administration/roles');
                   setIsMobileMenuOpen(false);
                 }}
-                suffix={<StatusBadge type="experimental" label="EXPERIMENTAL" />}
               />
             )}
 
@@ -530,7 +529,7 @@ const Layout: React.FC<LayoutProps> = ({
           <>
             {canAccessView('reports/ai-reporting') && (
               <NavItem
-                icon="fa-comment-dots"
+                icon="fa-wand-magic-sparkles"
                 label={t('routes.aiReporting')}
                 active={activeView === 'reports/ai-reporting'}
                 isCollapsed={isCollapsed}
@@ -538,6 +537,7 @@ const Layout: React.FC<LayoutProps> = ({
                   onViewChange('reports/ai-reporting');
                   setIsMobileMenuOpen(false);
                 }}
+                suffix={<StatusBadge type="experimental" label="EXPERIMENTAL" />}
               />
             )}
           </>

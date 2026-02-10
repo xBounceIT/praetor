@@ -19,7 +19,8 @@
       "Bash(bun run lint:fix:*)",
       "Bash(git push)",
       "Bash(grep:*)",
-      "Bash(bunx tsc:*)"
+      "Bash(bunx tsc:*)",
+      "Bash(git -C /mnt/c/Users/dange/Desktop/Projects/praetor log --oneline -5)"
     ]
   }
 }

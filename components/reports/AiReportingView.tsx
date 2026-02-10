@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import StatusBadge from '../shared/StatusBadge';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -233,13 +234,16 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
         {/* Header */}
         <div className="flex items-center gap-3 mb-4 ml-10">
           <div className="w-10 h-10 rounded-2xl bg-praetor text-white flex items-center justify-center shadow-sm">
-            <i className="fa-solid fa-chart-simple text-sm"></i>
+            <i className="fa-solid fa-wand-magic-sparkles text-sm"></i>
           </div>
           <div className="min-w-0">
             <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
               {t('aiReporting.session', { defaultValue: 'Session' })}
             </div>
-            <div className="text-base font-extrabold text-slate-900 truncate">{activeTitle}</div>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="text-base font-extrabold text-slate-900 truncate">{activeTitle}</div>
+              <StatusBadge type="experimental" label="EXPERIMENTAL" className="shrink-0" />
+            </div>
           </div>
         </div>
 
