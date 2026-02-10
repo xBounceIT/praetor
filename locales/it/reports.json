@@ -2,11 +2,17 @@
   "aiReporting": {
     "newChat": "Nuova chat",
     "session": "Sessione",
+    "selectSession": "Seleziona chat",
+    "loadingSessions": "Caricamento...",
     "placeholder": "Fai una domanda sui tuoi dati aziendali...",
     "thinking": "Sto pensando...",
     "noSessions": "Nessuna chat.",
     "noPermissionToSend": "Non hai i permessi per usare AI Reporting.",
     "footerHint": "Invio per inviare, Shift+Invio per andare a capo.",
+    "deleteActiveChatAria": "Elimina chat attiva",
+    "deleteChatTitle": "Elimina chat",
+    "deleteChatConfirm": "Questo rimuovera' \"{{name}}\" dalla cronologia chat.",
+    "goToBottom": "Vai in fondo",
     "error": "Si e' verificato un errore."
   }
 }

@@ -43,6 +43,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const { t } = useTranslation(['reports', 'common']);
   const [sessions, setSessions] = useState<ReportChatSessionSummary[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [isNewChat, setIsNewChat] = useState(false);
   const [messages, setMessages] = useState<ReportChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -52,11 +53,29 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<ReportChatSessionSummary | null>(null);
   const [isDeletingSession, setIsDeletingSession] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasNewText, setHasNewText] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
+  const isAtBottomRef = useRef(true);
 
   const canSend = hasPermission(permissions, buildPermission('reports.ai_reporting_ai', 'create'));
   const canArchive = hasPermission(permissions, buildPermission('reports.ai_reporting', 'view'));
+
+  const getIsAtBottom = useCallback((el: HTMLDivElement) => {
+    const threshold = 80;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+  }, []);
+
+  const updateAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const next = getIsAtBottom(el);
+    isAtBottomRef.current = next;
+    setIsAtBottom(next);
+    if (next) setHasNewText(false);
+  }, [getIsAtBottom]);
 
   const scrollToBottom = useCallback(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -69,6 +88,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
       const data = await api.reports.listSessions();
       setSessions(data);
       setActiveSessionId((prev) => {
+        if (isNewChat) return '';
         if (prev && data.some((s) => s.id === prev)) return prev;
         return data[0]?.id || '';
       });
@@ -77,10 +97,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [t]);
+  }, [isNewChat, t]);
 
   const loadMessages = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, opts: { forceScroll?: boolean } = {}) => {
       const token = ++loadTokenRef.current;
       setIsLoadingMessages(true);
       setError('');
@@ -88,7 +108,15 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
         const data = await api.reports.getSessionMessages(sessionId);
         if (token !== loadTokenRef.current) return;
         setMessages(data);
-        queueMicrotask(scrollToBottom);
+        queueMicrotask(() => {
+          if (opts.forceScroll || isAtBottomRef.current) {
+            scrollToBottom();
+            setHasNewText(false);
+          } else {
+            setHasNewText(true);
+          }
+          updateAtBottom();
+        });
       } catch (err) {
         if (token !== loadTokenRef.current) return;
         setError((err as Error).message || t('aiReporting.error'));
@@ -96,22 +124,20 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
         if (token === loadTokenRef.current) setIsLoadingMessages(false);
       }
     },
-    [t, scrollToBottom],
+    [t, scrollToBottom, updateAtBottom],
   );
 
   const handleNewChat = async () => {
     if (!canSend) return;
+    // Avoid creating empty sessions: the server will create a session only when the first message is sent.
     setError('');
-    try {
-      // Create with the default title so the server can auto-title it on the first user message.
-      const { id } = await api.reports.createSession();
-      await loadSessions();
-      setActiveSessionId(id);
-      setMessages([]);
-      setDraft('');
-    } catch (err) {
-      setError((err as Error).message || t('aiReporting.error'));
-    }
+    setIsNewChat(true);
+    setActiveSessionId('');
+    setMessages([]);
+    setDraft('');
+    setHasNewText(false);
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
   };
 
   const handleSend = async () => {
@@ -138,21 +164,35 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
       createdAt: now + 1,
     };
     setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
-    queueMicrotask(scrollToBottom);
+    queueMicrotask(() => {
+      if (isAtBottomRef.current) {
+        scrollToBottom();
+      } else {
+        setHasNewText(true);
+      }
+    });
 
     try {
+      const hadSession = Boolean(activeSessionId);
       const res = await api.reports.chat({
         sessionId: activeSessionId || undefined,
         message: content,
       });
 
-      if (!activeSessionId) setActiveSessionId(res.sessionId);
-      await Promise.all([loadSessions(), loadMessages(res.sessionId)]);
+      if (!hadSession) {
+        setActiveSessionId(res.sessionId);
+        setIsNewChat(false);
+      }
+      if (!hadSession) {
+        await loadSessions();
+      } else {
+        await Promise.all([loadSessions(), loadMessages(res.sessionId, { forceScroll: false })]);
+      }
     } catch (err) {
       setError((err as Error).message || t('aiReporting.error'));
       // Reload canonical messages if possible.
       if (activeSessionId) {
-        await loadMessages(activeSessionId);
+        await loadMessages(activeSessionId, { forceScroll: false });
       } else {
         setMessages([]);
       }
@@ -164,6 +204,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   useEffect(() => {
     if (!currentUserId) return;
     setActiveSessionId('');
+    setIsNewChat(false);
     setMessages([]);
     setDraft('');
     void loadSessions();
@@ -171,7 +212,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
 
   useEffect(() => {
     if (!activeSessionId) return;
-    void loadMessages(activeSessionId);
+    setIsNewChat(false);
+    setHasNewText(false);
+    void loadMessages(activeSessionId, { forceScroll: true });
   }, [activeSessionId, loadMessages]);
 
   useEffect(() => {
@@ -202,11 +245,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
     }
   }, [canArchive, isDeletingSession, loadSessions, sessionToDelete, t]);
 
-  const activeTitle = sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
+  const activeTitle = isNewChat
+    ? t('aiReporting.newChat', { defaultValue: 'New chat' })
+    : sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
   const sessionOptions = sessions.map((s) => ({ id: s.id, name: toOptionLabel(s) }));
   const canDeleteActive =
     Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
+  const showGoToBottom = messages.length > 0 && (!isAtBottom || hasNewText);
 
   return (
     <div className="flex h-[calc(100vh-180px)] min-h-[560px]">
@@ -235,30 +281,39 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
               <CustomSelect
                 options={sessionOptions}
                 value={activeSessionId}
-                onChange={(value) => setActiveSessionId(value as string)}
+                onChange={(value) => {
+                  setIsNewChat(false);
+                  setActiveSessionId(value as string);
+                  setHasNewText(false);
+                }}
                 placeholder={
                   isLoadingSessions
-                    ? t('aiReporting.loadingSessions', { defaultValue: 'Loading…' })
+                    ? t('aiReporting.loadingSessions', { defaultValue: 'Loading...' })
                     : t('aiReporting.selectSession', { defaultValue: 'Select chat' })
                 }
+                displayValue={
+                  isNewChat ? t('aiReporting.newChat', { defaultValue: 'New chat' }) : undefined
+                }
                 disabled={isLoadingSessions || sessions.length === 0}
-                searchable={sessions.length > 8}
+                searchable
                 buttonClassName="py-2.5 text-sm font-semibold"
               />
             </div>
 
             <button
               type="button"
-              aria-label="Delete active chat"
+              aria-label={t('aiReporting.deleteActiveChatAria', {
+                defaultValue: 'Delete active chat',
+              })}
               disabled={!canDeleteActive}
               onClick={() => {
                 if (!activeSession) return;
                 confirmDeleteSession(activeSession);
               }}
-              className={`w-11 h-11 rounded-xl shadow-xl flex items-center justify-center transition-colors ${
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
                 canDeleteActive
                   ? 'bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50'
-                  : 'bg-slate-100 border border-slate-200 text-slate-300 shadow-none cursor-not-allowed'
+                  : 'bg-slate-100 border border-slate-200 text-slate-300 cursor-not-allowed'
               }`}
             >
               <i className="fa-solid fa-trash text-sm" />
@@ -292,7 +347,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-52">
+        <div
+          ref={scrollRef}
+          onScroll={updateAtBottom}
+          className="flex-1 overflow-y-auto px-4 md:px-6 pb-52"
+        >
           {isLoadingMessages && (
             <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
           )}
@@ -443,6 +502,23 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
           <div ref={endRef} />
         </div>
 
+        {showGoToBottom && (
+          <button
+            type="button"
+            onClick={() => {
+              scrollToBottom();
+              setHasNewText(false);
+            }}
+            aria-label={t('aiReporting.goToBottom', { defaultValue: 'Go to bottom' })}
+            className="absolute left-1/2 -translate-x-1/2 bottom-32 z-[3] w-11 h-11 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors flex items-center justify-center"
+          >
+            <i className="fa-solid fa-arrow-down" />
+            {hasNewText && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-praetor border-2 border-white" />
+            )}
+          </button>
+        )}
+
         {/* Gradient overlay */}
         <div
           className="absolute left-0 right-0 bottom-0 h-32 pointer-events-none z-[1]"
@@ -528,7 +604,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
                 }}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('common:buttons.cancel')}
+                {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 type="button"
@@ -540,7 +616,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
                     : 'bg-red-600 shadow-red-200 hover:bg-red-700'
                 }`}
               >
-                {t('common:buttons.delete')}
+                {t('common:buttons.delete', { defaultValue: 'Delete' })}
               </button>
             </div>
           </div>

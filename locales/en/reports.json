@@ -2,11 +2,17 @@
   "aiReporting": {
     "newChat": "New chat",
     "session": "Session",
+    "selectSession": "Select chat",
+    "loadingSessions": "Loading...",
     "placeholder": "Ask a question about your business data...",
     "thinking": "Thinking...",
     "noSessions": "No chats yet.",
     "noPermissionToSend": "You do not have permission to use AI Reporting.",
     "footerHint": "Enter to send, Shift+Enter for a new line.",
+    "deleteActiveChatAria": "Delete active chat",
+    "deleteChatTitle": "Delete chat",
+    "deleteChatConfirm": "This will remove \"{{name}}\" from your chat history.",
+    "goToBottom": "Go to bottom",
     "error": "Something went wrong."
   }
 }
