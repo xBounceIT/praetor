@@ -1,6 +1,6 @@
 ## 20260216 - Operativo
 - Nuovo modulo Report per reportistica
-- Nuova funzionalità AI Reporting (alpha): 
+- Nuova funzionalità AI Reporting (experimental): 
   - Interfaccia UI stile ChatGPT per interrogare modello AI ed analizzare i dati di sistema
   - i dati analizzabili sono solo quelli a cui l'utente ha accesso
   - Chat persistenti su DB
