@@ -977,5 +977,16 @@ ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions (role_id, permission)
 VALUES
     ('manager', 'reports.ai_reporting.view'),
-    ('manager', 'reports.ai_reporting_ai.create')
+    ('manager', 'reports.ai_reporting.create')
 ON CONFLICT DO NOTHING;
+
+-- Migration: Merge reports.ai_reporting_ai.create into reports.ai_reporting.create
+UPDATE role_permissions
+SET permission = 'reports.ai_reporting.create'
+WHERE permission = 'reports.ai_reporting_ai.create'
+  AND NOT EXISTS (
+    SELECT 1 FROM role_permissions rp2
+    WHERE rp2.role_id = role_permissions.role_id
+      AND rp2.permission = 'reports.ai_reporting.create'
+  );
+DELETE FROM role_permissions WHERE permission = 'reports.ai_reporting_ai.create';

@@ -59,9 +59,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.costs', actions: VIEW_UPDATE },
 
   // Reports
-  { id: 'reports.ai_reporting', actions: VIEW_ONLY },
-  // "create" here means: create chat sessions / send AI messages.
-  { id: 'reports.ai_reporting_ai', actions: ['create'] },
+  { id: 'reports.ai_reporting', actions: ['view', 'create'] },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE },
@@ -136,7 +134,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('hr.external', CRUD),
     ...buildPermissions('hr.costs', VIEW_UPDATE),
     buildPermission('reports.ai_reporting', 'view'),
-    buildPermission('reports.ai_reporting_ai', 'create'),
+    buildPermission('reports.ai_reporting', 'create'),
     buildPermission('settings', 'view'),
     buildPermission('settings', 'update'),
     buildPermission('docs.api', 'view'),

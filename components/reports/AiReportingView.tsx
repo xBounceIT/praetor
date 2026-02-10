@@ -60,7 +60,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   const loadTokenRef = useRef(0);
   const isAtBottomRef = useRef(true);
 
-  const canSend = hasPermission(permissions, buildPermission('reports.ai_reporting_ai', 'create'));
+  const canSend = hasPermission(permissions, buildPermission('reports.ai_reporting', 'create'));
   const canArchive = hasPermission(permissions, buildPermission('reports.ai_reporting', 'view'));
 
   const getIsAtBottom = useCallback((el: HTMLDivElement) => {

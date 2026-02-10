@@ -55,6 +55,9 @@
       "internal": "Interni",
       "external": "Esterni"
     },
+    "reports": {
+      "ai_reporting": "Reportistica IA"
+    },
     "configuration": {
       "authentication": "Autenticazione",
       "general": "Generale",

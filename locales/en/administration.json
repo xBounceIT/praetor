@@ -55,6 +55,9 @@
       "internal": "Internal",
       "external": "External"
     },
+    "reports": {
+      "ai_reporting": "AI Reporting"
+    },
     "configuration": {
       "authentication": "Authentication",
       "general": "General",

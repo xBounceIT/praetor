@@ -876,7 +876,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/sessions',
     {
-      onRequest: [requirePermission('reports.ai_reporting_ai.create')],
+      onRequest: [requirePermission('reports.ai_reporting.create')],
       schema: {
         tags: ['reports'],
         summary: 'Create a new AI Reporting chat session',
@@ -1016,7 +1016,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat',
     {
-      onRequest: [requirePermission('reports.ai_reporting_ai.create')],
+      onRequest: [requirePermission('reports.ai_reporting.create')],
       schema: {
         tags: ['reports'],
         summary: 'Send a message to AI Reporting and store history',

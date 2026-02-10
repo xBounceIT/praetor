@@ -61,9 +61,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.costs', actions: VIEW_UPDATE, module: 'hr' },
 
   // Reports
-  { id: 'reports.ai_reporting', actions: VIEW_ONLY, module: 'reports' },
-  // "create" here means: create chat sessions / send AI messages.
-  { id: 'reports.ai_reporting_ai', actions: ['create'], module: 'reports' },
+  { id: 'reports.ai_reporting', actions: ['view', 'create'], module: 'reports' },
 
   // Administration
   { id: 'administration.authentication', actions: VIEW_UPDATE, module: 'administration' },
