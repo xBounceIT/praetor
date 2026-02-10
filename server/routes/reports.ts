@@ -86,6 +86,33 @@ const openrouterTextFromCompletion = (payload: unknown): string => {
   return (p.choices?.[0]?.message?.content || '').trim();
 };
 
+const cleanSessionTitle = (raw: string) => {
+  const t = String(raw || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Strip common wrapping quotes/backticks the model may add.
+  const unwrapped = t
+    .replace(/^["'`]+/, '')
+    .replace(/["'`]+$/, '')
+    .trim();
+  const noTrailingPunct = unwrapped.replace(/[.?!:;,]+$/g, '').trim();
+  return noTrailingPunct.slice(0, 80);
+};
+
+const buildSessionTitlePrompt = (firstUserMessage: string) =>
+  [
+    'Generate a short, descriptive title for this chat session.',
+    'Rules:',
+    '- Use at most 6 words.',
+    '- No quotes, no markdown, no trailing punctuation.',
+    '- Output only the title text.',
+    '',
+    'First user message:',
+    firstUserMessage,
+  ].join('\n');
+
 const geminiGenerateText = async (apiKey: string, modelId: string, prompt: string) => {
   const path = normalizeGeminiModelPath(modelId);
   const url = `https://generativelanguage.googleapis.com/v1beta/${path}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -122,6 +149,37 @@ const openrouterGenerateText = async (
   if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
   const data = await res.json();
   return openrouterTextFromCompletion(data);
+};
+
+const generateSessionTitle = async (
+  providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
+  firstUserMessage: string,
+) => {
+  const seed = String(firstUserMessage || '')
+    .trim()
+    .slice(0, 800);
+  if (!seed) return '';
+
+  const prompt = buildSessionTitlePrompt(seed);
+
+  if (providerKeyModel.provider === 'openrouter') {
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      {
+        role: 'system',
+        content: 'You generate short chat titles. Output only the title text.',
+      },
+      { role: 'user', content: prompt },
+    ];
+    const raw = await openrouterGenerateText(
+      providerKeyModel.apiKey,
+      providerKeyModel.modelId,
+      messages,
+    );
+    return cleanSessionTitle(raw);
+  }
+
+  const raw = await geminiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, prompt);
+  return cleanSessionTitle(raw);
 };
 
 const hasPermission = (request: FastifyRequest, permission: string) =>
@@ -996,7 +1054,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
 
-      const { provider, apiKey, modelId } = resolveProviderKeyModel(cfg);
+      const providerKeyModel = resolveProviderKeyModel(cfg);
+      const { provider, apiKey, modelId } = providerKeyModel;
       if (!apiKey.trim())
         return badRequest(reply, `Missing ${provider} API key in General Settings.`);
       if (!modelId.trim())
@@ -1004,14 +1063,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const ns = `reports:ai-reporting:user:${userId}`;
       let didMutate = false;
+      let shouldAutoTitle = false;
 
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
         const owned = await query(
-          `SELECT 1 FROM report_chat_sessions WHERE id = $1 AND user_id = $2 AND is_archived = FALSE LIMIT 1`,
+          `SELECT title
+           FROM report_chat_sessions
+           WHERE id = $1 AND user_id = $2 AND is_archived = FALSE
+           LIMIT 1`,
           [resolvedSessionId, userId],
         );
         if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+        shouldAutoTitle = String(owned.rows[0]?.title || '') === 'AI Reporting';
       } else {
         resolvedSessionId = `rpt-chat-${randomUUID()}`;
         await query(
@@ -1020,6 +1084,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [resolvedSessionId, userId, 'AI Reporting'],
         );
         didMutate = true;
+        shouldAutoTitle = true;
       }
 
       try {
@@ -1083,7 +1148,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         didMutate = true;
 
-        // Update session timestamp and set a title based on the first user message if still default.
+        let titleToSet = '';
+        if (shouldAutoTitle) {
+          const firstUser = await query(
+            `SELECT content
+             FROM report_chat_messages
+             WHERE session_id = $1 AND role = 'user'
+             ORDER BY created_at ASC
+             LIMIT 1`,
+            [resolvedSessionId],
+          );
+          const firstUserMessage = String(firstUser.rows[0]?.content || '').trim();
+
+          try {
+            titleToSet = await generateSessionTitle(providerKeyModel, firstUserMessage);
+          } catch {
+            titleToSet = '';
+          }
+
+          if (!titleToSet) {
+            titleToSet = cleanSessionTitle(firstUserMessage);
+          }
+        }
+
+        // Update session timestamp and set an AI-generated title based on the first user message if still default.
         await query(
           `UPDATE report_chat_sessions
            SET updated_at = CURRENT_TIMESTAMP,
@@ -1092,7 +1180,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  ELSE title
                END
            WHERE id = $1 AND user_id = $3`,
-          [resolvedSessionId, messageResult.value, userId],
+          [resolvedSessionId, titleToSet || 'AI Reporting', userId],
         );
         didMutate = true;
 

@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StatusBadge from '../shared/StatusBadge';
 
@@ -102,9 +103,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
     if (!canSend) return;
     setError('');
     try {
-      const { id } = await api.reports.createSession({
-        title: t('aiReporting.session', { defaultValue: 'Session' }),
-      });
+      // Create with the default title so the server can auto-title it on the first user message.
+      const { id } = await api.reports.createSession();
       await loadSessions();
       setActiveSessionId(id);
       setMessages([]);
@@ -203,62 +203,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
   }, [canArchive, isDeletingSession, loadSessions, sessionToDelete, t]);
 
   const activeTitle = sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
+  const sessionOptions = sessions.map((s) => ({ id: s.id, name: toOptionLabel(s) }));
+  const canDeleteActive =
+    Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
 
   return (
-    <div className="flex h-[calc(100vh-180px)] min-h-[560px] gap-6">
-      {/* Sessions sidebar (desktop/tablet) */}
-      <aside className="hidden md:flex w-72 shrink-0 h-full flex-col bg-white rounded-2xl shadow-xl border border-slate-200">
-        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
-          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
-            Sessions
-          </span>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {isLoadingSessions && <div className="text-xs text-slate-400 px-2 py-3">Loading…</div>}
-          {!isLoadingSessions && sessions.length === 0 && (
-            <div className="text-xs text-slate-400 px-2 py-3">
-              {t('aiReporting.noSessions', { defaultValue: 'No chats yet.' })}
-            </div>
-          )}
-          {sessions.map((s) => {
-            const isActive = s.id === activeSessionId;
-            return (
-              <div key={s.id} className="relative w-full">
-                <button
-                  type="button"
-                  onClick={() => setActiveSessionId(s.id)}
-                  className={`w-full text-left rounded-xl px-3 py-2.5 pr-12 text-sm font-semibold truncate transition-colors outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${
-                    isActive ? 'bg-praetor text-white' : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {toOptionLabel(s)}
-                </button>
-
-                <button
-                  type="button"
-                  aria-label="Delete chat"
-                  disabled={!canArchive || isDeletingSession}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    confirmDeleteSession(s);
-                  }}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                    !canArchive || isDeletingSession
-                      ? 'opacity-40 cursor-not-allowed'
-                      : isActive
-                        ? 'text-white/90 hover:text-white hover:bg-white/10'
-                        : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
-                  }`}
-                >
-                  <i className="fa-solid fa-trash text-xs" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
-
-      {/* Main chat column */}
+    <div className="flex h-[calc(100vh-180px)] min-h-[560px]">
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-4 px-4 md:px-6">
@@ -279,19 +230,54 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void handleNewChat()}
-            disabled={!canSend}
-            className={`shrink-0 px-5 py-2.5 rounded-xl text-sm font-black shadow-xl transition-all active:scale-95 flex items-center gap-2 ${
-              canSend
-                ? 'bg-praetor text-white shadow-slate-200 hover:bg-[var(--color-primary-hover)]'
-                : 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
-            }`}
-          >
-            <i className="fa-solid fa-plus text-xs" />
-            {t('aiReporting.newChat', { defaultValue: 'New chat' })}
-          </button>
+          <div className="shrink-0 flex items-center gap-3">
+            <div className="w-48 sm:w-56 md:w-72">
+              <CustomSelect
+                options={sessionOptions}
+                value={activeSessionId}
+                onChange={(value) => setActiveSessionId(value as string)}
+                placeholder={
+                  isLoadingSessions
+                    ? t('aiReporting.loadingSessions', { defaultValue: 'Loading…' })
+                    : t('aiReporting.selectSession', { defaultValue: 'Select chat' })
+                }
+                disabled={isLoadingSessions || sessions.length === 0}
+                searchable={sessions.length > 8}
+                buttonClassName="py-2.5 text-sm font-semibold"
+              />
+            </div>
+
+            <button
+              type="button"
+              aria-label="Delete active chat"
+              disabled={!canDeleteActive}
+              onClick={() => {
+                if (!activeSession) return;
+                confirmDeleteSession(activeSession);
+              }}
+              className={`w-11 h-11 rounded-xl shadow-xl flex items-center justify-center transition-colors ${
+                canDeleteActive
+                  ? 'bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50'
+                  : 'bg-slate-100 border border-slate-200 text-slate-300 shadow-none cursor-not-allowed'
+              }`}
+            >
+              <i className="fa-solid fa-trash text-sm" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleNewChat()}
+              disabled={!canSend}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black shadow-xl transition-all active:scale-95 flex items-center gap-2 ${
+                canSend
+                  ? 'bg-praetor text-white shadow-slate-200 hover:bg-[var(--color-primary-hover)]'
+                  : 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
+              }`}
+            >
+              <i className="fa-solid fa-plus text-xs" />
+              {t('aiReporting.newChat', { defaultValue: 'New chat' })}
+            </button>
+          </div>
         </div>
 
         {error && (
