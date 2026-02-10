@@ -223,17 +223,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
           {sessions.map((s) => {
             const isActive = s.id === activeSessionId;
             return (
-              <div
-                key={s.id}
-                className={`group flex items-center gap-2 w-full rounded-xl px-3 py-2.5 transition-colors ${
-                  isActive ? 'bg-praetor' : 'hover:bg-slate-50'
-                }`}
-              >
+              <div key={s.id} className="relative w-full">
                 <button
                   type="button"
                   onClick={() => setActiveSessionId(s.id)}
-                  className={`flex-1 text-left text-sm font-semibold truncate outline-none ${
-                    isActive ? 'text-white' : 'text-slate-700'
+                  className={`w-full text-left rounded-xl px-3 py-2.5 pr-12 text-sm font-semibold truncate transition-colors outline-none focus-visible:ring-2 focus-visible:ring-praetor/40 ${
+                    isActive ? 'bg-praetor text-white' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {toOptionLabel(s)}
@@ -247,7 +242,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({ currentUserId, permis
                     e.stopPropagation();
                     confirmDeleteSession(s);
                   }}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
                     !canArchive || isDeletingSession
                       ? 'opacity-40 cursor-not-allowed'
                       : isActive
