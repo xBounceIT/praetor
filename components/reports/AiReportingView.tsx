@@ -309,6 +309,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const canDeleteActive =
     Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
   const isEmptySession = Boolean(activeSessionId) && !isLoadingMessages && messages.length === 0;
+  const isNewChatDisabled = !canSend || isCreatingSession || isEmptySession || isLoadingMessages;
   const showGoToBottom = messages.length > 0 && (!isAtBottom || hasNewText);
   const footerHint = t('aiReporting.footerHint', {
     defaultValue: 'Enter to send, Shift+Enter for a new line.',
@@ -390,11 +391,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             <button
               type="button"
               onClick={() => void handleNewChat()}
-              disabled={!canSend || isCreatingSession || isEmptySession || isLoadingMessages}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black shadow-xl transition-all active:scale-95 flex items-center gap-2 ${
-                canSend && !isCreatingSession && !isEmptySession
-                  ? 'bg-praetor text-white shadow-slate-200 hover:bg-[var(--color-primary-hover)]'
-                  : 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
+              disabled={isNewChatDisabled}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${
+                !isNewChatDisabled
+                  ? 'bg-praetor text-white shadow-xl shadow-slate-200 hover:bg-[var(--color-primary-hover)] active:scale-95'
+                  : 'bg-slate-100 border border-slate-200 text-slate-400 shadow-none cursor-not-allowed active:scale-100'
               }`}
             >
               <i
