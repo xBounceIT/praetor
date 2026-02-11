@@ -7,6 +7,7 @@
   - permessi dedicati necessari per l'utilizzo delle funzioni AI
   - default: disattivo
 - Aggiunto OpenRouter tra i provider disponibili per le funzioni AI
+- Aggiunta pagina Logs in Amministrazione con tabella accessi utente
 
 ## 20260209 - Operativo
 - Aggiunto Swagger (/docs/api) e TypeDoc (/docs/frontend) per documentazione automatica Backend e Frontend durante commit

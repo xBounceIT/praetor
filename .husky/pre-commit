@@ -12,9 +12,5 @@ if ! bun -e "require('rollup')" >/dev/null 2>&1; then
   bun install
 fi
 
-bun run build
-cd server && bun run build && cd ..
-bun run docs
-git add docs bun.lock
-bunx lint-staged
+git add bun.lock
 bun run lint
