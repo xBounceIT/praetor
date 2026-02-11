@@ -944,7 +944,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       await query(
         `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
          VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [id, userId, titleResult.value || 'AI Reporting'],
+        [id, userId, titleResult.value || ''],
       );
 
       await bumpNamespaceVersion(`reports:ai-reporting:user:${userId}`);
@@ -1130,13 +1130,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [resolvedSessionId, userId],
         );
         if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
-        shouldAutoTitle = String(owned.rows[0]?.title || '') === 'AI Reporting';
+        shouldAutoTitle = ['AI Reporting', ''].includes(String(owned.rows[0]?.title || '').trim());
       } else {
         resolvedSessionId = `rpt-chat-${randomUUID()}`;
         await query(
           `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
            VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [resolvedSessionId, userId, 'AI Reporting'],
+          [resolvedSessionId, userId, ''],
         );
         didMutate = true;
         shouldAutoTitle = true;
@@ -1226,16 +1226,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         }
 
-        // Update session timestamp and set an AI-generated title based on the first user message if still default.
+        // Update session timestamp and set an AI-generated title based on the first user message if still empty.
         await query(
           `UPDATE report_chat_sessions
            SET updated_at = CURRENT_TIMESTAMP,
                title = CASE
-                 WHEN title = 'AI Reporting' THEN LEFT($2, 80)
+                 WHEN BTRIM(title) = '' OR title = 'AI Reporting' THEN LEFT($2, 80)
                  ELSE title
                END
            WHERE id = $1 AND user_id = $3`,
-          [resolvedSessionId, titleToSet || 'AI Reporting', userId],
+          [resolvedSessionId, titleToSet || cleanSessionTitle(messageResult.value), userId],
         );
         didMutate = true;
 

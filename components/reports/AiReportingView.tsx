@@ -18,7 +18,7 @@ export interface AiReportingViewProps {
 }
 
 const toOptionLabel = (session: ReportChatSessionSummary) => {
-  const title = session.title?.trim() ? session.title.trim() : 'AI Reporting';
+  const title = session.title?.trim() ? session.title.trim() : '';
   return title;
 };
 
@@ -171,7 +171,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       const res = await api.reports.createSession();
       const session: ReportChatSessionSummary = {
         id: res.id,
-        title: 'AI Reporting',
+        title: '',
         createdAt: now,
         updatedAt: now,
       };
@@ -332,9 +332,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
   const activeTitle = isNewChat
     ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
-    : sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
+    : sessions.find((s) => s.id === activeSessionId)?.title ||
+      t('aiReporting.newChat', { defaultValue: 'New Chat' });
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
-  const sessionOptions = sessions.map((s) => ({ id: s.id, name: toOptionLabel(s) }));
+  const sessionOptions = sessions.map((s) => ({
+    id: s.id,
+    name: toOptionLabel(s) || t('aiReporting.newChat', { defaultValue: 'New Chat' }),
+  }));
   const canDeleteActive =
     Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
   const isEmptySession = Boolean(activeSessionId) && !isLoadingMessages && messages.length === 0;
@@ -469,7 +473,21 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               )}
 
               {!isLoadingMessages && messages.length === 0 && (
-                <div className="text-sm text-slate-500">{t('aiReporting.noSessions')}</div>
+                <div className="min-h-[45vh] flex items-center justify-center px-4">
+                  <div className="max-w-xl text-center">
+                    <div className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+                      {t('aiReporting.emptyPlaceholderTitle', {
+                        defaultValue: 'What should we build together now?',
+                      })}
+                    </div>
+                    <div className="mt-3 text-sm md:text-base text-slate-500 leading-relaxed">
+                      {t('aiReporting.emptyPlaceholderBody', {
+                        defaultValue:
+                          'Start with a question about your business data. I will use your reports to help you.',
+                      })}
+                    </div>
+                  </div>
+                </div>
               )}
 
               <div className="space-y-5">
@@ -728,7 +746,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               </h3>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
                 {t('aiReporting.deleteChatConfirm', {
-                  name: sessionToDelete ? toOptionLabel(sessionToDelete) : '',
+                  name: sessionToDelete
+                    ? toOptionLabel(sessionToDelete) ||
+                      t('aiReporting.newChat', { defaultValue: 'New Chat' })
+                    : '',
                   defaultValue: 'This will remove "{{name}}" from your chat history.',
                 })}
               </p>

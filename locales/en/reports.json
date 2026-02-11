@@ -7,6 +7,8 @@
     "placeholder": "Ask a question about your business data...",
     "thinking": "Thinking...",
     "noSessions": "No chats yet.",
+    "emptyPlaceholderTitle": "What should we analyze next?",
+    "emptyPlaceholderBody": "Start with a question about your business data and I will help you with a useful answer.",
     "noPermissionToSend": "You do not have permission to use AI Reporting.",
     "disabledByAdmin": "AI Reporting is disabled by administration.",
     "disabledTitle": "AI Reporting disabled",
