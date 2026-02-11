@@ -287,9 +287,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     }
   };
 
-  const handleSend = async () => {
+  const sendMessage = async (rawContent: string, opts: { clearDraft?: boolean } = {}) => {
     if (!enableAiReporting) return;
-    const content = draft.trim();
+    const content = rawContent.trim();
     if (!content || isSending || !canSend) return;
 
     const abortController = new AbortController();
@@ -298,7 +298,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
     setIsSending(true);
     setError('');
-    setDraft('');
+    if (opts.clearDraft) {
+      setDraft('');
+    }
 
     const now = Date.now();
     const assistantMessageId = `tmp-asst-${now}`;
@@ -565,6 +567,37 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         setIsSending(false);
       }
     }
+  };
+
+  const handleSend = async () => {
+    await sendMessage(draft, { clearDraft: true });
+  };
+
+  const getRetryMessageContent = useCallback(
+    (assistantMessageId: string) => {
+      const assistantIndex = messages.findIndex(
+        (message) => message.id === assistantMessageId && message.role === 'assistant',
+      );
+      if (assistantIndex <= 0) return '';
+
+      const assistantMessage = messages[assistantIndex];
+      for (let index = assistantIndex - 1; index >= 0; index--) {
+        const candidate = messages[index];
+        if (candidate.role !== 'user') continue;
+        if (candidate.sessionId !== assistantMessage.sessionId) continue;
+        const trimmed = candidate.content.trim();
+        if (trimmed) return trimmed;
+      }
+      return '';
+    },
+    [messages],
+  );
+
+  const handleRetryMessage = async (assistantMessageId: string) => {
+    if (!enableAiReporting || !canSend || isSending) return;
+    const retryContent = getRetryMessageContent(assistantMessageId);
+    if (!retryContent) return;
+    await sendMessage(retryContent);
   };
 
   const handleStop = () => {
@@ -850,6 +883,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               <div className="space-y-7">
                 {messages.map((m) => {
                   const isThoughtExpanded = expandedThoughtMessageIds.includes(m.id);
+                  const retryContent = m.role === 'assistant' ? getRetryMessageContent(m.id) : '';
+                  const canRetryAssistantMessage =
+                    m.role === 'assistant' && Boolean(retryContent) && canSend && !isSending;
                   return (
                     <div
                       key={m.id}
@@ -1054,7 +1090,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                           >
                             {m.content}
                           </ReactMarkdown>
-                          <div className="mt-2 flex justify-end opacity-0 transition-all pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto">
+                          <div className="mt-2 flex justify-start items-center gap-1.5">
                             <Tooltip
                               label={
                                 copiedMessageId === m.id
@@ -1069,6 +1105,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   type="button"
                                   onClick={() => void handleCopy(m.id, m.content)}
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                  aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
                                 >
                                   <i
                                     className={
@@ -1077,6 +1114,24 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                         : 'fa-regular fa-copy'
                                     }
                                   />
+                                </button>
+                              )}
+                            </Tooltip>
+                            <Tooltip label={t('aiReporting.retry', { defaultValue: 'Retry' })}>
+                              {() => (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRetryMessage(m.id)}
+                                  disabled={!canRetryAssistantMessage}
+                                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors ${
+                                    canRetryAssistantMessage
+                                      ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                      : 'text-slate-300 cursor-not-allowed'
+                                  }`}
+                                  aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                >
+                                  <i className="fa-solid fa-rotate-right text-[11px]" />
+                                  {t('aiReporting.retry', { defaultValue: 'Retry' })}
                                 </button>
                               )}
                             </Tooltip>

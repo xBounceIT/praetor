@@ -21,6 +21,7 @@
     "goToBottom": "Go to bottom",
     "error": "Something went wrong.",
     "thoughtLabel": "Thought process",
-    "stop": "Stop"
+    "stop": "Stop",
+    "retry": "Retry"
   }
 }

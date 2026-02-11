@@ -21,6 +21,7 @@
     "goToBottom": "Vai in fondo",
     "error": "Si e' verificato un errore.",
     "thoughtLabel": "Processo di pensiero",
-    "stop": "Ferma"
+    "stop": "Ferma",
+    "retry": "Riprova"
   }
 }
