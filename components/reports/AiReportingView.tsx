@@ -68,6 +68,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const loadTokenRef = useRef(0);
   const isAtBottomRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  const sendRunIdRef = useRef(0);
+  const activeAssistantMessageIdRef = useRef('');
 
   const canSend =
     enableAiReporting &&
@@ -102,8 +104,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       messageId: string,
       finalContent: string,
       thoughtContent?: string,
-      opts: { sessionId?: string } = {},
+      opts: { sessionId?: string; shouldContinue?: () => boolean } = {},
     ) => {
+      const shouldContinue = opts.shouldContinue || (() => true);
       const speedMs = 8;
       const thoughtChunks = 3;
       const answerChunks = 2;
@@ -112,6 +115,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       let thoughtIndex = 0;
 
       while (thoughtIndex < finalThought.length) {
+        if (!shouldContinue()) return false;
         if (thoughtIndex < finalThought.length) {
           nextThought += finalThought.slice(thoughtIndex, thoughtIndex + thoughtChunks);
           thoughtIndex += thoughtChunks;
@@ -141,6 +145,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       let answerIndex = 0;
 
       while (answerIndex < finalContent.length) {
+        if (!shouldContinue()) return false;
         if (answerIndex < finalContent.length) {
           nextAnswer += finalContent.slice(answerIndex, answerIndex + answerChunks);
           answerIndex += answerChunks;
@@ -166,6 +171,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         await new Promise((resolve) => setTimeout(resolve, speedMs));
       }
 
+      if (!shouldContinue()) return false;
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
@@ -178,6 +184,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             : m,
         ),
       );
+      return true;
     },
     [scrollToBottom],
   );
@@ -284,6 +291,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     if (!content || isSending || !canSend) return;
 
     const abortController = new AbortController();
+    const runId = ++sendRunIdRef.current;
     abortRef.current = abortController;
 
     setIsSending(true);
@@ -308,6 +316,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       thoughtContent: thinkingLabel,
       createdAt: now + 1,
     };
+    activeAssistantMessageIdRef.current = assistantMessageId;
     setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
     setExpandedThoughtMessageIds((prev) =>
       prev.includes(assistantMessageId) ? prev : [...prev, assistantMessageId],
@@ -320,6 +329,19 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       }
     });
 
+    const isRunActive = () =>
+      sendRunIdRef.current === runId &&
+      abortRef.current === abortController &&
+      !abortController.signal.aborted;
+
+    const cleanupCancelledAssistant = () => {
+      setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
+      setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
+      if (activeAssistantMessageIdRef.current === assistantMessageId) {
+        activeAssistantMessageIdRef.current = '';
+      }
+    };
+
     try {
       const hadSession = Boolean(activeSessionId);
       let resolvedSessionId = activeSessionId || '';
@@ -328,7 +350,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       let streamProducedOutput = false;
 
       const syncAssistantSession = (sessionId: string) => {
-        if (!sessionId) return;
+        if (!sessionId || !isRunActive()) return;
         resolvedSessionId = sessionId;
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMessageId ? { ...m, sessionId } : m)),
@@ -336,7 +358,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       };
 
       const closeThoughtPanel = () => {
-        if (thoughtDoneClosed) return;
+        if (thoughtDoneClosed || !isRunActive()) return;
         thoughtDoneClosed = true;
         setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
       };
@@ -350,6 +372,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
           },
           {
             onStart: ({ sessionId }) => {
+              if (!isRunActive()) return;
               streamStarted = true;
               syncAssistantSession(sessionId);
               if (!hadSession && sessionId) {
@@ -361,7 +384,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               }
             },
             onThoughtDelta: (delta) => {
-              if (!delta) return;
+              if (!delta || !isRunActive()) return;
               streamProducedOutput = true;
               setMessages((prev) =>
                 prev.map((m) => {
@@ -383,6 +406,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               }
             },
             onThoughtDone: () => {
+              if (!isRunActive()) return;
               closeThoughtPanel();
               setMessages((prev) =>
                 prev.map((m) =>
@@ -393,7 +417,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               );
             },
             onAnswerDelta: (delta) => {
-              if (!delta) return;
+              if (!delta || !isRunActive()) return;
               streamProducedOutput = true;
               closeThoughtPanel();
               setMessages((prev) =>
@@ -420,6 +444,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
           abortController.signal,
         );
 
+        if (!isRunActive()) return;
         syncAssistantSession(streamed.sessionId);
         closeThoughtPanel();
 
@@ -444,18 +469,20 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               : m,
           ),
         );
+        if (activeAssistantMessageIdRef.current === assistantMessageId) {
+          activeAssistantMessageIdRef.current = '';
+        }
         await loadSessions({ preferredSessionId: streamed.sessionId });
       } catch (streamErr) {
+        if (!isRunActive()) {
+          cleanupCancelledAssistant();
+          return;
+        }
+
         if ((streamErr as Error).name === 'AbortError') {
-          // User cancelled — reload canonical messages without showing an error.
-          const reloadId = resolvedSessionId || activeSessionId;
-          if (reloadId) {
-            await loadMessages(reloadId, { forceScroll: false });
-            await loadSessions({ preferredSessionId: reloadId });
-          } else {
-            setMessages([]);
-          }
+          cleanupCancelledAssistant();
         } else if (!streamStarted && !streamProducedOutput) {
+          if (!isRunActive()) return;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMessageId
@@ -471,6 +498,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             },
             abortController.signal,
           );
+          if (!isRunActive()) {
+            cleanupCancelledAssistant();
+            return;
+          }
 
           if (!hadSession) {
             setActiveSessionId(fallback.sessionId);
@@ -480,12 +511,26 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             setPendingEmptySessionId('');
           }
 
-          await typeAssistantMessage(assistantMessageId, fallback.text, fallback.thoughtContent, {
-            sessionId: fallback.sessionId,
-          });
+          const completed = await typeAssistantMessage(
+            assistantMessageId,
+            fallback.text,
+            fallback.thoughtContent,
+            {
+              sessionId: fallback.sessionId,
+              shouldContinue: isRunActive,
+            },
+          );
+          if (!completed || !isRunActive()) {
+            cleanupCancelledAssistant();
+            return;
+          }
+          if (activeAssistantMessageIdRef.current === assistantMessageId) {
+            activeAssistantMessageIdRef.current = '';
+          }
           setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
           await loadSessions({ preferredSessionId: fallback.sessionId });
         } else {
+          if (!isRunActive()) return;
           setError((streamErr as Error).message || t('aiReporting.error'));
           if (resolvedSessionId) {
             await loadMessages(resolvedSessionId, { forceScroll: false });
@@ -493,13 +538,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         }
       }
     } catch (err) {
+      if (!isRunActive()) {
+        cleanupCancelledAssistant();
+        return;
+      }
+
       if ((err as Error).name === 'AbortError') {
-        // User cancelled — reload canonical messages without showing an error.
-        if (activeSessionId) {
-          await loadMessages(activeSessionId, { forceScroll: false });
-        } else {
-          setMessages([]);
-        }
+        cleanupCancelledAssistant();
       } else {
         setError((err as Error).message || t('aiReporting.error'));
         // Reload canonical messages if possible.
@@ -510,18 +555,38 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         }
       }
     } finally {
-      abortRef.current = null;
-      setIsSending(false);
+      if (isRunActive()) {
+        if (activeAssistantMessageIdRef.current === assistantMessageId) {
+          activeAssistantMessageIdRef.current = '';
+        }
+        abortRef.current = null;
+        setIsSending(false);
+      }
     }
   };
 
   const handleStop = () => {
-    abortRef.current?.abort();
+    const controller = abortRef.current;
+    if (!controller) return;
+    sendRunIdRef.current += 1;
+    abortRef.current = null;
+    setIsSending(false);
+    const activeAssistantId = activeAssistantMessageIdRef.current;
+    if (activeAssistantId) {
+      setMessages((prev) => prev.filter((m) => m.id !== activeAssistantId));
+      setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== activeAssistantId));
+      activeAssistantMessageIdRef.current = '';
+    }
+    controller.abort();
   };
 
   useEffect(() => {
     if (!currentUserId) return;
     if (!enableAiReporting) {
+      sendRunIdRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      activeAssistantMessageIdRef.current = '';
       setSessions([]);
       setActiveSessionId('');
       setIsNewChat(false);
@@ -530,10 +595,15 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setError('');
       setIsLoadingSessions(false);
       setIsLoadingMessages(false);
+      setIsSending(false);
       setHasNewText(false);
       setExpandedThoughtMessageIds([]);
       return;
     }
+    sendRunIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    activeAssistantMessageIdRef.current = '';
     setActiveSessionId('');
     setIsNewChat(false);
     setMessages([]);

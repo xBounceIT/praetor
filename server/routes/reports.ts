@@ -185,6 +185,20 @@ const resolveStreamDelta = (current: string, incoming: string) => {
   return incoming;
 };
 
+const isAbortError = (err: unknown) => {
+  if (!err || typeof err !== 'object') return false;
+  const name = String((err as { name?: unknown }).name || '');
+  if (name === 'AbortError') return true;
+  const code = String((err as { code?: unknown }).code || '');
+  return code === 'ABORT_ERR';
+};
+
+const createAbortError = () => {
+  const err = new Error('Operation aborted');
+  err.name = 'AbortError';
+  return err;
+};
+
 const cleanSessionTitle = (raw: string) => {
   const t = String(raw || '')
     .replace(/[\r\n]+/g, ' ')
@@ -267,6 +281,7 @@ const geminiGenerateTextStream = async (
   modelId: string,
   prompt: string,
   callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
 ) => {
   const path = normalizeGeminiModelPath(modelId);
   const url = `https://generativelanguage.googleapis.com/v1beta/${path}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
@@ -277,6 +292,7 @@ const geminiGenerateTextStream = async (
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.2 },
     }),
+    signal,
   });
 
   if (!res.ok) throw new Error(`Gemini request failed: HTTP ${res.status}`);
@@ -286,6 +302,7 @@ const geminiGenerateTextStream = async (
   let thoughtDone = false;
 
   for await (const evt of iterateSseEvents(res.body)) {
+    if (signal?.aborted) throw createAbortError();
     const rawData = String(evt.data || '').trim();
     if (!rawData || rawData === '[DONE]') continue;
 
@@ -344,6 +361,7 @@ const openrouterGenerateTextStream = async (
   modelId: string,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
 ) => {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -357,6 +375,7 @@ const openrouterGenerateTextStream = async (
       stream: true,
       messages,
     }),
+    signal,
   });
 
   if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
@@ -366,6 +385,7 @@ const openrouterGenerateTextStream = async (
   let thoughtDone = false;
 
   for await (const evt of iterateSseEvents(res.body)) {
+    if (signal?.aborted) throw createAbortError();
     const rawData = String(evt.data || '').trim();
     if (!rawData || rawData === '[DONE]') continue;
 
@@ -1449,6 +1469,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let thoughtDoneSent = false;
       let streamedText = '';
       let streamedThoughtContent = '';
+      const streamAbortController = new AbortController();
+      const handleClientDisconnect = () => {
+        streamAbortController.abort();
+      };
+      request.raw.once('aborted', handleClientDisconnect);
+      request.raw.once('close', handleClientDisconnect);
 
       let resolvedSessionId = sessionIdResult.value || '';
       if (resolvedSessionId) {
@@ -1500,18 +1526,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const { fromDate, toDate } = getReportingRange();
         const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
         const datasetJson = JSON.stringify(dataset);
+        if (streamAbortController.signal.aborted) return;
 
         startSseResponse(reply);
         streamStarted = true;
-        writeSseEvent(reply, 'start', {
-          sessionId: resolvedSessionId,
-          messageId: assistantMessageId,
-        });
+        if (
+          !writeSseEvent(reply, 'start', {
+            sessionId: resolvedSessionId,
+            messageId: assistantMessageId,
+          })
+        ) {
+          streamAbortController.abort();
+          return;
+        }
 
         const emitThoughtDone = async () => {
-          if (thoughtDoneSent) return;
+          if (thoughtDoneSent || streamAbortController.signal.aborted) return;
           thoughtDoneSent = true;
-          writeSseEvent(reply, 'thought_done', {});
+          if (!writeSseEvent(reply, 'thought_done', {})) {
+            streamAbortController.abort();
+          }
         };
 
         let generated: AiTextResult;
@@ -1521,17 +1555,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
             ...convo.map((m) => ({ role: m.role, content: m.content })),
           ];
-          generated = await openrouterGenerateTextStream(apiKey, modelId, messagesForAi, {
-            onThoughtDelta: async (delta) => {
-              streamedThoughtContent += delta;
-              writeSseEvent(reply, 'thought_delta', { delta });
+          generated = await openrouterGenerateTextStream(
+            apiKey,
+            modelId,
+            messagesForAi,
+            {
+              onThoughtDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedThoughtContent += delta;
+                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onAnswerDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedText += delta;
+                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onThoughtDone: emitThoughtDone,
             },
-            onAnswerDelta: async (delta) => {
-              streamedText += delta;
-              writeSseEvent(reply, 'answer_delta', { delta });
-            },
-            onThoughtDone: emitThoughtDone,
-          });
+            streamAbortController.signal,
+          );
         } else {
           const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
           const prompt = [
@@ -1544,25 +1590,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             '',
             'Answer as the assistant:',
           ].join('\n');
-          generated = await geminiGenerateTextStream(apiKey, modelId, prompt, {
-            onThoughtDelta: async (delta) => {
-              streamedThoughtContent += delta;
-              writeSseEvent(reply, 'thought_delta', { delta });
+          generated = await geminiGenerateTextStream(
+            apiKey,
+            modelId,
+            prompt,
+            {
+              onThoughtDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedThoughtContent += delta;
+                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onAnswerDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedText += delta;
+                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onThoughtDone: emitThoughtDone,
             },
-            onAnswerDelta: async (delta) => {
-              streamedText += delta;
-              writeSseEvent(reply, 'answer_delta', { delta });
-            },
-            onThoughtDone: emitThoughtDone,
-          });
+            streamAbortController.signal,
+          );
         }
 
+        if (streamAbortController.signal.aborted) return;
         await emitThoughtDone();
 
         const generatedText = String(generated.text || '').trim();
         const generatedThought = String(generated.thoughtContent || '').trim();
         const assistantText = generatedText || streamedText.trim() || 'No response.';
         const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
+        if (streamAbortController.signal.aborted) return;
 
         await query(
           `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
@@ -1593,6 +1653,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             titleToSet = cleanSessionTitle(firstUserMessage);
           }
         }
+        if (streamAbortController.signal.aborted) return;
 
         await query(
           `UPDATE report_chat_sessions
@@ -1606,18 +1667,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         didMutate = true;
 
-        writeSseEvent(reply, 'done', {
-          sessionId: resolvedSessionId,
-          text: assistantText,
-          thoughtContent: assistantThoughtContent || undefined,
-        });
+        if (
+          !writeSseEvent(reply, 'done', {
+            sessionId: resolvedSessionId,
+            text: assistantText,
+            thoughtContent: assistantThoughtContent || undefined,
+          })
+        ) {
+          streamAbortController.abort();
+        }
         endSseResponse(reply);
       } catch (err) {
+        if (isAbortError(err) || streamAbortController.signal.aborted || reply.raw.destroyed) {
+          endSseResponse(reply);
+          return;
+        }
         const msg = err instanceof Error ? err.message : 'AI request failed';
         if (!streamStarted) return reply.code(502).send({ error: msg });
         writeSseEvent(reply, 'error', { message: msg });
         endSseResponse(reply);
       } finally {
+        request.raw.removeListener('aborted', handleClientDisconnect);
+        request.raw.removeListener('close', handleClientDisconnect);
         if (didMutate) {
           await bumpNamespaceVersion(ns);
         }
