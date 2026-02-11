@@ -13,4 +13,5 @@ if ! bun -e "require('rollup')" >/dev/null 2>&1; then
 fi
 
 git add bun.lock
-bun run lint
+bunx lint-staged
+tsc --noEmit
