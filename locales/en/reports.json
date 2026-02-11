@@ -19,6 +19,7 @@
     "deleteChatTitle": "Delete chat",
     "deleteChatConfirm": "This will remove \"{{name}}\" from your chat history.",
     "goToBottom": "Go to bottom",
-    "error": "Something went wrong."
+    "error": "Something went wrong.",
+    "thoughtLabel": "Thought process"
   }
 }

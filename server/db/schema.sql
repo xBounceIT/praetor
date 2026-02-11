@@ -943,6 +943,7 @@ CREATE TABLE IF NOT EXISTS report_chat_messages (
     session_id VARCHAR(50) NOT NULL REFERENCES report_chat_sessions(id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
+    thought_content TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -994,3 +995,6 @@ WHERE permission = 'reports.ai_reporting_ai.create'
       AND rp2.permission = 'reports.ai_reporting.create'
   );
 DELETE FROM role_permissions WHERE permission = 'reports.ai_reporting_ai.create';
+
+
+ALTER TABLE report_chat_messages ADD COLUMN IF NOT EXISTS thought_content TEXT;

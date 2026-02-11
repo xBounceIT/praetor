@@ -62,6 +62,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [isDeletingSession, setIsDeletingSession] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewText, setHasNewText] = useState(false);
+  const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
@@ -94,6 +95,68 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     requestAnimationFrame(updateAtBottom);
   }, [updateAtBottom]);
+
+  const typeAssistantMessage = useCallback(
+    async (
+      messageId: string,
+      finalContent: string,
+      thoughtContent?: string,
+      opts: { sessionId?: string } = {},
+    ) => {
+      const speedMs = 8;
+      const answerChunks = 2;
+      const thoughtChunks = 3;
+      const finalThought = String(thoughtContent || '');
+      let nextAnswer = '';
+      let nextThought = '';
+      let answerIndex = 0;
+      let thoughtIndex = 0;
+
+      while (answerIndex < finalContent.length || thoughtIndex < finalThought.length) {
+        if (answerIndex < finalContent.length) {
+          nextAnswer += finalContent.slice(answerIndex, answerIndex + answerChunks);
+          answerIndex += answerChunks;
+        }
+        if (thoughtIndex < finalThought.length) {
+          nextThought += finalThought.slice(thoughtIndex, thoughtIndex + thoughtChunks);
+          thoughtIndex += thoughtChunks;
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  content: nextAnswer,
+                  thoughtContent: nextThought || undefined,
+                  sessionId: opts.sessionId || m.sessionId,
+                }
+              : m,
+          ),
+        );
+        if (isAtBottomRef.current) {
+          requestAnimationFrame(scrollToBottom);
+        } else {
+          setHasNewText(true);
+        }
+        await new Promise((resolve) => setTimeout(resolve, speedMs));
+      }
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                content: finalContent,
+                thoughtContent: finalThought || undefined,
+                sessionId: opts.sessionId || m.sessionId,
+              }
+            : m,
+        ),
+      );
+    },
+    [scrollToBottom],
+  );
 
   const loadSessions = useCallback(
     async (opts: { preferredSessionId?: string } = {}) => {
@@ -156,6 +219,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setIsNewChat(false);
       setActiveSessionId(pendingEmptySessionId);
       setHasNewText(false);
+      setExpandedThoughtMessageIds([]);
       return;
     }
 
@@ -200,6 +264,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     setDraft('');
 
     const now = Date.now();
+    const assistantMessageId = `tmp-asst-${now}`;
     const optimisticUser: ReportChatMessage = {
       id: `tmp-user-${now}`,
       sessionId: activeSessionId || 'tmp',
@@ -208,7 +273,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       createdAt: now,
     };
     const optimisticAssistant: ReportChatMessage = {
-      id: `tmp-asst-${now}`,
+      id: assistantMessageId,
       sessionId: activeSessionId || 'tmp',
       role: 'assistant',
       content: t('aiReporting.thinking', { defaultValue: 'Thinking…' }),
@@ -232,18 +297,17 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       });
 
       if (!hadSession) {
-        const newSessionId = res.sessionId;
-        setActiveSessionId(newSessionId);
+        setActiveSessionId(res.sessionId);
         setIsNewChat(false);
       }
       if (pendingEmptySessionId && res.sessionId === pendingEmptySessionId) {
         setPendingEmptySessionId('');
       }
-      if (!hadSession) {
-        await loadSessions({ preferredSessionId: res.sessionId });
-      } else {
-        await Promise.all([loadSessions(), loadMessages(res.sessionId, { forceScroll: false })]);
-      }
+
+      await typeAssistantMessage(assistantMessageId, res.text, res.thoughtContent, {
+        sessionId: res.sessionId,
+      });
+      await loadSessions({ preferredSessionId: res.sessionId });
     } catch (err) {
       setError((err as Error).message || t('aiReporting.error'));
       // Reload canonical messages if possible.
@@ -269,11 +333,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setIsLoadingSessions(false);
       setIsLoadingMessages(false);
       setHasNewText(false);
+      setExpandedThoughtMessageIds([]);
       return;
     }
     setActiveSessionId('');
     setIsNewChat(false);
     setMessages([]);
+    setExpandedThoughtMessageIds([]);
     setDraft('');
     void loadSessions();
     setPendingEmptySessionId('');
@@ -626,6 +692,38 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                         >
                           {m.content}
                         </ReactMarkdown>
+                        {m.thoughtContent?.trim() && (
+                          <div className="mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedThoughtMessageIds((prev) =>
+                                  prev.includes(m.id)
+                                    ? prev.filter((id) => id !== m.id)
+                                    : [...prev, m.id],
+                                )
+                              }
+                              className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <i className="fa-regular fa-lightbulb text-slate-500" />
+                                {t('aiReporting.thoughtLabel', { defaultValue: 'Thought process' })}
+                              </span>
+                              <i
+                                className={`fa-solid ${
+                                  expandedThoughtMessageIds.includes(m.id)
+                                    ? 'fa-chevron-up'
+                                    : 'fa-chevron-down'
+                                }`}
+                              />
+                            </button>
+                            {expandedThoughtMessageIds.includes(m.id) && (
+                              <div className="border-t border-slate-200/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
+                                {m.thoughtContent}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
