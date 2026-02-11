@@ -104,18 +104,31 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       opts: { sessionId?: string } = {},
     ) => {
       const speedMs = 8;
-      const chunks = 2;
-      let next = '';
+      const answerChunks = 2;
+      const thoughtChunks = 3;
+      const finalThought = String(thoughtContent || '');
+      let nextAnswer = '';
+      let nextThought = '';
+      let answerIndex = 0;
+      let thoughtIndex = 0;
 
-      for (let i = 0; i < finalContent.length; i += chunks) {
-        next += finalContent.slice(i, i + chunks);
+      while (answerIndex < finalContent.length || thoughtIndex < finalThought.length) {
+        if (answerIndex < finalContent.length) {
+          nextAnswer += finalContent.slice(answerIndex, answerIndex + answerChunks);
+          answerIndex += answerChunks;
+        }
+        if (thoughtIndex < finalThought.length) {
+          nextThought += finalThought.slice(thoughtIndex, thoughtIndex + thoughtChunks);
+          thoughtIndex += thoughtChunks;
+        }
+
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId
               ? {
                   ...m,
-                  content: next,
-                  thoughtContent: thoughtContent || undefined,
+                  content: nextAnswer,
+                  thoughtContent: nextThought || undefined,
                   sessionId: opts.sessionId || m.sessionId,
                 }
               : m,
@@ -135,7 +148,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             ? {
                 ...m,
                 content: finalContent,
-                thoughtContent: thoughtContent || undefined,
+                thoughtContent: finalThought || undefined,
                 sessionId: opts.sessionId || m.sessionId,
               }
             : m,
@@ -680,7 +693,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                           {m.content}
                         </ReactMarkdown>
                         {m.thoughtContent?.trim() && (
-                          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50">
+                          <div className="mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
                             <button
                               type="button"
                               onClick={() =>
@@ -690,10 +703,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     : [...prev, m.id],
                                 )
                               }
-                              className="w-full flex items-center justify-between px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-slate-500 hover:text-slate-700"
+                              className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
                             >
-                              <span>
-                                {t('aiReporting.thoughtLabel', { defaultValue: 'Model thought' })}
+                              <span className="inline-flex items-center gap-2">
+                                <i className="fa-regular fa-lightbulb text-slate-500" />
+                                {t('aiReporting.thoughtLabel', { defaultValue: 'Thought process' })}
                               </span>
                               <i
                                 className={`fa-solid ${
@@ -704,7 +718,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               />
                             </button>
                             {expandedThoughtMessageIds.includes(m.id) && (
-                              <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-600 whitespace-pre-wrap">
+                              <div className="border-t border-slate-200/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
                                 {m.thoughtContent}
                               </div>
                             )}
