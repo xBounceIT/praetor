@@ -55,6 +55,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [pendingEmptySessionId, setPendingEmptySessionId] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<ReportChatSessionSummary | null>(null);
@@ -151,6 +152,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     if (!enableAiReporting) return;
     if (!canSend || isCreatingSession || isSending || isLoadingMessages || isEmptySession) return;
 
+    if (pendingEmptySessionId && sessions.some((session) => session.id === pendingEmptySessionId)) {
+      setIsNewChat(false);
+      setActiveSessionId(pendingEmptySessionId);
+      setHasNewText(false);
+      return;
+    }
+
     setError('');
     setDraft('');
     setHasNewText(false);
@@ -173,6 +181,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setMessages([]);
       setIsNewChat(false);
       setActiveSessionId(session.id);
+      setPendingEmptySessionId(session.id);
       await loadSessions({ preferredSessionId: session.id });
     } catch (err) {
       setError((err as Error).message || t('aiReporting.error'));
@@ -227,6 +236,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         setActiveSessionId(newSessionId);
         setIsNewChat(false);
       }
+      if (pendingEmptySessionId && res.sessionId === pendingEmptySessionId) {
+        setPendingEmptySessionId('');
+      }
       if (!hadSession) {
         await loadSessions({ preferredSessionId: res.sessionId });
       } else {
@@ -264,6 +276,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     setMessages([]);
     setDraft('');
     void loadSessions();
+    setPendingEmptySessionId('');
   }, [currentUserId, enableAiReporting, loadSessions]);
 
   useEffect(() => {
@@ -277,6 +290,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   useEffect(() => {
     if (!activeSessionId) setMessages([]);
   }, [activeSessionId]);
+
+  useEffect(() => {
+    if (!activeSessionId || !pendingEmptySessionId) return;
+    if (activeSessionId !== pendingEmptySessionId) return;
+    if (messages.length > 0) {
+      setPendingEmptySessionId('');
+    }
+  }, [activeSessionId, messages, pendingEmptySessionId]);
 
   const confirmDeleteSession = useCallback((session: ReportChatSessionSummary) => {
     setSessionToDelete(session);
@@ -292,6 +313,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     setError('');
     try {
       await api.reports.archiveSession(sessionToDelete.id);
+      if (sessionToDelete.id === pendingEmptySessionId) {
+        setPendingEmptySessionId('');
+      }
       setIsDeleteConfirmOpen(false);
       setSessionToDelete(null);
       await loadSessions();
@@ -300,10 +324,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     } finally {
       setIsDeletingSession(false);
     }
-  }, [canArchive, isDeletingSession, loadSessions, sessionToDelete, t]);
+  }, [canArchive, isDeletingSession, loadSessions, pendingEmptySessionId, sessionToDelete, t]);
 
   const activeTitle = isNewChat
-    ? t('aiReporting.newChat', { defaultValue: 'New chat' })
+    ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
     : sessions.find((s) => s.id === activeSessionId)?.title || 'AI Reporting';
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
   const sessionOptions = sessions.map((s) => ({ id: s.id, name: toOptionLabel(s) }));
@@ -362,7 +386,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                     : t('aiReporting.selectSession', { defaultValue: 'Select chat' })
                 }
                 displayValue={
-                  isNewChat ? t('aiReporting.newChat', { defaultValue: 'New chat' }) : undefined
+                  isNewChat ? t('aiReporting.newChat', { defaultValue: 'New Chat' }) : undefined
                 }
                 disabled={isLoadingSessions || sessions.length === 0}
                 searchable
@@ -404,7 +428,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                   isCreatingSession ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-plus'
                 } text-xs`}
               />
-              {t('aiReporting.newChat', { defaultValue: 'New chat' })}
+              {t('aiReporting.newChat', { defaultValue: 'New Chat' })}
             </button>
           </div>
         </div>
