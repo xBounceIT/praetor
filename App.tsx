@@ -109,9 +109,6 @@ const TrackerView: React.FC<{
   projectTasks: ProjectTask[];
   onAddEntry: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => void;
   onDeleteEntry: (id: string) => void;
-  insights: string;
-  isInsightLoading: boolean;
-  onRefreshInsights: () => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
@@ -130,8 +127,6 @@ const TrackerView: React.FC<{
   currentUser: User;
   dailyGoal: number;
   onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
-  enableAiInsights: boolean;
-  enableAiSmartEntry: boolean;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
 }> = ({
@@ -141,9 +136,6 @@ const TrackerView: React.FC<{
   projectTasks,
   onAddEntry,
   onDeleteEntry,
-  insights,
-  isInsightLoading,
-  onRefreshInsights,
   onUpdateEntry,
   startOfWeek,
   treatSaturdayAsHoliday,
@@ -156,8 +148,6 @@ const TrackerView: React.FC<{
   currentUser,
   dailyGoal,
   onAddBulkEntries,
-  enableAiInsights,
-  enableAiSmartEntry,
   onRecurringAction,
   defaultLocation = 'remote',
 }) => {
@@ -296,7 +286,6 @@ const TrackerView: React.FC<{
               permissions={permissions}
               dailyGoal={dailyGoal}
               currentDayTotal={dailyTotal}
-              enableAiSmartEntry={enableAiSmartEntry}
               defaultLocation={defaultLocation}
             />
 
@@ -460,31 +449,6 @@ const TrackerView: React.FC<{
               dailyGoal={dailyGoal}
               allowWeekendSelection={allowWeekendSelection}
             />
-
-            {enableAiInsights && (
-              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 hidden lg:block">
-                <h3 className="text-indigo-900 font-bold mb-3 flex items-center gap-2 text-sm">
-                  <i className="fa-solid fa-lightbulb text-indigo-500"></i>
-                  AI Coach
-                </h3>
-                <div className="text-indigo-700 text-xs leading-relaxed whitespace-pre-line mb-4">
-                  {isInsightLoading ? (
-                    <div className="flex items-center gap-2">
-                      <i className="fa-solid fa-circle-notch fa-spin"></i>
-                      Analyzing patterns...
-                    </div>
-                  ) : (
-                    insights
-                  )}
-                </div>
-                <button
-                  onClick={onRefreshInsights}
-                  className="w-full bg-white text-indigo-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                >
-                  Refresh Insights
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -603,8 +567,6 @@ const App: React.FC = () => {
     startOfWeek: 'Monday' as 'Monday' | 'Sunday',
     treatSaturdayAsHoliday: true,
     allowWeekendSelection: true,
-    enableAiInsights: false,
-    enableAiSmartEntry: false,
     enableAiReporting: false,
     geminiApiKey: '',
     aiProvider: 'gemini' as 'gemini' | 'openrouter',
@@ -768,8 +730,6 @@ const App: React.FC = () => {
     const permission = VIEW_PERMISSION_MAP[activeView as View];
     return permission ? hasPermission(currentUser.permissions, permission) : false;
   }, [activeView, currentUser]);
-  const [insights, setInsights] = useState<string>('Logging some time to see patterns!');
-  const [isInsightLoading, setIsInsightLoading] = useState(false);
 
   // Redirect to 404 if route is not accessible
   useEffect(() => {
@@ -2250,22 +2210,6 @@ const App: React.FC = () => {
     }
   };
 
-  const generateInsights = async () => {
-    if (!generalSettings.enableAiInsights) return;
-    if (entries.length < 3) return;
-    setIsInsightLoading(true);
-    const userEntries = entries.filter((e) => e.userId === viewingUserId);
-    try {
-      const { text } = await api.ai.getInsights(userEntries.slice(0, 10));
-      setInsights(text);
-    } catch (err) {
-      console.error('Failed to generate insights:', err);
-      setInsights('Keep up the great work! Consistent tracking is the first step to optimization.');
-    } finally {
-      setIsInsightLoading(false);
-    }
-  };
-
   const getDefaultViewForPermissions = (permissions: string[]): View => {
     const allowedView = VALID_VIEWS.find((view) => {
       const permission = VIEW_PERMISSION_MAP[view];
@@ -2584,9 +2528,6 @@ const App: React.FC = () => {
                 onAddEntry={handleAddEntry}
                 onDeleteEntry={handleDeleteEntry}
                 onUpdateEntry={handleUpdateEntry}
-                insights={insights}
-                isInsightLoading={isInsightLoading}
-                onRefreshInsights={generateInsights}
                 startOfWeek={generalSettings.startOfWeek}
                 treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
                 allowWeekendSelection={generalSettings.allowWeekendSelection}
@@ -2598,8 +2539,6 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 dailyGoal={generalSettings.dailyLimit}
                 onAddBulkEntries={handleAddBulkEntries}
-                enableAiInsights={generalSettings.enableAiInsights}
-                enableAiSmartEntry={generalSettings.enableAiSmartEntry}
                 onRecurringAction={handleRecurringAction}
                 defaultLocation={generalSettings.defaultLocation}
               />

@@ -563,34 +563,6 @@ export const aiApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-
-  parseSmartEntry: (
-    input: string,
-  ): Promise<{
-    project: string;
-    task: string;
-    duration: number;
-    notes?: string;
-  }> =>
-    fetchApi('/ai/parse-smart-entry', {
-      method: 'POST',
-      body: JSON.stringify({ input }),
-    }),
-
-  getInsights: (
-    entries: Array<{
-      date: string;
-      clientName: string;
-      projectName: string;
-      task: string;
-      duration: number;
-      notes?: string;
-    }>,
-  ): Promise<{ text: string }> =>
-    fetchApi('/ai/insights', {
-      method: 'POST',
-      body: JSON.stringify({ entries }),
-    }),
 };
 
 // Reports API

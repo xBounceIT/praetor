@@ -55,8 +55,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>(
     settings.defaultLocation || 'remote',
   );
-  const [enableAiInsights, setEnableAiInsights] = useState(settings.enableAiInsights);
-  const [enableAiSmartEntry, setEnableAiSmartEntry] = useState(settings.enableAiSmartEntry);
   const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openrouter'>(
@@ -79,8 +77,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setTreatSaturdayAsHoliday(settings.treatSaturdayAsHoliday);
     setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
     setDefaultLocation(settings.defaultLocation || 'remote');
-    setEnableAiInsights(settings.enableAiInsights);
-    setEnableAiSmartEntry(settings.enableAiSmartEntry);
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -93,7 +89,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const currentApiKey = aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey;
   const currentModelId = aiProvider === 'gemini' ? geminiModelId : openrouterModelId;
 
-  const isAnyAiEnabled = enableAiInsights || enableAiSmartEntry || enableAiReporting;
+  const isAnyAiEnabled = enableAiReporting;
   const isApiKeyMissing = () => isAnyAiEnabled && !currentApiKey.trim();
   const isModelMissing = () => isAnyAiEnabled && !currentModelId.trim();
   const isModelNotFound = isAnyAiEnabled && modelCheck.state === 'not_found';
@@ -131,8 +127,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         treatSaturdayAsHoliday,
         allowWeekendSelection,
         defaultLocation,
-        enableAiInsights,
-        enableAiSmartEntry,
         enableAiReporting,
         geminiApiKey,
         aiProvider,
@@ -156,8 +150,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     treatSaturdayAsHoliday !== settings.treatSaturdayAsHoliday ||
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     defaultLocation !== (settings.defaultLocation || 'remote') ||
-    enableAiInsights !== settings.enableAiInsights ||
-    enableAiSmartEntry !== settings.enableAiSmartEntry ||
     enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
@@ -337,30 +329,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="max-w-md">
-                  <p className="text-sm font-bold text-slate-800">
-                    {t('general.enableAiCoachLabel')}
-                  </p>
-                  <p className="text-xs text-slate-500 italic leading-relaxed">
-                    {t('general.enableAiCoachDescription')}
-                  </p>
-                </div>
-                <Toggle checked={enableAiInsights} onChange={setEnableAiInsights} />
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="max-w-md">
-                  <p className="text-sm font-bold text-slate-800">
-                    {t('general.enableAiSmartEntryLabel')}
-                  </p>
-                  <p className="text-xs text-slate-500 italic leading-relaxed">
-                    {t('general.enableAiSmartEntryDescription')}
-                  </p>
-                </div>
-                <Toggle checked={enableAiSmartEntry} onChange={setEnableAiSmartEntry} />
-              </div>
-
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="max-w-md">
                   <p className="text-sm font-bold text-slate-800">

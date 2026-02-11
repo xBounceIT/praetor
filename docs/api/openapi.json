@@ -686,319 +686,6 @@
         }
       }
     },
-    "/api/ai/parse-smart-entry": {
-      "post": {
-        "summary": "Parse natural language time entry into structured fields",
-        "tags": [
-          "ai"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "input": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "input"
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "project": {
-                      "type": "string"
-                    },
-                    "task": {
-                      "type": "string"
-                    },
-                    "duration": {
-                      "type": "number"
-                    },
-                    "notes": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "project",
-                    "task",
-                    "duration"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/ai/insights": {
-      "post": {
-        "summary": "Generate short productivity insights from recent time entries",
-        "tags": [
-          "ai"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "entries": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "date": {
-                          "type": "string"
-                        },
-                        "clientName": {
-                          "type": "string"
-                        },
-                        "projectName": {
-                          "type": "string"
-                        },
-                        "task": {
-                          "type": "string"
-                        },
-                        "duration": {
-                          "type": "number"
-                        },
-                        "notes": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "date",
-                        "clientName",
-                        "projectName",
-                        "task",
-                        "duration"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "entries"
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/users/": {
       "get": {
         "summary": "List users",
@@ -6435,12 +6122,6 @@
                     "treatSaturdayAsHoliday": {
                       "type": "boolean"
                     },
-                    "enableAiInsights": {
-                      "type": "boolean"
-                    },
-                    "enableAiSmartEntry": {
-                      "type": "boolean"
-                    },
                     "enableAiReporting": {
                       "type": "boolean"
                     },
@@ -6471,8 +6152,6 @@
                     "dailyLimit",
                     "startOfWeek",
                     "treatSaturdayAsHoliday",
-                    "enableAiInsights",
-                    "enableAiSmartEntry",
                     "enableAiReporting",
                     "geminiApiKey",
                     "aiProvider",
@@ -6601,12 +6280,6 @@
                   "treatSaturdayAsHoliday": {
                     "type": "boolean"
                   },
-                  "enableAiInsights": {
-                    "type": "boolean"
-                  },
-                  "enableAiSmartEntry": {
-                    "type": "boolean"
-                  },
                   "enableAiReporting": {
                     "type": "boolean"
                   },
@@ -6656,12 +6329,6 @@
                     "treatSaturdayAsHoliday": {
                       "type": "boolean"
                     },
-                    "enableAiInsights": {
-                      "type": "boolean"
-                    },
-                    "enableAiSmartEntry": {
-                      "type": "boolean"
-                    },
                     "enableAiReporting": {
                       "type": "boolean"
                     },
@@ -6692,8 +6359,6 @@
                     "dailyLimit",
                     "startOfWeek",
                     "treatSaturdayAsHoliday",
-                    "enableAiInsights",
-                    "enableAiSmartEntry",
                     "enableAiReporting",
                     "geminiApiKey",
                     "aiProvider",

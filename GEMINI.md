@@ -8,13 +8,13 @@ The project follows a full-stack architecture with a React-based frontend and a 
 
 - **Frontend:** A Single Page Application (SPA) built with React 19, TypeScript, and Vite. Styling is handled via Tailwind CSS, and data visualization uses Recharts.
 - **Backend:** An API server built with Fastify, using PostgreSQL as the primary relational database and Redis for caching.
-- **AI Integration:** Utilizes Google Gemini API (`@google/genai`) for "Magic Input" time entries and AI-driven productivity insights.
+- **AI Integration:** Supports AI Reporting (Gemini/OpenRouter, server-side provider calls) for generating insights from business data.
 - **Deployment:** Containerized using Docker and Orchestrated via Docker Compose.
 
 ## Key Modules
 
 - **Timesheets:** 
-    - **Tracker:** Manual and AI-powered ("Magic Input") time logging.
+    - **Tracker:** Manual time logging.
     - **Recurring Manager:** Automation for recurring tasks.
 - **CRM (Customer Relationship Management):** 
     - **Clients:** Manage client details and associations.

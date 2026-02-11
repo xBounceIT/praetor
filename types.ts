@@ -59,8 +59,6 @@ export interface GeneralSettings {
   dailyLimit: number;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
-  enableAiInsights: boolean;
-  enableAiSmartEntry: boolean;
   enableAiReporting: boolean;
   geminiApiKey?: string;
   aiProvider?: 'gemini' | 'openrouter';
