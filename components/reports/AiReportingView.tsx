@@ -10,6 +10,7 @@ import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StatusBadge from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -63,6 +64,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewText, setHasNewText] = useState(false);
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
+  const [copiedMessageId, setCopiedMessageId] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
@@ -580,6 +582,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     controller.abort();
   };
 
+  const handleCopy = useCallback(async (messageId: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedMessageId(messageId);
+    setTimeout(() => setCopiedMessageId(''), 1500);
+  }, []);
+
   useEffect(() => {
     if (!currentUserId) return;
     if (!enableAiReporting) {
@@ -828,14 +836,64 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 {messages.map((m) => (
                   <div
                     key={m.id}
-                    className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={`group w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     {m.role === 'user' ? (
-                      <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
-                        {m.content}
+                      <div className="flex items-start gap-1.5">
+                        <Tooltip
+                          label={
+                            copiedMessageId === m.id
+                              ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
+                              : t('common:buttons.copy', { defaultValue: 'Copy' })
+                          }
+                        >
+                          {() => (
+                            <button
+                              type="button"
+                              onClick={() => void handleCopy(m.id, m.content)}
+                              className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              <i
+                                className={
+                                  copiedMessageId === m.id
+                                    ? 'fa-solid fa-check text-green-500'
+                                    : 'fa-regular fa-copy'
+                                }
+                              />
+                            </button>
+                          )}
+                        </Tooltip>
+                        <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
+                          {m.content}
+                        </div>
                       </div>
                     ) : (
-                      <div className="w-full text-sm leading-relaxed text-slate-800">
+                      <div className="w-full text-sm leading-relaxed text-slate-800 relative">
+                        <div className="absolute -top-1 right-0 opacity-0 group-hover:opacity-100 transition-all">
+                          <Tooltip
+                            label={
+                              copiedMessageId === m.id
+                                ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
+                                : t('common:buttons.copy', { defaultValue: 'Copy' })
+                            }
+                          >
+                            {() => (
+                              <button
+                                type="button"
+                                onClick={() => void handleCopy(m.id, m.content)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                              >
+                                <i
+                                  className={
+                                    copiedMessageId === m.id
+                                      ? 'fa-solid fa-check text-green-500'
+                                      : 'fa-regular fa-copy'
+                                  }
+                                />
+                              </button>
+                            )}
+                          </Tooltip>
+                        </div>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkBreaks]}
                           components={{
