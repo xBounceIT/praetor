@@ -94,6 +94,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     // Validation
     const trimmedName = formData.name?.trim() || '';
     const trimmedSupplierCode = formData.supplierCode?.trim() || '';
+    const trimmedVatNumber = formData.vatNumber?.trim() || '';
     const newErrors: Record<string, string> = {};
 
     if (!trimmedName) {
@@ -114,6 +115,10 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       }
     }
 
+    if (!editingSupplier && !trimmedVatNumber) {
+      newErrors.vatNumber = t('crm:suppliers.vatRequired');
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -123,6 +128,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       ...formData,
       name: trimmedName,
       supplierCode: trimmedSupplierCode,
+      vatNumber: trimmedVatNumber,
     };
 
     try {
@@ -421,10 +427,18 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                   <input
                     type="text"
                     value={formData.vatNumber}
-                    onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vatNumber: e.target.value });
+                      if (errors.vatNumber) setErrors({ ...errors, vatNumber: '' });
+                    }}
                     placeholder={t('crm:suppliers.vatPlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                      errors.vatNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                    }`}
                   />
+                  {errors.vatNumber && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.vatNumber}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">

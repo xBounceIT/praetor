@@ -51,7 +51,7 @@ const supplierCreateBodySchema = {
     paymentTerms: { type: 'string' },
     notes: { type: 'string' },
   },
-  required: ['name'],
+  required: ['name', 'vatNumber'],
 } as const;
 
 const supplierUpdateBodySchema = {
@@ -170,7 +170,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const addressResult = optionalNonEmptyString(address, 'address');
       if (!addressResult.ok) return badRequest(reply, addressResult.message);
 
-      const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
+      const vatNumberResult = requireNonEmptyString(vatNumber, 'vatNumber');
       if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
 
       const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
