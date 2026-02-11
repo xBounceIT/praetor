@@ -354,7 +354,7 @@ const buildBusinessDataset = async (
 
   if (canListClients) {
     const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
-    const res = canViewAllClients
+    const countRes = canViewAllClients
       ? await query('SELECT COUNT(*) as count FROM clients')
       : await query(
           `SELECT COUNT(*) as count
@@ -363,7 +363,26 @@ const buildBusinessDataset = async (
            WHERE uc.user_id = $1`,
           [viewerId],
         );
-    dataset.clients = { count: toNumber(res.rows[0]?.count) };
+
+    const listRes = canViewAllClients
+      ? await query(
+          `SELECT c.id, c.name
+           FROM clients c
+           ORDER BY c.name ASC`,
+        )
+      : await query(
+          `SELECT DISTINCT c.id, c.name
+           FROM clients c
+           JOIN user_clients uc ON uc.client_id = c.id
+           WHERE uc.user_id = $1
+           ORDER BY c.name ASC`,
+          [viewerId],
+        );
+
+    dataset.clients = {
+      count: toNumber(countRes.rows[0]?.count),
+      items: listRes.rows.map((r) => ({ id: String(r.id || ''), name: String(r.name || '') })),
+    };
   }
 
   // Projects (scoped if manage_all not present)
@@ -777,8 +796,8 @@ const buildBusinessDataset = async (
     'quotes',
     'tasks',
     'projects',
-    'clients',
     'timesheets',
+    'clients',
   ];
 
   for (const key of dropOrder) {
