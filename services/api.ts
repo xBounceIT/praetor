@@ -651,11 +651,14 @@ export const reportsApi = {
   getSessionMessages: (sessionId: string): Promise<ReportChatMessage[]> =>
     fetchApi<ReportChatMessage[]>(`/reports/ai-reporting/sessions/${sessionId}/messages`),
 
-  chat: (data: {
-    sessionId?: string;
-    message: string;
-    language?: string;
-  }): Promise<{
+  chat: (
+    data: {
+      sessionId?: string;
+      message: string;
+      language?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<{
     sessionId: string;
     text: string;
     thoughtContent?: string;
@@ -663,6 +666,7 @@ export const reportsApi = {
     fetchApi('/reports/ai-reporting/chat', {
       method: 'POST',
       body: JSON.stringify(data),
+      signal,
     }),
 
   chatStream: async (
@@ -672,6 +676,7 @@ export const reportsApi = {
       language?: string;
     },
     handlers: ReportChatStreamHandlers = {},
+    signal?: AbortSignal,
   ): Promise<ReportChatStreamDoneEvent> => {
     const response = await fetch(`${API_BASE}/reports/ai-reporting/chat/stream`, {
       method: 'POST',
@@ -680,6 +685,7 @@ export const reportsApi = {
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       body: JSON.stringify(data),
+      signal,
     });
 
     const newToken = response.headers.get('x-auth-token');

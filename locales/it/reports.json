@@ -20,6 +20,7 @@
     "deleteChatConfirm": "Questo rimuovera' \"{{name}}\" dalla cronologia chat.",
     "goToBottom": "Vai in fondo",
     "error": "Si e' verificato un errore.",
-    "thoughtLabel": "Processo di pensiero"
+    "thoughtLabel": "Processo di pensiero",
+    "stop": "Ferma"
   }
 }

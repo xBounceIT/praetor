@@ -67,6 +67,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
   const isAtBottomRef = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
 
   const canSend =
     enableAiReporting &&
@@ -282,6 +283,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     const content = draft.trim();
     if (!content || isSending || !canSend) return;
 
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
     setIsSending(true);
     setError('');
     setDraft('');
@@ -413,6 +417,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               }
             },
           },
+          abortController.signal,
         );
 
         syncAssistantSession(streamed.sessionId);
@@ -441,7 +446,16 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         );
         await loadSessions({ preferredSessionId: streamed.sessionId });
       } catch (streamErr) {
-        if (!streamStarted && !streamProducedOutput) {
+        if ((streamErr as Error).name === 'AbortError') {
+          // User cancelled — reload canonical messages without showing an error.
+          const reloadId = resolvedSessionId || activeSessionId;
+          if (reloadId) {
+            await loadMessages(reloadId, { forceScroll: false });
+            await loadSessions({ preferredSessionId: reloadId });
+          } else {
+            setMessages([]);
+          }
+        } else if (!streamStarted && !streamProducedOutput) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMessageId
@@ -449,11 +463,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 : m,
             ),
           );
-          const fallback = await api.reports.chat({
-            sessionId: activeSessionId || undefined,
-            message: content,
-            language: i18n.language,
-          });
+          const fallback = await api.reports.chat(
+            {
+              sessionId: activeSessionId || undefined,
+              message: content,
+              language: i18n.language,
+            },
+            abortController.signal,
+          );
 
           if (!hadSession) {
             setActiveSessionId(fallback.sessionId);
@@ -476,16 +493,30 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         }
       }
     } catch (err) {
-      setError((err as Error).message || t('aiReporting.error'));
-      // Reload canonical messages if possible.
-      if (activeSessionId) {
-        await loadMessages(activeSessionId, { forceScroll: false });
+      if ((err as Error).name === 'AbortError') {
+        // User cancelled — reload canonical messages without showing an error.
+        if (activeSessionId) {
+          await loadMessages(activeSessionId, { forceScroll: false });
+        } else {
+          setMessages([]);
+        }
       } else {
-        setMessages([]);
+        setError((err as Error).message || t('aiReporting.error'));
+        // Reload canonical messages if possible.
+        if (activeSessionId) {
+          await loadMessages(activeSessionId, { forceScroll: false });
+        } else {
+          setMessages([]);
+        }
       }
     } finally {
+      abortRef.current = null;
       setIsSending(false);
     }
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
   };
 
   useEffect(() => {
@@ -965,19 +996,30 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                         className="flex-1 resize-none bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400 px-2 py-2 max-h-40 disabled:cursor-not-allowed"
                       />
 
-                      <button
-                        type="button"
-                        onClick={() => void handleSend()}
-                        disabled={!canSend || isSending || !draft.trim()}
-                        className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                          !canSend || isSending || !draft.trim()
-                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                            : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
-                        }`}
-                        aria-label="Send"
-                      >
-                        <i className="fa-solid fa-arrow-up text-sm" />
-                      </button>
+                      {isSending ? (
+                        <button
+                          type="button"
+                          onClick={handleStop}
+                          className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
+                          aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
+                        >
+                          <i className="fa-solid fa-stop text-sm" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleSend()}
+                          disabled={!canSend || !draft.trim()}
+                          className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                            !canSend || !draft.trim()
+                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                              : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
+                          }`}
+                          aria-label="Send"
+                        >
+                          <i className="fa-solid fa-arrow-up text-sm" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
