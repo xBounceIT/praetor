@@ -847,7 +847,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 </div>
               )}
 
-              <div className="space-y-5">
+              <div className="space-y-7">
                 {messages.map((m) => (
                   <div
                     key={m.id}
@@ -883,32 +883,39 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                         </div>
                       </div>
                     ) : (
-                      <div className="w-full text-sm leading-relaxed text-slate-800 relative">
-                        <div className="absolute -top-1 right-0 opacity-0 group-hover:opacity-100 transition-all">
-                          <Tooltip
-                            label={
-                              copiedMessageId === m.id
-                                ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
-                                : t('common:buttons.copy', { defaultValue: 'Copy' })
-                            }
-                          >
-                            {() => (
-                              <button
-                                type="button"
-                                onClick={() => void handleCopy(m.id, m.content)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
-                              >
-                                <i
-                                  className={
-                                    copiedMessageId === m.id
-                                      ? 'fa-solid fa-check text-green-500'
-                                      : 'fa-regular fa-copy'
-                                  }
-                                />
-                              </button>
+                      <div className="w-full text-sm leading-relaxed text-slate-800">
+                        {m.thoughtContent?.trim() && (
+                          <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedThoughtMessageIds((prev) =>
+                                  prev.includes(m.id)
+                                    ? prev.filter((id) => id !== m.id)
+                                    : [...prev, m.id],
+                                )
+                              }
+                              className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <i className="fa-regular fa-lightbulb text-slate-500" />
+                                {t('aiReporting.thoughtLabel', { defaultValue: 'Thought process' })}
+                              </span>
+                              <i
+                                className={`fa-solid ${
+                                  expandedThoughtMessageIds.includes(m.id)
+                                    ? 'fa-chevron-up'
+                                    : 'fa-chevron-down'
+                                }`}
+                              />
+                            </button>
+                            {expandedThoughtMessageIds.includes(m.id) && (
+                              <div className="border-t border-slate-200/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
+                                {m.thoughtContent}
+                              </div>
                             )}
-                          </Tooltip>
-                        </div>
+                          </div>
+                        )}
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkBreaks]}
                           components={{
@@ -1033,38 +1040,31 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                         >
                           {m.content}
                         </ReactMarkdown>
-                        {m.thoughtContent?.trim() && (
-                          <div className="mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedThoughtMessageIds((prev) =>
-                                  prev.includes(m.id)
-                                    ? prev.filter((id) => id !== m.id)
-                                    : [...prev, m.id],
-                                )
-                              }
-                              className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-                            >
-                              <span className="inline-flex items-center gap-2">
-                                <i className="fa-regular fa-lightbulb text-slate-500" />
-                                {t('aiReporting.thoughtLabel', { defaultValue: 'Thought process' })}
-                              </span>
-                              <i
-                                className={`fa-solid ${
-                                  expandedThoughtMessageIds.includes(m.id)
-                                    ? 'fa-chevron-up'
-                                    : 'fa-chevron-down'
-                                }`}
-                              />
-                            </button>
-                            {expandedThoughtMessageIds.includes(m.id) && (
-                              <div className="border-t border-slate-200/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
-                                {m.thoughtContent}
-                              </div>
+                        <div className="mt-2 flex justify-end opacity-0 transition-all pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto">
+                          <Tooltip
+                            label={
+                              copiedMessageId === m.id
+                                ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
+                                : t('common:buttons.copy', { defaultValue: 'Copy' })
+                            }
+                          >
+                            {() => (
+                              <button
+                                type="button"
+                                onClick={() => void handleCopy(m.id, m.content)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                              >
+                                <i
+                                  className={
+                                    copiedMessageId === m.id
+                                      ? 'fa-solid fa-check text-green-500'
+                                      : 'fa-regular fa-copy'
+                                  }
+                                />
+                              </button>
                             )}
-                          </div>
-                        )}
+                          </Tooltip>
+                        </div>
                       </div>
                     )}
                   </div>
