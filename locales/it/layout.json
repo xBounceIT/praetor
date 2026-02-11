@@ -19,7 +19,6 @@
   "routes": {
     "timeTracker": "Time Tracker",
     "tracker": "Tracker",
-
     "recurring": "Ricorrenti",
     "recurringTasks": "Attività Ricorrenti",
     "tasks": "Attività",
@@ -49,7 +48,8 @@
     "internalEmployees": "Dipendenti Interni",
     "externalEmployees": "Dipendenti Esterni",
     "roles": "Ruoli",
-    "aiReporting": "AI Reporting"
+    "aiReporting": "AI Reporting",
+    "logs": "Log"
   },
   "menu": {
     "settings": "Impostazioni",
@@ -87,7 +87,8 @@
     "externalEmployees": "Dipendenti Esterni",
     "emailSettings": "Impostazioni Email",
     "roles": "Ruoli",
-    "aiReporting": "AI Reporting"
+    "aiReporting": "AI Reporting",
+    "logs": "Log di Sistema"
   },
   "notifications": {
     "title": "Notifiche",

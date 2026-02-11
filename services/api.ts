@@ -52,6 +52,7 @@ const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise
 
 // Types for API responses
 import type {
+  AuditLogEntry,
   Client,
   ClientsOrder,
   ClientsOrderItem,
@@ -773,6 +774,10 @@ export const notificationsApi = {
   delete: (id: string): Promise<void> => fetchApi(`/notifications/${id}`, { method: 'DELETE' }),
 };
 
+export const logsApi = {
+  listAudit: (): Promise<AuditLogEntry[]> => fetchApi('/logs/audit'),
+};
+
 // Email API
 export const emailApi = {
   getConfig: (): Promise<EmailConfig> => fetchApi('/email/config'),
@@ -826,6 +831,7 @@ export default {
   generalSettings: generalSettingsApi,
   email: emailApi,
   roles: rolesApi,
+  logs: logsApi,
   setAuthToken,
   getAuthToken,
 };

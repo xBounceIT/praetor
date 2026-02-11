@@ -8,7 +8,10 @@
     "renameRoleSubtitle": "Aggiorna il nome visualizzato del ruolo.",
     "editPermissions": "Modifica permessi",
     "deleteRole": "Elimina ruolo",
-    "badges": { "system": "Sistema", "admin": "Admin" },
+    "badges": {
+      "system": "Sistema",
+      "admin": "Admin"
+    },
     "allPermissions": "Tutti i permessi",
     "permissionCount": "{{count}} permessi",
     "permissions": "Permessi",
@@ -66,7 +69,8 @@
       "work_units": "Unità di Lavoro",
       "work_units_all": "Unità di Lavoro (Tutte)",
       "email": "Email",
-      "roles": "Ruoli"
+      "roles": "Ruoli",
+      "logs": "Log"
     },
     "settings": "Impostazioni",
     "docs": {
@@ -74,5 +78,23 @@
       "frontend": "Documentazione Frontend"
     },
     "notifications": "Notifiche"
+  },
+  "logs": {
+    "title": "Logs",
+    "subtitle": "Monitora gli accessi al sistema tramite audit log.",
+    "tabs": {
+      "audit": "Audit"
+    },
+    "columns": {
+      "user": "Utente",
+      "username": "Username",
+      "ip": "IP",
+      "timestamp": "Timestamp"
+    },
+    "loading": "Caricamento log in corso...",
+    "empty": "Nessun accesso registrato.",
+    "errors": {
+      "loadFailed": "Impossibile caricare i log di audit."
+    }
   }
 }

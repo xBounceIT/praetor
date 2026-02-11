@@ -32,6 +32,7 @@ const moduleRoutes: Record<string, View[]> = {
     'administration/work-units',
     'administration/roles',
     'administration/email',
+    'administration/logs',
   ],
 };
 
@@ -522,6 +523,19 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
               />
             )}
+
+            {canAccessView('administration/logs') && (
+              <NavItem
+                icon="fa-clipboard-list"
+                label={t('routes.logs')}
+                active={activeView === 'administration/logs'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('administration/logs');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'reports':
@@ -667,33 +681,35 @@ const Layout: React.FC<LayoutProps> = ({
                   ? t('titles.generalAdmin')
                   : activeView === 'administration/roles'
                     ? t('titles.roles')
-                    : activeView === 'projects/manage'
-                      ? t('titles.projects')
-                      : activeView === 'projects/tasks'
-                        ? t('titles.tasks')
-                        : activeView === 'catalog/external-listing'
-                          ? t('titles.externalProducts')
-                          : activeView === 'catalog/special-bids'
-                            ? t('titles.externalListing')
-                            : activeView === 'suppliers/manage'
-                              ? t('titles.suppliers')
-                              : activeView === 'suppliers/quotes'
-                                ? t('titles.supplierQuotes')
-                                : activeView === 'hr/internal'
-                                  ? t('titles.internalEmployees')
-                                  : activeView === 'hr/external'
-                                    ? t('titles.externalEmployees')
-                                    : t(
-                                        `routes.${activeView
-                                          .split('/')
-                                          .pop()
-                                          ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
-                                        {
-                                          defaultValue:
-                                            activeView.split('/').pop()?.replace('-', ' ') ||
-                                            activeView,
-                                        },
-                                      )}
+                    : activeView === 'administration/logs'
+                      ? t('titles.logs')
+                      : activeView === 'projects/manage'
+                        ? t('titles.projects')
+                        : activeView === 'projects/tasks'
+                          ? t('titles.tasks')
+                          : activeView === 'catalog/external-listing'
+                            ? t('titles.externalProducts')
+                            : activeView === 'catalog/special-bids'
+                              ? t('titles.externalListing')
+                              : activeView === 'suppliers/manage'
+                                ? t('titles.suppliers')
+                                : activeView === 'suppliers/quotes'
+                                  ? t('titles.supplierQuotes')
+                                  : activeView === 'hr/internal'
+                                    ? t('titles.internalEmployees')
+                                    : activeView === 'hr/external'
+                                      ? t('titles.externalEmployees')
+                                      : t(
+                                          `routes.${activeView
+                                            .split('/')
+                                            .pop()
+                                            ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
+                                          {
+                                            defaultValue:
+                                              activeView.split('/').pop()?.replace('-', ' ') ||
+                                              activeView,
+                                          },
+                                        )}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">

@@ -70,6 +70,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'administration.work_units_all', actions: VIEW_ONLY, isScope: true },
   { id: 'administration.email', actions: VIEW_UPDATE },
   { id: 'administration.roles', actions: CRUD },
+  { id: 'administration.logs', actions: VIEW_ONLY },
 
   // Standalone
   { id: 'settings', actions: VIEW_UPDATE },

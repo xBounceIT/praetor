@@ -290,6 +290,7 @@ export type View =
   | 'administration/work-units'
   | 'administration/email'
   | 'administration/roles'
+  | 'administration/logs'
   // CRM module
   | 'crm/clients'
   | 'crm/suppliers'
@@ -329,6 +330,15 @@ export interface ReportChatSessionSummary {
   title: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  username: string;
+  ipAddress: string;
+  createdAt: number;
 }
 
 export interface ReportChatMessage {

@@ -8,7 +8,10 @@
     "renameRoleSubtitle": "Update the role display name.",
     "editPermissions": "Edit permissions",
     "deleteRole": "Delete role",
-    "badges": { "system": "System", "admin": "Admin" },
+    "badges": {
+      "system": "System",
+      "admin": "Admin"
+    },
     "allPermissions": "All permissions",
     "permissionCount": "{{count}} permissions",
     "permissions": "Permissions",
@@ -66,7 +69,8 @@
       "work_units": "Work Units",
       "work_units_all": "Work Units (All)",
       "email": "Email",
-      "roles": "Roles"
+      "roles": "Roles",
+      "logs": "Logs"
     },
     "settings": "Settings",
     "docs": {
@@ -74,5 +78,23 @@
       "frontend": "Frontend Documentation"
     },
     "notifications": "Notifications"
+  },
+  "logs": {
+    "title": "Logs",
+    "subtitle": "Monitor system access through audit logs.",
+    "tabs": {
+      "audit": "Audit"
+    },
+    "columns": {
+      "user": "User",
+      "username": "Username",
+      "ip": "IP",
+      "timestamp": "Timestamp"
+    },
+    "loading": "Loading logs...",
+    "empty": "No access entries found.",
+    "errors": {
+      "loadFailed": "Unable to load audit logs."
+    }
   }
 }

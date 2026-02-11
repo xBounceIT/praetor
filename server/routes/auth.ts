@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, generateToken } from '../middleware/auth.ts';
@@ -57,6 +58,17 @@ const loginResponseSchema = {
   },
   required: ['token', 'user'],
 } as const;
+
+const getRequestIpAddress = (request: FastifyRequest) => {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length) {
+    return forwarded.split(',')[0]?.trim() || request.ip || 'unknown';
+  }
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0] || request.ip || 'unknown';
+  }
+  return request.ip || 'unknown';
+};
 
 const getAvailableRolesForUser = async (userId: string) => {
   try {
@@ -153,6 +165,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const token = generateToken(user.id, Date.now(), user.role);
       const permissions = await getRolePermissions(user.role);
+
+      await query('INSERT INTO audit_logs (id, user_id, ip_address) VALUES ($1, $2, $3)', [
+        `audit-${randomUUID()}`,
+        user.id,
+        getRequestIpAddress(request),
+      ]);
       const availableRoles = await getAvailableRolesForUser(user.id);
       const effectiveAvailableRoles =
         availableRoles.length > 0

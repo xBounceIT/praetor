@@ -5,6 +5,7 @@ import ClientsOrdersView from './components/accounting/ClientsOrdersView';
 import AuthSettings from './components/administration/AuthSettings';
 import EmailSettings from './components/administration/EmailSettings';
 import GeneralSettings from './components/administration/GeneralSettings';
+import LogsView from './components/administration/LogsView';
 import RolesView from './components/administration/RolesView';
 import UserManagement from './components/administration/UserManagement';
 import ClientsView from './components/CRM/ClientsView';
@@ -620,6 +621,7 @@ const App: React.FC = () => {
       'administration/authentication',
       'administration/general',
       'administration/email',
+      'administration/logs',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -669,6 +671,7 @@ const App: React.FC = () => {
       'administration/authentication',
       'administration/general',
       'administration/email',
+      'administration/logs',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -2825,6 +2828,9 @@ const App: React.FC = () => {
                   onDeleteRole={handleDeleteRole}
                 />
               )}
+
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/logs']) &&
+              activeView === 'administration/logs' && <LogsView />}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/email']) &&
               activeView === 'administration/email' && (
