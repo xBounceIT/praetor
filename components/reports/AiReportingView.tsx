@@ -288,6 +288,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
     const now = Date.now();
     const assistantMessageId = `tmp-asst-${now}`;
+    const thinkingLabel = t('aiReporting.thinking', { defaultValue: 'Thinking…' });
     const optimisticUser: ReportChatMessage = {
       id: `tmp-user-${now}`,
       sessionId: activeSessionId || 'tmp',
@@ -300,7 +301,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       sessionId: activeSessionId || 'tmp',
       role: 'assistant',
       content: '',
-      thoughtContent: t('aiReporting.thinking', { defaultValue: 'Thinking…' }),
+      thoughtContent: thinkingLabel,
       createdAt: now + 1,
     };
     setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
@@ -317,24 +318,163 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
     try {
       const hadSession = Boolean(activeSessionId);
-      const res = await api.reports.chat({
-        sessionId: activeSessionId || undefined,
-        message: content,
-        language: i18n.language,
-      });
+      let resolvedSessionId = activeSessionId || '';
+      let thoughtDoneClosed = false;
+      let streamStarted = false;
+      let streamProducedOutput = false;
 
-      if (!hadSession) {
-        setActiveSessionId(res.sessionId);
-        setIsNewChat(false);
-      }
-      if (pendingEmptySessionId && res.sessionId === pendingEmptySessionId) {
-        setPendingEmptySessionId('');
-      }
+      const syncAssistantSession = (sessionId: string) => {
+        if (!sessionId) return;
+        resolvedSessionId = sessionId;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMessageId ? { ...m, sessionId } : m)),
+        );
+      };
 
-      await typeAssistantMessage(assistantMessageId, res.text, res.thoughtContent, {
-        sessionId: res.sessionId,
-      });
-      await loadSessions({ preferredSessionId: res.sessionId });
+      const closeThoughtPanel = () => {
+        if (thoughtDoneClosed) return;
+        thoughtDoneClosed = true;
+        setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
+      };
+
+      try {
+        const streamed = await api.reports.chatStream(
+          {
+            sessionId: activeSessionId || undefined,
+            message: content,
+            language: i18n.language,
+          },
+          {
+            onStart: ({ sessionId }) => {
+              streamStarted = true;
+              syncAssistantSession(sessionId);
+              if (!hadSession && sessionId) {
+                setActiveSessionId(sessionId);
+                setIsNewChat(false);
+              }
+              if (pendingEmptySessionId && sessionId === pendingEmptySessionId) {
+                setPendingEmptySessionId('');
+              }
+            },
+            onThoughtDelta: (delta) => {
+              if (!delta) return;
+              streamProducedOutput = true;
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== assistantMessageId) return m;
+                  const previousThought = String(m.thoughtContent || '');
+                  const nextThought =
+                    previousThought === thinkingLabel ? delta : `${previousThought}${delta}`;
+                  return {
+                    ...m,
+                    thoughtContent: nextThought,
+                    sessionId: resolvedSessionId || m.sessionId,
+                  };
+                }),
+              );
+              if (isAtBottomRef.current) {
+                requestAnimationFrame(scrollToBottom);
+              } else {
+                setHasNewText(true);
+              }
+            },
+            onThoughtDone: () => {
+              closeThoughtPanel();
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId && m.thoughtContent === thinkingLabel
+                    ? { ...m, thoughtContent: undefined }
+                    : m,
+                ),
+              );
+            },
+            onAnswerDelta: (delta) => {
+              if (!delta) return;
+              streamProducedOutput = true;
+              closeThoughtPanel();
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== assistantMessageId) return m;
+                  const nextContent = `${m.content}${delta}`;
+                  const cleanedThought =
+                    m.thoughtContent === thinkingLabel ? undefined : m.thoughtContent;
+                  return {
+                    ...m,
+                    content: nextContent,
+                    thoughtContent: cleanedThought,
+                    sessionId: resolvedSessionId || m.sessionId,
+                  };
+                }),
+              );
+              if (isAtBottomRef.current) {
+                requestAnimationFrame(scrollToBottom);
+              } else {
+                setHasNewText(true);
+              }
+            },
+          },
+        );
+
+        syncAssistantSession(streamed.sessionId);
+        closeThoughtPanel();
+
+        if (!hadSession && streamed.sessionId) {
+          setActiveSessionId(streamed.sessionId);
+          setIsNewChat(false);
+        }
+        if (pendingEmptySessionId && streamed.sessionId === pendingEmptySessionId) {
+          setPendingEmptySessionId('');
+        }
+
+        const finalThought = String(streamed.thoughtContent || '').trim();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: streamed.text,
+                  thoughtContent: finalThought || undefined,
+                  sessionId: streamed.sessionId || m.sessionId,
+                }
+              : m,
+          ),
+        );
+        await loadSessions({ preferredSessionId: streamed.sessionId });
+      } catch (streamErr) {
+        if (!streamStarted && !streamProducedOutput) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: '', thoughtContent: thinkingLabel }
+                : m,
+            ),
+          );
+          const fallback = await api.reports.chat({
+            sessionId: activeSessionId || undefined,
+            message: content,
+            language: i18n.language,
+          });
+
+          if (!hadSession) {
+            setActiveSessionId(fallback.sessionId);
+            setIsNewChat(false);
+          }
+          if (pendingEmptySessionId && fallback.sessionId === pendingEmptySessionId) {
+            setPendingEmptySessionId('');
+          }
+
+          await typeAssistantMessage(assistantMessageId, fallback.text, fallback.thoughtContent, {
+            sessionId: fallback.sessionId,
+          });
+          setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
+          await loadSessions({ preferredSessionId: fallback.sessionId });
+        } else {
+          setError((streamErr as Error).message || t('aiReporting.error'));
+          if (resolvedSessionId) {
+            await loadMessages(resolvedSessionId, { forceScroll: false });
+          }
+        }
+      }
     } catch (err) {
       setError((err as Error).message || t('aiReporting.error'));
       // Reload canonical messages if possible.

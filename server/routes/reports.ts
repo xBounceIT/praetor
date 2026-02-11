@@ -70,6 +70,18 @@ const normalizeGeminiModelPath = (modelId: string) => {
 };
 
 type AiTextResult = { text: string; thoughtContent?: string };
+type AiStreamCallbacks = {
+  onThoughtDelta?: (delta: string) => Promise<void> | void;
+  onAnswerDelta?: (delta: string) => Promise<void> | void;
+  onThoughtDone?: () => Promise<void> | void;
+};
+
+type ParsedSseEvent = { event: string; data: string };
+type StreamReader = {
+  read: () => Promise<{ done: boolean; value?: Uint8Array }>;
+  releaseLock?: () => void;
+};
+type ReadableSseBody = { getReader?: () => StreamReader };
 
 const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
   const p = payload as {
@@ -109,6 +121,68 @@ const openrouterTextFromCompletion = (payload: unknown): AiTextResult => {
   const thoughtContent = String(message?.reasoning_content || message?.reasoning || '').trim();
 
   return { text, thoughtContent: thoughtContent || undefined };
+};
+
+const parseSseEventBlock = (rawBlock: string): ParsedSseEvent | null => {
+  const lines = rawBlock.replace(/\r/g, '').split('\n');
+  let event = 'message';
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (!line || line.startsWith(':')) continue;
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim() || 'message';
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0) return null;
+  return { event, data: dataLines.join('\n') };
+};
+
+const iterateSseEvents = async function* (responseBody: unknown): AsyncGenerator<ParsedSseEvent> {
+  const body = responseBody as ReadableSseBody | null;
+  if (!body?.getReader) throw new Error('Streaming response body is not readable');
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
+      if (done) break;
+
+      buffer += decoder.decode(value || new Uint8Array(), { stream: true });
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary !== -1) {
+        const rawBlock = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const parsed = parseSseEventBlock(rawBlock);
+        if (parsed) yield parsed;
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
+
+    buffer += decoder.decode();
+    const tail = buffer.trim();
+    if (tail) {
+      const parsed = parseSseEventBlock(tail);
+      if (parsed) yield parsed;
+    }
+  } finally {
+    if (typeof reader.releaseLock === 'function') reader.releaseLock();
+  }
+};
+
+const resolveStreamDelta = (current: string, incoming: string) => {
+  if (!incoming) return '';
+  if (incoming.startsWith(current)) return incoming.slice(current.length);
+  if (current.endsWith(incoming)) return '';
+  return incoming;
 };
 
 const cleanSessionTitle = (raw: string) => {
@@ -186,6 +260,187 @@ const openrouterGenerateText = async (
   if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
   const data = await res.json();
   return openrouterTextFromCompletion(data);
+};
+
+const geminiGenerateTextStream = async (
+  apiKey: string,
+  modelId: string,
+  prompt: string,
+  callbacks: AiStreamCallbacks = {},
+) => {
+  const path = normalizeGeminiModelPath(modelId);
+  const url = `https://generativelanguage.googleapis.com/v1beta/${path}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2 },
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Gemini request failed: HTTP ${res.status}`);
+
+  let text = '';
+  let thoughtContent = '';
+  let thoughtDone = false;
+
+  for await (const evt of iterateSseEvents(res.body)) {
+    const rawData = String(evt.data || '').trim();
+    if (!rawData || rawData === '[DONE]') continue;
+
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(rawData);
+    } catch {
+      continue;
+    }
+
+    const p = payload as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{ text?: string; thought?: boolean; type?: string }>;
+        };
+      }>;
+    };
+    const parts = p.candidates?.[0]?.content?.parts || [];
+
+    const nextThought = parts
+      .filter((x) => x.thought || x.type === 'thought')
+      .map((x) => x.text || '')
+      .join('');
+    const nextText = parts
+      .filter((x) => !x.thought && x.type !== 'thought')
+      .map((x) => x.text || '')
+      .join('');
+
+    const thoughtDelta = resolveStreamDelta(thoughtContent, nextThought);
+    if (thoughtDelta) {
+      thoughtContent += thoughtDelta;
+      await callbacks.onThoughtDelta?.(thoughtDelta);
+    }
+
+    const answerDelta = resolveStreamDelta(text, nextText);
+    if (answerDelta) {
+      if (!thoughtDone) {
+        thoughtDone = true;
+        await callbacks.onThoughtDone?.();
+      }
+      text += answerDelta;
+      await callbacks.onAnswerDelta?.(answerDelta);
+    }
+  }
+
+  if (!thoughtDone) await callbacks.onThoughtDone?.();
+
+  return {
+    text: text.trim(),
+    thoughtContent: thoughtContent.trim() || undefined,
+  } as AiTextResult;
+};
+
+const openrouterGenerateTextStream = async (
+  apiKey: string,
+  modelId: string,
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  callbacks: AiStreamCallbacks = {},
+) => {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelId,
+      temperature: 0.2,
+      stream: true,
+      messages,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
+
+  let text = '';
+  let thoughtContent = '';
+  let thoughtDone = false;
+
+  for await (const evt of iterateSseEvents(res.body)) {
+    const rawData = String(evt.data || '').trim();
+    if (!rawData || rawData === '[DONE]') continue;
+
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(rawData);
+    } catch {
+      continue;
+    }
+
+    const p = payload as {
+      choices?: Array<{
+        delta?: {
+          content?: string;
+          reasoning?: string;
+          reasoning_content?: string;
+        };
+        message?: {
+          content?: string;
+          reasoning?: string;
+          reasoning_content?: string;
+        };
+      }>;
+    };
+
+    const choice = p.choices?.[0];
+    const delta = choice?.delta;
+    const message = choice?.message;
+
+    const nextThoughtChunk =
+      typeof delta?.reasoning_content === 'string'
+        ? delta.reasoning_content
+        : typeof delta?.reasoning === 'string'
+          ? delta.reasoning
+          : '';
+    if (nextThoughtChunk) {
+      thoughtContent += nextThoughtChunk;
+      await callbacks.onThoughtDelta?.(nextThoughtChunk);
+    }
+
+    const nextAnswerChunk = typeof delta?.content === 'string' ? delta.content : '';
+    if (nextAnswerChunk) {
+      if (!thoughtDone) {
+        thoughtDone = true;
+        await callbacks.onThoughtDone?.();
+      }
+      text += nextAnswerChunk;
+      await callbacks.onAnswerDelta?.(nextAnswerChunk);
+    }
+
+    const fallbackThought = String(message?.reasoning_content || message?.reasoning || '');
+    const fallbackThoughtDelta = resolveStreamDelta(thoughtContent, fallbackThought);
+    if (fallbackThoughtDelta) {
+      thoughtContent += fallbackThoughtDelta;
+      await callbacks.onThoughtDelta?.(fallbackThoughtDelta);
+    }
+
+    const fallbackAnswer = String(message?.content || '');
+    const fallbackAnswerDelta = resolveStreamDelta(text, fallbackAnswer);
+    if (fallbackAnswerDelta) {
+      if (!thoughtDone) {
+        thoughtDone = true;
+        await callbacks.onThoughtDone?.();
+      }
+      text += fallbackAnswerDelta;
+      await callbacks.onAnswerDelta?.(fallbackAnswerDelta);
+    }
+  }
+
+  if (!thoughtDone) await callbacks.onThoughtDone?.();
+
+  return {
+    text: text.trim(),
+    thoughtContent: thoughtContent.trim() || undefined,
+  } as AiTextResult;
 };
 
 const generateSessionTitle = async (
@@ -878,6 +1133,36 @@ const buildDatasetInstruction = (datasetJson: string, language: UiLanguage) => {
   ].join('\n');
 };
 
+const startSseResponse = (reply: FastifyReply) => {
+  reply.hijack();
+  reply.raw.statusCode = 200;
+  reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+  reply.raw.setHeader('Connection', 'keep-alive');
+  reply.raw.setHeader('X-Accel-Buffering', 'no');
+  if (typeof reply.raw.flushHeaders === 'function') reply.raw.flushHeaders();
+};
+
+const writeSseEvent = (reply: FastifyReply, event: string, payload: unknown) => {
+  if (reply.raw.destroyed || reply.raw.writableEnded) return false;
+  try {
+    reply.raw.write(`event: ${event}\n`);
+    reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const endSseResponse = (reply: FastifyReply) => {
+  if (reply.raw.destroyed || reply.raw.writableEnded) return;
+  try {
+    reply.raw.end();
+  } catch {
+    // Ignore close errors on disconnected clients.
+  }
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -1106,6 +1391,237 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await bumpNamespaceVersion(`reports:ai-reporting:user:${userId}`);
       return reply.send({ success: true });
+    },
+  );
+
+  // POST /ai-reporting/chat/stream
+  fastify.post(
+    '/ai-reporting/chat/stream',
+    {
+      onRequest: [requirePermission('reports.ai_reporting.create')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Send a message to AI Reporting and stream progress',
+        body: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string' },
+            message: { type: 'string' },
+            language: { type: 'string' },
+          },
+          required: ['message'],
+        },
+        response: {
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const { sessionId, message, language } = request.body as {
+        sessionId?: unknown;
+        message?: unknown;
+        language?: unknown;
+      };
+
+      const sessionIdResult = optionalNonEmptyString(sessionId, 'sessionId');
+      if (!sessionIdResult.ok) return badRequest(reply, sessionIdResult.message);
+      const messageResult = requireNonEmptyString(message, 'message');
+      if (!messageResult.ok) return badRequest(reply, messageResult.message);
+      if (messageResult.value.length > 4000) return badRequest(reply, 'message is too long');
+
+      const uiLanguage = normalizeUiLanguage(language);
+
+      const cfg = await getGeneralAiConfig();
+      if (!ensureAiEnabled(cfg, reply)) return;
+
+      const providerKeyModel = resolveProviderKeyModel(cfg);
+      const { provider, apiKey, modelId } = providerKeyModel;
+      if (!apiKey.trim())
+        return badRequest(reply, `Missing ${provider} API key in General Settings.`);
+      if (!modelId.trim())
+        return badRequest(reply, `Missing ${provider} model id in General Settings.`);
+
+      const ns = `reports:ai-reporting:user:${userId}`;
+      let didMutate = false;
+      let shouldAutoTitle = false;
+      let streamStarted = false;
+      let thoughtDoneSent = false;
+      let streamedText = '';
+      let streamedThoughtContent = '';
+
+      let resolvedSessionId = sessionIdResult.value || '';
+      if (resolvedSessionId) {
+        const owned = await query(
+          `SELECT title
+           FROM report_chat_sessions
+           WHERE id = $1 AND user_id = $2 AND is_archived = FALSE
+           LIMIT 1`,
+          [resolvedSessionId, userId],
+        );
+        if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+        shouldAutoTitle = ['AI Reporting', ''].includes(String(owned.rows[0]?.title || '').trim());
+      } else {
+        resolvedSessionId = `rpt-chat-${randomUUID()}`;
+        await query(
+          `INSERT INTO report_chat_sessions (id, user_id, title, is_archived, created_at, updated_at)
+           VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          [resolvedSessionId, userId, ''],
+        );
+        didMutate = true;
+        shouldAutoTitle = true;
+      }
+
+      const assistantMessageId = `rpt-msg-${randomUUID()}`;
+
+      try {
+        const userMessageId = `rpt-msg-${randomUUID()}`;
+        await query(
+          `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
+           VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
+          [userMessageId, resolvedSessionId, messageResult.value],
+        );
+        didMutate = true;
+
+        const recent = await query(
+          `SELECT role, content
+           FROM report_chat_messages
+           WHERE session_id = $1
+           ORDER BY created_at DESC
+           LIMIT 20`,
+          [resolvedSessionId],
+        );
+        const convo = recent.rows
+          .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
+          .filter((x) => (x.role === 'user' || x.role === 'assistant') && x.content.trim())
+          .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
+          .reverse();
+
+        const { fromDate, toDate } = getReportingRange();
+        const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
+        const datasetJson = JSON.stringify(dataset);
+
+        startSseResponse(reply);
+        streamStarted = true;
+        writeSseEvent(reply, 'start', {
+          sessionId: resolvedSessionId,
+          messageId: assistantMessageId,
+        });
+
+        const emitThoughtDone = async () => {
+          if (thoughtDoneSent) return;
+          thoughtDoneSent = true;
+          writeSseEvent(reply, 'thought_done', {});
+        };
+
+        let generated: AiTextResult;
+        if (provider === 'openrouter') {
+          const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+            { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
+            { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
+            ...convo.map((m) => ({ role: m.role, content: m.content })),
+          ];
+          generated = await openrouterGenerateTextStream(apiKey, modelId, messagesForAi, {
+            onThoughtDelta: async (delta) => {
+              streamedThoughtContent += delta;
+              writeSseEvent(reply, 'thought_delta', { delta });
+            },
+            onAnswerDelta: async (delta) => {
+              streamedText += delta;
+              writeSseEvent(reply, 'answer_delta', { delta });
+            },
+            onThoughtDone: emitThoughtDone,
+          });
+        } else {
+          const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+          const prompt = [
+            buildAiReportingSystemPrompt(uiLanguage),
+            '',
+            buildDatasetInstruction(datasetJson, uiLanguage),
+            '',
+            'Conversation:',
+            transcript,
+            '',
+            'Answer as the assistant:',
+          ].join('\n');
+          generated = await geminiGenerateTextStream(apiKey, modelId, prompt, {
+            onThoughtDelta: async (delta) => {
+              streamedThoughtContent += delta;
+              writeSseEvent(reply, 'thought_delta', { delta });
+            },
+            onAnswerDelta: async (delta) => {
+              streamedText += delta;
+              writeSseEvent(reply, 'answer_delta', { delta });
+            },
+            onThoughtDone: emitThoughtDone,
+          });
+        }
+
+        await emitThoughtDone();
+
+        const generatedText = String(generated.text || '').trim();
+        const generatedThought = String(generated.thoughtContent || '').trim();
+        const assistantText = generatedText || streamedText.trim() || 'No response.';
+        const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
+
+        await query(
+          `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
+           VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,
+          [assistantMessageId, resolvedSessionId, assistantText, assistantThoughtContent || null],
+        );
+        didMutate = true;
+
+        let titleToSet = '';
+        if (shouldAutoTitle) {
+          const firstUser = await query(
+            `SELECT content
+             FROM report_chat_messages
+             WHERE session_id = $1 AND role = 'user'
+             ORDER BY created_at ASC
+             LIMIT 1`,
+            [resolvedSessionId],
+          );
+          const firstUserMessage = String(firstUser.rows[0]?.content || '').trim();
+
+          try {
+            titleToSet = await generateSessionTitle(providerKeyModel, firstUserMessage, uiLanguage);
+          } catch {
+            titleToSet = '';
+          }
+
+          if (!titleToSet) {
+            titleToSet = cleanSessionTitle(firstUserMessage);
+          }
+        }
+
+        await query(
+          `UPDATE report_chat_sessions
+           SET updated_at = CURRENT_TIMESTAMP,
+               title = CASE
+                 WHEN BTRIM(title) = '' OR title = 'AI Reporting' THEN LEFT($2, 80)
+                 ELSE title
+               END
+           WHERE id = $1 AND user_id = $3`,
+          [resolvedSessionId, titleToSet || cleanSessionTitle(messageResult.value), userId],
+        );
+        didMutate = true;
+
+        writeSseEvent(reply, 'done', {
+          sessionId: resolvedSessionId,
+          text: assistantText,
+          thoughtContent: assistantThoughtContent || undefined,
+        });
+        endSseResponse(reply);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'AI request failed';
+        if (!streamStarted) return reply.code(502).send({ error: msg });
+        writeSseEvent(reply, 'error', { message: msg });
+        endSseResponse(reply);
+      } finally {
+        if (didMutate) {
+          await bumpNamespaceVersion(ns);
+        }
+      }
     },
   );
 
