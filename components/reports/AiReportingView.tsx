@@ -848,199 +848,15 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               )}
 
               <div className="space-y-7">
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`group w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {m.role === 'user' ? (
-                      <div className="flex items-start gap-1.5">
-                        <Tooltip
-                          label={
-                            copiedMessageId === m.id
-                              ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
-                              : t('common:buttons.copy', { defaultValue: 'Copy' })
-                          }
-                        >
-                          {() => (
-                            <button
-                              type="button"
-                              onClick={() => void handleCopy(m.id, m.content)}
-                              className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
-                            >
-                              <i
-                                className={
-                                  copiedMessageId === m.id
-                                    ? 'fa-solid fa-check text-green-500'
-                                    : 'fa-regular fa-copy'
-                                }
-                              />
-                            </button>
-                          )}
-                        </Tooltip>
-                        <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
-                          {m.content}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="w-full text-sm leading-relaxed text-slate-800">
-                        {m.thoughtContent?.trim() && (
-                          <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedThoughtMessageIds((prev) =>
-                                  prev.includes(m.id)
-                                    ? prev.filter((id) => id !== m.id)
-                                    : [...prev, m.id],
-                                )
-                              }
-                              className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-                            >
-                              <span className="inline-flex items-center gap-2">
-                                <i className="fa-regular fa-lightbulb text-slate-500" />
-                                {t('aiReporting.thoughtLabel', { defaultValue: 'Thought process' })}
-                              </span>
-                              <i
-                                className={`fa-solid ${
-                                  expandedThoughtMessageIds.includes(m.id)
-                                    ? 'fa-chevron-up'
-                                    : 'fa-chevron-down'
-                                }`}
-                              />
-                            </button>
-                            {expandedThoughtMessageIds.includes(m.id) && (
-                              <div className="border-t border-slate-200/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
-                                {m.thoughtContent}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkBreaks]}
-                          components={{
-                            a: ({ children, href }) => {
-                              const safe = safeHref(href);
-                              if (!safe) return <>{children}</>;
-                              return (
-                                <a
-                                  href={safe}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                                >
-                                  {children}
-                                </a>
-                              );
-                            },
-                            img: ({ alt, src }) => {
-                              const safe = safeHref(src);
-                              const label = alt?.trim() ? alt.trim() : src || 'image';
-                              if (!safe)
-                                return <span className="text-slate-500">[Image: {label}]</span>;
-                              return (
-                                <a
-                                  href={safe}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                                >
-                                  [Image: {label}]
-                                </a>
-                              );
-                            },
-                            p: ({ children }) => (
-                              <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-                            ),
-                            h1: ({ children }) => (
-                              <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
-                                {children}
-                              </h1>
-                            ),
-                            h2: ({ children }) => (
-                              <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
-                                {children}
-                              </h2>
-                            ),
-                            h3: ({ children }) => (
-                              <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
-                                {children}
-                              </h3>
-                            ),
-                            ul: ({ children }) => (
-                              <ul className="my-2 list-disc pl-5 marker:text-slate-400">
-                                {children}
-                              </ul>
-                            ),
-                            ol: ({ children }) => (
-                              <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
-                                {children}
-                              </ol>
-                            ),
-                            li: ({ children }) => <li className="my-1">{children}</li>,
-                            blockquote: ({ children }) => (
-                              <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
-                                {children}
-                              </blockquote>
-                            ),
-                            hr: () => <hr className="my-3 border-slate-200" />,
-                            table: ({ children }) => (
-                              <div className="my-2 overflow-x-auto">
-                                <table className="w-full border-collapse text-left">
-                                  {children}
-                                </table>
-                              </div>
-                            ),
-                            th: ({ children }) => (
-                              <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
-                                {children}
-                              </th>
-                            ),
-                            td: ({ children }) => (
-                              <td className="border border-slate-200 px-2 py-1">{children}</td>
-                            ),
-                            pre: ({ children }) => (
-                              <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
-                                {children}
-                              </pre>
-                            ),
-                            code: (props) => {
-                              // react-markdown provides `inline` here, but it is not represented in the
-                              // published `Components` typing (intrinsic `code` props only).
-                              const { inline, className, children } = props as unknown as {
-                                inline?: boolean;
-                                className?: string;
-                                children?: React.ReactNode;
-                              };
-
-                              const value =
-                                typeof children === 'string'
-                                  ? children.replace(/\n$/, '')
-                                  : children;
-
-                              if (inline === false) {
-                                return (
-                                  <code
-                                    className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
-                                      className ?? ''
-                                    }`}
-                                  >
-                                    {value}
-                                  </code>
-                                );
-                              }
-
-                              return (
-                                <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
-                                  {value}
-                                </code>
-                              );
-                            },
-                          }}
-                        >
-                          {m.content}
-                        </ReactMarkdown>
-                        <div className="mt-2 flex justify-end opacity-0 transition-all pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto">
+                {messages.map((m) => {
+                  const isThoughtExpanded = expandedThoughtMessageIds.includes(m.id);
+                  return (
+                    <div
+                      key={m.id}
+                      className={`group w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      {m.role === 'user' ? (
+                        <div className="flex items-start gap-1.5">
                           <Tooltip
                             label={
                               copiedMessageId === m.id
@@ -1052,7 +868,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => void handleCopy(m.id, m.content)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
                               >
                                 <i
                                   className={
@@ -1064,11 +880,212 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               </button>
                             )}
                           </Tooltip>
+                          <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
+                            {m.content}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <div className="w-full text-sm leading-relaxed text-slate-800">
+                          {m.thoughtContent?.trim() && (
+                            <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedThoughtMessageIds((prev) =>
+                                    prev.includes(m.id)
+                                      ? prev.filter((id) => id !== m.id)
+                                      : [...prev, m.id],
+                                  )
+                                }
+                                className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                              >
+                                <span className="inline-flex items-center gap-2">
+                                  <i className="fa-regular fa-lightbulb text-slate-500" />
+                                  {t('aiReporting.thoughtLabel', {
+                                    defaultValue: 'Thought process',
+                                  })}
+                                </span>
+                                <i
+                                  className={`fa-solid ${
+                                    isThoughtExpanded ? 'fa-chevron-up' : 'fa-chevron-down'
+                                  }`}
+                                />
+                              </button>
+                              <div
+                                className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
+                                  isThoughtExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                }`}
+                              >
+                                <div className="overflow-hidden">
+                                  <div
+                                    className={`border-t text-xs leading-relaxed text-slate-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
+                                      isThoughtExpanded
+                                        ? 'border-slate-200/80 px-3 py-2.5 opacity-100 translate-y-0'
+                                        : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
+                                    }`}
+                                  >
+                                    {m.thoughtContent}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                            components={{
+                              a: ({ children, href }) => {
+                                const safe = safeHref(href);
+                                if (!safe) return <>{children}</>;
+                                return (
+                                  <a
+                                    href={safe}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                  >
+                                    {children}
+                                  </a>
+                                );
+                              },
+                              img: ({ alt, src }) => {
+                                const safe = safeHref(src);
+                                const label = alt?.trim() ? alt.trim() : src || 'image';
+                                if (!safe)
+                                  return <span className="text-slate-500">[Image: {label}]</span>;
+                                return (
+                                  <a
+                                    href={safe}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                  >
+                                    [Image: {label}]
+                                  </a>
+                                );
+                              },
+                              p: ({ children }) => (
+                                <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+                              ),
+                              h1: ({ children }) => (
+                                <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                                  {children}
+                                </h1>
+                              ),
+                              h2: ({ children }) => (
+                                <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                                  {children}
+                                </h2>
+                              ),
+                              h3: ({ children }) => (
+                                <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                                  {children}
+                                </h3>
+                              ),
+                              ul: ({ children }) => (
+                                <ul className="my-2 list-disc pl-5 marker:text-slate-400">
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
+                                  {children}
+                                </ol>
+                              ),
+                              li: ({ children }) => <li className="my-1">{children}</li>,
+                              blockquote: ({ children }) => (
+                                <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                                  {children}
+                                </blockquote>
+                              ),
+                              hr: () => <hr className="my-3 border-slate-200" />,
+                              table: ({ children }) => (
+                                <div className="my-2 overflow-x-auto">
+                                  <table className="w-full border-collapse text-left">
+                                    {children}
+                                  </table>
+                                </div>
+                              ),
+                              th: ({ children }) => (
+                                <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                                  {children}
+                                </th>
+                              ),
+                              td: ({ children }) => (
+                                <td className="border border-slate-200 px-2 py-1">{children}</td>
+                              ),
+                              pre: ({ children }) => (
+                                <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                                  {children}
+                                </pre>
+                              ),
+                              code: (props) => {
+                                // react-markdown provides `inline` here, but it is not represented in the
+                                // published `Components` typing (intrinsic `code` props only).
+                                const { inline, className, children } = props as unknown as {
+                                  inline?: boolean;
+                                  className?: string;
+                                  children?: React.ReactNode;
+                                };
+
+                                const value =
+                                  typeof children === 'string'
+                                    ? children.replace(/\n$/, '')
+                                    : children;
+
+                                if (inline === false) {
+                                  return (
+                                    <code
+                                      className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                        className ?? ''
+                                      }`}
+                                    >
+                                      {value}
+                                    </code>
+                                  );
+                                }
+
+                                return (
+                                  <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
+                                    {value}
+                                  </code>
+                                );
+                              },
+                            }}
+                          >
+                            {m.content}
+                          </ReactMarkdown>
+                          <div className="mt-2 flex justify-end opacity-0 transition-all pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto">
+                            <Tooltip
+                              label={
+                                copiedMessageId === m.id
+                                  ? t('notifications:copied', {
+                                      defaultValue: 'Copied to clipboard',
+                                    })
+                                  : t('common:buttons.copy', { defaultValue: 'Copy' })
+                              }
+                            >
+                              {() => (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCopy(m.id, m.content)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                >
+                                  <i
+                                    className={
+                                      copiedMessageId === m.id
+                                        ? 'fa-solid fa-check text-green-500'
+                                        : 'fa-regular fa-copy'
+                                    }
+                                  />
+                                </button>
+                              )}
+                            </Tooltip>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div ref={endRef} />
