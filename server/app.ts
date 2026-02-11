@@ -13,6 +13,7 @@ import expensesRoutes from './routes/expenses.ts';
 import generalSettingsRoutes from './routes/general-settings.ts';
 import invoicesRoutes from './routes/invoices.ts';
 import ldapRoutes from './routes/ldap.ts';
+import logsRoutes from './routes/logs.ts';
 import notificationsRoutes from './routes/notifications.ts';
 import paymentsRoutes from './routes/payments.ts';
 import productsRoutes from './routes/products.ts';
@@ -81,6 +82,7 @@ export const buildApp = async () => {
   await fastify.register(emailRoutes, { prefix: '/api/email' });
   await fastify.register(rolesRoutes, { prefix: '/api/roles' });
   await fastify.register(reportsRoutes, { prefix: '/api/reports' });
+  await fastify.register(logsRoutes, { prefix: '/api/logs' });
 
   fastify.get(
     '/api/health',

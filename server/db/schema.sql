@@ -214,6 +214,18 @@ BEGIN
     END IF;
 END $$;
 
+
+-- Audit logs table (successful system access)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id VARCHAR(50) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ip_address VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+
 -- Work Units table
 CREATE TABLE IF NOT EXISTS work_units (
     id VARCHAR(50) PRIMARY KEY,

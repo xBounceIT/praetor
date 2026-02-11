@@ -82,6 +82,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   { id: 'administration.email', actions: VIEW_UPDATE, module: 'administration' },
   { id: 'administration.roles', actions: CRUD, module: 'administration' },
+  { id: 'administration.logs', actions: VIEW_ONLY, module: 'administration' },
 
   // Standalone
   { id: 'settings', actions: VIEW_UPDATE, module: getModuleId('settings') },
@@ -135,6 +136,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'administration/work-units': buildPermission('administration.work_units', 'view'),
   'administration/email': buildPermission('administration.email', 'view'),
   'administration/roles': buildPermission('administration.roles', 'view'),
+  'administration/logs': buildPermission('administration.logs', 'view'),
   'crm/clients': buildPermission('crm.clients', 'view'),
   'crm/suppliers': buildPermission('crm.suppliers', 'view'),
   'sales/client-quotes': buildPermission('sales.client_quotes', 'view'),
