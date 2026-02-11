@@ -104,19 +104,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       opts: { sessionId?: string } = {},
     ) => {
       const speedMs = 8;
-      const answerChunks = 2;
       const thoughtChunks = 3;
+      const answerChunks = 2;
       const finalThought = String(thoughtContent || '');
-      let nextAnswer = '';
       let nextThought = '';
-      let answerIndex = 0;
       let thoughtIndex = 0;
 
-      while (answerIndex < finalContent.length || thoughtIndex < finalThought.length) {
-        if (answerIndex < finalContent.length) {
-          nextAnswer += finalContent.slice(answerIndex, answerIndex + answerChunks);
-          answerIndex += answerChunks;
-        }
+      while (thoughtIndex < finalThought.length) {
         if (thoughtIndex < finalThought.length) {
           nextThought += finalThought.slice(thoughtIndex, thoughtIndex + thoughtChunks);
           thoughtIndex += thoughtChunks;
@@ -127,8 +121,37 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             m.id === messageId
               ? {
                   ...m,
-                  content: nextAnswer,
+                  content: '',
                   thoughtContent: nextThought || undefined,
+                  sessionId: opts.sessionId || m.sessionId,
+                }
+              : m,
+          ),
+        );
+        if (isAtBottomRef.current) {
+          requestAnimationFrame(scrollToBottom);
+        } else {
+          setHasNewText(true);
+        }
+        await new Promise((resolve) => setTimeout(resolve, speedMs));
+      }
+
+      let nextAnswer = '';
+      let answerIndex = 0;
+
+      while (answerIndex < finalContent.length) {
+        if (answerIndex < finalContent.length) {
+          nextAnswer += finalContent.slice(answerIndex, answerIndex + answerChunks);
+          answerIndex += answerChunks;
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  content: nextAnswer,
+                  thoughtContent: finalThought || undefined,
                   sessionId: opts.sessionId || m.sessionId,
                 }
               : m,
