@@ -1240,7 +1240,9 @@ const App: React.FC = () => {
             break;
           }
           case 'reports': {
-            // Reports pages fetch their own data as needed.
+            // Reports pages fetch their own data as needed, but they still depend on global settings
+            // (e.g. AI Reporting enablement).
+            await loadGeneralSettings();
             break;
           }
         }
@@ -2848,13 +2850,21 @@ const App: React.FC = () => {
                 onUpdatePassword={handleUpdateUserPassword}
               />
             )}
-            {activeView === 'reports/ai-reporting' && (
-              <AiReportingView
-                currentUserId={currentUser.id}
-                permissions={currentUser.permissions || []}
-                enableAiReporting={generalSettings.enableAiReporting}
-              />
-            )}
+            {activeView === 'reports/ai-reporting' &&
+              (!hasLoadedGeneralSettings ? (
+                <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
+                  <div className="text-center">
+                    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
+                    <p className="text-slate-600 font-medium">Loading...</p>
+                  </div>
+                </div>
+              ) : (
+                <AiReportingView
+                  currentUserId={currentUser.id}
+                  permissions={currentUser.permissions || []}
+                  enableAiReporting={generalSettings.enableAiReporting}
+                />
+              ))}
           </>
         )}
       </Layout>
