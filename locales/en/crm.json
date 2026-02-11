@@ -298,6 +298,7 @@
     "adminFiscal": "Administrative and Fiscal Data",
     "code": "Supplier Code",
     "codeRequired": "Supplier code is required",
+    "vatRequired": "VAT Number is required",
     "codeInvalid": "Code can only contain letters, numbers, underscores, and hyphens",
     "codeUnique": "This supplier code is already in use",
     "codePlaceholder": "e.g. SUP-001",

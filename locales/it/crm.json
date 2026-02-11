@@ -292,6 +292,7 @@
     "adminFiscal": "Dati Amministrativi e Fiscali",
     "code": "Codice Fornitore",
     "codeRequired": "Il codice fornitore è obbligatorio",
+    "vatRequired": "La Partita IVA è obbligatoria",
     "codeInvalid": "Il codice può contenere solo lettere, numeri, trattini bassi e trattini",
     "codeUnique": "Questo codice fornitore è già in uso",
     "codePlaceholder": "es. FOR-001",
