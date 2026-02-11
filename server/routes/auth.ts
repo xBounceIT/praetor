@@ -166,11 +166,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const token = generateToken(user.id, Date.now(), user.role);
       const permissions = await getRolePermissions(user.role);
 
-      await query('INSERT INTO audit_logs (id, user_id, ip_address) VALUES ($1, $2, $3)', [
-        `audit-${randomUUID()}`,
-        user.id,
-        getRequestIpAddress(request),
-      ]);
+      try {
+        await query('INSERT INTO audit_logs (id, user_id, ip_address) VALUES ($1, $2, $3)', [
+          `audit-${randomUUID()}`,
+          user.id,
+          getRequestIpAddress(request),
+        ]);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        console.error('Audit log insert failed during login:', errorMessage);
+      }
       const availableRoles = await getAvailableRolesForUser(user.id);
       const effectiveAvailableRoles =
         availableRoles.length > 0
