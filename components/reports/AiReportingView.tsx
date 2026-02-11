@@ -294,10 +294,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   useEffect(() => {
     if (!activeSessionId || !pendingEmptySessionId) return;
     if (activeSessionId !== pendingEmptySessionId) return;
-    if (messages.length > 0) {
+    if (isLoadingMessages) return;
+    const hasPendingMessages = messages.some(
+      (message) => message.sessionId === pendingEmptySessionId,
+    );
+    if (hasPendingMessages) {
       setPendingEmptySessionId('');
     }
-  }, [activeSessionId, messages, pendingEmptySessionId]);
+  }, [activeSessionId, isLoadingMessages, messages, pendingEmptySessionId]);
 
   const confirmDeleteSession = useCallback((session: ReportChatSessionSummary) => {
     setSessionToDelete(session);
