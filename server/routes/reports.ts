@@ -69,22 +69,46 @@ const normalizeGeminiModelPath = (modelId: string) => {
   return `models/${trimmed}`;
 };
 
-const googleTextFromGenerateContent = (payload: unknown): string => {
+type AiTextResult = { text: string; thoughtContent?: string };
+
+const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
   const p = payload as {
     candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
+      content?: {
+        parts?: Array<{ text?: string; thought?: boolean; type?: string }>;
+      };
     }>;
   };
   const parts = p.candidates?.[0]?.content?.parts || [];
-  return parts
+  const text = parts
+    .filter((x) => !x.thought && x.type !== 'thought')
     .map((x) => x.text || '')
     .join('')
     .trim();
+  const thoughtContent = parts
+    .filter((x) => x.thought || x.type === 'thought')
+    .map((x) => x.text || '')
+    .join('')
+    .trim();
+  return { text, thoughtContent: thoughtContent || undefined };
 };
 
-const openrouterTextFromCompletion = (payload: unknown): string => {
-  const p = payload as { choices?: Array<{ message?: { content?: string } }> };
-  return (p.choices?.[0]?.message?.content || '').trim();
+const openrouterTextFromCompletion = (payload: unknown): AiTextResult => {
+  const p = payload as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+        reasoning?: string;
+        reasoning_content?: string;
+      };
+    }>;
+  };
+
+  const message = p.choices?.[0]?.message;
+  const text = String(message?.content || '').trim();
+  const thoughtContent = String(message?.reasoning_content || message?.reasoning || '').trim();
+
+  return { text, thoughtContent: thoughtContent || undefined };
 };
 
 const cleanSessionTitle = (raw: string) => {
@@ -189,11 +213,11 @@ const generateSessionTitle = async (
       providerKeyModel.modelId,
       messages,
     );
-    return cleanSessionTitle(raw);
+    return cleanSessionTitle(raw.text);
   }
 
   const raw = await geminiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, prompt);
-  return cleanSessionTitle(raw);
+  return cleanSessionTitle(raw.text);
 };
 
 const hasPermission = (request: FastifyRequest, permission: string) =>
@@ -872,6 +896,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       sessionId: { type: 'string' },
       role: { type: 'string' },
       content: { type: 'string' },
+      thoughtContent: { type: 'string' },
       createdAt: { type: 'number' },
     },
     required: ['id', 'sessionId', 'role', 'content', 'createdAt'],
@@ -1015,6 +1040,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                session_id as "sessionId",
                role,
                content,
+               thought_content as "thoughtContent",
                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
              FROM report_chat_messages
              WHERE session_id = $1
@@ -1026,6 +1052,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             sessionId: String(r.sessionId),
             role: String(r.role),
             content: String(r.content || ''),
+            thoughtContent: r.thoughtContent ? String(r.thoughtContent) : undefined,
             createdAt: toNumber(r.createdAt),
           }));
         },
@@ -1102,6 +1129,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             properties: {
               sessionId: { type: 'string' },
               text: { type: 'string' },
+              thoughtContent: { type: 'string' },
             },
             required: ['sessionId', 'text'],
           },
@@ -1189,13 +1217,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const datasetJson = JSON.stringify(dataset);
 
         let text = '';
+        let thoughtContent = '';
         if (provider === 'openrouter') {
           const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
             { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
             { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
             ...convo.map((m) => ({ role: m.role, content: m.content })),
           ];
-          text = await openrouterGenerateText(apiKey, modelId, messagesForAi);
+          const generated = await openrouterGenerateText(apiKey, modelId, messagesForAi);
+          text = generated.text;
+          thoughtContent = generated.thoughtContent || '';
         } else {
           const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
           const prompt = [
@@ -1208,17 +1239,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             '',
             'Answer as the assistant:',
           ].join('\n');
-          text = await geminiGenerateText(apiKey, modelId, prompt);
+          const generated = await geminiGenerateText(apiKey, modelId, prompt);
+          text = generated.text;
+          thoughtContent = generated.thoughtContent || '';
         }
 
         const cleaned = String(text || '').trim();
         const assistantText = cleaned || 'No response.';
+        const assistantThoughtContent = String(thoughtContent || '').trim();
 
         const assistantMessageId = `rpt-msg-${randomUUID()}`;
         await query(
-          `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-           VALUES ($1, $2, 'assistant', $3, CURRENT_TIMESTAMP)`,
-          [assistantMessageId, resolvedSessionId, assistantText],
+          `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
+           VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,
+          [assistantMessageId, resolvedSessionId, assistantText, assistantThoughtContent || null],
         );
         didMutate = true;
 
@@ -1258,7 +1292,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         didMutate = true;
 
-        return reply.send({ sessionId: resolvedSessionId, text: assistantText });
+        return reply.send({
+          sessionId: resolvedSessionId,
+          text: assistantText,
+          thoughtContent: assistantThoughtContent || undefined,
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'AI request failed';
         return reply.code(502).send({ error: msg });

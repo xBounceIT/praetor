@@ -19,6 +19,7 @@
     "deleteChatTitle": "Elimina chat",
     "deleteChatConfirm": "Questo rimuovera' \"{{name}}\" dalla cronologia chat.",
     "goToBottom": "Vai in fondo",
-    "error": "Si e' verificato un errore."
+    "error": "Si e' verificato un errore.",
+    "thoughtLabel": "Pensiero del modello"
   }
 }
