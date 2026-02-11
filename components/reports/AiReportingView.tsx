@@ -276,10 +276,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       id: assistantMessageId,
       sessionId: activeSessionId || 'tmp',
       role: 'assistant',
-      content: t('aiReporting.thinking', { defaultValue: 'Thinking…' }),
+      content: '',
+      thoughtContent: t('aiReporting.thinking', { defaultValue: 'Thinking…' }),
       createdAt: now + 1,
     };
     setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
+    setExpandedThoughtMessageIds((prev) =>
+      prev.includes(assistantMessageId) ? prev : [...prev, assistantMessageId],
+    );
     queueMicrotask(() => {
       if (isAtBottomRef.current) {
         scrollToBottom();
