@@ -68,7 +68,9 @@ const LogsView: React.FC = () => {
       {
         header: t('logs.columns.timestamp'),
         id: 'createdAt',
-        accessorFn: (row) => dateTimeFormatter.format(new Date(row.createdAt)),
+        accessorFn: (row) => new Date(row.createdAt).getTime(),
+        cell: ({ row }) => dateTimeFormatter.format(new Date(row.createdAt)),
+        filterFormat: (value) => dateTimeFormatter.format(new Date(Number(value))),
       },
     ],
     [dateTimeFormatter, t],
