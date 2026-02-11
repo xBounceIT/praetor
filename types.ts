@@ -336,6 +336,7 @@ export interface ReportChatMessage {
   sessionId: string;
   role: 'user' | 'assistant';
   content: string;
+  thoughtContent?: string;
   createdAt: number;
 }
 

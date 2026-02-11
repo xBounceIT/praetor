@@ -586,6 +586,7 @@ export const reportsApi = {
   }): Promise<{
     sessionId: string;
     text: string;
+    thoughtContent?: string;
   }> =>
     fetchApi('/reports/ai-reporting/chat', {
       method: 'POST',
