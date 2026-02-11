@@ -582,6 +582,7 @@ export const reportsApi = {
   chat: (data: {
     sessionId?: string;
     message: string;
+    language?: string;
   }): Promise<{
     sessionId: string;
     text: string;

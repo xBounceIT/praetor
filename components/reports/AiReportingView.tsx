@@ -45,7 +45,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   permissions,
   enableAiReporting,
 }) => {
-  const { t } = useTranslation(['reports', 'common']);
+  const { t, i18n } = useTranslation(['reports', 'common']);
   const [sessions, setSessions] = useState<ReportChatSessionSummary[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [isNewChat, setIsNewChat] = useState(false);
@@ -219,6 +219,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       const res = await api.reports.chat({
         sessionId: activeSessionId || undefined,
         message: content,
+        language: i18n.language,
       });
 
       if (!hadSession) {

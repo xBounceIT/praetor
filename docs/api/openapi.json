@@ -17223,6 +17223,9 @@
                   },
                   "message": {
                     "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
                   }
                 },
                 "required": [
