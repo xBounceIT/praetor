@@ -583,9 +583,24 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   };
 
   const handleCopy = useCallback(async (messageId: string, text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopiedMessageId(messageId);
-    setTimeout(() => setCopiedMessageId(''), 1500);
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(''), 1500);
+    } catch {
+      /* silently fail */
+    }
   }, []);
 
   useEffect(() => {
