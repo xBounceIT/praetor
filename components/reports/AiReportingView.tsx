@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -41,6 +41,28 @@ const safeHref = (href: string | undefined) => {
   }
 };
 
+const RETRY_REWRITE_PROMPT_PREFIX = '[retry_rewrite_v1]';
+
+const buildRetryRewritePrompt = (userMessage: string, assistantAnswer: string) =>
+  [
+    RETRY_REWRITE_PROMPT_PREFIX,
+    'Original user request:',
+    userMessage,
+    '',
+    'Previous assistant answer:',
+    assistantAnswer,
+    '',
+    'Rewrite the assistant answer as an alternative response that is materially different from the previous one while staying correct, concise, and grounded in the same request.',
+    'Return only the rewritten answer.',
+  ].join('\n');
+
+const isRetryRewritePrompt = (content: string) => content.startsWith(RETRY_REWRITE_PROMPT_PREFIX);
+
+interface ChatTurn {
+  user: ReportChatMessage;
+  assistants: ReportChatMessage[];
+}
+
 const AiReportingView: React.FC<AiReportingViewProps> = ({
   currentUserId,
   permissions,
@@ -65,6 +87,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [hasNewText, setHasNewText] = useState(false);
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
   const [copiedMessageId, setCopiedMessageId] = useState('');
+  const [selectedAssistantVariantByUserId, setSelectedAssistantVariantByUserId] = useState<
+    Record<string, number>
+  >({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
@@ -287,7 +312,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     }
   };
 
-  const sendMessage = async (rawContent: string, opts: { clearDraft?: boolean } = {}) => {
+  const sendMessage = async (
+    rawContent: string,
+    opts: { clearDraft?: boolean; hideUserMessage?: boolean } = {},
+  ) => {
     if (!enableAiReporting) return;
     const content = rawContent.trim();
     if (!content || isSending || !canSend) return;
@@ -321,7 +349,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       createdAt: now + 1,
     };
     activeAssistantMessageIdRef.current = assistantMessageId;
-    setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
+    setMessages((prev) =>
+      opts.hideUserMessage
+        ? [...prev, optimisticAssistant]
+        : [...prev, optimisticUser, optimisticAssistant],
+    );
     setExpandedThoughtMessageIds((prev) =>
       prev.includes(assistantMessageId) ? prev : [...prev, assistantMessageId],
     );
@@ -573,7 +605,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     await sendMessage(draft, { clearDraft: true });
   };
 
-  const getRetryMessageContent = useCallback(
+  const getRetryMessageContext = useCallback(
     (assistantMessageId: string) => {
       const assistantIndex = messages.findIndex(
         (message) => message.id === assistantMessageId && message.role === 'assistant',
@@ -585,8 +617,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         const candidate = messages[index];
         if (candidate.role !== 'user') continue;
         if (candidate.sessionId !== assistantMessage.sessionId) continue;
+        if (isRetryRewritePrompt(candidate.content)) continue;
         const trimmed = candidate.content.trim();
-        if (trimmed) return trimmed;
+        const assistantText = assistantMessage.content.trim();
+        if (trimmed && assistantText) {
+          return buildRetryRewritePrompt(trimmed, assistantText);
+        }
       }
       return '';
     },
@@ -595,10 +631,66 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
 
   const handleRetryMessage = async (assistantMessageId: string) => {
     if (!enableAiReporting || !canSend || isSending) return;
-    const retryContent = getRetryMessageContent(assistantMessageId);
+    const retryContent = getRetryMessageContext(assistantMessageId);
     if (!retryContent) return;
-    await sendMessage(retryContent);
+    await sendMessage(retryContent, { hideUserMessage: true });
   };
+
+  const chatTurns = useMemo<ChatTurn[]>(() => {
+    const turns: ChatTurn[] = [];
+    const turnByUserId = new Map<string, ChatTurn>();
+    let latestVisibleTurn: ChatTurn | null = null;
+    let latestUserMessage: ReportChatMessage | null = null;
+
+    for (const message of messages) {
+      if (message.role === 'user') {
+        latestUserMessage = message;
+        if (isRetryRewritePrompt(message.content)) continue;
+        const turn: ChatTurn = { user: message, assistants: [] };
+        turns.push(turn);
+        turnByUserId.set(message.id, turn);
+        latestVisibleTurn = turn;
+        continue;
+      }
+
+      if (!latestUserMessage) continue;
+
+      if (isRetryRewritePrompt(latestUserMessage.content)) {
+        if (latestVisibleTurn && latestVisibleTurn.user.sessionId === message.sessionId) {
+          latestVisibleTurn.assistants.push(message);
+        }
+        continue;
+      }
+
+      const turn = turnByUserId.get(latestUserMessage.id);
+      if (turn) {
+        turn.assistants.push(message);
+      }
+    }
+
+    return turns;
+  }, [messages]);
+
+  useEffect(() => {
+    setSelectedAssistantVariantByUserId((prev) => {
+      const next: Record<string, number> = {};
+      for (const turn of chatTurns) {
+        if (!turn.assistants.length) continue;
+        const previousValue = prev[turn.user.id];
+        const fallbackValue = turn.assistants.length - 1;
+        next[turn.user.id] =
+          typeof previousValue === 'number'
+            ? Math.min(Math.max(previousValue, 0), turn.assistants.length - 1)
+            : fallbackValue;
+      }
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length && nextKeys.every((key) => prev[key] === next[key])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [chatTurns]);
 
   const handleStop = () => {
     const controller = abortRef.current;
@@ -881,21 +973,32 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               )}
 
               <div className="space-y-7">
-                {messages.map((m) => {
-                  const isThoughtExpanded = expandedThoughtMessageIds.includes(m.id);
-                  const retryContent = m.role === 'assistant' ? getRetryMessageContent(m.id) : '';
+                {chatTurns.map((turn) => {
+                  const selectedVariantIndex = Math.min(
+                    selectedAssistantVariantByUserId[turn.user.id] ??
+                      Math.max(turn.assistants.length - 1, 0),
+                    Math.max(turn.assistants.length - 1, 0),
+                  );
+                  const selectedAssistantMessage = turn.assistants[selectedVariantIndex];
+                  const userMessage = turn.user;
+                  const isThoughtExpanded = selectedAssistantMessage
+                    ? expandedThoughtMessageIds.includes(selectedAssistantMessage.id)
+                    : false;
+                  const retryContent = selectedAssistantMessage
+                    ? getRetryMessageContext(selectedAssistantMessage.id)
+                    : '';
                   const canRetryAssistantMessage =
-                    m.role === 'assistant' && Boolean(retryContent) && canSend && !isSending;
+                    Boolean(selectedAssistantMessage) &&
+                    Boolean(retryContent) &&
+                    canSend &&
+                    !isSending;
                   return (
-                    <div
-                      key={m.id}
-                      className={`group w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {m.role === 'user' ? (
-                        <div className="flex items-start gap-1.5">
+                    <div key={turn.user.id} className="group w-full flex justify-start">
+                      <div className="w-full space-y-2">
+                        <div className="flex items-start gap-1.5 justify-end">
                           <Tooltip
                             label={
-                              copiedMessageId === m.id
+                              copiedMessageId === userMessage.id
                                 ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
                                 : t('common:buttons.copy', { defaultValue: 'Copy' })
                             }
@@ -903,12 +1006,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                             {() => (
                               <button
                                 type="button"
-                                onClick={() => void handleCopy(m.id, m.content)}
+                                onClick={() => void handleCopy(userMessage.id, userMessage.content)}
                                 className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
                               >
                                 <i
                                   className={
-                                    copiedMessageId === m.id
+                                    copiedMessageId === userMessage.id
                                       ? 'fa-solid fa-check text-green-500'
                                       : 'fa-regular fa-copy'
                                   }
@@ -917,227 +1020,286 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                             )}
                           </Tooltip>
                           <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
-                            {m.content}
+                            {userMessage.content}
                           </div>
                         </div>
-                      ) : (
-                        <div className="w-full text-sm leading-relaxed text-slate-800">
-                          {m.thoughtContent?.trim() && (
-                            <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedThoughtMessageIds((prev) =>
-                                    prev.includes(m.id)
-                                      ? prev.filter((id) => id !== m.id)
-                                      : [...prev, m.id],
-                                  )
-                                }
-                                className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-                              >
-                                <span className="inline-flex items-center gap-2">
-                                  <i className="fa-regular fa-lightbulb text-slate-500" />
-                                  {t('aiReporting.thoughtLabel', {
-                                    defaultValue: 'Thought process',
-                                  })}
-                                </span>
-                                <i
-                                  className={`fa-solid ${
-                                    isThoughtExpanded ? 'fa-chevron-up' : 'fa-chevron-down'
-                                  }`}
-                                />
-                              </button>
-                              <div
-                                className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
-                                  isThoughtExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                                }`}
-                              >
-                                <div className="overflow-hidden">
-                                  <div
-                                    className={`border-t text-xs leading-relaxed text-slate-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
-                                      isThoughtExpanded
-                                        ? 'border-slate-200/80 px-3 py-2.5 opacity-100 translate-y-0'
-                                        : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
+
+                        {selectedAssistantMessage && (
+                          <div className="w-full text-sm leading-relaxed text-slate-800">
+                            {selectedAssistantMessage.thoughtContent?.trim() && (
+                              <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedThoughtMessageIds((prev) =>
+                                      prev.includes(selectedAssistantMessage.id)
+                                        ? prev.filter((id) => id !== selectedAssistantMessage.id)
+                                        : [...prev, selectedAssistantMessage.id],
+                                    )
+                                  }
+                                  className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                                >
+                                  <span className="inline-flex items-center gap-2">
+                                    <i className="fa-regular fa-lightbulb text-slate-500" />
+                                    {t('aiReporting.thoughtLabel', {
+                                      defaultValue: 'Thought process',
+                                    })}
+                                  </span>
+                                  <i
+                                    className={`fa-solid ${
+                                      isThoughtExpanded ? 'fa-chevron-up' : 'fa-chevron-down'
                                     }`}
-                                  >
-                                    {m.thoughtContent}
+                                  />
+                                </button>
+                                <div
+                                  className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
+                                    isThoughtExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                  }`}
+                                >
+                                  <div className="overflow-hidden">
+                                    <div
+                                      className={`border-t text-xs leading-relaxed text-slate-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
+                                        isThoughtExpanded
+                                          ? 'border-slate-200/80 px-3 py-2.5 opacity-100 translate-y-0'
+                                          : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
+                                      }`}
+                                    >
+                                      {selectedAssistantMessage.thoughtContent}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          )}
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkBreaks]}
-                            components={{
-                              a: ({ children, href }) => {
-                                const safe = safeHref(href);
-                                if (!safe) return <>{children}</>;
-                                return (
-                                  <a
-                                    href={safe}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                                  >
-                                    {children}
-                                  </a>
-                                );
-                              },
-                              img: ({ alt, src }) => {
-                                const safe = safeHref(src);
-                                const label = alt?.trim() ? alt.trim() : src || 'image';
-                                if (!safe)
-                                  return <span className="text-slate-500">[Image: {label}]</span>;
-                                return (
-                                  <a
-                                    href={safe}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                                  >
-                                    [Image: {label}]
-                                  </a>
-                                );
-                              },
-                              p: ({ children }) => (
-                                <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-                              ),
-                              h1: ({ children }) => (
-                                <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
-                                  {children}
-                                </h1>
-                              ),
-                              h2: ({ children }) => (
-                                <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
-                                  {children}
-                                </h2>
-                              ),
-                              h3: ({ children }) => (
-                                <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
-                                  {children}
-                                </h3>
-                              ),
-                              ul: ({ children }) => (
-                                <ul className="my-2 list-disc pl-5 marker:text-slate-400">
-                                  {children}
-                                </ul>
-                              ),
-                              ol: ({ children }) => (
-                                <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
-                                  {children}
-                                </ol>
-                              ),
-                              li: ({ children }) => <li className="my-1">{children}</li>,
-                              blockquote: ({ children }) => (
-                                <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
-                                  {children}
-                                </blockquote>
-                              ),
-                              hr: () => <hr className="my-3 border-slate-200" />,
-                              table: ({ children }) => (
-                                <div className="my-2 overflow-x-auto">
-                                  <table className="w-full border-collapse text-left">
-                                    {children}
-                                  </table>
-                                </div>
-                              ),
-                              th: ({ children }) => (
-                                <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
-                                  {children}
-                                </th>
-                              ),
-                              td: ({ children }) => (
-                                <td className="border border-slate-200 px-2 py-1">{children}</td>
-                              ),
-                              pre: ({ children }) => (
-                                <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
-                                  {children}
-                                </pre>
-                              ),
-                              code: (props) => {
-                                // react-markdown provides `inline` here, but it is not represented in the
-                                // published `Components` typing (intrinsic `code` props only).
-                                const { inline, className, children } = props as unknown as {
-                                  inline?: boolean;
-                                  className?: string;
-                                  children?: React.ReactNode;
-                                };
-
-                                const value =
-                                  typeof children === 'string'
-                                    ? children.replace(/\n$/, '')
-                                    : children;
-
-                                if (inline === false) {
+                            )}
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkBreaks]}
+                              components={{
+                                a: ({ children, href }) => {
+                                  const safe = safeHref(href);
+                                  if (!safe) return <>{children}</>;
                                   return (
-                                    <code
-                                      className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
-                                        className ?? ''
-                                      }`}
+                                    <a
+                                      href={safe}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
                                     >
+                                      {children}
+                                    </a>
+                                  );
+                                },
+                                img: ({ alt, src }) => {
+                                  const safe = safeHref(src);
+                                  const label = alt?.trim() ? alt.trim() : src || 'image';
+                                  if (!safe)
+                                    return <span className="text-slate-500">[Image: {label}]</span>;
+                                  return (
+                                    <a
+                                      href={safe}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                    >
+                                      [Image: {label}]
+                                    </a>
+                                  );
+                                },
+                                p: ({ children }) => (
+                                  <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+                                ),
+                                h1: ({ children }) => (
+                                  <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                                    {children}
+                                  </h1>
+                                ),
+                                h2: ({ children }) => (
+                                  <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                                    {children}
+                                  </h2>
+                                ),
+                                h3: ({ children }) => (
+                                  <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                                    {children}
+                                  </h3>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="my-2 list-disc pl-5 marker:text-slate-400">
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
+                                    {children}
+                                  </ol>
+                                ),
+                                li: ({ children }) => <li className="my-1">{children}</li>,
+                                blockquote: ({ children }) => (
+                                  <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                                    {children}
+                                  </blockquote>
+                                ),
+                                hr: () => <hr className="my-3 border-slate-200" />,
+                                table: ({ children }) => (
+                                  <div className="my-2 overflow-x-auto">
+                                    <table className="w-full border-collapse text-left">
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                th: ({ children }) => (
+                                  <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                                    {children}
+                                  </th>
+                                ),
+                                td: ({ children }) => (
+                                  <td className="border border-slate-200 px-2 py-1">{children}</td>
+                                ),
+                                pre: ({ children }) => (
+                                  <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                                    {children}
+                                  </pre>
+                                ),
+                                code: (props) => {
+                                  // react-markdown provides `inline` here, but it is not represented in the
+                                  // published `Components` typing (intrinsic `code` props only).
+                                  const { inline, className, children } = props as unknown as {
+                                    inline?: boolean;
+                                    className?: string;
+                                    children?: React.ReactNode;
+                                  };
+
+                                  const value =
+                                    typeof children === 'string'
+                                      ? children.replace(/\n$/, '')
+                                      : children;
+
+                                  if (inline === false) {
+                                    return (
+                                      <code
+                                        className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                          className ?? ''
+                                        }`}
+                                      >
+                                        {value}
+                                      </code>
+                                    );
+                                  }
+
+                                  return (
+                                    <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
                                       {value}
                                     </code>
                                   );
-                                }
-
-                                return (
-                                  <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
-                                    {value}
-                                  </code>
-                                );
-                              },
-                            }}
-                          >
-                            {m.content}
-                          </ReactMarkdown>
-                          <div className="mt-2 flex justify-start items-center gap-1.5">
-                            <Tooltip
-                              label={
-                                copiedMessageId === m.id
-                                  ? t('notifications:copied', {
-                                      defaultValue: 'Copied to clipboard',
-                                    })
-                                  : t('common:buttons.copy', { defaultValue: 'Copy' })
-                              }
+                                },
+                              }}
                             >
-                              {() => (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleCopy(m.id, m.content)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
-                                  aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
-                                >
-                                  <i
-                                    className={
-                                      copiedMessageId === m.id
-                                        ? 'fa-solid fa-check text-green-500'
-                                        : 'fa-regular fa-copy'
+                              {selectedAssistantMessage.content}
+                            </ReactMarkdown>
+                            <div className="mt-2 flex justify-start items-center gap-1.5">
+                              <Tooltip
+                                label={
+                                  copiedMessageId === selectedAssistantMessage.id
+                                    ? t('notifications:copied', {
+                                        defaultValue: 'Copied to clipboard',
+                                      })
+                                    : t('common:buttons.copy', { defaultValue: 'Copy' })
+                                }
+                              >
+                                {() => (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleCopy(
+                                        selectedAssistantMessage.id,
+                                        selectedAssistantMessage.content,
+                                      )
                                     }
-                                  />
-                                </button>
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                    aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                  >
+                                    <i
+                                      className={
+                                        copiedMessageId === selectedAssistantMessage.id
+                                          ? 'fa-solid fa-check text-green-500'
+                                          : 'fa-regular fa-copy'
+                                      }
+                                    />
+                                  </button>
+                                )}
+                              </Tooltip>
+                              <Tooltip label={t('aiReporting.retry', { defaultValue: 'Retry' })}>
+                                {() => (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleRetryMessage(selectedAssistantMessage.id)
+                                    }
+                                    disabled={!canRetryAssistantMessage}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors ${
+                                      canRetryAssistantMessage
+                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                        : 'text-slate-300 cursor-not-allowed'
+                                    }`}
+                                    aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                  >
+                                    <i className="fa-solid fa-rotate-right text-[11px]" />
+                                    {t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                  </button>
+                                )}
+                              </Tooltip>
+                              {turn.assistants.length > 1 && (
+                                <div className="ml-2 inline-flex items-center gap-1 text-xs text-slate-500">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedAssistantVariantByUserId((prev) => ({
+                                        ...prev,
+                                        [turn.user.id]: Math.max(selectedVariantIndex - 1, 0),
+                                      }))
+                                    }
+                                    disabled={selectedVariantIndex <= 0}
+                                    className={`w-6 h-6 rounded-md inline-flex items-center justify-center transition-colors ${
+                                      selectedVariantIndex <= 0
+                                        ? 'text-slate-300 cursor-not-allowed'
+                                        : 'hover:bg-slate-100 hover:text-slate-700'
+                                    }`}
+                                    aria-label={t('common:buttons.previous', {
+                                      defaultValue: 'Previous',
+                                    })}
+                                  >
+                                    <i className="fa-solid fa-chevron-left text-[10px]" />
+                                  </button>
+                                  <span className="min-w-[44px] text-center font-semibold">
+                                    {selectedVariantIndex + 1}/{turn.assistants.length}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedAssistantVariantByUserId((prev) => ({
+                                        ...prev,
+                                        [turn.user.id]: Math.min(
+                                          selectedVariantIndex + 1,
+                                          turn.assistants.length - 1,
+                                        ),
+                                      }))
+                                    }
+                                    disabled={selectedVariantIndex >= turn.assistants.length - 1}
+                                    className={`w-6 h-6 rounded-md inline-flex items-center justify-center transition-colors ${
+                                      selectedVariantIndex >= turn.assistants.length - 1
+                                        ? 'text-slate-300 cursor-not-allowed'
+                                        : 'hover:bg-slate-100 hover:text-slate-700'
+                                    }`}
+                                    aria-label={t('common:buttons.next', {
+                                      defaultValue: 'Next',
+                                    })}
+                                  >
+                                    <i className="fa-solid fa-chevron-right text-[10px]" />
+                                  </button>
+                                </div>
                               )}
-                            </Tooltip>
-                            <Tooltip label={t('aiReporting.retry', { defaultValue: 'Retry' })}>
-                              {() => (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleRetryMessage(m.id)}
-                                  disabled={!canRetryAssistantMessage}
-                                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors ${
-                                    canRetryAssistantMessage
-                                      ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                      : 'text-slate-300 cursor-not-allowed'
-                                  }`}
-                                  aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
-                                >
-                                  <i className="fa-solid fa-rotate-right text-[11px]" />
-                                  {t('aiReporting.retry', { defaultValue: 'Retry' })}
-                                </button>
-                              )}
-                            </Tooltip>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   );
                 })}
