@@ -47,6 +47,8 @@ type AssistantAttemptGroup = {
   assistantAttempts: ReportChatMessage[];
 };
 
+const MESSAGES_PAGE_SIZE = 200;
+
 const mapNumberRecordEqual = (a: Record<string, number>, b: Record<string, number>) => {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
@@ -107,8 +109,10 @@ const buildAssistantAttemptGroups = (allMessages: ReportChatMessage[]): Assistan
   for (const group of groups) {
     const userText = group.userMessage?.content.trim() ?? '';
     if (userText && seenUserContent.has(userText)) {
-      const earlierIndex = seenUserContent.get(userText)!;
-      merged[earlierIndex].assistantAttempts.push(...group.assistantAttempts);
+      const earlierIndex = seenUserContent.get(userText);
+      if (earlierIndex !== undefined) {
+        merged[earlierIndex].assistantAttempts.push(...group.assistantAttempts);
+      }
     } else {
       if (userText) {
         seenUserContent.set(userText, merged.length);
@@ -133,6 +137,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [draft, setDraft] = useState('');
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [pendingEmptySessionId, setPendingEmptySessionId] = useState<string>('');
@@ -316,11 +322,15 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     async (sessionId: string, opts: { forceScroll?: boolean } = {}) => {
       const token = ++loadTokenRef.current;
       setIsLoadingMessages(true);
+      setIsLoadingOlderMessages(false);
       setError('');
       try {
-        const data = await api.reports.getSessionMessages(sessionId);
+        const data = await api.reports.getSessionMessages(sessionId, {
+          limit: MESSAGES_PAGE_SIZE,
+        });
         if (token !== loadTokenRef.current) return;
         setMessages(data);
+        setHasOlderMessages(data.length >= MESSAGES_PAGE_SIZE);
         queueMicrotask(() => {
           if (opts.forceScroll || isAtBottomRef.current) {
             scrollToBottom();
@@ -333,12 +343,53 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       } catch (err) {
         if (token !== loadTokenRef.current) return;
         setError((err as Error).message || t('aiReporting.error'));
+        setHasOlderMessages(false);
       } finally {
         if (token === loadTokenRef.current) setIsLoadingMessages(false);
       }
     },
     [t, scrollToBottom, updateAtBottom],
   );
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!enableAiReporting) return;
+    if (!activeSessionId || isLoadingMessages || isLoadingOlderMessages || !hasOlderMessages)
+      return;
+
+    const oldestLoaded = messages[0];
+    if (!oldestLoaded) {
+      setHasOlderMessages(false);
+      return;
+    }
+
+    setIsLoadingOlderMessages(true);
+    setError('');
+    try {
+      const older = await api.reports.getSessionMessages(activeSessionId, {
+        limit: MESSAGES_PAGE_SIZE,
+        before: oldestLoaded.createdAt,
+      });
+      setMessages((prev) => {
+        if (older.length === 0) return prev;
+        const existingIds = new Set(prev.map((m) => m.id));
+        const prepend = older.filter((m) => !existingIds.has(m.id));
+        return prepend.length > 0 ? [...prepend, ...prev] : prev;
+      });
+      setHasOlderMessages(older.length >= MESSAGES_PAGE_SIZE);
+    } catch (err) {
+      setError((err as Error).message || t('aiReporting.error'));
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  }, [
+    activeSessionId,
+    enableAiReporting,
+    hasOlderMessages,
+    isLoadingMessages,
+    isLoadingOlderMessages,
+    messages,
+    t,
+  ]);
 
   const handleNewChat = async () => {
     if (!enableAiReporting) return;
@@ -976,8 +1027,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setError('');
       setIsLoadingSessions(false);
       setIsLoadingMessages(false);
+      setIsLoadingOlderMessages(false);
       setIsSending(false);
       setHasNewText(false);
+      setHasOlderMessages(false);
       setExpandedThoughtMessageIds([]);
       return;
     }
@@ -988,6 +1041,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     setActiveSessionId('');
     setIsNewChat(false);
     setMessages([]);
+    setHasOlderMessages(false);
+    setIsLoadingOlderMessages(false);
     setExpandedThoughtMessageIds([]);
     setDraft('');
     void loadSessions();
@@ -1003,7 +1058,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   }, [activeSessionId, enableAiReporting, loadMessages]);
 
   useEffect(() => {
-    if (!activeSessionId) setMessages([]);
+    if (!activeSessionId) {
+      setMessages([]);
+      setHasOlderMessages(false);
+      setIsLoadingOlderMessages(false);
+    }
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -1086,6 +1145,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
   const isEmptySession = Boolean(activeSessionId) && !isLoadingMessages && messages.length === 0;
   const isNewChatDisabled = !canSend || isCreatingSession || isEmptySession || isLoadingMessages;
+  const showLoadOlderButton =
+    enableAiReporting &&
+    Boolean(activeSessionId) &&
+    messages.length > 0 &&
+    (hasOlderMessages || isLoadingOlderMessages);
   const showGoToBottom = messages.length > 0 && (!isAtBottom || hasNewText);
   const footerHint = t('aiReporting.footerHint', {
     defaultValue: 'Enter to send, Shift+Enter for a new line.',
@@ -1208,6 +1272,26 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             className="flex-1 overflow-y-auto px-4 md:px-6 pb-52"
           >
             <div className="mx-auto w-full max-w-[760px]">
+              {showLoadOlderButton && (
+                <div className="mb-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void loadOlderMessages()}
+                    disabled={isLoadingOlderMessages || isLoadingMessages}
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
+                      isLoadingOlderMessages || isLoadingMessages
+                        ? 'cursor-not-allowed border-slate-200 text-slate-400 bg-slate-50'
+                        : 'border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50'
+                    }`}
+                  >
+                    {isLoadingOlderMessages && <i className="fa-solid fa-spinner fa-spin" />}
+                    {isLoadingOlderMessages
+                      ? t('aiReporting.loadingOlder', { defaultValue: 'Loading older messages...' })
+                      : t('aiReporting.loadOlder', { defaultValue: 'Load older messages' })}
+                  </button>
+                </div>
+              )}
+
               {isLoadingMessages && (
                 <div className="text-sm text-slate-500">{t('aiReporting.thinking')}</div>
               )}

@@ -19,6 +19,8 @@
     "deleteChatTitle": "Elimina chat",
     "deleteChatConfirm": "Questo rimuovera' \"{{name}}\" dalla cronologia chat.",
     "goToBottom": "Vai in fondo",
+    "loadOlder": "Carica messaggi precedenti",
+    "loadingOlder": "Caricamento messaggi precedenti...",
     "error": "Si e' verificato un errore.",
     "thoughtLabel": "Processo di pensiero",
     "stop": "Ferma",

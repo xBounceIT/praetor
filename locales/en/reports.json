@@ -19,6 +19,8 @@
     "deleteChatTitle": "Delete chat",
     "deleteChatConfirm": "This will remove \"{{name}}\" from your chat history.",
     "goToBottom": "Go to bottom",
+    "loadOlder": "Load older messages",
+    "loadingOlder": "Loading older messages...",
     "error": "Something went wrong.",
     "thoughtLabel": "Thought process",
     "stop": "Stop",

@@ -1,6 +1,7 @@
-import { randomUUID } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
+import { createHash, randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query as dbQuery } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import {
@@ -24,6 +25,15 @@ type GeneralAiConfig = {
   geminiModelId: string;
   openrouterModelId: string;
   currency: string;
+};
+
+type DatasetQueryCounterStore = { count: number };
+const datasetQueryCounterStorage = new AsyncLocalStorage<DatasetQueryCounterStore>();
+
+const query = (text: string, params?: unknown[]) => {
+  const counter = datasetQueryCounterStorage.getStore();
+  if (counter) counter.count += 1;
+  return dbQuery(text, params);
 };
 
 const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
@@ -620,80 +630,274 @@ const applyOptionalFieldPruning = (
   }
 };
 
+const TTL_AI_DATASET_SECONDS = 60;
+
+const DATASET_SECTIONS = [
+  'timesheets',
+  'clients',
+  'projects',
+  'tasks',
+  'quotes',
+  'orders',
+  'invoices',
+  'payments',
+  'expenses',
+  'suppliers',
+  'supplierQuotes',
+  'catalog',
+  'specialBids',
+] as const;
+
+type DatasetSection = (typeof DATASET_SECTIONS)[number];
+
+type DatasetBuildMetrics = {
+  queryCount: number;
+  charCount: number;
+  truncationApplied: boolean;
+  requestedSections: string[];
+  includedSections: string[];
+  droppedSections: string[];
+};
+
+type DatasetBuildResult = {
+  dataset: Record<string, unknown>;
+  metrics: DatasetBuildMetrics;
+};
+
+const datasetSectionTerms: Record<DatasetSection, string[]> = {
+  timesheets: [
+    'timesheet',
+    'timesheets',
+    'time entry',
+    'time entries',
+    'hours',
+    'ore',
+    'ore lavorate',
+    'timbrature',
+  ],
+  clients: ['client', 'clients', 'customer', 'customers', 'cliente', 'clienti'],
+  projects: ['project', 'projects', 'progetto', 'progetti'],
+  tasks: ['task', 'tasks', 'attivita', 'attivita ricorrenti'],
+  quotes: ['quote', 'quotes', 'quotation', 'quotations', 'preventivo', 'preventivi'],
+  orders: ['order', 'orders', 'sale', 'sales', 'ordine', 'ordini'],
+  invoices: ['invoice', 'invoices', 'fattura', 'fatture', 'overdue', 'aging', 'scadenzario'],
+  payments: ['payment', 'payments', 'pagamento', 'pagamenti', 'collection', 'incasso', 'incassi'],
+  expenses: ['expense', 'expenses', 'spesa', 'spese', 'vendor', 'fornitore', 'fornitori'],
+  suppliers: ['supplier', 'suppliers', 'fornitore', 'fornitori'],
+  supplierQuotes: [
+    'supplier quote',
+    'supplier quotes',
+    'purchase order',
+    'offerta fornitore',
+    'offerte fornitori',
+  ],
+  catalog: ['catalog', 'catalogo', 'product', 'products', 'prodotto', 'prodotti', 'subcategory'],
+  specialBids: ['special bid', 'special bids', 'offerta speciale', 'offerte speciali'],
+};
+
+const normalizeQueryText = (value: string) =>
+  value.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+const includesTerm = (haystack: string, term: string) => {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`);
+  return pattern.test(haystack);
+};
+
+const shouldIncludeDatasetSection = (
+  requestedSections: Set<DatasetSection> | null,
+  section: DatasetSection,
+) => !requestedSections || requestedSections.size === 0 || requestedSections.has(section);
+
+const determineRequestedSections = (
+  message: string,
+  convo: Array<{ role: 'user' | 'assistant'; content: string }>,
+): Set<DatasetSection> | null => {
+  const recentUserMessages = convo
+    .filter(
+      (entry) =>
+        entry.role === 'user' && entry.content.trim() && !isRetryRewritePrompt(entry.content),
+    )
+    .slice(-3)
+    .map((entry) => entry.content);
+
+  const detectionText = normalizeQueryText([message, ...recentUserMessages].join(' '));
+  if (!detectionText) return null;
+
+  const overviewTerms = [
+    'overview',
+    'overall',
+    'everything',
+    'all data',
+    'full report',
+    'panoramica',
+    'riepilogo completo',
+    'tutto',
+    'dati completi',
+  ];
+  if (overviewTerms.some((term) => includesTerm(detectionText, term))) {
+    return null;
+  }
+
+  const matchedSections = new Set<DatasetSection>();
+  for (const section of DATASET_SECTIONS) {
+    const terms = datasetSectionTerms[section];
+    if (terms.some((term) => includesTerm(detectionText, normalizeQueryText(term)))) {
+      matchedSections.add(section);
+    }
+  }
+
+  if (matchedSections.size === 0) return null;
+  if (matchedSections.size >= 8) return null;
+
+  if (matchedSections.has('tasks')) matchedSections.add('projects');
+  if (matchedSections.has('projects')) matchedSections.add('tasks');
+  if (matchedSections.has('supplierQuotes')) matchedSections.add('suppliers');
+
+  return matchedSections;
+};
+
+const getPermissionsHash = (request: FastifyRequest) => {
+  const permissions = Array.isArray(request.user?.permissions)
+    ? [...request.user.permissions].sort().join('|')
+    : '';
+  return createHash('sha1').update(permissions).digest('hex').slice(0, 12);
+};
+
+const getRequestedSectionsKey = (requestedSections: Set<DatasetSection> | null) =>
+  requestedSections && requestedSections.size > 0
+    ? Array.from(requestedSections).sort().join(',')
+    : 'all';
+
+const logDatasetBuildTelemetry = (
+  request: FastifyRequest,
+  payload: {
+    cacheStatus: string;
+    durationMs: number;
+    metrics: DatasetBuildMetrics;
+  },
+) => {
+  request.log.info(
+    {
+      cache_status: payload.cacheStatus,
+      dataset_build_ms: payload.durationMs,
+      dataset_query_count: payload.metrics.queryCount,
+      dataset_char_count: payload.metrics.charCount,
+      truncation_applied: payload.metrics.truncationApplied,
+      requested_sections: payload.metrics.requestedSections,
+      included_sections: payload.metrics.includedSections,
+      dropped_sections: payload.metrics.droppedSections,
+    },
+    'AI reporting dataset prepared',
+  );
+};
+
 const buildBusinessDataset = async (
   request: FastifyRequest,
   cfg: GeneralAiConfig,
   fromDate: string,
   toDate: string,
-) => {
-  const viewerId = request.user?.id || '';
-  const permissionsApplied = new Set<string>();
-  const truncationState = {
-    applied: false,
-    level: 0,
-    droppedSections: [] as string[],
-    reducedLists: [] as string[],
-    removedFields: [] as string[],
-  };
+  requestedSections: Set<DatasetSection> | null = null,
+): Promise<DatasetBuildResult> =>
+  datasetQueryCounterStorage.run({ count: 0 }, async () => {
+    const viewerId = request.user?.id || '';
+    const permissionsApplied = new Set<string>();
+    const includedSections = new Set<DatasetSection>();
+    const requestedSectionsLabel = requestedSections
+      ? Array.from(requestedSections).sort()
+      : ['all'];
+    const contextState = {
+      requestedSections: requestedSectionsLabel,
+      includedSections: [] as string[],
+      droppedSections: [] as string[],
+      finalCharCount: 0,
+    };
+    const truncationState = {
+      applied: false,
+      level: 0,
+      droppedSections: [] as string[],
+      reducedLists: [] as string[],
+      removedFields: [] as string[],
+    };
 
-  const dataset: Record<string, unknown> = {
-    meta: {
-      datasetVersion: 2,
-      generatedAt: new Date().toISOString(),
-      fromDate,
-      toDate,
-      currency: cfg.currency || '',
-      scope: {
-        viewerId,
-        permissionsApplied: [] as string[],
+    const dataset: Record<string, unknown> = {
+      meta: {
+        datasetVersion: 2,
+        generatedAt: new Date().toISOString(),
+        fromDate,
+        toDate,
+        currency: cfg.currency || '',
+        scope: {
+          viewerId,
+          permissionsApplied: [] as string[],
+        },
+        context: contextState,
+        truncation: truncationState,
       },
-      truncation: truncationState,
-    },
-  };
+    };
 
-  const canViewTimesheets = hasPermission(request, 'timesheets.tracker.view');
-  const canViewAllTimesheets =
-    canViewTimesheets && hasPermission(request, 'timesheets.tracker_all.view');
-  const allowedTimesheetUserIds = canViewTimesheets
-    ? canViewAllTimesheets
-      ? null
-      : Array.from(new Set([viewerId, ...(await getManagedUserIds(viewerId))]))
-    : null;
+    const finalizeDataset = (charCount: number): DatasetBuildResult => {
+      contextState.includedSections = Array.from(includedSections).sort();
+      contextState.droppedSections = [...truncationState.droppedSections];
+      contextState.finalCharCount = charCount;
+      const datasetCounter = datasetQueryCounterStorage.getStore();
+      return {
+        dataset,
+        metrics: {
+          queryCount: datasetCounter?.count ?? 0,
+          charCount,
+          truncationApplied: truncationState.applied,
+          requestedSections: [...contextState.requestedSections],
+          includedSections: [...contextState.includedSections],
+          droppedSections: [...contextState.droppedSections],
+        },
+      };
+    };
 
-  if (canViewTimesheets) {
-    addGrantedPermissions(
-      request,
-      ['timesheets.tracker.view', 'timesheets.tracker_all.view'],
-      permissionsApplied,
-    );
-  }
+    const canViewTimesheets = hasPermission(request, 'timesheets.tracker.view');
+    const canViewAllTimesheets =
+      canViewTimesheets && hasPermission(request, 'timesheets.tracker_all.view');
+    const allowedTimesheetUserIds = canViewTimesheets
+      ? canViewAllTimesheets
+        ? null
+        : Array.from(new Set([viewerId, ...(await getManagedUserIds(viewerId))]))
+      : null;
 
-  const listLimits = {
-    items: 200,
-    top: 50,
-  };
+    if (canViewTimesheets) {
+      addGrantedPermissions(
+        request,
+        ['timesheets.tracker.view', 'timesheets.tracker_all.view'],
+        permissionsApplied,
+      );
+    }
 
-  // Timesheets (scoped to self+managed unless tracker_all is present)
-  if (canViewTimesheets) {
-    const baseWhere = allowedTimesheetUserIds
-      ? {
-          clause: 'WHERE te.date >= $1 AND te.date <= $2 AND te.user_id = ANY($3)',
-          params: [fromDate, toDate, allowedTimesheetUserIds],
-        }
-      : { clause: 'WHERE te.date >= $1 AND te.date <= $2', params: [fromDate, toDate] };
+    const listLimits = {
+      items: 200,
+      top: 50,
+    };
 
-    const totals = await query(
-      `SELECT
+    // Timesheets (scoped to self+managed unless tracker_all is present)
+    if (canViewTimesheets && shouldIncludeDatasetSection(requestedSections, 'timesheets')) {
+      includedSections.add('timesheets');
+      const baseWhere = allowedTimesheetUserIds
+        ? {
+            clause: 'WHERE te.date >= $1 AND te.date <= $2 AND te.user_id = ANY($3)',
+            params: [fromDate, toDate, allowedTimesheetUserIds],
+          }
+        : { clause: 'WHERE te.date >= $1 AND te.date <= $2', params: [fromDate, toDate] };
+
+      const totals = await query(
+        `SELECT
          COALESCE(SUM(te.duration), 0) as hours,
          COUNT(*) as entry_count,
          COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as total_cost
        FROM time_entries te
        ${baseWhere.clause}`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const topUsers = await query(
-      `SELECT
+      const topUsers = await query(
+        `SELECT
          u.name as label,
          COALESCE(SUM(te.duration), 0) as value,
          COUNT(*) as entry_count
@@ -703,11 +907,11 @@ const buildBusinessDataset = async (
        GROUP BY u.name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const topClients = await query(
-      `SELECT
+      const topClients = await query(
+        `SELECT
          te.client_name as label,
          COALESCE(SUM(te.duration), 0) as value,
          COUNT(*) as entry_count
@@ -716,11 +920,11 @@ const buildBusinessDataset = async (
        GROUP BY te.client_name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const topProjects = await query(
-      `SELECT
+      const topProjects = await query(
+        `SELECT
          te.project_name as label,
          COALESCE(SUM(te.duration), 0) as value,
          COUNT(*) as entry_count
@@ -729,11 +933,11 @@ const buildBusinessDataset = async (
        GROUP BY te.project_name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const topTasks = await query(
-      `SELECT
+      const topTasks = await query(
+        `SELECT
          te.task as label,
          COALESCE(SUM(te.duration), 0) as value,
          COUNT(*) as entry_count
@@ -742,11 +946,11 @@ const buildBusinessDataset = async (
        GROUP BY te.task
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const byMonth = await query(
-      `SELECT
+      const byMonth = await query(
+        `SELECT
          TO_CHAR(DATE_TRUNC('month', te.date), 'YYYY-MM') as label,
          COALESCE(SUM(te.duration), 0) as hours,
          COUNT(*) as entry_count,
@@ -755,11 +959,11 @@ const buildBusinessDataset = async (
        ${baseWhere.clause}
        GROUP BY DATE_TRUNC('month', te.date)
        ORDER BY label ASC`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const byLocation = await query(
-      `SELECT
+      const byLocation = await query(
+        `SELECT
          COALESCE(NULLIF(te.location, ''), 'unknown') as location,
          COALESCE(SUM(te.duration), 0) as hours,
          COUNT(*) as entry_count
@@ -767,173 +971,174 @@ const buildBusinessDataset = async (
        ${baseWhere.clause}
        GROUP BY COALESCE(NULLIF(te.location, ''), 'unknown')
        ORDER BY hours DESC`,
-      baseWhere.params,
-    );
+        baseWhere.params,
+      );
 
-    const totalHours = toNumber(totals.rows[0]?.hours);
-    const totalEntries = toNumber(totals.rows[0]?.entry_count);
+      const totalHours = toNumber(totals.rows[0]?.hours);
+      const totalEntries = toNumber(totals.rows[0]?.entry_count);
 
-    dataset.timesheets = {
-      totals: {
-        hours: totalHours,
-        entryCount: totalEntries,
-        cost: toNumber(totals.rows[0]?.total_cost),
-        avgEntryHours: totalEntries > 0 ? totalHours / totalEntries : 0,
-      },
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        hours: toNumber(r.hours),
-        entryCount: toNumber(r.entry_count),
-        cost: toNumber(r.total_cost),
-      })),
-      byLocation: byLocation.rows.map((r) => ({
-        location: toText(r.location),
-        hours: toNumber(r.hours),
-        entryCount: toNumber(r.entry_count),
-      })),
-      topHoursByUser: capTop(
-        topUsers.rows.map((r) => ({
+      dataset.timesheets = {
+        totals: {
+          hours: totalHours,
+          entryCount: totalEntries,
+          cost: toNumber(totals.rows[0]?.total_cost),
+          avgEntryHours: totalEntries > 0 ? totalHours / totalEntries : 0,
+        },
+        byMonth: byMonth.rows.map((r) => ({
           label: toText(r.label),
-          value: toNumber(r.value),
+          hours: toNumber(r.hours),
+          entryCount: toNumber(r.entry_count),
+          cost: toNumber(r.total_cost),
+        })),
+        byLocation: byLocation.rows.map((r) => ({
+          location: toText(r.location),
+          hours: toNumber(r.hours),
           entryCount: toNumber(r.entry_count),
         })),
-        listLimits.top,
-      ),
-      topHoursByClient: capTop(
-        topClients.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.value),
-          entryCount: toNumber(r.entry_count),
-        })),
-        listLimits.top,
-      ),
-      topHoursByProject: capTop(
-        topProjects.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.value),
-          entryCount: toNumber(r.entry_count),
-        })),
-        listLimits.top,
-      ),
-      topHoursByTask: capTop(
-        topTasks.rows.map((r) => ({
-          label: toText(r.label),
-          value: toNumber(r.value),
-          entryCount: toNumber(r.entry_count),
-        })),
-        listLimits.top,
-      ),
-    };
-  }
+        topHoursByUser: capTop(
+          topUsers.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            entryCount: toNumber(r.entry_count),
+          })),
+          listLimits.top,
+        ),
+        topHoursByClient: capTop(
+          topClients.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            entryCount: toNumber(r.entry_count),
+          })),
+          listLimits.top,
+        ),
+        topHoursByProject: capTop(
+          topProjects.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            entryCount: toNumber(r.entry_count),
+          })),
+          listLimits.top,
+        ),
+        topHoursByTask: capTop(
+          topTasks.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            entryCount: toNumber(r.entry_count),
+          })),
+          listLimits.top,
+        ),
+      };
+    }
 
-  const canViewQuotes = hasPermission(request, 'sales.client_quotes.view');
-  const canViewOrders = hasPermission(request, 'accounting.clients_orders.view');
-  const canViewInvoices = hasPermission(request, 'accounting.clients_invoices.view');
-  const canViewPayments = hasPermission(request, 'finances.payments.view');
-  const canViewExpenses = hasPermission(request, 'finances.expenses.view');
-  const canViewSupplierQuotes = hasPermission(request, 'suppliers.quotes.view');
-  const canViewSpecialBids = hasPermission(request, 'catalog.special_bids.view');
+    const canViewQuotes = hasPermission(request, 'sales.client_quotes.view');
+    const canViewOrders = hasPermission(request, 'accounting.clients_orders.view');
+    const canViewInvoices = hasPermission(request, 'accounting.clients_invoices.view');
+    const canViewPayments = hasPermission(request, 'finances.payments.view');
+    const canViewExpenses = hasPermission(request, 'finances.expenses.view');
+    const canViewSupplierQuotes = hasPermission(request, 'suppliers.quotes.view');
+    const canViewSpecialBids = hasPermission(request, 'catalog.special_bids.view');
 
-  if (canViewQuotes)
-    addGrantedPermissions(request, ['sales.client_quotes.view'], permissionsApplied);
-  if (canViewOrders) {
-    addGrantedPermissions(request, ['accounting.clients_orders.view'], permissionsApplied);
-  }
-  if (canViewInvoices) {
-    addGrantedPermissions(request, ['accounting.clients_invoices.view'], permissionsApplied);
-  }
-  if (canViewPayments) {
-    addGrantedPermissions(request, ['finances.payments.view'], permissionsApplied);
-  }
-  if (canViewExpenses) {
-    addGrantedPermissions(request, ['finances.expenses.view'], permissionsApplied);
-  }
-  if (canViewSupplierQuotes) {
-    addGrantedPermissions(request, ['suppliers.quotes.view'], permissionsApplied);
-  }
-  if (canViewSpecialBids) {
-    addGrantedPermissions(request, ['catalog.special_bids.view'], permissionsApplied);
-  }
+    if (canViewQuotes)
+      addGrantedPermissions(request, ['sales.client_quotes.view'], permissionsApplied);
+    if (canViewOrders) {
+      addGrantedPermissions(request, ['accounting.clients_orders.view'], permissionsApplied);
+    }
+    if (canViewInvoices) {
+      addGrantedPermissions(request, ['accounting.clients_invoices.view'], permissionsApplied);
+    }
+    if (canViewPayments) {
+      addGrantedPermissions(request, ['finances.payments.view'], permissionsApplied);
+    }
+    if (canViewExpenses) {
+      addGrantedPermissions(request, ['finances.expenses.view'], permissionsApplied);
+    }
+    if (canViewSupplierQuotes) {
+      addGrantedPermissions(request, ['suppliers.quotes.view'], permissionsApplied);
+    }
+    if (canViewSpecialBids) {
+      addGrantedPermissions(request, ['catalog.special_bids.view'], permissionsApplied);
+    }
 
-  const canListProducts = [
-    'catalog.internal_listing.view',
-    'catalog.external_listing.view',
-    'catalog.special_bids.view',
-    'suppliers.quotes.view',
-  ].some((p) => hasPermission(request, p));
-  if (canListProducts) {
-    addGrantedPermissions(
-      request,
-      [
-        'catalog.internal_listing.view',
-        'catalog.external_listing.view',
-        'catalog.special_bids.view',
-        'suppliers.quotes.view',
-      ],
-      permissionsApplied,
-    );
-  }
+    const canListProducts = [
+      'catalog.internal_listing.view',
+      'catalog.external_listing.view',
+      'catalog.special_bids.view',
+      'suppliers.quotes.view',
+    ].some((p) => hasPermission(request, p));
+    if (canListProducts) {
+      addGrantedPermissions(
+        request,
+        [
+          'catalog.internal_listing.view',
+          'catalog.external_listing.view',
+          'catalog.special_bids.view',
+          'suppliers.quotes.view',
+        ],
+        permissionsApplied,
+      );
+    }
 
-  // Clients (scoped if clients_all not present)
-  const canListClients = [
-    'crm.clients.view',
-    'crm.clients_all.view',
-    'timesheets.tracker.view',
-    'timesheets.recurring.view',
-    'projects.manage.view',
-    'projects.tasks.view',
-    'sales.client_quotes.view',
-    'accounting.clients_orders.view',
-    'accounting.clients_invoices.view',
-    'catalog.special_bids.view',
-    'catalog.internal_listing.view',
-    'catalog.external_listing.view',
-    'finances.payments.view',
-    'finances.expenses.view',
-    'suppliers.quotes.view',
-    'administration.user_management.view',
-    'administration.user_management.update',
-  ].some((p) => hasPermission(request, p));
+    // Clients (scoped if clients_all not present)
+    const canListClients = [
+      'crm.clients.view',
+      'crm.clients_all.view',
+      'timesheets.tracker.view',
+      'timesheets.recurring.view',
+      'projects.manage.view',
+      'projects.tasks.view',
+      'sales.client_quotes.view',
+      'accounting.clients_orders.view',
+      'accounting.clients_invoices.view',
+      'catalog.special_bids.view',
+      'catalog.internal_listing.view',
+      'catalog.external_listing.view',
+      'finances.payments.view',
+      'finances.expenses.view',
+      'suppliers.quotes.view',
+      'administration.user_management.view',
+      'administration.user_management.update',
+    ].some((p) => hasPermission(request, p));
 
-  if (canListClients) {
-    addGrantedPermissions(
-      request,
-      [
-        'crm.clients.view',
-        'crm.clients_all.view',
-        'timesheets.tracker.view',
-        'timesheets.recurring.view',
-        'projects.manage.view',
-        'projects.tasks.view',
-        'sales.client_quotes.view',
-        'accounting.clients_orders.view',
-        'accounting.clients_invoices.view',
-        'catalog.special_bids.view',
-        'catalog.internal_listing.view',
-        'catalog.external_listing.view',
-        'finances.payments.view',
-        'finances.expenses.view',
-        'suppliers.quotes.view',
-        'administration.user_management.view',
-        'administration.user_management.update',
-      ],
-      permissionsApplied,
-    );
+    if (canListClients && shouldIncludeDatasetSection(requestedSections, 'clients')) {
+      includedSections.add('clients');
+      addGrantedPermissions(
+        request,
+        [
+          'crm.clients.view',
+          'crm.clients_all.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+          'projects.manage.view',
+          'projects.tasks.view',
+          'sales.client_quotes.view',
+          'accounting.clients_orders.view',
+          'accounting.clients_invoices.view',
+          'catalog.special_bids.view',
+          'catalog.internal_listing.view',
+          'catalog.external_listing.view',
+          'finances.payments.view',
+          'finances.expenses.view',
+          'suppliers.quotes.view',
+          'administration.user_management.view',
+          'administration.user_management.update',
+        ],
+        permissionsApplied,
+      );
 
-    const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
-    const countRes = canViewAllClients
-      ? await query('SELECT COUNT(*) as count FROM clients')
-      : await query(
-          `SELECT COUNT(*) as count
+      const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
+      const countRes = canViewAllClients
+        ? await query('SELECT COUNT(*) as count FROM clients')
+        : await query(
+            `SELECT COUNT(*) as count
            FROM clients c
            JOIN user_clients uc ON uc.client_id = c.id
            WHERE uc.user_id = $1`,
-          [viewerId],
-        );
+            [viewerId],
+          );
 
-    const listRes = canViewAllClients
-      ? await query(
-          `SELECT
+      const listRes = canViewAllClients
+        ? await query(
+            `SELECT
              c.id,
              c.name,
              c.client_code,
@@ -946,9 +1151,9 @@ const buildBusinessDataset = async (
            FROM clients c
            ORDER BY c.name ASC
            LIMIT ${listLimits.items}`,
-        )
-      : await query(
-          `SELECT DISTINCT
+          )
+        : await query(
+            `SELECT DISTINCT
              c.id,
              c.name,
              c.client_code,
@@ -963,43 +1168,43 @@ const buildBusinessDataset = async (
            WHERE uc.user_id = $1
            ORDER BY c.name ASC
            LIMIT ${listLimits.items}`,
-          [viewerId],
-        );
+            [viewerId],
+          );
 
-    const clientIds = listRes.rows.map((r) => toText(r.id)).filter(Boolean);
-    const activityByClient = new Map<
-      string,
-      {
-        clientId: string;
-        quotesCount: number | null;
-        quotesNet: number | null;
-        ordersCount: number | null;
-        ordersNet: number | null;
-        invoicesCount: number | null;
-        invoicesTotal: number | null;
-        invoicesOutstanding: number | null;
-        paymentsTotal: number | null;
-        timesheetHours: number | null;
+      const clientIds = listRes.rows.map((r) => toText(r.id)).filter(Boolean);
+      const activityByClient = new Map<
+        string,
+        {
+          clientId: string;
+          quotesCount: number | null;
+          quotesNet: number | null;
+          ordersCount: number | null;
+          ordersNet: number | null;
+          invoicesCount: number | null;
+          invoicesTotal: number | null;
+          invoicesOutstanding: number | null;
+          paymentsTotal: number | null;
+          timesheetHours: number | null;
+        }
+      >();
+      for (const clientId of clientIds) {
+        activityByClient.set(clientId, {
+          clientId,
+          quotesCount: null,
+          quotesNet: null,
+          ordersCount: null,
+          ordersNet: null,
+          invoicesCount: null,
+          invoicesTotal: null,
+          invoicesOutstanding: null,
+          paymentsTotal: null,
+          timesheetHours: null,
+        });
       }
-    >();
-    for (const clientId of clientIds) {
-      activityByClient.set(clientId, {
-        clientId,
-        quotesCount: null,
-        quotesNet: null,
-        ordersCount: null,
-        ordersNet: null,
-        invoicesCount: null,
-        invoicesTotal: null,
-        invoicesOutstanding: null,
-        paymentsTotal: null,
-        timesheetHours: null,
-      });
-    }
 
-    if (clientIds.length > 0 && canViewQuotes) {
-      const perClientQuotes = await query(
-        `WITH per_quote AS (
+      if (clientIds.length > 0 && canViewQuotes) {
+        const perClientQuotes = await query(
+          `WITH per_quote AS (
           SELECT
             q.id,
             q.client_id,
@@ -1019,20 +1224,20 @@ const buildBusinessDataset = async (
           COALESCE(SUM(net_value), 0) as net_value
         FROM per_quote
         GROUP BY client_id`,
-        [fromDate, toDate, clientIds],
-      );
-      for (const row of perClientQuotes.rows) {
-        const clientId = toText(row.client_id);
-        const target = activityByClient.get(clientId);
-        if (!target) continue;
-        target.quotesCount = toNumber(row.quote_count);
-        target.quotesNet = toNumber(row.net_value);
+          [fromDate, toDate, clientIds],
+        );
+        for (const row of perClientQuotes.rows) {
+          const clientId = toText(row.client_id);
+          const target = activityByClient.get(clientId);
+          if (!target) continue;
+          target.quotesCount = toNumber(row.quote_count);
+          target.quotesNet = toNumber(row.net_value);
+        }
       }
-    }
 
-    if (clientIds.length > 0 && canViewOrders) {
-      const perClientOrders = await query(
-        `WITH per_order AS (
+      if (clientIds.length > 0 && canViewOrders) {
+        const perClientOrders = await query(
+          `WITH per_order AS (
           SELECT
             s.id,
             s.client_id,
@@ -1052,20 +1257,20 @@ const buildBusinessDataset = async (
           COALESCE(SUM(net_value), 0) as net_value
         FROM per_order
         GROUP BY client_id`,
-        [fromDate, toDate, clientIds],
-      );
-      for (const row of perClientOrders.rows) {
-        const clientId = toText(row.client_id);
-        const target = activityByClient.get(clientId);
-        if (!target) continue;
-        target.ordersCount = toNumber(row.order_count);
-        target.ordersNet = toNumber(row.net_value);
+          [fromDate, toDate, clientIds],
+        );
+        for (const row of perClientOrders.rows) {
+          const clientId = toText(row.client_id);
+          const target = activityByClient.get(clientId);
+          if (!target) continue;
+          target.ordersCount = toNumber(row.order_count);
+          target.ordersNet = toNumber(row.net_value);
+        }
       }
-    }
 
-    if (clientIds.length > 0 && canViewInvoices) {
-      const perClientInvoices = await query(
-        `SELECT
+      if (clientIds.length > 0 && canViewInvoices) {
+        const perClientInvoices = await query(
+          `SELECT
            client_id,
            COUNT(*) as invoice_count,
            COALESCE(SUM(total), 0) as total_sum,
@@ -1075,21 +1280,21 @@ const buildBusinessDataset = async (
            AND issue_date <= $2
            AND client_id = ANY($3)
          GROUP BY client_id`,
-        [fromDate, toDate, clientIds],
-      );
-      for (const row of perClientInvoices.rows) {
-        const clientId = toText(row.client_id);
-        const target = activityByClient.get(clientId);
-        if (!target) continue;
-        target.invoicesCount = toNumber(row.invoice_count);
-        target.invoicesTotal = toNumber(row.total_sum);
-        target.invoicesOutstanding = toNumber(row.outstanding_sum);
+          [fromDate, toDate, clientIds],
+        );
+        for (const row of perClientInvoices.rows) {
+          const clientId = toText(row.client_id);
+          const target = activityByClient.get(clientId);
+          if (!target) continue;
+          target.invoicesCount = toNumber(row.invoice_count);
+          target.invoicesTotal = toNumber(row.total_sum);
+          target.invoicesOutstanding = toNumber(row.outstanding_sum);
+        }
       }
-    }
 
-    if (clientIds.length > 0 && canViewPayments) {
-      const perClientPayments = await query(
-        `SELECT
+      if (clientIds.length > 0 && canViewPayments) {
+        const perClientPayments = await query(
+          `SELECT
            client_id,
            COALESCE(SUM(amount), 0) as total_amount
          FROM payments
@@ -1097,20 +1302,20 @@ const buildBusinessDataset = async (
            AND payment_date <= $2
            AND client_id = ANY($3)
          GROUP BY client_id`,
-        [fromDate, toDate, clientIds],
-      );
-      for (const row of perClientPayments.rows) {
-        const clientId = toText(row.client_id);
-        const target = activityByClient.get(clientId);
-        if (!target) continue;
-        target.paymentsTotal = toNumber(row.total_amount);
+          [fromDate, toDate, clientIds],
+        );
+        for (const row of perClientPayments.rows) {
+          const clientId = toText(row.client_id);
+          const target = activityByClient.get(clientId);
+          if (!target) continue;
+          target.paymentsTotal = toNumber(row.total_amount);
+        }
       }
-    }
 
-    if (clientIds.length > 0 && canViewTimesheets) {
-      const timesheetByClient = canViewAllTimesheets
-        ? await query(
-            `SELECT
+      if (clientIds.length > 0 && canViewTimesheets) {
+        const timesheetByClient = canViewAllTimesheets
+          ? await query(
+              `SELECT
                te.client_id,
                COALESCE(SUM(te.duration), 0) as hours
              FROM time_entries te
@@ -1118,10 +1323,10 @@ const buildBusinessDataset = async (
                AND te.date <= $2
                AND te.client_id = ANY($3)
              GROUP BY te.client_id`,
-            [fromDate, toDate, clientIds],
-          )
-        : await query(
-            `SELECT
+              [fromDate, toDate, clientIds],
+            )
+          : await query(
+              `SELECT
                te.client_id,
                COALESCE(SUM(te.duration), 0) as hours
              FROM time_entries te
@@ -1130,73 +1335,76 @@ const buildBusinessDataset = async (
                AND te.user_id = ANY($3)
                AND te.client_id = ANY($4)
              GROUP BY te.client_id`,
-            [fromDate, toDate, allowedTimesheetUserIds || [], clientIds],
-          );
-      for (const row of timesheetByClient.rows) {
-        const clientId = toText(row.client_id);
-        const target = activityByClient.get(clientId);
-        if (!target) continue;
-        target.timesheetHours = toNumber(row.hours);
+              [fromDate, toDate, allowedTimesheetUserIds || [], clientIds],
+            );
+        for (const row of timesheetByClient.rows) {
+          const clientId = toText(row.client_id);
+          const target = activityByClient.get(clientId);
+          if (!target) continue;
+          target.timesheetHours = toNumber(row.hours);
+        }
       }
+
+      dataset.clients = {
+        count: toNumber(countRes.rows[0]?.count),
+        items: listRes.rows.map((r) => ({
+          id: toText(r.id),
+          name: toText(r.name),
+          clientCode: toText(r.client_code),
+          type: toText(r.type),
+          contactName: toText(r.contact_name),
+          email: toText(r.email),
+          phone: toText(r.phone),
+          address: toText(r.address),
+          isDisabled: Boolean(r.is_disabled),
+        })),
+        activitySummary: clientIds
+          .map((clientId) => activityByClient.get(clientId))
+          .filter(Boolean),
+      };
     }
 
-    dataset.clients = {
-      count: toNumber(countRes.rows[0]?.count),
-      items: listRes.rows.map((r) => ({
-        id: toText(r.id),
-        name: toText(r.name),
-        clientCode: toText(r.client_code),
-        type: toText(r.type),
-        contactName: toText(r.contact_name),
-        email: toText(r.email),
-        phone: toText(r.phone),
-        address: toText(r.address),
-        isDisabled: Boolean(r.is_disabled),
-      })),
-      activitySummary: clientIds.map((clientId) => activityByClient.get(clientId)).filter(Boolean),
-    };
-  }
+    // Projects (scoped if manage_all not present)
+    const canListProjects = [
+      'projects.manage.view',
+      'projects.tasks.view',
+      'timesheets.tracker.view',
+      'timesheets.recurring.view',
+    ].some((p) => hasPermission(request, p));
+    if (canListProjects && shouldIncludeDatasetSection(requestedSections, 'projects')) {
+      includedSections.add('projects');
+      addGrantedPermissions(
+        request,
+        [
+          'projects.manage.view',
+          'projects.tasks.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+        ],
+        permissionsApplied,
+      );
 
-  // Projects (scoped if manage_all not present)
-  const canListProjects = [
-    'projects.manage.view',
-    'projects.tasks.view',
-    'timesheets.tracker.view',
-    'timesheets.recurring.view',
-  ].some((p) => hasPermission(request, p));
-  if (canListProjects) {
-    addGrantedPermissions(
-      request,
-      [
-        'projects.manage.view',
-        'projects.tasks.view',
-        'timesheets.tracker.view',
-        'timesheets.recurring.view',
-      ],
-      permissionsApplied,
-    );
-
-    const canViewAllProjects = hasPermission(request, 'projects.manage_all.view');
-    const summaryRes = canViewAllProjects
-      ? await query(
-          `SELECT
+      const canViewAllProjects = hasPermission(request, 'projects.manage_all.view');
+      const summaryRes = canViewAllProjects
+        ? await query(
+            `SELECT
              COUNT(*) as count,
              SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
            FROM projects`,
-        )
-      : await query(
-          `SELECT
+          )
+        : await query(
+            `SELECT
              COUNT(*) as count,
              SUM(CASE WHEN p.is_disabled THEN 1 ELSE 0 END) as disabled_count
            FROM projects p
            JOIN user_projects up ON up.project_id = p.id
            WHERE up.user_id = $1`,
-          [viewerId],
-        );
+            [viewerId],
+          );
 
-    const itemsRes = canViewAllProjects
-      ? await query(
-          `SELECT
+      const itemsRes = canViewAllProjects
+        ? await query(
+            `SELECT
              p.id,
              p.name,
              p.client_id,
@@ -1207,9 +1415,9 @@ const buildBusinessDataset = async (
            JOIN clients c ON c.id = p.client_id
            ORDER BY p.name ASC
            LIMIT ${listLimits.items}`,
-        )
-      : await query(
-          `SELECT
+          )
+        : await query(
+            `SELECT
              p.id,
              p.name,
              p.client_id,
@@ -1222,27 +1430,27 @@ const buildBusinessDataset = async (
            WHERE up.user_id = $1
            ORDER BY p.name ASC
            LIMIT ${listLimits.items}`,
-          [viewerId],
-        );
+            [viewerId],
+          );
 
-    let topByHours: Array<{ label: string; value: number; cost: number }> = [];
-    let topByCost: Array<{ label: string; value: number; hours: number }> = [];
+      let topByHours: Array<{ label: string; value: number; cost: number }> = [];
+      let topByCost: Array<{ label: string; value: number; hours: number }> = [];
 
-    if (canViewTimesheets) {
-      const rows = canViewAllProjects
-        ? canViewAllTimesheets
-          ? await query(
-              `SELECT
+      if (canViewTimesheets) {
+        const rows = canViewAllProjects
+          ? canViewAllTimesheets
+            ? await query(
+                `SELECT
                  te.project_name as label,
                  COALESCE(SUM(te.duration), 0) as hours,
                  COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
                FROM time_entries te
                WHERE te.date >= $1 AND te.date <= $2
                GROUP BY te.project_name`,
-              [fromDate, toDate],
-            )
-          : await query(
-              `SELECT
+                [fromDate, toDate],
+              )
+            : await query(
+                `SELECT
                  te.project_name as label,
                  COALESCE(SUM(te.duration), 0) as hours,
                  COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
@@ -1251,11 +1459,11 @@ const buildBusinessDataset = async (
                  AND te.date <= $2
                  AND te.user_id = ANY($3)
                GROUP BY te.project_name`,
-              [fromDate, toDate, allowedTimesheetUserIds || []],
-            )
-        : canViewAllTimesheets
-          ? await query(
-              `SELECT
+                [fromDate, toDate, allowedTimesheetUserIds || []],
+              )
+          : canViewAllTimesheets
+            ? await query(
+                `SELECT
                  te.project_name as label,
                  COALESCE(SUM(te.duration), 0) as hours,
                  COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
@@ -1265,10 +1473,10 @@ const buildBusinessDataset = async (
                  AND te.date <= $2
                  AND up.user_id = $3
                GROUP BY te.project_name`,
-              [fromDate, toDate, viewerId],
-            )
-          : await query(
-              `SELECT
+                [fromDate, toDate, viewerId],
+              )
+            : await query(
+                `SELECT
                  te.project_name as label,
                  COALESCE(SUM(te.duration), 0) as hours,
                  COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) as cost
@@ -1279,92 +1487,93 @@ const buildBusinessDataset = async (
                  AND te.user_id = ANY($3)
                  AND up.user_id = $4
                GROUP BY te.project_name`,
-              [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
-            );
+                [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
+              );
 
-      topByHours = capTop(
-        rows.rows
-          .map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.hours),
-            cost: toNumber(r.cost),
-          }))
-          .sort((a, b) => b.value - a.value),
-        listLimits.top,
-      );
-      topByCost = capTop(
-        rows.rows
-          .map((r) => ({
-            label: toText(r.label),
-            value: toNumber(r.cost),
-            hours: toNumber(r.hours),
-          }))
-          .sort((a, b) => b.value - a.value),
-        listLimits.top,
-      );
+        topByHours = capTop(
+          rows.rows
+            .map((r) => ({
+              label: toText(r.label),
+              value: toNumber(r.hours),
+              cost: toNumber(r.cost),
+            }))
+            .sort((a, b) => b.value - a.value),
+          listLimits.top,
+        );
+        topByCost = capTop(
+          rows.rows
+            .map((r) => ({
+              label: toText(r.label),
+              value: toNumber(r.cost),
+              hours: toNumber(r.hours),
+            }))
+            .sort((a, b) => b.value - a.value),
+          listLimits.top,
+        );
+      }
+
+      const projectCount = toNumber(summaryRes.rows[0]?.count);
+      const disabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
+      dataset.projects = {
+        count: projectCount,
+        activeCount: Math.max(projectCount - disabledCount, 0),
+        disabledCount,
+        items: itemsRes.rows.map((r) => ({
+          id: toText(r.id),
+          name: toText(r.name),
+          clientId: toText(r.client_id),
+          clientName: toText(r.client_name),
+          description: toText(r.description),
+          isDisabled: Boolean(r.is_disabled),
+        })),
+        topByHours,
+        topByCost,
+      };
     }
 
-    const projectCount = toNumber(summaryRes.rows[0]?.count);
-    const disabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
-    dataset.projects = {
-      count: projectCount,
-      activeCount: Math.max(projectCount - disabledCount, 0),
-      disabledCount,
-      items: itemsRes.rows.map((r) => ({
-        id: toText(r.id),
-        name: toText(r.name),
-        clientId: toText(r.client_id),
-        clientName: toText(r.client_name),
-        description: toText(r.description),
-        isDisabled: Boolean(r.is_disabled),
-      })),
-      topByHours,
-      topByCost,
-    };
-  }
+    // Tasks (scoped if tasks_all not present)
+    const canListTasks = [
+      'projects.tasks.view',
+      'projects.manage.view',
+      'timesheets.tracker.view',
+      'timesheets.recurring.view',
+    ].some((p) => hasPermission(request, p));
+    if (canListTasks && shouldIncludeDatasetSection(requestedSections, 'tasks')) {
+      includedSections.add('tasks');
+      addGrantedPermissions(
+        request,
+        [
+          'projects.tasks.view',
+          'projects.manage.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+        ],
+        permissionsApplied,
+      );
 
-  // Tasks (scoped if tasks_all not present)
-  const canListTasks = [
-    'projects.tasks.view',
-    'projects.manage.view',
-    'timesheets.tracker.view',
-    'timesheets.recurring.view',
-  ].some((p) => hasPermission(request, p));
-  if (canListTasks) {
-    addGrantedPermissions(
-      request,
-      [
-        'projects.tasks.view',
-        'projects.manage.view',
-        'timesheets.tracker.view',
-        'timesheets.recurring.view',
-      ],
-      permissionsApplied,
-    );
-
-    const canViewAllTasks = hasPermission(request, 'projects.tasks_all.view');
-    const summaryRes = canViewAllTasks
-      ? await query(
-          `SELECT
+      const canViewAllTasks = hasPermission(request, 'projects.tasks_all.view');
+      const summaryRes = canViewAllTasks
+        ? await query(
+            `SELECT
              COUNT(*) as count,
              SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count,
              SUM(CASE WHEN is_recurring THEN 1 ELSE 0 END) as recurring_count
            FROM tasks`,
-        )
-      : await query(
-          `SELECT
+          )
+        : await query(
+            `SELECT
              COUNT(*) as count,
              SUM(CASE WHEN t.is_disabled THEN 1 ELSE 0 END) as disabled_count,
              SUM(CASE WHEN t.is_recurring THEN 1 ELSE 0 END) as recurring_count
            FROM tasks t
            JOIN user_tasks ut ON ut.task_id = t.id
            WHERE ut.user_id = $1`,
-          [viewerId],
-        );
+            [viewerId],
+          );
 
-    const itemsRes = canViewAllTasks
-      ? await query(
-          `SELECT
+      const itemsRes = canViewAllTasks
+        ? await query(
+            `SELECT
              t.id,
              t.name,
              t.project_id,
@@ -1376,9 +1585,9 @@ const buildBusinessDataset = async (
            JOIN projects p ON p.id = t.project_id
            ORDER BY t.name ASC
            LIMIT ${listLimits.items}`,
-        )
-      : await query(
-          `SELECT
+          )
+        : await query(
+            `SELECT
              t.id,
              t.name,
              t.project_id,
@@ -1392,24 +1601,24 @@ const buildBusinessDataset = async (
            WHERE ut.user_id = $1
            ORDER BY t.name ASC
            LIMIT ${listLimits.items}`,
-          [viewerId],
-        );
+            [viewerId],
+          );
 
-    let topByHours: Array<{ label: string; value: number; entryCount: number }> = [];
-    if (canViewTimesheets) {
-      const taskHoursRes = canViewAllTasks
-        ? canViewAllTimesheets
-          ? await query(
-              `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
+      let topByHours: Array<{ label: string; value: number; entryCount: number }> = [];
+      if (canViewTimesheets) {
+        const taskHoursRes = canViewAllTasks
+          ? canViewAllTimesheets
+            ? await query(
+                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
                WHERE te.date >= $1 AND te.date <= $2
                GROUP BY te.task
                ORDER BY hours DESC
                LIMIT ${listLimits.top}`,
-              [fromDate, toDate],
-            )
-          : await query(
-              `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
+                [fromDate, toDate],
+              )
+            : await query(
+                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
                WHERE te.date >= $1
                  AND te.date <= $2
@@ -1417,11 +1626,11 @@ const buildBusinessDataset = async (
                GROUP BY te.task
                ORDER BY hours DESC
                LIMIT ${listLimits.top}`,
-              [fromDate, toDate, allowedTimesheetUserIds || []],
-            )
-        : canViewAllTimesheets
-          ? await query(
-              `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
+                [fromDate, toDate, allowedTimesheetUserIds || []],
+              )
+          : canViewAllTimesheets
+            ? await query(
+                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
                JOIN tasks t ON t.project_id = te.project_id AND t.name = te.task
                JOIN user_tasks ut ON ut.task_id = t.id
@@ -1431,10 +1640,10 @@ const buildBusinessDataset = async (
                GROUP BY te.task
                ORDER BY hours DESC
                LIMIT ${listLimits.top}`,
-              [fromDate, toDate, viewerId],
-            )
-          : await query(
-              `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
+                [fromDate, toDate, viewerId],
+              )
+            : await query(
+                `SELECT te.task as label, COALESCE(SUM(te.duration), 0) as hours, COUNT(*) as entry_count
                FROM time_entries te
                JOIN tasks t ON t.project_id = te.project_id AND t.name = te.task
                JOIN user_tasks ut ON ut.task_id = t.id
@@ -1445,40 +1654,41 @@ const buildBusinessDataset = async (
                GROUP BY te.task
                ORDER BY hours DESC
                LIMIT ${listLimits.top}`,
-              [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
-            );
+                [fromDate, toDate, allowedTimesheetUserIds || [], viewerId],
+              );
 
-      topByHours = taskHoursRes.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.hours),
-        entryCount: toNumber(r.entry_count),
-      }));
+        topByHours = taskHoursRes.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.hours),
+          entryCount: toNumber(r.entry_count),
+        }));
+      }
+
+      const taskCount = toNumber(summaryRes.rows[0]?.count);
+      const disabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
+      dataset.tasks = {
+        count: taskCount,
+        activeCount: Math.max(taskCount - disabledCount, 0),
+        disabledCount,
+        recurringCount: toNumber(summaryRes.rows[0]?.recurring_count),
+        items: itemsRes.rows.map((r) => ({
+          id: toText(r.id),
+          name: toText(r.name),
+          projectId: toText(r.project_id),
+          projectName: toText(r.project_name),
+          isDisabled: Boolean(r.is_disabled),
+          isRecurring: Boolean(r.is_recurring),
+          recurrencePattern: toText(r.recurrence_pattern),
+        })),
+        topByHours,
+      };
     }
 
-    const taskCount = toNumber(summaryRes.rows[0]?.count);
-    const disabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
-    dataset.tasks = {
-      count: taskCount,
-      activeCount: Math.max(taskCount - disabledCount, 0),
-      disabledCount,
-      recurringCount: toNumber(summaryRes.rows[0]?.recurring_count),
-      items: itemsRes.rows.map((r) => ({
-        id: toText(r.id),
-        name: toText(r.name),
-        projectId: toText(r.project_id),
-        projectName: toText(r.project_name),
-        isDisabled: Boolean(r.is_disabled),
-        isRecurring: Boolean(r.is_recurring),
-        recurrencePattern: toText(r.recurrence_pattern),
-      })),
-      topByHours,
-    };
-  }
-
-  // Quotes
-  if (canViewQuotes) {
-    const totals = await query(
-      `WITH per_quote AS (
+    // Quotes
+    if (canViewQuotes && shouldIncludeDatasetSection(requestedSections, 'quotes')) {
+      includedSections.add('quotes');
+      const totals = await query(
+        `WITH per_quote AS (
         SELECT
           q.id,
           SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
@@ -1493,11 +1703,11 @@ const buildBusinessDataset = async (
         COALESCE(SUM(net_value), 0) as total_net,
         COALESCE(AVG(net_value), 0) as avg_net
       FROM per_quote`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byStatus = await query(
-      `WITH per_quote AS (
+      const byStatus = await query(
+        `WITH per_quote AS (
         SELECT
           q.id,
           q.status,
@@ -1513,11 +1723,11 @@ const buildBusinessDataset = async (
       FROM per_quote
       GROUP BY status
       ORDER BY count DESC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMonth = await query(
-      `WITH per_quote AS (
+      const byMonth = await query(
+        `WITH per_quote AS (
         SELECT
           q.id,
           q.created_at,
@@ -1535,11 +1745,11 @@ const buildBusinessDataset = async (
       FROM per_quote
       GROUP BY DATE_TRUNC('month', created_at)
       ORDER BY label ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topQuotes = await query(
-      `WITH per_quote AS (
+      const topQuotes = await query(
+        `WITH per_quote AS (
         SELECT
           q.id,
           q.quote_code,
@@ -1563,11 +1773,11 @@ const buildBusinessDataset = async (
       FROM per_quote
       ORDER BY net_value DESC
       LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topClients = await query(
-      `WITH per_quote AS (
+      const topClients = await query(
+        `WITH per_quote AS (
         SELECT
           q.id,
           q.client_name,
@@ -1585,48 +1795,49 @@ const buildBusinessDataset = async (
       GROUP BY client_name
       ORDER BY value DESC
       LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.quotes = {
-      totals: {
-        count: toNumber(totals.rows[0]?.count),
-        totalNet: toNumber(totals.rows[0]?.total_net),
-        avgNet: toNumber(totals.rows[0]?.avg_net),
-      },
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        count: toNumber(r.count),
-        totalNet: toNumber(r.total_net),
-      })),
-      byStatus: byStatus.rows.map((r) => ({
-        status: toText(r.status),
-        count: toNumber(r.count),
-        totalNet: toNumber(r.total_net),
-      })),
-      topQuotesByNet: topQuotes.rows.map((r) => ({
-        id: toText(r.id),
-        quoteCode: toText(r.quote_code),
-        clientName: toText(r.client_name),
-        status: toText(r.status),
-        netValue: toNumber(r.net_value),
-        createdAt: toNumber(r.created_at),
-      })),
-      topClientsByNet: capTop(
-        topClients.rows.map((r) => ({
+      dataset.quotes = {
+        totals: {
+          count: toNumber(totals.rows[0]?.count),
+          totalNet: toNumber(totals.rows[0]?.total_net),
+          avgNet: toNumber(totals.rows[0]?.avg_net),
+        },
+        byMonth: byMonth.rows.map((r) => ({
           label: toText(r.label),
-          value: toNumber(r.value),
-          quoteCount: toNumber(r.quote_count),
+          count: toNumber(r.count),
+          totalNet: toNumber(r.total_net),
         })),
-        listLimits.top,
-      ),
-    };
-  }
+        byStatus: byStatus.rows.map((r) => ({
+          status: toText(r.status),
+          count: toNumber(r.count),
+          totalNet: toNumber(r.total_net),
+        })),
+        topQuotesByNet: topQuotes.rows.map((r) => ({
+          id: toText(r.id),
+          quoteCode: toText(r.quote_code),
+          clientName: toText(r.client_name),
+          status: toText(r.status),
+          netValue: toNumber(r.net_value),
+          createdAt: toNumber(r.created_at),
+        })),
+        topClientsByNet: capTop(
+          topClients.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            quoteCount: toNumber(r.quote_count),
+          })),
+          listLimits.top,
+        ),
+      };
+    }
 
-  // Orders (sales)
-  if (canViewOrders) {
-    const totals = await query(
-      `WITH per_order AS (
+    // Orders (sales)
+    if (canViewOrders && shouldIncludeDatasetSection(requestedSections, 'orders')) {
+      includedSections.add('orders');
+      const totals = await query(
+        `WITH per_order AS (
         SELECT
           s.id,
           SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
@@ -1641,11 +1852,11 @@ const buildBusinessDataset = async (
         COALESCE(SUM(net_value), 0) as total_net,
         COALESCE(AVG(net_value), 0) as avg_net
       FROM per_order`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byStatus = await query(
-      `WITH per_order AS (
+      const byStatus = await query(
+        `WITH per_order AS (
         SELECT
           s.id,
           s.status,
@@ -1661,11 +1872,11 @@ const buildBusinessDataset = async (
       FROM per_order
       GROUP BY status
       ORDER BY count DESC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMonth = await query(
-      `WITH per_order AS (
+      const byMonth = await query(
+        `WITH per_order AS (
         SELECT
           s.id,
           s.created_at,
@@ -1683,11 +1894,11 @@ const buildBusinessDataset = async (
       FROM per_order
       GROUP BY DATE_TRUNC('month', created_at)
       ORDER BY label ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topOrders = await query(
-      `WITH per_order AS (
+      const topOrders = await query(
+        `WITH per_order AS (
         SELECT
           s.id,
           s.client_name,
@@ -1709,11 +1920,11 @@ const buildBusinessDataset = async (
       FROM per_order
       ORDER BY net_value DESC
       LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topClients = await query(
-      `WITH per_order AS (
+      const topClients = await query(
+        `WITH per_order AS (
         SELECT
           s.id,
           s.client_name,
@@ -1731,58 +1942,59 @@ const buildBusinessDataset = async (
       GROUP BY client_name
       ORDER BY value DESC
       LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.orders = {
-      totals: {
-        count: toNumber(totals.rows[0]?.count),
-        totalNet: toNumber(totals.rows[0]?.total_net),
-        avgNet: toNumber(totals.rows[0]?.avg_net),
-      },
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        count: toNumber(r.count),
-        totalNet: toNumber(r.total_net),
-      })),
-      byStatus: byStatus.rows.map((r) => ({
-        status: toText(r.status),
-        count: toNumber(r.count),
-        totalNet: toNumber(r.total_net),
-      })),
-      topOrdersByNet: topOrders.rows.map((r) => ({
-        id: toText(r.id),
-        clientName: toText(r.client_name),
-        status: toText(r.status),
-        netValue: toNumber(r.net_value),
-        createdAt: toNumber(r.created_at),
-      })),
-      topClientsByNet: capTop(
-        topClients.rows.map((r) => ({
+      dataset.orders = {
+        totals: {
+          count: toNumber(totals.rows[0]?.count),
+          totalNet: toNumber(totals.rows[0]?.total_net),
+          avgNet: toNumber(totals.rows[0]?.avg_net),
+        },
+        byMonth: byMonth.rows.map((r) => ({
           label: toText(r.label),
-          value: toNumber(r.value),
-          orderCount: toNumber(r.order_count),
+          count: toNumber(r.count),
+          totalNet: toNumber(r.total_net),
         })),
-        listLimits.top,
-      ),
-    };
-  }
+        byStatus: byStatus.rows.map((r) => ({
+          status: toText(r.status),
+          count: toNumber(r.count),
+          totalNet: toNumber(r.total_net),
+        })),
+        topOrdersByNet: topOrders.rows.map((r) => ({
+          id: toText(r.id),
+          clientName: toText(r.client_name),
+          status: toText(r.status),
+          netValue: toNumber(r.net_value),
+          createdAt: toNumber(r.created_at),
+        })),
+        topClientsByNet: capTop(
+          topClients.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            orderCount: toNumber(r.order_count),
+          })),
+          listLimits.top,
+        ),
+      };
+    }
 
-  // Invoices
-  if (canViewInvoices) {
-    const totals = await query(
-      `SELECT
+    // Invoices
+    if (canViewInvoices && shouldIncludeDatasetSection(requestedSections, 'invoices')) {
+      includedSections.add('invoices');
+      const totals = await query(
+        `SELECT
          COUNT(*) as count,
          COALESCE(SUM(total), 0) as total_sum,
          COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum,
          COALESCE(SUM(amount_paid), 0) as paid_sum
        FROM invoices
        WHERE issue_date >= $1 AND issue_date <= $2`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byStatus = await query(
-      `SELECT status,
+      const byStatus = await query(
+        `SELECT status,
               COUNT(*) as count,
               COALESCE(SUM(total), 0) as total_sum,
               COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as outstanding_sum
@@ -1790,11 +2002,11 @@ const buildBusinessDataset = async (
        WHERE issue_date >= $1 AND issue_date <= $2
        GROUP BY status
        ORDER BY count DESC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMonth = await query(
-      `SELECT
+      const byMonth = await query(
+        `SELECT
          TO_CHAR(DATE_TRUNC('month', issue_date), 'YYYY-MM') as label,
          COUNT(*) as count,
          COALESCE(SUM(total), 0) as total_sum,
@@ -1803,11 +2015,11 @@ const buildBusinessDataset = async (
        WHERE issue_date >= $1 AND issue_date <= $2
        GROUP BY DATE_TRUNC('month', issue_date)
        ORDER BY label ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const aging = await query(
-      `SELECT
+      const aging = await query(
+        `SELECT
          CASE
            WHEN CURRENT_DATE - due_date <= 30 THEN '0-30'
            WHEN CURRENT_DATE - due_date <= 60 THEN '31-60'
@@ -1822,11 +2034,11 @@ const buildBusinessDataset = async (
          AND GREATEST(total - amount_paid, 0) > 0
        GROUP BY bucket
        ORDER BY bucket ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topOutstanding = await query(
-      `SELECT
+      const topOutstanding = await query(
+        `SELECT
          client_name as label,
          COUNT(*) as invoice_count,
          COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) as value
@@ -1835,11 +2047,11 @@ const buildBusinessDataset = async (
        GROUP BY client_name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topInvoices = await query(
-      `SELECT
+      const topInvoices = await query(
+        `SELECT
          id,
          invoice_number,
          client_name,
@@ -1850,75 +2062,76 @@ const buildBusinessDataset = async (
        WHERE issue_date >= $1 AND issue_date <= $2
        ORDER BY outstanding DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.invoices = {
-      totals: {
-        count: toNumber(totals.rows[0]?.count),
-        total: toNumber(totals.rows[0]?.total_sum),
-        outstanding: toNumber(totals.rows[0]?.outstanding_sum),
-        paidAmount: toNumber(totals.rows[0]?.paid_sum),
-      },
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        count: toNumber(r.count),
-        total: toNumber(r.total_sum),
-        outstanding: toNumber(r.outstanding_sum),
-      })),
-      aging: aging.rows.map((r) => ({
-        bucket: toText(r.bucket),
-        count: toNumber(r.count),
-        outstanding: toNumber(r.outstanding_sum),
-      })),
-      byStatus: byStatus.rows.map((r) => ({
-        status: toText(r.status),
-        count: toNumber(r.count),
-        total: toNumber(r.total_sum),
-        outstanding: toNumber(r.outstanding_sum),
-      })),
-      topInvoicesByOutstanding: topInvoices.rows.map((r) => ({
-        id: toText(r.id),
-        invoiceNumber: toText(r.invoice_number),
-        clientName: toText(r.client_name),
-        status: toText(r.status),
-        dueDate: toText(r.due_date),
-        outstanding: toNumber(r.outstanding),
-      })),
-      topClientsByOutstanding: capTop(
-        topOutstanding.rows.map((r) => ({
+      dataset.invoices = {
+        totals: {
+          count: toNumber(totals.rows[0]?.count),
+          total: toNumber(totals.rows[0]?.total_sum),
+          outstanding: toNumber(totals.rows[0]?.outstanding_sum),
+          paidAmount: toNumber(totals.rows[0]?.paid_sum),
+        },
+        byMonth: byMonth.rows.map((r) => ({
           label: toText(r.label),
-          value: toNumber(r.value),
-          invoiceCount: toNumber(r.invoice_count),
+          count: toNumber(r.count),
+          total: toNumber(r.total_sum),
+          outstanding: toNumber(r.outstanding_sum),
         })),
-        listLimits.top,
-      ),
-    };
-  }
+        aging: aging.rows.map((r) => ({
+          bucket: toText(r.bucket),
+          count: toNumber(r.count),
+          outstanding: toNumber(r.outstanding_sum),
+        })),
+        byStatus: byStatus.rows.map((r) => ({
+          status: toText(r.status),
+          count: toNumber(r.count),
+          total: toNumber(r.total_sum),
+          outstanding: toNumber(r.outstanding_sum),
+        })),
+        topInvoicesByOutstanding: topInvoices.rows.map((r) => ({
+          id: toText(r.id),
+          invoiceNumber: toText(r.invoice_number),
+          clientName: toText(r.client_name),
+          status: toText(r.status),
+          dueDate: toText(r.due_date),
+          outstanding: toNumber(r.outstanding),
+        })),
+        topClientsByOutstanding: capTop(
+          topOutstanding.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            invoiceCount: toNumber(r.invoice_count),
+          })),
+          listLimits.top,
+        ),
+      };
+    }
 
-  // Payments
-  if (canViewPayments) {
-    const totals = await query(
-      `SELECT
+    // Payments
+    if (canViewPayments && shouldIncludeDatasetSection(requestedSections, 'payments')) {
+      includedSections.add('payments');
+      const totals = await query(
+        `SELECT
          COUNT(*) as count,
          COALESCE(SUM(amount), 0) as total,
          COALESCE(AVG(amount), 0) as avg_amount
        FROM payments
        WHERE payment_date >= $1 AND payment_date <= $2`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMethod = await query(
-      `SELECT payment_method as label, COALESCE(SUM(amount), 0) as value
+      const byMethod = await query(
+        `SELECT payment_method as label, COALESCE(SUM(amount), 0) as value
        FROM payments
        WHERE payment_date >= $1 AND payment_date <= $2
        GROUP BY payment_method
        ORDER BY value DESC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topClients = await query(
-      `SELECT
+      const topClients = await query(
+        `SELECT
          COALESCE(c.name, 'Unknown') as label,
          COALESCE(SUM(p.amount), 0) as value,
          COUNT(*) as payment_count
@@ -1928,94 +2141,95 @@ const buildBusinessDataset = async (
        GROUP BY COALESCE(c.name, 'Unknown')
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const unlinked = await query(
-      `SELECT COUNT(*) as count
+      const unlinked = await query(
+        `SELECT COUNT(*) as count
        FROM payments
        WHERE payment_date >= $1
          AND payment_date <= $2
          AND invoice_id IS NULL`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMonth = await query(
-      `SELECT TO_CHAR(DATE_TRUNC('month', payment_date), 'YYYY-MM') as label,
+      const byMonth = await query(
+        `SELECT TO_CHAR(DATE_TRUNC('month', payment_date), 'YYYY-MM') as label,
               COALESCE(SUM(amount), 0) as value
        FROM payments
        WHERE payment_date >= $1 AND payment_date <= $2
        GROUP BY DATE_TRUNC('month', payment_date)
        ORDER BY label ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.payments = {
-      totals: {
-        count: toNumber(totals.rows[0]?.count),
-        total: toNumber(totals.rows[0]?.total),
-        avgPayment: toNumber(totals.rows[0]?.avg_amount),
-      },
-      byMethod: byMethod.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      topClientsByAmount: topClients.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-        paymentCount: toNumber(r.payment_count),
-      })),
-      unlinkedPaymentsCount: toNumber(unlinked.rows[0]?.count),
-    };
-  }
+      dataset.payments = {
+        totals: {
+          count: toNumber(totals.rows[0]?.count),
+          total: toNumber(totals.rows[0]?.total),
+          avgPayment: toNumber(totals.rows[0]?.avg_amount),
+        },
+        byMethod: byMethod.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+        })),
+        byMonth: byMonth.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+        })),
+        topClientsByAmount: topClients.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+          paymentCount: toNumber(r.payment_count),
+        })),
+        unlinkedPaymentsCount: toNumber(unlinked.rows[0]?.count),
+      };
+    }
 
-  // Expenses
-  if (canViewExpenses) {
-    const totals = await query(
-      `SELECT
+    // Expenses
+    if (canViewExpenses && shouldIncludeDatasetSection(requestedSections, 'expenses')) {
+      includedSections.add('expenses');
+      const totals = await query(
+        `SELECT
          COUNT(*) as count,
          COALESCE(SUM(amount), 0) as total,
          COALESCE(AVG(amount), 0) as avg_amount
        FROM expenses
        WHERE expense_date >= $1 AND expense_date <= $2`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byCategory = await query(
-      `SELECT category as label, COALESCE(SUM(amount), 0) as value
+      const byCategory = await query(
+        `SELECT category as label, COALESCE(SUM(amount), 0) as value
        FROM expenses
        WHERE expense_date >= $1 AND expense_date <= $2
        GROUP BY category
        ORDER BY value DESC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMonth = await query(
-      `SELECT TO_CHAR(DATE_TRUNC('month', expense_date), 'YYYY-MM') as label,
+      const byMonth = await query(
+        `SELECT TO_CHAR(DATE_TRUNC('month', expense_date), 'YYYY-MM') as label,
               COALESCE(SUM(amount), 0) as value
        FROM expenses
        WHERE expense_date >= $1 AND expense_date <= $2
        GROUP BY DATE_TRUNC('month', expense_date)
        ORDER BY label ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topVendors = await query(
-      `SELECT vendor as label, COALESCE(SUM(amount), 0) as value
+      const topVendors = await query(
+        `SELECT vendor as label, COALESCE(SUM(amount), 0) as value
        FROM expenses
        WHERE expense_date >= $1 AND expense_date <= $2 AND vendor IS NOT NULL AND vendor <> ''
        GROUP BY vendor
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topExpenses = await query(
-      `SELECT
+      const topExpenses = await query(
+        `SELECT
          id,
          description,
          vendor,
@@ -2026,65 +2240,66 @@ const buildBusinessDataset = async (
        WHERE expense_date >= $1 AND expense_date <= $2
        ORDER BY amount DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.expenses = {
-      totals: {
-        count: toNumber(totals.rows[0]?.count),
-        total: toNumber(totals.rows[0]?.total),
-        avgExpense: toNumber(totals.rows[0]?.avg_amount),
-      },
-      byCategory: byCategory.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      topVendors: capTop(
-        topVendors.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
-        listLimits.top,
-      ),
-      topExpenses: topExpenses.rows.map((r) => ({
-        id: toText(r.id),
-        description: toText(r.description),
-        vendor: toText(r.vendor),
-        category: toText(r.category),
-        amount: toNumber(r.amount),
-        expenseDate: toText(r.expense_date),
-      })),
-    };
-  }
+      dataset.expenses = {
+        totals: {
+          count: toNumber(totals.rows[0]?.count),
+          total: toNumber(totals.rows[0]?.total),
+          avgExpense: toNumber(totals.rows[0]?.avg_amount),
+        },
+        byCategory: byCategory.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+        })),
+        byMonth: byMonth.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+        })),
+        topVendors: capTop(
+          topVendors.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
+          listLimits.top,
+        ),
+        topExpenses: topExpenses.rows.map((r) => ({
+          id: toText(r.id),
+          description: toText(r.description),
+          vendor: toText(r.vendor),
+          category: toText(r.category),
+          amount: toNumber(r.amount),
+          expenseDate: toText(r.expense_date),
+        })),
+      };
+    }
 
-  // Suppliers (global in current access model)
-  const canListSuppliers = [
-    'crm.suppliers.view',
-    'crm.suppliers_all.view',
-    'catalog.external_listing.view',
-    'suppliers.quotes.view',
-  ].some((p) => hasPermission(request, p));
-  if (canListSuppliers) {
-    addGrantedPermissions(
-      request,
-      [
-        'crm.suppliers.view',
-        'crm.suppliers_all.view',
-        'catalog.external_listing.view',
-        'suppliers.quotes.view',
-      ],
-      permissionsApplied,
-    );
+    // Suppliers (global in current access model)
+    const canListSuppliers = [
+      'crm.suppliers.view',
+      'crm.suppliers_all.view',
+      'catalog.external_listing.view',
+      'suppliers.quotes.view',
+    ].some((p) => hasPermission(request, p));
+    if (canListSuppliers && shouldIncludeDatasetSection(requestedSections, 'suppliers')) {
+      includedSections.add('suppliers');
+      addGrantedPermissions(
+        request,
+        [
+          'crm.suppliers.view',
+          'crm.suppliers_all.view',
+          'catalog.external_listing.view',
+          'suppliers.quotes.view',
+        ],
+        permissionsApplied,
+      );
 
-    const summaryRes = await query(
-      `SELECT
+      const summaryRes = await query(
+        `SELECT
          COUNT(*) as count,
          SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
        FROM suppliers`,
-    );
-    const listRes = await query(
-      `SELECT
+      );
+      const listRes = await query(
+        `SELECT
          id,
          name,
          supplier_code,
@@ -2096,30 +2311,30 @@ const buildBusinessDataset = async (
        FROM suppliers
        ORDER BY name ASC
        LIMIT ${listLimits.items}`,
-    );
+      );
 
-    const supplierIds = listRes.rows.map((r) => toText(r.id)).filter(Boolean);
-    const activityBySupplier = new Map<
-      string,
-      {
-        supplierId: string;
-        quotesCount: number | null;
-        quotesNet: number | null;
-        productsCount: number | null;
+      const supplierIds = listRes.rows.map((r) => toText(r.id)).filter(Boolean);
+      const activityBySupplier = new Map<
+        string,
+        {
+          supplierId: string;
+          quotesCount: number | null;
+          quotesNet: number | null;
+          productsCount: number | null;
+        }
+      >();
+      for (const supplierId of supplierIds) {
+        activityBySupplier.set(supplierId, {
+          supplierId,
+          quotesCount: null,
+          quotesNet: null,
+          productsCount: null,
+        });
       }
-    >();
-    for (const supplierId of supplierIds) {
-      activityBySupplier.set(supplierId, {
-        supplierId,
-        quotesCount: null,
-        quotesNet: null,
-        productsCount: null,
-      });
-    }
 
-    if (supplierIds.length > 0 && canViewSupplierQuotes) {
-      const supplierQuoteStats = await query(
-        `WITH per_quote AS (
+      if (supplierIds.length > 0 && canViewSupplierQuotes) {
+        const supplierQuoteStats = await query(
+          `WITH per_quote AS (
           SELECT
             sq.id,
             sq.supplier_id,
@@ -2139,61 +2354,62 @@ const buildBusinessDataset = async (
           COALESCE(SUM(net_value), 0) as net_value
         FROM per_quote
         GROUP BY supplier_id`,
-        [fromDate, toDate, supplierIds],
-      );
+          [fromDate, toDate, supplierIds],
+        );
 
-      for (const row of supplierQuoteStats.rows) {
-        const supplierId = toText(row.supplier_id);
-        const target = activityBySupplier.get(supplierId);
-        if (!target) continue;
-        target.quotesCount = toNumber(row.quote_count);
-        target.quotesNet = toNumber(row.net_value);
+        for (const row of supplierQuoteStats.rows) {
+          const supplierId = toText(row.supplier_id);
+          const target = activityBySupplier.get(supplierId);
+          if (!target) continue;
+          target.quotesCount = toNumber(row.quote_count);
+          target.quotesNet = toNumber(row.net_value);
+        }
       }
-    }
 
-    if (supplierIds.length > 0 && canListProducts) {
-      const supplierProductStats = await query(
-        `SELECT supplier_id, COUNT(*) as product_count
+      if (supplierIds.length > 0 && canListProducts) {
+        const supplierProductStats = await query(
+          `SELECT supplier_id, COUNT(*) as product_count
          FROM products
          WHERE supplier_id = ANY($1)
          GROUP BY supplier_id`,
-        [supplierIds],
-      );
+          [supplierIds],
+        );
 
-      for (const row of supplierProductStats.rows) {
-        const supplierId = toText(row.supplier_id);
-        const target = activityBySupplier.get(supplierId);
-        if (!target) continue;
-        target.productsCount = toNumber(row.product_count);
+        for (const row of supplierProductStats.rows) {
+          const supplierId = toText(row.supplier_id);
+          const target = activityBySupplier.get(supplierId);
+          if (!target) continue;
+          target.productsCount = toNumber(row.product_count);
+        }
       }
+
+      const supplierCount = toNumber(summaryRes.rows[0]?.count);
+      const supplierDisabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
+      dataset.suppliers = {
+        count: supplierCount,
+        activeCount: Math.max(supplierCount - supplierDisabledCount, 0),
+        disabledCount: supplierDisabledCount,
+        items: listRes.rows.map((r) => ({
+          id: toText(r.id),
+          name: toText(r.name),
+          supplierCode: toText(r.supplier_code),
+          contactName: toText(r.contact_name),
+          email: toText(r.email),
+          phone: toText(r.phone),
+          address: toText(r.address),
+          isDisabled: Boolean(r.is_disabled),
+        })),
+        activitySummary: supplierIds
+          .map((supplierId) => activityBySupplier.get(supplierId))
+          .filter(Boolean),
+      };
     }
 
-    const supplierCount = toNumber(summaryRes.rows[0]?.count);
-    const supplierDisabledCount = toNumber(summaryRes.rows[0]?.disabled_count);
-    dataset.suppliers = {
-      count: supplierCount,
-      activeCount: Math.max(supplierCount - supplierDisabledCount, 0),
-      disabledCount: supplierDisabledCount,
-      items: listRes.rows.map((r) => ({
-        id: toText(r.id),
-        name: toText(r.name),
-        supplierCode: toText(r.supplier_code),
-        contactName: toText(r.contact_name),
-        email: toText(r.email),
-        phone: toText(r.phone),
-        address: toText(r.address),
-        isDisabled: Boolean(r.is_disabled),
-      })),
-      activitySummary: supplierIds
-        .map((supplierId) => activityBySupplier.get(supplierId))
-        .filter(Boolean),
-    };
-  }
-
-  // Supplier quotes
-  if (canViewSupplierQuotes) {
-    const totals = await query(
-      `WITH per_quote AS (
+    // Supplier quotes
+    if (canViewSupplierQuotes && shouldIncludeDatasetSection(requestedSections, 'supplierQuotes')) {
+      includedSections.add('supplierQuotes');
+      const totals = await query(
+        `WITH per_quote AS (
         SELECT
           sq.id,
           SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0))
@@ -2208,11 +2424,11 @@ const buildBusinessDataset = async (
         COALESCE(SUM(net_value), 0) as total_net,
         COALESCE(AVG(net_value), 0) as avg_net
       FROM per_quote`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byStatus = await query(
-      `WITH per_quote AS (
+      const byStatus = await query(
+        `WITH per_quote AS (
         SELECT
           sq.id,
           sq.status,
@@ -2228,11 +2444,11 @@ const buildBusinessDataset = async (
       FROM per_quote
       GROUP BY status
       ORDER BY count DESC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const byMonth = await query(
-      `WITH per_quote AS (
+      const byMonth = await query(
+        `WITH per_quote AS (
         SELECT
           sq.id,
           sq.created_at,
@@ -2250,11 +2466,11 @@ const buildBusinessDataset = async (
       FROM per_quote
       GROUP BY DATE_TRUNC('month', created_at)
       ORDER BY label ASC`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topSuppliers = await query(
-      `WITH per_quote AS (
+      const topSuppliers = await query(
+        `WITH per_quote AS (
         SELECT
           sq.id,
           sq.supplier_name,
@@ -2272,11 +2488,11 @@ const buildBusinessDataset = async (
       GROUP BY supplier_name
       ORDER BY value DESC
       LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topQuotes = await query(
-      `WITH per_quote AS (
+      const topQuotes = await query(
+        `WITH per_quote AS (
         SELECT
           sq.id,
           sq.supplier_name,
@@ -2300,87 +2516,88 @@ const buildBusinessDataset = async (
       FROM per_quote
       ORDER BY net_value DESC
       LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.supplierQuotes = {
-      totals: {
-        count: toNumber(totals.rows[0]?.count),
-        totalNet: toNumber(totals.rows[0]?.total_net),
-        avgNet: toNumber(totals.rows[0]?.avg_net),
-      },
-      byMonth: byMonth.rows.map((r) => ({
-        label: toText(r.label),
-        count: toNumber(r.count),
-        totalNet: toNumber(r.total_net),
-      })),
-      byStatus: byStatus.rows.map((r) => ({
-        status: toText(r.status),
-        count: toNumber(r.count),
-        totalNet: toNumber(r.total_net),
-      })),
-      topQuotesByNet: topQuotes.rows.map((r) => ({
-        id: toText(r.id),
-        supplierName: toText(r.supplier_name),
-        purchaseOrderNumber: toText(r.purchase_order_number),
-        status: toText(r.status),
-        netValue: toNumber(r.net_value),
-        createdAt: toNumber(r.created_at),
-      })),
-      topSuppliersByNet: capTop(
-        topSuppliers.rows.map((r) => ({
+      dataset.supplierQuotes = {
+        totals: {
+          count: toNumber(totals.rows[0]?.count),
+          totalNet: toNumber(totals.rows[0]?.total_net),
+          avgNet: toNumber(totals.rows[0]?.avg_net),
+        },
+        byMonth: byMonth.rows.map((r) => ({
           label: toText(r.label),
-          value: toNumber(r.value),
-          quoteCount: toNumber(r.quote_count),
+          count: toNumber(r.count),
+          totalNet: toNumber(r.total_net),
         })),
-        listLimits.top,
-      ),
-    };
-  }
+        byStatus: byStatus.rows.map((r) => ({
+          status: toText(r.status),
+          count: toNumber(r.count),
+          totalNet: toNumber(r.total_net),
+        })),
+        topQuotesByNet: topQuotes.rows.map((r) => ({
+          id: toText(r.id),
+          supplierName: toText(r.supplier_name),
+          purchaseOrderNumber: toText(r.purchase_order_number),
+          status: toText(r.status),
+          netValue: toNumber(r.net_value),
+          createdAt: toNumber(r.created_at),
+        })),
+        topSuppliersByNet: capTop(
+          topSuppliers.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+            quoteCount: toNumber(r.quote_count),
+          })),
+          listLimits.top,
+        ),
+      };
+    }
 
-  // Products / Catalog
-  if (canListProducts) {
-    const counts = await query(
-      `SELECT
+    // Products / Catalog
+    if (canListProducts && shouldIncludeDatasetSection(requestedSections, 'catalog')) {
+      includedSections.add('catalog');
+      const counts = await query(
+        `SELECT
          SUM(CASE WHEN supplier_id IS NULL THEN 1 ELSE 0 END) as internal_count,
          SUM(CASE WHEN supplier_id IS NOT NULL THEN 1 ELSE 0 END) as external_count,
          SUM(CASE WHEN is_disabled THEN 1 ELSE 0 END) as disabled_count
        FROM products`,
-    );
+      );
 
-    const byType = await query(
-      `SELECT COALESCE(NULLIF(type, ''), 'unknown') as label, COUNT(*) as value
+      const byType = await query(
+        `SELECT COALESCE(NULLIF(type, ''), 'unknown') as label, COUNT(*) as value
        FROM products
        GROUP BY COALESCE(NULLIF(type, ''), 'unknown')
        ORDER BY value DESC`,
-    );
+      );
 
-    const byCategory = await query(
-      `SELECT COALESCE(NULLIF(category, ''), 'uncategorized') as label, COUNT(*) as value
+      const byCategory = await query(
+        `SELECT COALESCE(NULLIF(category, ''), 'uncategorized') as label, COUNT(*) as value
        FROM products
        GROUP BY COALESCE(NULLIF(category, ''), 'uncategorized')
        ORDER BY value DESC`,
-    );
+      );
 
-    const bySubcategory = await query(
-      `SELECT COALESCE(NULLIF(subcategory, ''), 'none') as label, COUNT(*) as value
+      const bySubcategory = await query(
+        `SELECT COALESCE(NULLIF(subcategory, ''), 'none') as label, COUNT(*) as value
        FROM products
        GROUP BY COALESCE(NULLIF(subcategory, ''), 'none')
        ORDER BY value DESC`,
-    );
+      );
 
-    const externalBySupplier = await query(
-      `SELECT COALESCE(s.name, 'Unknown') as label, COUNT(*) as value
+      const externalBySupplier = await query(
+        `SELECT COALESCE(s.name, 'Unknown') as label, COUNT(*) as value
        FROM products p
        LEFT JOIN suppliers s ON s.id = p.supplier_id
        WHERE p.supplier_id IS NOT NULL
        GROUP BY COALESCE(s.name, 'Unknown')
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-    );
+      );
 
-    const topProductsByUsage = await query(
-      `WITH usage_rows AS (
+      const topProductsByUsage = await query(
+        `WITH usage_rows AS (
          SELECT qi.product_id, qi.product_name, COUNT(*) as use_count, COALESCE(SUM(qi.quantity), 0) as quantity_total
          FROM quote_items qi
          JOIN quotes q ON q.id = qi.quote_id
@@ -2408,11 +2625,11 @@ const buildBusinessDataset = async (
        GROUP BY product_id, product_name
        ORDER BY usage_count DESC, quantity_total DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    const topProductsByRevenue = await query(
-      `SELECT
+      const topProductsByRevenue = await query(
+        `SELECT
          si.product_id,
          si.product_name,
          COALESCE(
@@ -2430,86 +2647,87 @@ const buildBusinessDataset = async (
        GROUP BY si.product_id, si.product_name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      [fromDate, toDate],
-    );
+        [fromDate, toDate],
+      );
 
-    dataset.catalog = {
-      productCounts: {
-        internal: toNumber(counts.rows[0]?.internal_count),
-        external: toNumber(counts.rows[0]?.external_count),
-        disabled: toNumber(counts.rows[0]?.disabled_count),
-      },
-      byType: byType.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
-      byCategory: byCategory.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      bySubcategory: bySubcategory.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      externalProductsBySupplier: capTop(
-        externalBySupplier.rows.map((r) => ({
+      dataset.catalog = {
+        productCounts: {
+          internal: toNumber(counts.rows[0]?.internal_count),
+          external: toNumber(counts.rows[0]?.external_count),
+          disabled: toNumber(counts.rows[0]?.disabled_count),
+        },
+        byType: byType.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
+        byCategory: byCategory.rows.map((r) => ({
           label: toText(r.label),
           value: toNumber(r.value),
         })),
-        listLimits.top,
-      ),
-      topProductsByUsage: topProductsByUsage.rows.map((r) => ({
-        productId: toText(r.product_id),
-        productName: toText(r.product_name),
-        usageCount: toNumber(r.usage_count),
-        quantity: toNumber(r.quantity_total),
-      })),
-      topProductsByRevenue: topProductsByRevenue.rows.map((r) => ({
-        productId: toText(r.product_id),
-        productName: toText(r.product_name),
-        value: toNumber(r.value),
-      })),
-    };
-  }
+        bySubcategory: bySubcategory.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+        })),
+        externalProductsBySupplier: capTop(
+          externalBySupplier.rows.map((r) => ({
+            label: toText(r.label),
+            value: toNumber(r.value),
+          })),
+          listLimits.top,
+        ),
+        topProductsByUsage: topProductsByUsage.rows.map((r) => ({
+          productId: toText(r.product_id),
+          productName: toText(r.product_name),
+          usageCount: toNumber(r.usage_count),
+          quantity: toNumber(r.quantity_total),
+        })),
+        topProductsByRevenue: topProductsByRevenue.rows.map((r) => ({
+          productId: toText(r.product_id),
+          productName: toText(r.product_name),
+          value: toNumber(r.value),
+        })),
+      };
+    }
 
-  // Special bids (catalog.special_bids.view)
-  if (canViewSpecialBids) {
-    const activeCount = await query(
-      `SELECT COUNT(*) as count
+    // Special bids (catalog.special_bids.view)
+    if (canViewSpecialBids && shouldIncludeDatasetSection(requestedSections, 'specialBids')) {
+      includedSections.add('specialBids');
+      const activeCount = await query(
+        `SELECT COUNT(*) as count
        FROM special_bids
        WHERE start_date <= $1 AND end_date >= $2`,
-      [toDate, fromDate],
-    );
+        [toDate, fromDate],
+      );
 
-    const expiringSoon = await query(
-      `SELECT COUNT(*) as count
+      const expiringSoon = await query(
+        `SELECT COUNT(*) as count
        FROM special_bids
        WHERE end_date >= $1
          AND end_date <= ($1::date + INTERVAL '30 day')`,
-      [toDate],
-    );
+        [toDate],
+      );
 
-    const byClient = await query(
-      `SELECT client_name as label, COUNT(*) as value
+      const byClient = await query(
+        `SELECT client_name as label, COUNT(*) as value
        FROM special_bids
        WHERE start_date <= $1
          AND end_date >= $2
        GROUP BY client_name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      [toDate, fromDate],
-    );
+        [toDate, fromDate],
+      );
 
-    const byProduct = await query(
-      `SELECT product_name as label, COUNT(*) as value
+      const byProduct = await query(
+        `SELECT product_name as label, COUNT(*) as value
        FROM special_bids
        WHERE start_date <= $1
          AND end_date >= $2
        GROUP BY product_name
        ORDER BY value DESC
        LIMIT ${listLimits.top}`,
-      [toDate, fromDate],
-    );
+        [toDate, fromDate],
+      );
 
-    const topByUnitPrice = await query(
-      `SELECT
+      const topByUnitPrice = await query(
+        `SELECT
          id,
          client_name,
          product_name,
@@ -2521,86 +2739,112 @@ const buildBusinessDataset = async (
          AND end_date >= $2
        ORDER BY unit_price DESC
        LIMIT ${listLimits.top}`,
-      [toDate, fromDate],
-    );
+        [toDate, fromDate],
+      );
 
-    dataset.specialBids = {
-      activeInRange: toNumber(activeCount.rows[0]?.count),
-      expiringIn30Days: toNumber(expiringSoon.rows[0]?.count),
-      byClient: byClient.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
-      byProduct: byProduct.rows.map((r) => ({
-        label: toText(r.label),
-        value: toNumber(r.value),
-      })),
-      topByUnitPrice: topByUnitPrice.rows.map((r) => ({
-        id: toText(r.id),
-        clientName: toText(r.client_name),
-        productName: toText(r.product_name),
-        unitPrice: toNumber(r.unit_price),
-        startDate: toText(r.start_date),
-        endDate: toText(r.end_date),
-      })),
-    };
-  }
-
-  const meta = isRecord(dataset.meta) ? dataset.meta : null;
-  const scope = meta && isRecord(meta.scope) ? meta.scope : null;
-  if (scope) {
-    scope.permissionsApplied = Array.from(permissionsApplied).sort();
-  }
-
-  // Keep dataset size bounded with progressive trimming.
-  const maxChars = 50_000;
-  if (JSON.stringify(dataset).length <= maxChars) return dataset;
-
-  truncationState.applied = true;
-
-  const listLimitsByTier = [100, 50, 25, 10];
-  let tier = 0;
-  for (const limit of listLimitsByTier) {
-    tier += 1;
-    const reducedLists = new Set<string>();
-    trimArraysInPlace(dataset, limit, '', reducedLists);
-    if (tier >= 2) {
-      const removedFields = new Set<string>();
-      applyOptionalFieldPruning(dataset, removedFields);
-      truncationState.removedFields = Array.from(
-        new Set([...truncationState.removedFields, ...Array.from(removedFields)]),
-      ).sort();
+      dataset.specialBids = {
+        activeInRange: toNumber(activeCount.rows[0]?.count),
+        expiringIn30Days: toNumber(expiringSoon.rows[0]?.count),
+        byClient: byClient.rows.map((r) => ({ label: toText(r.label), value: toNumber(r.value) })),
+        byProduct: byProduct.rows.map((r) => ({
+          label: toText(r.label),
+          value: toNumber(r.value),
+        })),
+        topByUnitPrice: topByUnitPrice.rows.map((r) => ({
+          id: toText(r.id),
+          clientName: toText(r.client_name),
+          productName: toText(r.product_name),
+          unitPrice: toNumber(r.unit_price),
+          startDate: toText(r.start_date),
+          endDate: toText(r.end_date),
+        })),
+      };
     }
-    truncationState.level = tier;
-    truncationState.reducedLists = Array.from(
-      new Set([...truncationState.reducedLists, ...Array.from(reducedLists)]),
-    ).sort();
-    if (JSON.stringify(dataset).length <= maxChars) return dataset;
-  }
 
-  const dropOrder = [
-    'specialBids',
-    'catalog',
-    'supplierQuotes',
-    'suppliers',
-    'expenses',
-    'payments',
-    'invoices',
-    'orders',
-    'quotes',
-    'tasks',
-    'projects',
-    'timesheets',
-    'clients',
-  ] as const;
+    const meta = isRecord(dataset.meta) ? dataset.meta : null;
+    const scope = meta && isRecord(meta.scope) ? meta.scope : null;
+    if (scope) {
+      scope.permissionsApplied = Array.from(permissionsApplied).sort();
+    }
 
-  for (const key of dropOrder) {
-    if (dataset[key] === undefined) continue;
-    delete dataset[key];
-    truncationState.droppedSections.push(key);
-    truncationState.level += 1;
-    if (JSON.stringify(dataset).length <= maxChars) break;
-  }
+    // Keep dataset size bounded with progressive trimming.
+    const maxChars = 50_000;
+    let charCount = JSON.stringify(dataset).length;
+    if (charCount <= maxChars) return finalizeDataset(charCount);
 
-  return dataset;
+    truncationState.applied = true;
+
+    const listLimitsByTier = [100, 50, 25, 10];
+    let tier = 0;
+    for (const limit of listLimitsByTier) {
+      tier += 1;
+      const reducedLists = new Set<string>();
+      trimArraysInPlace(dataset, limit, '', reducedLists);
+      if (tier >= 2) {
+        const removedFields = new Set<string>();
+        applyOptionalFieldPruning(dataset, removedFields);
+        truncationState.removedFields = Array.from(
+          new Set([...truncationState.removedFields, ...Array.from(removedFields)]),
+        ).sort();
+      }
+      truncationState.level = tier;
+      truncationState.reducedLists = Array.from(
+        new Set([...truncationState.reducedLists, ...Array.from(reducedLists)]),
+      ).sort();
+      charCount = JSON.stringify(dataset).length;
+      if (charCount <= maxChars) return finalizeDataset(charCount);
+    }
+
+    const dropOrder = [
+      'specialBids',
+      'catalog',
+      'supplierQuotes',
+      'suppliers',
+      'expenses',
+      'payments',
+      'invoices',
+      'orders',
+      'quotes',
+      'tasks',
+      'projects',
+      'timesheets',
+      'clients',
+    ] as const;
+
+    for (const key of dropOrder) {
+      if (dataset[key] === undefined) continue;
+      delete dataset[key];
+      truncationState.droppedSections.push(key);
+      truncationState.level += 1;
+      charCount = JSON.stringify(dataset).length;
+      if (charCount <= maxChars) break;
+    }
+
+    return finalizeDataset(JSON.stringify(dataset).length);
+  });
+
+const getCachedBusinessDataset = async (
+  request: FastifyRequest,
+  cfg: GeneralAiConfig,
+  fromDate: string,
+  toDate: string,
+  requestedSections: Set<DatasetSection> | null,
+  bypass = false,
+) => {
+  const userId = request.user?.id || '';
+  const sectionKey = getRequestedSectionsKey(requestedSections);
+  const permissionHash = getPermissionsHash(request);
+  const ns = `reports:ai-reporting:dataset:user:${userId}`;
+
+  return cacheGetSetJson<DatasetBuildResult>(
+    ns,
+    `v=1:from=${fromDate}:to=${toDate}:sections=${sectionKey}:permissions=${permissionHash}`,
+    TTL_AI_DATASET_SECONDS,
+    () => buildBusinessDataset(request, cfg, fromDate, toDate, requestedSections),
+    { bypass },
+  );
 };
+
 const buildAiReportingSystemPrompt = (language: UiLanguage) => {
   if (language === 'it') {
     return [
@@ -2805,6 +3049,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['reports'],
         summary: 'List messages for an AI Reporting session',
         params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number' },
+            before: { type: 'number' },
+          },
+        },
         response: {
           200: { type: 'array', items: messageSchema },
           ...standardErrorResponses,
@@ -2816,6 +3067,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      const { limit, before } = request.query as { limit?: unknown; before?: unknown };
+
+      const parsedLimit = limit === undefined ? 200 : Number.parseInt(String(limit), 10);
+      if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+        return badRequest(reply, 'limit must be a positive integer');
+      }
+      const messageLimit = Math.min(parsedLimit, 500);
+
+      let beforeTimestampMs: number | null = null;
+      if (before !== undefined) {
+        const parsedBefore = Number(before);
+        if (!Number.isFinite(parsedBefore) || parsedBefore <= 0) {
+          return badRequest(reply, 'before must be a positive timestamp in milliseconds');
+        }
+        beforeTimestampMs = Math.floor(parsedBefore);
+      }
 
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
@@ -2831,23 +3098,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { status, value } = await cacheGetSetJson(
         ns,
-        `v=1:session=${idResult.value}:messages`,
+        `v=2:session=${idResult.value}:messages:limit=${messageLimit}:before=${beforeTimestampMs ?? 'none'}`,
         TTL_ENTRIES_SECONDS,
         async () => {
-          const result = await query(
-            `SELECT
-               id,
-               session_id as "sessionId",
-               role,
-               content,
-               thought_content as "thoughtContent",
-               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-             FROM report_chat_messages
-             WHERE session_id = $1
-             ORDER BY created_at ASC`,
-            [idResult.value],
-          );
-          return result.rows.map((r) => ({
+          const result =
+            beforeTimestampMs === null
+              ? await query(
+                  `SELECT
+                     id,
+                     session_id as "sessionId",
+                     role,
+                     content,
+                     thought_content as "thoughtContent",
+                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
+                   FROM report_chat_messages
+                   WHERE session_id = $1
+                   ORDER BY created_at DESC
+                   LIMIT $2`,
+                  [idResult.value, messageLimit],
+                )
+              : await query(
+                  `SELECT
+                     id,
+                     session_id as "sessionId",
+                     role,
+                     content,
+                     thought_content as "thoughtContent",
+                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
+                   FROM report_chat_messages
+                   WHERE session_id = $1
+                     AND created_at < TO_TIMESTAMP($2 / 1000.0)
+                   ORDER BY created_at DESC
+                   LIMIT $3`,
+                  [idResult.value, beforeTimestampMs, messageLimit],
+                );
+
+          return result.rows.reverse().map((r) => ({
             id: String(r.id),
             sessionId: String(r.sessionId),
             role: String(r.role),
@@ -3028,8 +3314,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const { fromDate, toDate } = getReportingRange();
-        const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
-        const datasetJson = JSON.stringify(dataset);
+        const requestedSections = determineRequestedSections(messageResult.value, convo);
+        const datasetStartedAt = Date.now();
+        const { status: datasetCacheStatus, value: datasetBuildResult } =
+          await getCachedBusinessDataset(
+            request,
+            cfg,
+            fromDate,
+            toDate,
+            requestedSections,
+            shouldBypassCache(request),
+          );
+        logDatasetBuildTelemetry(request, {
+          cacheStatus: datasetCacheStatus,
+          durationMs: Date.now() - datasetStartedAt,
+          metrics: datasetBuildResult.metrics,
+        });
+        const datasetJson = JSON.stringify(datasetBuildResult.dataset);
         if (streamAbortController.signal.aborted) return;
 
         startSseResponse(reply);
@@ -3341,8 +3642,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .reverse();
 
         const { fromDate, toDate } = getReportingRange();
-        const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
-        const datasetJson = JSON.stringify(dataset);
+        const requestedSections = determineRequestedSections(contentResult.value, convo);
+        const datasetStartedAt = Date.now();
+        const { status: datasetCacheStatus, value: datasetBuildResult } =
+          await getCachedBusinessDataset(
+            request,
+            cfg,
+            fromDate,
+            toDate,
+            requestedSections,
+            shouldBypassCache(request),
+          );
+        logDatasetBuildTelemetry(request, {
+          cacheStatus: datasetCacheStatus,
+          durationMs: Date.now() - datasetStartedAt,
+          metrics: datasetBuildResult.metrics,
+        });
+        const datasetJson = JSON.stringify(datasetBuildResult.dataset);
         if (streamAbortController.signal.aborted) return;
 
         startSseResponse(reply);
@@ -3608,8 +3924,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const { fromDate, toDate } = getReportingRange();
-        const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
-        const datasetJson = JSON.stringify(dataset);
+        const requestedSections = determineRequestedSections(messageResult.value, convo);
+        const datasetStartedAt = Date.now();
+        const { status: datasetCacheStatus, value: datasetBuildResult } =
+          await getCachedBusinessDataset(
+            request,
+            cfg,
+            fromDate,
+            toDate,
+            requestedSections,
+            shouldBypassCache(request),
+          );
+        logDatasetBuildTelemetry(request, {
+          cacheStatus: datasetCacheStatus,
+          durationMs: Date.now() - datasetStartedAt,
+          metrics: datasetBuildResult.metrics,
+        });
+        const datasetJson = JSON.stringify(datasetBuildResult.dataset);
 
         let text = '';
         let thoughtContent = '';

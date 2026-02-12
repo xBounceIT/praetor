@@ -142,8 +142,23 @@ export const reportsApi = {
       body: JSON.stringify(data),
     }),
 
-  getSessionMessages: (sessionId: string): Promise<ReportChatMessage[]> =>
-    fetchApi<ReportChatMessage[]>(`/reports/ai-reporting/sessions/${sessionId}/messages`),
+  getSessionMessages: (
+    sessionId: string,
+    opts: { limit?: number; before?: number } = {},
+  ): Promise<ReportChatMessage[]> => {
+    const params = new URLSearchParams();
+    if (typeof opts.limit === 'number' && Number.isFinite(opts.limit)) {
+      params.set('limit', String(Math.floor(opts.limit)));
+    }
+    if (typeof opts.before === 'number' && Number.isFinite(opts.before)) {
+      params.set('before', String(Math.floor(opts.before)));
+    }
+    const suffix = params.toString();
+    const endpoint = `/reports/ai-reporting/sessions/${sessionId}/messages${
+      suffix ? `?${suffix}` : ''
+    }`;
+    return fetchApi<ReportChatMessage[]>(endpoint);
+  },
 
   chat: (
     data: {

@@ -574,6 +574,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name_unique ON products(name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_product_code_unique ON products(product_code);
+CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON products(supplier_id);
 
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (
@@ -592,6 +593,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 
 CREATE INDEX IF NOT EXISTS idx_quotes_client_id ON quotes(client_id);
 CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
+CREATE INDEX IF NOT EXISTS idx_quotes_created_at ON quotes(created_at);
 
 -- Migration: Update quotes status check constraint to allow new statuses
 DO $$
@@ -677,6 +679,7 @@ DROP INDEX IF EXISTS idx_special_bids_unique;
 CREATE INDEX IF NOT EXISTS idx_special_bids_client_product ON special_bids(client_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_client_id ON special_bids(client_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_product_id ON special_bids(product_id);
+CREATE INDEX IF NOT EXISTS idx_special_bids_date_range ON special_bids(start_date, end_date);
 
 -- Migration: Add gemini_api_key to general_settings
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemini_api_key VARCHAR(255);
@@ -732,6 +735,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_sales_client_id ON sales(client_id);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
 CREATE INDEX IF NOT EXISTS idx_sales_linked_quote_id ON sales(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 
 -- Sale items table (safe for existing installations)
 CREATE TABLE IF NOT EXISTS sale_items (
@@ -791,6 +795,7 @@ CREATE TABLE IF NOT EXISTS supplier_quotes (
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_supplier_id ON supplier_quotes(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_status ON supplier_quotes(status);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_po ON supplier_quotes(purchase_order_number);
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_created_at ON supplier_quotes(created_at);
 
 -- Supplier Quote Items table
 CREATE TABLE IF NOT EXISTS supplier_quote_items (
