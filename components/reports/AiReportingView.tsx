@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -41,6 +41,66 @@ const safeHref = (href: string | undefined) => {
   }
 };
 
+type AssistantAttemptGroup = {
+  id: string;
+  userMessage: ReportChatMessage | null;
+  assistantAttempts: ReportChatMessage[];
+};
+
+const mapNumberRecordEqual = (a: Record<string, number>, b: Record<string, number>) => {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => a[key] === b[key]);
+};
+
+const buildAssistantAttemptGroups = (allMessages: ReportChatMessage[]): AssistantAttemptGroup[] => {
+  const groups: AssistantAttemptGroup[] = [];
+  let index = 0;
+
+  while (index < allMessages.length) {
+    const current = allMessages[index];
+    if (current.role !== 'user') {
+      groups.push({
+        id: current.id,
+        userMessage: null,
+        assistantAttempts: [current],
+      });
+      index += 1;
+      continue;
+    }
+
+    const normalizedUserText = current.content.trim();
+    const attempts: ReportChatMessage[] = [];
+    let cursor = index + 1;
+
+    if (cursor < allMessages.length && allMessages[cursor].role === 'assistant') {
+      attempts.push(allMessages[cursor]);
+      cursor += 1;
+    }
+
+    // Retry sends the same user message again before a new assistant response.
+    // Collapse contiguous repeated user+assistant pairs into attempt versions.
+    while (cursor + 1 < allMessages.length) {
+      const repeatedUser = allMessages[cursor];
+      const repeatedAssistant = allMessages[cursor + 1];
+      if (repeatedUser.role !== 'user' || repeatedAssistant.role !== 'assistant') break;
+      if (repeatedUser.content.trim() !== normalizedUserText) break;
+      attempts.push(repeatedAssistant);
+      cursor += 2;
+    }
+
+    groups.push({
+      id: current.id,
+      userMessage: current,
+      assistantAttempts: attempts,
+    });
+    index = cursor;
+  }
+
+  return groups;
+};
+
 const AiReportingView: React.FC<AiReportingViewProps> = ({
   currentUserId,
   permissions,
@@ -65,6 +125,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [hasNewText, setHasNewText] = useState(false);
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
   const [copiedMessageId, setCopiedMessageId] = useState('');
+  const [selectedAttemptIndexByGroup, setSelectedAttemptIndexByGroup] = useState<
+    Record<string, number>
+  >({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
@@ -72,6 +135,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const sendRunIdRef = useRef(0);
   const activeAssistantMessageIdRef = useRef('');
+  const pendingRetryAutoSelectGroupRef = useRef('');
 
   const canSend =
     enableAiReporting &&
@@ -79,6 +143,17 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const canArchive =
     enableAiReporting &&
     hasPermission(permissions, buildPermission('reports.ai_reporting', 'view'));
+
+  const assistantAttemptGroups = useMemo(() => buildAssistantAttemptGroups(messages), [messages]);
+  const assistantGroupByMessageId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const group of assistantAttemptGroups) {
+      for (const attempt of group.assistantAttempts) {
+        map[attempt.id] = group.id;
+      }
+    }
+    return map;
+  }, [assistantAttemptGroups]);
 
   const getIsAtBottom = useCallback((el: HTMLDivElement) => {
     const threshold = 80;
@@ -597,6 +672,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     if (!enableAiReporting || !canSend || isSending) return;
     const retryContent = getRetryMessageContent(assistantMessageId);
     if (!retryContent) return;
+    const attemptGroupId = assistantGroupByMessageId[assistantMessageId];
+    if (attemptGroupId) {
+      pendingRetryAutoSelectGroupRef.current = attemptGroupId;
+    }
     await sendMessage(retryContent);
   };
 
@@ -692,6 +771,34 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setPendingEmptySessionId('');
     }
   }, [activeSessionId, isLoadingMessages, messages, pendingEmptySessionId]);
+
+  useEffect(() => {
+    setSelectedAttemptIndexByGroup((prev) => {
+      const next: Record<string, number> = {};
+      const pendingGroupId = pendingRetryAutoSelectGroupRef.current;
+      let autoSelectApplied = false;
+
+      for (const group of assistantAttemptGroups) {
+        const maxIndex = group.assistantAttempts.length - 1;
+        if (maxIndex < 0) continue;
+        let index = Math.min(prev[group.id] ?? 0, maxIndex);
+        if (pendingGroupId && pendingGroupId === group.id) {
+          index = maxIndex;
+          autoSelectApplied = true;
+        }
+        next[group.id] = index;
+      }
+
+      if (autoSelectApplied) pendingRetryAutoSelectGroupRef.current = '';
+      return mapNumberRecordEqual(prev, next) ? prev : next;
+    });
+  }, [assistantAttemptGroups]);
+
+  useEffect(() => {
+    pendingRetryAutoSelectGroupRef.current = '';
+    setSelectedAttemptIndexByGroup({});
+    if (!activeSessionId) return;
+  }, [activeSessionId]);
 
   const confirmDeleteSession = useCallback((session: ReportChatSessionSummary) => {
     setSessionToDelete(session);
@@ -881,219 +988,35 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               )}
 
               <div className="space-y-7">
-                {messages.map((m) => {
-                  const isThoughtExpanded = expandedThoughtMessageIds.includes(m.id);
-                  const retryContent = m.role === 'assistant' ? getRetryMessageContent(m.id) : '';
+                {assistantAttemptGroups.map((group) => {
+                  const userMessage = group.userMessage;
+                  const attemptCount = group.assistantAttempts.length;
+                  const safeSelectedIndex = Math.max(
+                    0,
+                    Math.min(
+                      selectedAttemptIndexByGroup[group.id] ?? 0,
+                      Math.max(0, attemptCount - 1),
+                    ),
+                  );
+                  const assistantMessage =
+                    attemptCount > 0 ? group.assistantAttempts[safeSelectedIndex] : null;
+                  const isThoughtExpanded = assistantMessage
+                    ? expandedThoughtMessageIds.includes(assistantMessage.id)
+                    : false;
+                  const retryContent = assistantMessage
+                    ? getRetryMessageContent(assistantMessage.id)
+                    : '';
                   const canRetryAssistantMessage =
-                    m.role === 'assistant' && Boolean(retryContent) && canSend && !isSending;
+                    Boolean(assistantMessage) && Boolean(retryContent) && canSend && !isSending;
+
                   return (
-                    <div
-                      key={m.id}
-                      className={`group w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {m.role === 'user' ? (
-                        <div className="flex items-start gap-1.5">
-                          <Tooltip
-                            label={
-                              copiedMessageId === m.id
-                                ? t('notifications:copied', { defaultValue: 'Copied to clipboard' })
-                                : t('common:buttons.copy', { defaultValue: 'Copy' })
-                            }
-                          >
-                            {() => (
-                              <button
-                                type="button"
-                                onClick={() => void handleCopy(m.id, m.content)}
-                                className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
-                              >
-                                <i
-                                  className={
-                                    copiedMessageId === m.id
-                                      ? 'fa-solid fa-check text-green-500'
-                                      : 'fa-regular fa-copy'
-                                  }
-                                />
-                              </button>
-                            )}
-                          </Tooltip>
-                          <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
-                            {m.content}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-full text-sm leading-relaxed text-slate-800">
-                          {m.thoughtContent?.trim() && (
-                            <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedThoughtMessageIds((prev) =>
-                                    prev.includes(m.id)
-                                      ? prev.filter((id) => id !== m.id)
-                                      : [...prev, m.id],
-                                  )
-                                }
-                                className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-                              >
-                                <span className="inline-flex items-center gap-2">
-                                  <i className="fa-regular fa-lightbulb text-slate-500" />
-                                  {t('aiReporting.thoughtLabel', {
-                                    defaultValue: 'Thought process',
-                                  })}
-                                </span>
-                                <i
-                                  className={`fa-solid ${
-                                    isThoughtExpanded ? 'fa-chevron-up' : 'fa-chevron-down'
-                                  }`}
-                                />
-                              </button>
-                              <div
-                                className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
-                                  isThoughtExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                                }`}
-                              >
-                                <div className="overflow-hidden">
-                                  <div
-                                    className={`border-t text-xs leading-relaxed text-slate-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
-                                      isThoughtExpanded
-                                        ? 'border-slate-200/80 px-3 py-2.5 opacity-100 translate-y-0'
-                                        : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
-                                    }`}
-                                  >
-                                    {m.thoughtContent}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkBreaks]}
-                            components={{
-                              a: ({ children, href }) => {
-                                const safe = safeHref(href);
-                                if (!safe) return <>{children}</>;
-                                return (
-                                  <a
-                                    href={safe}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                                  >
-                                    {children}
-                                  </a>
-                                );
-                              },
-                              img: ({ alt, src }) => {
-                                const safe = safeHref(src);
-                                const label = alt?.trim() ? alt.trim() : src || 'image';
-                                if (!safe)
-                                  return <span className="text-slate-500">[Image: {label}]</span>;
-                                return (
-                                  <a
-                                    href={safe}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
-                                  >
-                                    [Image: {label}]
-                                  </a>
-                                );
-                              },
-                              p: ({ children }) => (
-                                <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-                              ),
-                              h1: ({ children }) => (
-                                <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
-                                  {children}
-                                </h1>
-                              ),
-                              h2: ({ children }) => (
-                                <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
-                                  {children}
-                                </h2>
-                              ),
-                              h3: ({ children }) => (
-                                <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
-                                  {children}
-                                </h3>
-                              ),
-                              ul: ({ children }) => (
-                                <ul className="my-2 list-disc pl-5 marker:text-slate-400">
-                                  {children}
-                                </ul>
-                              ),
-                              ol: ({ children }) => (
-                                <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
-                                  {children}
-                                </ol>
-                              ),
-                              li: ({ children }) => <li className="my-1">{children}</li>,
-                              blockquote: ({ children }) => (
-                                <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
-                                  {children}
-                                </blockquote>
-                              ),
-                              hr: () => <hr className="my-3 border-slate-200" />,
-                              table: ({ children }) => (
-                                <div className="my-2 overflow-x-auto">
-                                  <table className="w-full border-collapse text-left">
-                                    {children}
-                                  </table>
-                                </div>
-                              ),
-                              th: ({ children }) => (
-                                <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
-                                  {children}
-                                </th>
-                              ),
-                              td: ({ children }) => (
-                                <td className="border border-slate-200 px-2 py-1">{children}</td>
-                              ),
-                              pre: ({ children }) => (
-                                <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
-                                  {children}
-                                </pre>
-                              ),
-                              code: (props) => {
-                                // react-markdown provides `inline` here, but it is not represented in the
-                                // published `Components` typing (intrinsic `code` props only).
-                                const { inline, className, children } = props as unknown as {
-                                  inline?: boolean;
-                                  className?: string;
-                                  children?: React.ReactNode;
-                                };
-
-                                const value =
-                                  typeof children === 'string'
-                                    ? children.replace(/\n$/, '')
-                                    : children;
-
-                                if (inline === false) {
-                                  return (
-                                    <code
-                                      className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
-                                        className ?? ''
-                                      }`}
-                                    >
-                                      {value}
-                                    </code>
-                                  );
-                                }
-
-                                return (
-                                  <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
-                                    {value}
-                                  </code>
-                                );
-                              },
-                            }}
-                          >
-                            {m.content}
-                          </ReactMarkdown>
-                          <div className="mt-2 flex justify-start items-center gap-1.5">
+                    <div key={group.id} className="space-y-4">
+                      {userMessage && (
+                        <div className="group w-full flex justify-end">
+                          <div className="flex items-start gap-1.5">
                             <Tooltip
                               label={
-                                copiedMessageId === m.id
+                                copiedMessageId === userMessage.id
                                   ? t('notifications:copied', {
                                       defaultValue: 'Copied to clipboard',
                                     })
@@ -1103,13 +1026,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               {() => (
                                 <button
                                   type="button"
-                                  onClick={() => void handleCopy(m.id, m.content)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
-                                  aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                  onClick={() =>
+                                    void handleCopy(userMessage.id, userMessage.content)
+                                  }
+                                  className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
                                 >
                                   <i
                                     className={
-                                      copiedMessageId === m.id
+                                      copiedMessageId === userMessage.id
                                         ? 'fa-solid fa-check text-green-500'
                                         : 'fa-regular fa-copy'
                                     }
@@ -1117,24 +1041,281 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                 </button>
                               )}
                             </Tooltip>
-                            <Tooltip label={t('aiReporting.retry', { defaultValue: 'Retry' })}>
-                              {() => (
+                            <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
+                              {userMessage.content}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {assistantMessage && (
+                        <div className="group w-full flex justify-start">
+                          <div className="w-full text-sm leading-relaxed text-slate-800">
+                            {assistantMessage.thoughtContent?.trim() && (
+                              <div className="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 backdrop-blur-sm">
                                 <button
                                   type="button"
-                                  onClick={() => void handleRetryMessage(m.id)}
-                                  disabled={!canRetryAssistantMessage}
-                                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors ${
-                                    canRetryAssistantMessage
-                                      ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                      : 'text-slate-300 cursor-not-allowed'
-                                  }`}
-                                  aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                  onClick={() =>
+                                    setExpandedThoughtMessageIds((prev) =>
+                                      prev.includes(assistantMessage.id)
+                                        ? prev.filter((id) => id !== assistantMessage.id)
+                                        : [...prev, assistantMessage.id],
+                                    )
+                                  }
+                                  className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
                                 >
-                                  <i className="fa-solid fa-rotate-right text-[11px]" />
-                                  {t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                  <span className="inline-flex items-center gap-2">
+                                    <i className="fa-regular fa-lightbulb text-slate-500" />
+                                    {t('aiReporting.thoughtLabel', {
+                                      defaultValue: 'Thought process',
+                                    })}
+                                  </span>
+                                  <i
+                                    className={`fa-solid ${
+                                      isThoughtExpanded ? 'fa-chevron-up' : 'fa-chevron-down'
+                                    }`}
+                                  />
                                 </button>
+                                <div
+                                  className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
+                                    isThoughtExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                  }`}
+                                >
+                                  <div className="overflow-hidden">
+                                    <div
+                                      className={`border-t text-xs leading-relaxed text-slate-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
+                                        isThoughtExpanded
+                                          ? 'border-slate-200/80 px-3 py-2.5 opacity-100 translate-y-0'
+                                          : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
+                                      }`}
+                                    >
+                                      {assistantMessage.thoughtContent}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkBreaks]}
+                              components={{
+                                a: ({ children, href }) => {
+                                  const safe = safeHref(href);
+                                  if (!safe) return <>{children}</>;
+                                  return (
+                                    <a
+                                      href={safe}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                    >
+                                      {children}
+                                    </a>
+                                  );
+                                },
+                                img: ({ alt, src }) => {
+                                  const safe = safeHref(src);
+                                  const label = alt?.trim() ? alt.trim() : src || 'image';
+                                  if (!safe)
+                                    return <span className="text-slate-500">[Image: {label}]</span>;
+                                  return (
+                                    <a
+                                      href={safe}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-semibold underline underline-offset-2 text-slate-900 hover:text-slate-700"
+                                    >
+                                      [Image: {label}]
+                                    </a>
+                                  );
+                                },
+                                p: ({ children }) => (
+                                  <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+                                ),
+                                h1: ({ children }) => (
+                                  <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
+                                    {children}
+                                  </h1>
+                                ),
+                                h2: ({ children }) => (
+                                  <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
+                                    {children}
+                                  </h2>
+                                ),
+                                h3: ({ children }) => (
+                                  <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
+                                    {children}
+                                  </h3>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="my-2 list-disc pl-5 marker:text-slate-400">
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
+                                    {children}
+                                  </ol>
+                                ),
+                                li: ({ children }) => <li className="my-1">{children}</li>,
+                                blockquote: ({ children }) => (
+                                  <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
+                                    {children}
+                                  </blockquote>
+                                ),
+                                hr: () => <hr className="my-3 border-slate-200" />,
+                                table: ({ children }) => (
+                                  <div className="my-2 overflow-x-auto">
+                                    <table className="w-full border-collapse text-left">
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                th: ({ children }) => (
+                                  <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                                    {children}
+                                  </th>
+                                ),
+                                td: ({ children }) => (
+                                  <td className="border border-slate-200 px-2 py-1">{children}</td>
+                                ),
+                                pre: ({ children }) => (
+                                  <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
+                                    {children}
+                                  </pre>
+                                ),
+                                code: (props) => {
+                                  // react-markdown provides `inline` here, but it is not represented in the
+                                  // published `Components` typing (intrinsic `code` props only).
+                                  const { inline, className, children } = props as unknown as {
+                                    inline?: boolean;
+                                    className?: string;
+                                    children?: React.ReactNode;
+                                  };
+
+                                  const value =
+                                    typeof children === 'string'
+                                      ? children.replace(/\n$/, '')
+                                      : children;
+
+                                  if (inline === false) {
+                                    return (
+                                      <code
+                                        className={`font-mono text-[12px] leading-relaxed text-slate-100 ${
+                                          className ?? ''
+                                        }`}
+                                      >
+                                        {value}
+                                      </code>
+                                    );
+                                  }
+
+                                  return (
+                                    <code className="font-mono text-[12px] rounded bg-slate-100 px-1 py-0.5 text-slate-900">
+                                      {value}
+                                    </code>
+                                  );
+                                },
+                              }}
+                            >
+                              {assistantMessage.content}
+                            </ReactMarkdown>
+                            <div className="mt-2 flex justify-start items-center gap-1.5">
+                              <Tooltip
+                                label={
+                                  copiedMessageId === assistantMessage.id
+                                    ? t('notifications:copied', {
+                                        defaultValue: 'Copied to clipboard',
+                                      })
+                                    : t('common:buttons.copy', { defaultValue: 'Copy' })
+                                }
+                              >
+                                {() => (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleCopy(assistantMessage.id, assistantMessage.content)
+                                    }
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                    aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
+                                  >
+                                    <i
+                                      className={
+                                        copiedMessageId === assistantMessage.id
+                                          ? 'fa-solid fa-check text-green-500'
+                                          : 'fa-regular fa-copy'
+                                      }
+                                    />
+                                  </button>
+                                )}
+                              </Tooltip>
+                              <Tooltip label={t('aiReporting.retry', { defaultValue: 'Retry' })}>
+                                {() => (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRetryMessage(assistantMessage.id)}
+                                    disabled={!canRetryAssistantMessage}
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                      canRetryAssistantMessage
+                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                        : 'text-slate-300 cursor-not-allowed'
+                                    }`}
+                                    aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                  >
+                                    <i className="fa-solid fa-rotate-right text-[11px]" />
+                                  </button>
+                                )}
+                              </Tooltip>
+                              {attemptCount > 1 && (
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedAttemptIndexByGroup((prev) => ({
+                                        ...prev,
+                                        [group.id]: Math.max(0, safeSelectedIndex - 1),
+                                      }))
+                                    }
+                                    disabled={safeSelectedIndex <= 0}
+                                    aria-label={t('aiReporting.previousVersion', {
+                                      defaultValue: 'Previous version',
+                                    })}
+                                    className={`p-1 text-xs rounded transition-colors ${
+                                      safeSelectedIndex > 0
+                                        ? 'text-slate-500 hover:text-slate-700'
+                                        : 'text-slate-300 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <i className="fa-solid fa-chevron-left text-[10px]" />
+                                  </button>
+                                  <span className="text-xs text-slate-500 min-w-[36px] text-center">
+                                    {safeSelectedIndex + 1}/{attemptCount}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedAttemptIndexByGroup((prev) => ({
+                                        ...prev,
+                                        [group.id]: Math.min(
+                                          attemptCount - 1,
+                                          safeSelectedIndex + 1,
+                                        ),
+                                      }))
+                                    }
+                                    disabled={safeSelectedIndex >= attemptCount - 1}
+                                    aria-label={t('aiReporting.nextVersion', {
+                                      defaultValue: 'Next version',
+                                    })}
+                                    className={`p-1 text-xs rounded transition-colors ${
+                                      safeSelectedIndex < attemptCount - 1
+                                        ? 'text-slate-500 hover:text-slate-700'
+                                        : 'text-slate-300 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <i className="fa-solid fa-chevron-right text-[10px]" />
+                                  </button>
+                                </div>
                               )}
-                            </Tooltip>
+                            </div>
                           </div>
                         </div>
                       )}
