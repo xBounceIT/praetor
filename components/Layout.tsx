@@ -546,11 +546,11 @@ const Layout: React.FC<LayoutProps> = ({
                 iconElement={
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
+                    width="20"
+                    height="20"
                     viewBox="0 0 24 24"
                     fill="currentColor"
-                    className="w-4 h-4"
+                    className="w-5 h-5"
                     role="img"
                     aria-label="AI sparkle"
                   >
@@ -568,7 +568,6 @@ const Layout: React.FC<LayoutProps> = ({
                   onViewChange('reports/ai-reporting');
                   setIsMobileMenuOpen(false);
                 }}
-                suffix={<StatusBadge type="experimental" label="EXPERIMENTAL" />}
               />
             )}
           </>
