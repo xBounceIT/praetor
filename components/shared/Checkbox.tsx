@@ -1,6 +1,6 @@
 import type React from 'react';
 
-interface CheckboxProps {
+export interface CheckboxProps {
   checked: boolean;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   disabled?: boolean;
