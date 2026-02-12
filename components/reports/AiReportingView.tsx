@@ -1596,7 +1596,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     })}
                                     className={`p-1 text-xs rounded transition-colors ${
                                       safeSelectedIndex > 0
-                                        ? 'text-slate-500 hover:text-slate-700'
+                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                                         : 'text-slate-300 cursor-not-allowed'
                                     }`}
                                   >
@@ -1622,7 +1622,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     })}
                                     className={`p-1 text-xs rounded transition-colors ${
                                       safeSelectedIndex < attemptCount - 1
-                                        ? 'text-slate-500 hover:text-slate-700'
+                                        ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                                         : 'text-slate-300 cursor-not-allowed'
                                     }`}
                                   >
