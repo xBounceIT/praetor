@@ -1563,19 +1563,21 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                 ),
                                 hr: () => <hr className="my-3 border-slate-200" />,
                                 table: ({ children }) => (
-                                  <div className="my-2 overflow-x-auto">
-                                    <table className="w-full border-collapse text-left">
+                                  <div className="my-2 max-w-full overflow-x-auto">
+                                    <table className="w-max min-w-full border-collapse text-left">
                                       {children}
                                     </table>
                                   </div>
                                 ),
                                 th: ({ children }) => (
-                                  <th className="border border-slate-200 bg-slate-50 px-2 py-1 font-extrabold">
+                                  <th className="align-top whitespace-nowrap border border-slate-200 bg-slate-50 px-3 py-2 font-extrabold">
                                     {children}
                                   </th>
                                 ),
                                 td: ({ children }) => (
-                                  <td className="border border-slate-200 px-2 py-1">{children}</td>
+                                  <td className="align-top break-words border border-slate-200 px-3 py-2">
+                                    {children}
+                                  </td>
                                 ),
                                 pre: ({ children }) => (
                                   <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
