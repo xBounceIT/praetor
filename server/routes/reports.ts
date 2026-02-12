@@ -223,6 +223,11 @@ const normalizeUiLanguage = (value: unknown): UiLanguage => {
   return 'en';
 };
 
+const RETRY_REWRITE_PROMPT_PREFIX = '[retry_rewrite_v1]';
+
+const isRetryRewritePrompt = (content: string) =>
+  content.trimStart().startsWith(RETRY_REWRITE_PROMPT_PREFIX);
+
 const buildSessionTitlePrompt = (firstUserMessage: string, language: UiLanguage) => {
   const languageLabel = language === 'it' ? 'Italian' : 'English';
   return [
@@ -2988,13 +2993,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const assistantMessageId = `rpt-msg-${randomUUID()}`;
 
       try {
-        const userMessageId = `rpt-msg-${randomUUID()}`;
-        await query(
-          `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-           VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
-          [userMessageId, resolvedSessionId, messageResult.value],
-        );
-        didMutate = true;
+        const isRetryRewrite = isRetryRewritePrompt(messageResult.value);
+        if (!isRetryRewrite) {
+          const userMessageId = `rpt-msg-${randomUUID()}`;
+          await query(
+            `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
+             VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
+            [userMessageId, resolvedSessionId, messageResult.value],
+          );
+          didMutate = true;
+        }
 
         const recent = await query(
           `SELECT role, content
@@ -3006,9 +3014,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         const convo = recent.rows
           .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
-          .filter((x) => (x.role === 'user' || x.role === 'assistant') && x.content.trim())
+          .filter(
+            (x) =>
+              (x.role === 'user' || x.role === 'assistant') &&
+              x.content.trim() &&
+              !isRetryRewritePrompt(x.content),
+          )
           .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
           .reverse();
+
+        if (isRetryRewrite) {
+          convo.push({ role: 'user', content: messageResult.value });
+        }
 
         const { fromDate, toDate } = getReportingRange();
         const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
@@ -3267,13 +3284,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const userMessageId = `rpt-msg-${randomUUID()}`;
-        await query(
-          `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
-           VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
-          [userMessageId, resolvedSessionId, messageResult.value],
-        );
-        didMutate = true;
+        const isRetryRewrite = isRetryRewritePrompt(messageResult.value);
+        if (!isRetryRewrite) {
+          const userMessageId = `rpt-msg-${randomUUID()}`;
+          await query(
+            `INSERT INTO report_chat_messages (id, session_id, role, content, created_at)
+             VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
+            [userMessageId, resolvedSessionId, messageResult.value],
+          );
+          didMutate = true;
+        }
 
         const recent = await query(
           `SELECT role, content
@@ -3285,9 +3305,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         const convo = recent.rows
           .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
-          .filter((x) => (x.role === 'user' || x.role === 'assistant') && x.content.trim())
+          .filter(
+            (x) =>
+              (x.role === 'user' || x.role === 'assistant') &&
+              x.content.trim() &&
+              !isRetryRewritePrompt(x.content),
+          )
           .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
           .reverse();
+
+        if (isRetryRewrite) {
+          convo.push({ role: 'user', content: messageResult.value });
+        }
 
         const { fromDate, toDate } = getReportingRange();
         const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
