@@ -543,7 +543,24 @@ const Layout: React.FC<LayoutProps> = ({
           <>
             {canAccessView('reports/ai-reporting') && (
               <NavItem
-                icon="fa-wand-magic-sparkles"
+                iconElement={
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                    role="img"
+                    aria-label="AI sparkle"
+                  >
+                    <title>AI sparkle</title>
+                    <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5Z" />
+                    <path d="M19 14L19.75 16.25L22 17L19.75 17.75L19 20L18.25 17.75L16 17L18.25 16.25Z" />
+                    <path d="M5 2L5.5 3.5L7 4L5.5 4.5L5 6L4.5 4.5L3 4L4.5 3.5Z" />
+                    <path d="M6 18L6.5 19.5L8 20L6.5 20.5L6 22L5.5 20.5L4 20L5.5 19.5Z" />
+                  </svg>
+                }
                 label={t('routes.aiReporting')}
                 active={activeView === 'reports/ai-reporting'}
                 isCollapsed={isCollapsed}
@@ -850,7 +867,8 @@ const Layout: React.FC<LayoutProps> = ({
 };
 
 interface NavItemProps {
-  icon: string;
+  icon?: string;
+  iconElement?: React.ReactNode;
   label: string;
   active: boolean;
   isCollapsed: boolean;
@@ -858,7 +876,15 @@ interface NavItemProps {
   suffix?: React.ReactNode;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onClick, suffix }) => (
+const NavItem: React.FC<NavItemProps> = ({
+  icon,
+  iconElement,
+  label,
+  active,
+  isCollapsed,
+  onClick,
+  suffix,
+}) => (
   <Tooltip label={label} position="right" disabled={!isCollapsed} wrapperClassName="w-full">
     {() => (
       <button
@@ -869,9 +895,17 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, isCollapsed, onC
             : 'text-white/60 hover:bg-white/10 hover:text-white'
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
-        <i
-          className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
-        ></i>
+        {iconElement ? (
+          <span
+            className={`w-5 text-center text-lg flex items-center justify-center ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
+          >
+            {iconElement}
+          </span>
+        ) : (
+          <i
+            className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
+          ></i>
+        )}
         {!isCollapsed && (
           <>
             <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
