@@ -764,6 +764,102 @@ export const reportsApi = {
     return donePayload;
   },
 
+  editMessageStream: async (
+    data: {
+      sessionId: string;
+      messageId: string;
+      content: string;
+      language?: string;
+    },
+    handlers: ReportChatStreamHandlers = {},
+    signal?: AbortSignal,
+  ): Promise<ReportChatStreamDoneEvent> => {
+    const response = await fetch(`${API_BASE}/reports/ai-reporting/chat/edit-stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify(data),
+      signal,
+    });
+
+    const newToken = response.headers.get('x-auth-token');
+    if (newToken) setAuthToken(newToken);
+
+    if (!response.ok) {
+      const jsonError = await response.json().catch(() => null);
+      const message =
+        typeof jsonError?.error === 'string' ? jsonError.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    if (!response.body) {
+      throw new Error('Streaming response body is missing');
+    }
+
+    let streamError = '';
+    let donePayload: ReportChatStreamDoneEvent | null = null;
+
+    for await (const evt of iterateSseEvents(response.body)) {
+      const rawData = String(evt.data || '').trim();
+      if (!rawData || rawData === '[DONE]') continue;
+
+      let payload: Record<string, unknown> = {};
+      try {
+        const parsed = JSON.parse(rawData) as unknown;
+        if (parsed && typeof parsed === 'object') {
+          payload = parsed as Record<string, unknown>;
+        }
+      } catch {
+        payload = {};
+      }
+
+      if (evt.event === 'start') {
+        handlers.onStart?.({
+          sessionId: String(payload.sessionId || ''),
+          messageId: String(payload.messageId || ''),
+        });
+        continue;
+      }
+
+      if (evt.event === 'thought_delta') {
+        const delta = String(payload.delta || '');
+        if (delta) handlers.onThoughtDelta?.(delta);
+        continue;
+      }
+
+      if (evt.event === 'answer_delta') {
+        const delta = String(payload.delta || '');
+        if (delta) handlers.onAnswerDelta?.(delta);
+        continue;
+      }
+
+      if (evt.event === 'thought_done') {
+        handlers.onThoughtDone?.();
+        continue;
+      }
+
+      if (evt.event === 'done') {
+        donePayload = {
+          sessionId: String(payload.sessionId || ''),
+          text: String(payload.text || ''),
+          thoughtContent:
+            typeof payload.thoughtContent === 'string' ? payload.thoughtContent : undefined,
+        };
+        continue;
+      }
+
+      if (evt.event === 'error') {
+        streamError = String(payload.message || 'AI request failed');
+      }
+    }
+
+    if (streamError) throw new Error(streamError);
+    if (!donePayload) throw new Error('Streaming response ended without a completion event');
+    return donePayload;
+  },
+
   archiveSession: (sessionId: string): Promise<{ success: boolean }> =>
     fetchApi(`/reports/ai-reporting/sessions/${sessionId}/archive`, { method: 'POST' }),
 };

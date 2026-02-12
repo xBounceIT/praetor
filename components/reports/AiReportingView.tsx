@@ -125,6 +125,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [hasNewText, setHasNewText] = useState(false);
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
   const [copiedMessageId, setCopiedMessageId] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState('');
+  const [editingDraft, setEditingDraft] = useState('');
   const [selectedAttemptIndexByGroup, setSelectedAttemptIndexByGroup] = useState<
     Record<string, number>
   >({});
@@ -648,6 +650,211 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     await sendMessage(draft, { clearDraft: true });
   };
 
+  const handleEditSend = async (userMessage: ReportChatMessage) => {
+    if (!enableAiReporting || !canSend || isSending) return;
+    const content = editingDraft.trim();
+    if (!content) return;
+
+    // If content unchanged, just cancel edit
+    if (content === userMessage.content.trim()) {
+      setEditingMessageId('');
+      setEditingDraft('');
+      return;
+    }
+
+    // Find the currently displayed assistant message paired with this user message
+    const group = assistantAttemptGroups.find((g) => g.userMessage?.id === userMessage.id);
+    const attemptCount = group?.assistantAttempts.length ?? 0;
+    const safeIdx = Math.max(
+      0,
+      Math.min(selectedAttemptIndexByGroup[group?.id || ''] ?? 0, Math.max(0, attemptCount - 1)),
+    );
+    const pairedAssistant = group && attemptCount > 0 ? group.assistantAttempts[safeIdx] : null;
+
+    const abortController = new AbortController();
+    const runId = ++sendRunIdRef.current;
+    abortRef.current = abortController;
+
+    setIsSending(true);
+    setError('');
+    setEditingMessageId('');
+    setEditingDraft('');
+
+    const thinkingLabel = t('aiReporting.thinking', { defaultValue: 'Thinking…' });
+    const placeholderId = pairedAssistant?.id || `tmp-asst-edit-${Date.now()}`;
+    activeAssistantMessageIdRef.current = placeholderId;
+
+    // Optimistically update user message content and replace assistant with thinking placeholder
+    setMessages((prev) => {
+      const updated = prev.map((m) => {
+        if (m.id === userMessage.id) return { ...m, content };
+        if (pairedAssistant && m.id === pairedAssistant.id)
+          return { ...m, content: '', thoughtContent: thinkingLabel };
+        return m;
+      });
+      // If no paired assistant, inject a placeholder after the user message
+      if (!pairedAssistant) {
+        const userIdx = updated.findIndex((m) => m.id === userMessage.id);
+        if (userIdx >= 0) {
+          const placeholder: ReportChatMessage = {
+            id: placeholderId,
+            sessionId: activeSessionId || 'tmp',
+            role: 'assistant',
+            content: '',
+            thoughtContent: thinkingLabel,
+            createdAt: userMessage.createdAt + 1,
+          };
+          updated.splice(userIdx + 1, 0, placeholder);
+        }
+      }
+      return updated;
+    });
+    setExpandedThoughtMessageIds((prev) =>
+      prev.includes(placeholderId) ? prev : [...prev, placeholderId],
+    );
+
+    const isRunActive = () =>
+      sendRunIdRef.current === runId &&
+      abortRef.current === abortController &&
+      !abortController.signal.aborted;
+
+    const cleanupPlaceholder = () => {
+      if (!pairedAssistant) {
+        setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
+      }
+      setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== placeholderId));
+      if (activeAssistantMessageIdRef.current === placeholderId) {
+        activeAssistantMessageIdRef.current = '';
+      }
+    };
+
+    try {
+      let thoughtDoneClosed = false;
+
+      const closeThoughtPanel = () => {
+        if (thoughtDoneClosed || !isRunActive()) return;
+        thoughtDoneClosed = true;
+        setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== placeholderId));
+      };
+
+      const streamed = await api.reports.editMessageStream(
+        {
+          sessionId: activeSessionId,
+          messageId: userMessage.id,
+          content,
+          language: i18n.language,
+        },
+        {
+          onStart: ({ messageId }) => {
+            if (!isRunActive()) return;
+            // Replace placeholder ID with the real assistant message ID from server
+            if (messageId && messageId !== placeholderId) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === placeholderId ? { ...m, id: messageId } : m)),
+              );
+              setExpandedThoughtMessageIds((prev) =>
+                prev.map((id) => (id === placeholderId ? messageId : id)),
+              );
+              if (activeAssistantMessageIdRef.current === placeholderId) {
+                activeAssistantMessageIdRef.current = messageId;
+              }
+            }
+          },
+          onThoughtDelta: (delta) => {
+            if (!delta || !isRunActive()) return;
+            const targetId = activeAssistantMessageIdRef.current || placeholderId;
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== targetId) return m;
+                const previousThought = String(m.thoughtContent || '');
+                const nextThought =
+                  previousThought === thinkingLabel ? delta : `${previousThought}${delta}`;
+                return { ...m, thoughtContent: nextThought };
+              }),
+            );
+            if (isAtBottomRef.current) {
+              requestAnimationFrame(scrollToBottom);
+            } else {
+              setHasNewText(true);
+            }
+          },
+          onThoughtDone: () => {
+            if (!isRunActive()) return;
+            closeThoughtPanel();
+            const targetId = activeAssistantMessageIdRef.current || placeholderId;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === targetId && m.thoughtContent === thinkingLabel
+                  ? { ...m, thoughtContent: undefined }
+                  : m,
+              ),
+            );
+          },
+          onAnswerDelta: (delta) => {
+            if (!delta || !isRunActive()) return;
+            closeThoughtPanel();
+            const targetId = activeAssistantMessageIdRef.current || placeholderId;
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== targetId) return m;
+                const nextContent = `${m.content}${delta}`;
+                const cleanedThought =
+                  m.thoughtContent === thinkingLabel ? undefined : m.thoughtContent;
+                return { ...m, content: nextContent, thoughtContent: cleanedThought };
+              }),
+            );
+            if (isAtBottomRef.current) {
+              requestAnimationFrame(scrollToBottom);
+            } else {
+              setHasNewText(true);
+            }
+          },
+        },
+        abortController.signal,
+      );
+
+      if (!isRunActive()) return;
+      closeThoughtPanel();
+
+      const finalId = activeAssistantMessageIdRef.current || placeholderId;
+      const finalThought = String(streamed.thoughtContent || '').trim();
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === finalId
+            ? { ...m, content: streamed.text, thoughtContent: finalThought || undefined }
+            : m,
+        ),
+      );
+      if (activeAssistantMessageIdRef.current === finalId) {
+        activeAssistantMessageIdRef.current = '';
+      }
+      await loadSessions({ preferredSessionId: streamed.sessionId });
+    } catch (err) {
+      if (!isRunActive()) {
+        cleanupPlaceholder();
+        return;
+      }
+
+      if ((err as Error).name === 'AbortError') {
+        cleanupPlaceholder();
+      } else {
+        setError((err as Error).message || t('aiReporting.error'));
+        // Reload canonical messages to restore consistent state
+        if (activeSessionId) {
+          await loadMessages(activeSessionId, { forceScroll: false });
+        }
+      }
+    } finally {
+      if (isRunActive()) {
+        if (activeAssistantMessageIdRef.current === placeholderId) {
+          activeAssistantMessageIdRef.current = '';
+        }
+        abortRef.current = null;
+        setIsSending(false);
+      }
+    }
+  };
+
   const getRetryMessageContent = useCallback(
     (assistantMessageId: string) => {
       const assistantIndex = messages.findIndex(
@@ -1013,38 +1220,110 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                     <div key={group.id} className="space-y-4">
                       {userMessage && (
                         <div className="group w-full flex justify-end">
-                          <div className="flex items-start gap-1.5">
-                            <Tooltip
-                              label={
-                                copiedMessageId === userMessage.id
-                                  ? t('notifications:copied', {
-                                      defaultValue: 'Copied to clipboard',
-                                    })
-                                  : t('common:buttons.copy', { defaultValue: 'Copy' })
-                              }
-                            >
-                              {() => (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleCopy(userMessage.id, userMessage.content)
-                                  }
-                                  className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
-                                >
-                                  <i
-                                    className={
-                                      copiedMessageId === userMessage.id
-                                        ? 'fa-solid fa-check text-green-500'
-                                        : 'fa-regular fa-copy'
+                          {editingMessageId === userMessage.id ? (
+                            <div className="w-full">
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <textarea
+                                  value={editingDraft}
+                                  onChange={(e) => setEditingDraft(e.target.value)}
+                                  rows={3}
+                                  className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed text-slate-800"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      setEditingMessageId('');
+                                      setEditingDraft('');
+                                    } else if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      void handleEditSend(userMessage);
                                     }
-                                  />
-                                </button>
-                              )}
-                            </Tooltip>
-                            <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
-                              {userMessage.content}
+                                  }}
+                                />
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingMessageId('');
+                                      setEditingDraft('');
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-colors"
+                                  >
+                                    {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleEditSend(userMessage)}
+                                    disabled={!editingDraft.trim()}
+                                    className="px-3 py-1.5 text-xs font-medium text-white bg-praetor hover:bg-praetor/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {t('common:buttons.send', { defaultValue: 'Send' })}
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="flex flex-col items-end max-w-[85%]">
+                              <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
+                                {userMessage.content}
+                              </div>
+                              <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <Tooltip
+                                  label={
+                                    copiedMessageId === userMessage.id
+                                      ? t('notifications:copied', {
+                                          defaultValue: 'Copied to clipboard',
+                                        })
+                                      : t('common:buttons.copy', { defaultValue: 'Copy' })
+                                  }
+                                >
+                                  {() => (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleCopy(userMessage.id, userMessage.content)
+                                      }
+                                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                                    >
+                                      <i
+                                        className={
+                                          copiedMessageId === userMessage.id
+                                            ? 'fa-solid fa-check text-green-500'
+                                            : 'fa-regular fa-copy'
+                                        }
+                                      />
+                                    </button>
+                                  )}
+                                </Tooltip>
+                                <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
+                                  {() => (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingMessageId(userMessage.id);
+                                        setEditingDraft(userMessage.content);
+                                      }}
+                                      disabled={
+                                        isSending ||
+                                        !canSend ||
+                                        editingMessageId !== '' ||
+                                        userMessage.id.startsWith('tmp-')
+                                      }
+                                      className={`p-1.5 rounded-lg transition-colors ${
+                                        isSending ||
+                                        !canSend ||
+                                        editingMessageId !== '' ||
+                                        userMessage.id.startsWith('tmp-')
+                                          ? 'text-slate-300 cursor-not-allowed'
+                                          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      <i className="fa-regular fa-pen-to-square" />
+                                    </button>
+                                  )}
+                                </Tooltip>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 

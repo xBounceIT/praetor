@@ -3200,6 +3200,295 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  // POST /ai-reporting/chat/edit-stream
+  fastify.post(
+    '/ai-reporting/chat/edit-stream',
+    {
+      onRequest: [requirePermission('reports.ai_reporting.create')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Edit a user message and regenerate the assistant response via streaming',
+        body: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string' },
+            messageId: { type: 'string' },
+            content: { type: 'string' },
+            language: { type: 'string' },
+          },
+          required: ['sessionId', 'messageId', 'content'],
+        },
+        response: {
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const { sessionId, messageId, content, language } = request.body as {
+        sessionId?: unknown;
+        messageId?: unknown;
+        content?: unknown;
+        language?: unknown;
+      };
+
+      const sessionIdResult = requireNonEmptyString(sessionId, 'sessionId');
+      if (!sessionIdResult.ok) return badRequest(reply, sessionIdResult.message);
+      const messageIdResult = requireNonEmptyString(messageId, 'messageId');
+      if (!messageIdResult.ok) return badRequest(reply, messageIdResult.message);
+      const contentResult = requireNonEmptyString(content, 'content');
+      if (!contentResult.ok) return badRequest(reply, contentResult.message);
+      if (contentResult.value.length > 4000) return badRequest(reply, 'content is too long');
+
+      const uiLanguage = normalizeUiLanguage(language);
+
+      const cfg = await getGeneralAiConfig();
+      if (!ensureAiEnabled(cfg, reply)) return;
+
+      const providerKeyModel = resolveProviderKeyModel(cfg);
+      const { provider, apiKey, modelId } = providerKeyModel;
+      if (!apiKey.trim())
+        return badRequest(reply, `Missing ${provider} API key in General Settings.`);
+      if (!modelId.trim())
+        return badRequest(reply, `Missing ${provider} model id in General Settings.`);
+
+      const ns = `reports:ai-reporting:user:${userId}`;
+      let didMutate = false;
+      let streamStarted = false;
+      let thoughtDoneSent = false;
+      let streamedText = '';
+      let streamedThoughtContent = '';
+      const streamAbortController = new AbortController();
+      const handleClientDisconnect = () => {
+        streamAbortController.abort();
+      };
+      request.raw.once('aborted', handleClientDisconnect);
+      request.raw.once('close', handleClientDisconnect);
+
+      // Verify session exists, belongs to user, is not archived
+      const owned = await query(
+        `SELECT id
+         FROM report_chat_sessions
+         WHERE id = $1 AND user_id = $2 AND is_archived = FALSE
+         LIMIT 1`,
+        [sessionIdResult.value, userId],
+      );
+      if (owned.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
+
+      // Verify messageId exists and is a user message in this session
+      const userMsgRow = await query(
+        `SELECT id, created_at
+         FROM report_chat_messages
+         WHERE id = $1 AND session_id = $2 AND role = 'user'
+         LIMIT 1`,
+        [messageIdResult.value, sessionIdResult.value],
+      );
+      if (userMsgRow.rows.length === 0)
+        return reply.code(404).send({ error: 'User message not found' });
+
+      const userMsgCreatedAt = userMsgRow.rows[0].created_at;
+
+      // Find the first assistant message chronologically after the user message
+      const pairedAssistant = await query(
+        `SELECT id, created_at
+         FROM report_chat_messages
+         WHERE session_id = $1 AND role = 'assistant'
+           AND created_at > $2
+         ORDER BY created_at ASC
+         LIMIT 1`,
+        [sessionIdResult.value, userMsgCreatedAt],
+      );
+
+      let savedAssistantCreatedAt: Date;
+      if (pairedAssistant.rows.length > 0) {
+        savedAssistantCreatedAt = new Date(pairedAssistant.rows[0].created_at);
+        // Delete the paired assistant message
+        await query(`DELETE FROM report_chat_messages WHERE id = $1`, [pairedAssistant.rows[0].id]);
+        didMutate = true;
+      } else {
+        savedAssistantCreatedAt = new Date(new Date(userMsgCreatedAt).getTime() + 1000);
+      }
+
+      // Update user message content
+      await query(`UPDATE report_chat_messages SET content = $1 WHERE id = $2`, [
+        contentResult.value,
+        messageIdResult.value,
+      ]);
+      didMutate = true;
+
+      const assistantMessageId = `rpt-msg-${randomUUID()}`;
+
+      try {
+        // Build context from messages up to and including the edited message
+        const recent = await query(
+          `SELECT role, content
+           FROM report_chat_messages
+           WHERE session_id = $1
+             AND created_at <= $2
+           ORDER BY created_at DESC
+           LIMIT 20`,
+          [sessionIdResult.value, userMsgCreatedAt],
+        );
+        const convo = recent.rows
+          .map((r) => ({ role: String(r.role || ''), content: String(r.content || '') }))
+          .filter(
+            (x) =>
+              (x.role === 'user' || x.role === 'assistant') &&
+              x.content.trim() &&
+              !isRetryRewritePrompt(x.content),
+          )
+          .map((x) => ({ role: x.role as 'user' | 'assistant', content: x.content }))
+          .reverse();
+
+        const { fromDate, toDate } = getReportingRange();
+        const dataset = await buildBusinessDataset(request, cfg, fromDate, toDate);
+        const datasetJson = JSON.stringify(dataset);
+        if (streamAbortController.signal.aborted) return;
+
+        startSseResponse(reply);
+        streamStarted = true;
+        if (
+          !writeSseEvent(reply, 'start', {
+            sessionId: sessionIdResult.value,
+            messageId: assistantMessageId,
+          })
+        ) {
+          streamAbortController.abort();
+          return;
+        }
+
+        const emitThoughtDone = async () => {
+          if (thoughtDoneSent || streamAbortController.signal.aborted) return;
+          thoughtDoneSent = true;
+          if (!writeSseEvent(reply, 'thought_done', {})) {
+            streamAbortController.abort();
+          }
+        };
+
+        let generated: AiTextResult;
+        if (provider === 'openrouter') {
+          const messagesForAi: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+            { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
+            { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
+            ...convo.map((m) => ({ role: m.role, content: m.content })),
+          ];
+          generated = await openrouterGenerateTextStream(
+            apiKey,
+            modelId,
+            messagesForAi,
+            {
+              onThoughtDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedThoughtContent += delta;
+                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onAnswerDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedText += delta;
+                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onThoughtDone: emitThoughtDone,
+            },
+            streamAbortController.signal,
+          );
+        } else {
+          const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+          const prompt = [
+            buildAiReportingSystemPrompt(uiLanguage),
+            '',
+            buildDatasetInstruction(datasetJson, uiLanguage),
+            '',
+            'Conversation:',
+            transcript,
+            '',
+            'Answer as the assistant:',
+          ].join('\n');
+          generated = await geminiGenerateTextStream(
+            apiKey,
+            modelId,
+            prompt,
+            {
+              onThoughtDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedThoughtContent += delta;
+                if (!writeSseEvent(reply, 'thought_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onAnswerDelta: async (delta) => {
+                if (streamAbortController.signal.aborted) return;
+                streamedText += delta;
+                if (!writeSseEvent(reply, 'answer_delta', { delta })) {
+                  streamAbortController.abort();
+                }
+              },
+              onThoughtDone: emitThoughtDone,
+            },
+            streamAbortController.signal,
+          );
+        }
+
+        if (streamAbortController.signal.aborted) return;
+        await emitThoughtDone();
+
+        const generatedText = String(generated.text || '').trim();
+        const generatedThought = String(generated.thoughtContent || '').trim();
+        const assistantText = generatedText || streamedText.trim() || 'No response.';
+        const assistantThoughtContent = generatedThought || streamedThoughtContent.trim();
+        if (streamAbortController.signal.aborted) return;
+
+        // Insert new assistant message with the saved timestamp so ordering is preserved
+        await query(
+          `INSERT INTO report_chat_messages (id, session_id, role, content, thought_content, created_at)
+           VALUES ($1, $2, 'assistant', $3, $4, $5)`,
+          [
+            assistantMessageId,
+            sessionIdResult.value,
+            assistantText,
+            assistantThoughtContent || null,
+            savedAssistantCreatedAt.toISOString(),
+          ],
+        );
+        didMutate = true;
+
+        await query(
+          `UPDATE report_chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2`,
+          [sessionIdResult.value, userId],
+        );
+
+        if (
+          !writeSseEvent(reply, 'done', {
+            sessionId: sessionIdResult.value,
+            text: assistantText,
+            thoughtContent: assistantThoughtContent || undefined,
+          })
+        ) {
+          streamAbortController.abort();
+        }
+        endSseResponse(reply);
+      } catch (err) {
+        if (isAbortError(err) || streamAbortController.signal.aborted || reply.raw.destroyed) {
+          endSseResponse(reply);
+          return;
+        }
+        const msg = err instanceof Error ? err.message : 'AI request failed';
+        if (!streamStarted) return reply.code(502).send({ error: msg });
+        writeSseEvent(reply, 'error', { message: msg });
+        endSseResponse(reply);
+      } finally {
+        request.raw.removeListener('aborted', handleClientDisconnect);
+        request.raw.removeListener('close', handleClientDisconnect);
+        if (didMutate) {
+          await bumpNamespaceVersion(ns);
+        }
+      }
+    },
+  );
+
   // POST /ai-reporting/chat
   fastify.post(
     '/ai-reporting/chat',
