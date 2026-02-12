@@ -26,7 +26,8 @@
     "copy": "Copia",
     "paste": "Incolla",
     "print": "Stampa",
-    "view": "Visualizza"
+    "view": "Visualizza",
+    "send": "Invia"
   },
   "labels": {
     "name": "Nome",

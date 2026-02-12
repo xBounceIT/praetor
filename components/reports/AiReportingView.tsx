@@ -98,7 +98,26 @@ const buildAssistantAttemptGroups = (allMessages: ReportChatMessage[]): Assistan
     index = cursor;
   }
 
-  return groups;
+  // Merge pass: collapse non-contiguous groups with matching user message content.
+  // After loadMessages reloads from the server, retry messages appear chronologically
+  // at the end, non-contiguous with the original group. Merge them here.
+  const merged: AssistantAttemptGroup[] = [];
+  const seenUserContent = new Map<string, number>();
+
+  for (const group of groups) {
+    const userText = group.userMessage?.content.trim() ?? '';
+    if (userText && seenUserContent.has(userText)) {
+      const earlierIndex = seenUserContent.get(userText)!;
+      merged[earlierIndex].assistantAttempts.push(...group.assistantAttempts);
+    } else {
+      if (userText) {
+        seenUserContent.set(userText, merged.length);
+      }
+      merged.push(group);
+    }
+  }
+
+  return merged;
 };
 
 const AiReportingView: React.FC<AiReportingViewProps> = ({
@@ -364,7 +383,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     }
   };
 
-  const sendMessage = async (rawContent: string, opts: { clearDraft?: boolean } = {}) => {
+  const sendMessage = async (
+    rawContent: string,
+    opts: { clearDraft?: boolean; retryInsertAfterGroupId?: string } = {},
+  ) => {
     if (!enableAiReporting) return;
     const content = rawContent.trim();
     if (!content || isSending || !canSend) return;
@@ -398,7 +420,24 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       createdAt: now + 1,
     };
     activeAssistantMessageIdRef.current = assistantMessageId;
-    setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
+    setMessages((prev) => {
+      if (opts.retryInsertAfterGroupId) {
+        // Find the group's last assistant attempt and insert right after it
+        const groups = buildAssistantAttemptGroups(prev);
+        const targetGroup = groups.find((g) => g.id === opts.retryInsertAfterGroupId);
+        if (targetGroup && targetGroup.assistantAttempts.length > 0) {
+          const lastAttempt =
+            targetGroup.assistantAttempts[targetGroup.assistantAttempts.length - 1];
+          const lastAttemptIndex = prev.findIndex((m) => m.id === lastAttempt.id);
+          if (lastAttemptIndex >= 0) {
+            const updated = [...prev];
+            updated.splice(lastAttemptIndex + 1, 0, optimisticUser, optimisticAssistant);
+            return updated;
+          }
+        }
+      }
+      return [...prev, optimisticUser, optimisticAssistant];
+    });
     setExpandedThoughtMessageIds((prev) =>
       prev.includes(assistantMessageId) ? prev : [...prev, assistantMessageId],
     );
@@ -883,7 +922,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     if (attemptGroupId) {
       pendingRetryAutoSelectGroupRef.current = attemptGroupId;
     }
-    await sendMessage(retryContent);
+    await sendMessage(retryContent, { retryInsertAfterGroupId: attemptGroupId });
   };
 
   const handleStop = () => {
@@ -1246,7 +1285,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                       setEditingMessageId('');
                                       setEditingDraft('');
                                     }}
-                                    className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-colors"
+                                    className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-full transition-colors"
                                   >
                                     {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
                                   </button>
@@ -1254,7 +1293,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     type="button"
                                     onClick={() => void handleEditSend(userMessage)}
                                     disabled={!editingDraft.trim()}
-                                    className="px-3 py-1.5 text-xs font-medium text-white bg-praetor hover:bg-praetor/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-1.5 text-xs font-medium text-white bg-praetor hover:bg-praetor/90 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     {t('common:buttons.send', { defaultValue: 'Send' })}
                                   </button>
@@ -1540,7 +1579,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     }`}
                                     aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
                                   >
-                                    <i className="fa-solid fa-rotate-right text-[11px]" />
+                                    <i className="fa-solid fa-rotate-right" />
                                   </button>
                                 )}
                               </Tooltip>
