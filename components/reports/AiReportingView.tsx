@@ -1238,7 +1238,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="mx-auto w-full max-w-[760px] mt-2 px-2">
+                <div className="mx-auto w-full max-w-[760px] mt-2 px-2 text-center">
                   <div className="text-[11px] text-slate-400">
                     {footerHintWithPeriod ? `${footerHintWithPeriod} ${aiWarning}` : aiWarning}
                   </div>
