@@ -1123,15 +1123,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   type="button"
                                   onClick={() => void handleRetryMessage(m.id)}
                                   disabled={!canRetryAssistantMessage}
-                                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors ${
+                                  className={`rounded-lg p-1.5 transition-colors ${
                                     canRetryAssistantMessage
-                                      ? 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                      ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
                                       : 'text-slate-300 cursor-not-allowed'
                                   }`}
                                   aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
                                 >
-                                  <i className="fa-solid fa-rotate-right text-[11px]" />
-                                  {t('aiReporting.retry', { defaultValue: 'Retry' })}
+                                  <i className="fa-solid fa-rotate-right" />
                                 </button>
                               )}
                             </Tooltip>
