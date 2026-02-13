@@ -41,6 +41,68 @@ const safeHref = (href: string | undefined) => {
   }
 };
 
+const copyTextToClipboard = async (text: string) => {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const normalizeTableCellText = (value: string) =>
+  value
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' <br> ')
+    .replace(/\|/g, '\\|');
+
+const toMarkdownTableRow = (cells: string[]) => `| ${cells.join(' | ')} |`;
+
+const tableElementToMarkdown = (table: HTMLTableElement) => {
+  const rows = Array.from(table.querySelectorAll('tr'))
+    .map((row) =>
+      Array.from(row.querySelectorAll('th, td')).map((cell) =>
+        normalizeTableCellText(cell.textContent || ''),
+      ),
+    )
+    .filter((row) => row.length > 0);
+
+  if (rows.length === 0) return '';
+
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  if (columnCount <= 0) return '';
+
+  const normalizedRows = rows.map((row) =>
+    Array.from({ length: columnCount }, (_, columnIndex) => row[columnIndex] || ''),
+  );
+  const header = normalizedRows[0];
+  const body = normalizedRows.slice(1);
+  const separator = Array.from({ length: columnCount }, () => '---');
+
+  return [
+    toMarkdownTableRow(header),
+    toMarkdownTableRow(separator),
+    ...body.map(toMarkdownTableRow),
+  ].join('\n');
+};
+
 type AssistantAttemptGroup = {
   id: string;
   userMessage: ReportChatMessage | null;
@@ -150,6 +212,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [hasNewText, setHasNewText] = useState(false);
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
   const [copiedMessageId, setCopiedMessageId] = useState('');
+  const [copiedTableId, setCopiedTableId] = useState('');
   const [editingMessageId, setEditingMessageId] = useState('');
   const [editingDraft, setEditingDraft] = useState('');
   const [selectedAttemptIndexByGroup, setSelectedAttemptIndexByGroup] = useState<
@@ -163,6 +226,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const sendRunIdRef = useRef(0);
   const activeAssistantMessageIdRef = useRef('');
   const pendingRetryAutoSelectGroupRef = useRef('');
+  const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
 
   const canSend =
     enableAiReporting &&
@@ -992,24 +1056,34 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   };
 
   const handleCopy = useCallback(async (messageId: string, text: string) => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopiedMessageId(messageId);
-      setTimeout(() => setCopiedMessageId(''), 1500);
-    } catch {
-      /* silently fail */
-    }
+    const didCopy = await copyTextToClipboard(text);
+    if (!didCopy) return;
+    setCopiedMessageId(messageId);
+    setTimeout(
+      () =>
+        setCopiedMessageId((currentMessageId) =>
+          currentMessageId === messageId ? '' : currentMessageId,
+        ),
+      1500,
+    );
+  }, []);
+
+  const handleCopyTable = useCallback(async (tableId: string) => {
+    const tableElement = tableRefs.current[tableId];
+    if (!tableElement) return;
+
+    const markdown = tableElementToMarkdown(tableElement);
+    if (!markdown) return;
+
+    const didCopy = await copyTextToClipboard(markdown);
+    if (!didCopy) return;
+
+    setCopiedTableId(tableId);
+    setTimeout(
+      () =>
+        setCopiedTableId((currentTableId) => (currentTableId === tableId ? '' : currentTableId)),
+      1500,
+    );
   }, []);
 
   useEffect(() => {
@@ -1335,6 +1409,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                     : '';
                   const canRetryAssistantMessage =
                     Boolean(assistantMessage) && Boolean(retryContent) && canSend && !isSending;
+                  let tableRenderIndex = 0;
 
                   return (
                     <div key={group.id} className="space-y-4">
@@ -1562,20 +1637,61 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   </blockquote>
                                 ),
                                 hr: () => <hr className="my-3 border-slate-200" />,
-                                table: ({ children }) => (
-                                  <div className="my-2 max-w-full overflow-x-auto">
-                                    <table className="w-max min-w-full border-collapse text-left">
-                                      {children}
-                                    </table>
-                                  </div>
-                                ),
+                                table: ({ children }) => {
+                                  tableRenderIndex += 1;
+                                  const tableId = `${assistantMessage.id}-table-${tableRenderIndex}`;
+                                  const copied = copiedTableId === tableId;
+                                  return (
+                                    <div className="my-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                      <div className="flex items-center justify-end border-b border-slate-200 px-2 py-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleCopyTable(tableId)}
+                                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                                          aria-label={t('aiReporting.copyTable', {
+                                            defaultValue: 'Copy table',
+                                          })}
+                                        >
+                                          <i
+                                            className={
+                                              copied
+                                                ? 'fa-solid fa-check text-green-500'
+                                                : 'fa-regular fa-copy'
+                                            }
+                                          />
+                                          {copied
+                                            ? t('aiReporting.copiedTable', {
+                                                defaultValue: 'Copied',
+                                              })
+                                            : t('aiReporting.copyTable', {
+                                                defaultValue: 'Copy table',
+                                              })}
+                                        </button>
+                                      </div>
+                                      <div className="max-w-full overflow-x-auto">
+                                        <table
+                                          ref={(tableElement) => {
+                                            if (tableElement) {
+                                              tableRefs.current[tableId] = tableElement;
+                                            } else {
+                                              delete tableRefs.current[tableId];
+                                            }
+                                          }}
+                                          className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-slate-700"
+                                        >
+                                          {children}
+                                        </table>
+                                      </div>
+                                    </div>
+                                  );
+                                },
                                 th: ({ children }) => (
-                                  <th className="align-top whitespace-nowrap border border-slate-200 bg-slate-50 px-3 py-2 font-extrabold">
+                                  <th className="align-top whitespace-nowrap border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
                                     {children}
                                   </th>
                                 ),
                                 td: ({ children }) => (
-                                  <td className="align-top break-words border border-slate-200 px-3 py-2">
+                                  <td className="align-top break-words border border-slate-200/80 px-3 py-2">
                                     {children}
                                   </td>
                                 ),
