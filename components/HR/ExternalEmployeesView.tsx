@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import type { User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 
 export interface ExternalEmployeesViewProps {
@@ -17,6 +19,11 @@ export interface ExternalEmployeesViewProps {
   currency: string;
   permissions: string[];
 }
+
+const getSurname = (name: string): string => {
+  const parts = name.trim().split(' ');
+  return parts.length > 1 ? parts[parts.length - 1] : name;
+};
 
 const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   users,
@@ -36,17 +43,16 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Filter for external employees only
+  // Filter for external employees only, sorted by surname ascending
   const externalEmployees = useMemo(() => {
-    return users.filter(
-      (u) =>
-        u.employeeType === 'external' &&
-        !u.isDisabled &&
-        (searchTerm === '' || u.name.toLowerCase().includes(searchTerm.toLowerCase())),
-    );
-  }, [users, searchTerm]);
+    const filtered = users.filter((u) => u.employeeType === 'external' && !u.isDisabled);
+
+    return filtered.sort((a, b) => {
+      const surnameA = getSurname(a.name).toLowerCase();
+      const surnameB = getSurname(b.name).toLowerCase();
+      return surnameA.localeCompare(surnameB);
+    });
+  }, [users]);
 
   const [formData, setFormData] = useState<{ name: string; costPerHour: string }>({
     name: '',
@@ -123,6 +129,88 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
       setEmployeeToDelete(null);
     }
   };
+
+  // Define columns for StandardTable
+  const columns: Column<User>[] = [
+    {
+      header: t('externalEmployees.name'),
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+            {row.avatarInitials}
+          </div>
+          <span className="font-semibold text-slate-800">{row.name}</span>
+        </div>
+      ),
+    },
+    {
+      header: t('externalEmployees.type'),
+      accessorFn: () => 'external',
+      cell: () => <StatusBadge type="external" label={t('externalEmployees.externalBadge')} />,
+      disableSorting: true,
+    },
+    ...(canViewCosts
+      ? [
+          {
+            header: t('externalEmployees.costPerHour'),
+            accessorKey: 'costPerHour' as keyof User,
+            align: 'right' as const,
+            cell: ({ value }: { value: unknown }) => (
+              <span className="font-medium text-slate-600">
+                {currency}
+                {Number(value ?? 0).toFixed(2)}
+              </span>
+            ),
+          },
+        ]
+      : []),
+    {
+      header: t('externalEmployees.status'),
+      accessorFn: () => 'active',
+      cell: () => <StatusBadge type="active" label={t('externalEmployees.active')} />,
+      disableSorting: true,
+    },
+    {
+      header: t('externalEmployees.actions'),
+      id: 'actions',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <Tooltip label={t('externalEmployees.editEmployee')}>
+            {() => (
+              <button
+                onClick={() => openEditModal(row)}
+                className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+              >
+                <i className="fa-solid fa-pen-to-square"></i>
+              </button>
+            )}
+          </Tooltip>
+          <Tooltip label={t('common:delete')}>
+            {() => (
+              <button
+                onClick={() => confirmDelete(row)}
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <i className="fa-solid fa-trash"></i>
+              </button>
+            )}
+          </Tooltip>
+        </div>
+      ),
+      disableSorting: true,
+      disableFiltering: true,
+    },
+  ];
+
+  // Custom empty state component
+  const EmptyState = () => (
+    <div className="p-8 text-center">
+      <i className="fa-solid fa-user-clock text-4xl mb-3 text-slate-300"></i>
+      <p className="text-slate-500 font-medium">{t('externalEmployees.noEmployees')}</p>
+      <p className="text-sm text-slate-400 mt-1">{t('externalEmployees.createFirst')}</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -262,108 +350,13 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
         </button>
       </div>
 
-      {/* Search */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="relative">
-          <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={t('externalEmployees.searchEmployees')}
-            className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor/20 focus:border-praetor transition-all"
-          />
-        </div>
-      </div>
-
       {/* External Employees Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        {externalEmployees.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <i className="fa-solid fa-user-clock text-5xl mb-4 opacity-50"></i>
-            <p className="text-lg font-medium">{t('externalEmployees.noEmployees')}</p>
-            <p className="text-sm mt-1">{t('externalEmployees.createFirst')}</p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('externalEmployees.name')}
-                </th>
-                {canViewCosts && (
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    {t('externalEmployees.costPerHour')}
-                  </th>
-                )}
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('externalEmployees.status')}
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {t('externalEmployees.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {externalEmployees.map((employee) => (
-                <tr
-                  key={employee.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
-                        {employee.avatarInitials}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-800">{employee.name}</span>
-                        <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
-                          {t('externalEmployees.externalBadge')}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  {canViewCosts && (
-                    <td className="px-6 py-4 font-medium text-slate-600">
-                      {currency}
-                      {(employee.costPerHour || 0).toFixed(2)}
-                    </td>
-                  )}
-                  <td className="px-6 py-4">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
-                      {t('externalEmployees.active')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <Tooltip label={t('externalEmployees.editEmployee')}>
-                        {() => (
-                          <button
-                            onClick={() => openEditModal(employee)}
-                            className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
-                          >
-                            <i className="fa-solid fa-pen-to-square"></i>
-                          </button>
-                        )}
-                      </Tooltip>
-                      <Tooltip label={t('common:delete')}>
-                        {() => (
-                          <button
-                            onClick={() => confirmDelete(employee)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <i className="fa-solid fa-trash"></i>
-                          </button>
-                        )}
-                      </Tooltip>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <StandardTable<User>
+        title={t('externalEmployees.title')}
+        data={externalEmployees}
+        columns={columns}
+        emptyState={<EmptyState />}
+      />
     </div>
   );
 };

@@ -19,6 +19,7 @@ export type StatusType =
   | 'consulting'
   | 'item'
   | 'internal'
+  | 'external'
   | 'app_user'
   | 'experimental';
 
@@ -101,6 +102,10 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
     internal: {
       container: 'bg-emerald-50 text-emerald-700 border-emerald-100',
       icon: 'fa-user-tie',
+    },
+    external: {
+      container: 'bg-amber-50 text-amber-700 border-amber-100',
+      icon: 'fa-user-clock',
     },
     app_user: {
       container: 'bg-blue-50 text-blue-700 border-blue-100',
