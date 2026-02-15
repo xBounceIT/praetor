@@ -50,15 +50,38 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
 
 ## Deployment
 
-### Docker
+### Developer Compose (builds from source)
 
-You can containerize the application using Nginx to serve the static files:
+Use this when you have the repository checked out and want local builds.
 
 ```bash
 cp .env.example .env
-
 docker compose up -d --build
 ```
+
+### Customer Compose (pulls prebuilt images)
+
+Use this when deploying from a container registry (GHCR by default), without cloning source.
+
+```bash
+cp deploy/.env.customer.example .env
+# edit .env and set PRAETOR_VERSION + secrets
+
+docker compose --env-file .env -f deploy/docker-compose.customer.yml pull
+docker compose --env-file .env -f deploy/docker-compose.customer.yml up -d
+```
+
+For complete customer deployment details, see `deploy/README.md`.
+
+### Publishing release images
+
+This repository includes GitHub Actions workflow `publish-images.yml` that pushes:
+
+- `ghcr.io/<owner>/praetor-frontend:<version>`
+- `ghcr.io/<owner>/praetor-backend:<version>`
+- `latest` tags for both images
+
+The workflow runs on `v*` git tags and can also be run manually.
 
 ## Usage Guide
 

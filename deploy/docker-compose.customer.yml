@@ -1,26 +1,22 @@
 services:
-  # Developer compose (builds images from local source).
-  # PostgreSQL Database
   postgres:
     image: postgres:17-alpine
     container_name: praetor-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-praetor}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
-      POSTGRES_DB: ${POSTGRES_DB:-praetor}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     expose:
       - '5432'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-praetor} -d ${POSTGRES_DB:-praetor}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
-  # Redis (cache)
   redis:
     image: redis:7-alpine
     container_name: praetor-redis
@@ -33,25 +29,22 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Backend API Server
   backend:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    image: ${PRAETOR_IMAGE_PREFIX:-ghcr.io/xbounceit}/praetor-backend:${PRAETOR_VERSION:?PRAETOR_VERSION is required}
     container_name: praetor-backend
     environment:
       PORT: 3001
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-praetor}
-      DB_USER: ${POSTGRES_USER:-praetor}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
+      DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-praetor-encryption-key-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       DEMO_SEEDING: ${DEMO_SEEDING:-false}
-      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-password}
-      FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:?ADMIN_DEFAULT_PASSWORD is required}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
     volumes:
       - ssl_certs:/app/certs
     expose:
@@ -63,16 +56,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Frontend (Caddy serving static files)
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: /api
+    image: ${PRAETOR_IMAGE_PREFIX:-ghcr.io/xbounceit}/praetor-frontend:${PRAETOR_VERSION:?PRAETOR_VERSION is required}
     container_name: praetor-frontend
     ports:
-      - '3000:80'
+      - '${FRONTEND_PORT:-3000}:80'
     depends_on:
       - backend
     restart: unless-stopped

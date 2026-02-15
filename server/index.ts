@@ -8,6 +8,8 @@ const PORT = Number(process.env.PORT ?? 3001);
 const ADMIN_USERNAME = 'admin';
 const DEFAULT_ADMIN_USER_ID = 'u1';
 const DEFAULT_ADMIN_PASSWORD = 'password';
+const DEFAULT_JWT_SECRET = 'praetor-secret-key-change-in-production';
+const DEFAULT_ENCRYPTION_KEY = 'praetor-encryption-key-change-in-production';
 
 const fastify = await buildApp();
 
@@ -16,6 +18,26 @@ const parseBooleanEnv = (value: string | undefined): boolean => {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+};
+
+const warnInsecureRuntimeDefaults = () => {
+  const warnings: string[] = [];
+
+  if ((process.env.JWT_SECRET || '').trim() === DEFAULT_JWT_SECRET) {
+    warnings.push('JWT_SECRET is using the default placeholder value.');
+  }
+
+  if ((process.env.ENCRYPTION_KEY || '').trim() === DEFAULT_ENCRYPTION_KEY) {
+    warnings.push('ENCRYPTION_KEY is using the default placeholder value.');
+  }
+
+  if ((process.env.ADMIN_DEFAULT_PASSWORD || '').trim() === DEFAULT_ADMIN_PASSWORD) {
+    warnings.push('ADMIN_DEFAULT_PASSWORD is using the default placeholder value.');
+  }
+
+  for (const warning of warnings) {
+    console.warn(`Security warning: ${warning}`);
+  }
 };
 
 const ensureBootstrapAdmin = async () => {
@@ -72,6 +94,8 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 // Start server
 try {
+  warnInsecureRuntimeDefaults();
+
   // One-time probe to confirm DB connectivity without logging on every pooled connection.
   // Retry briefly to handle container startup ordering.
   let dbReady = false;
