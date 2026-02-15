@@ -6,7 +6,7 @@
   - Chat persistenti su DB
   - permessi dedicati necessari per l'utilizzo delle funzioni AI
   - default: disattivo
-  - roadmap: data masking, rifinitura ui, rifinitura system propmpt AI
+  - roadmap: data masking, rifinitura ui, rifinitura system prompt AI
 - Aggiunto OpenRouter tra i provider disponibili per le funzioni AI
 - Aggiunta pagina Logs in Amministrazione con tabella accessi utente
 - Aggiunta variabile d'ambiente per impostare password admin subito
