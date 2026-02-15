@@ -1659,13 +1659,6 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                                 : 'fa-regular fa-copy'
                                             }
                                           />
-                                          {copied
-                                            ? t('aiReporting.copiedTable', {
-                                                defaultValue: 'Copied',
-                                              })
-                                            : t('aiReporting.copyTable', {
-                                                defaultValue: 'Copy table',
-                                              })}
                                         </button>
                                       </div>
                                       <div className="max-w-full overflow-x-auto">
