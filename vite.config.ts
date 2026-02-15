@@ -10,7 +10,7 @@ import pkg from './package.json';
 const getBuildDate = () => {
   const year = '2026';
   const month = '02';
-  const day = '09';
+  const day = '16';
   return `${year}${month}${day}`;
 };
 

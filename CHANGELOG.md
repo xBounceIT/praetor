@@ -12,7 +12,7 @@
 - Aggiunta variabile d'ambiente per impostare password admin subito
 - Aggiunta variabile d'ambiente per attivare/disattivare ambiente demo con clienti e progetti default
 - Aggiunto compose per deploy senza build
-- Aggiunto warning per variabili critiche deboli (secret key etc.)
+- Aggiunto warning per variabili critiche deboli (secret key etc.) nei log del backend
 
 ## 20260209 - Operativo
 - Aggiunto Swagger (/docs/api) e TypeDoc (/docs/frontend) per documentazione automatica Backend e Frontend durante commit
