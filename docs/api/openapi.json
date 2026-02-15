@@ -16941,6 +16941,22 @@
         "parameters": [
           {
             "schema": {
+              "type": "number"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "number"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "in": "path",
