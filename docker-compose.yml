@@ -10,7 +10,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./server/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./server/db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
       - ./server/db/postgresql.conf:/etc/postgresql/postgresql.conf
     expose:
       - '5432'
@@ -50,6 +49,8 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-praetor-encryption-key-change-in-production}
+      DEMO_SEEDING: ${DEMO_SEEDING:-false}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-password}
       FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
     volumes:
       - ssl_certs:/app/certs

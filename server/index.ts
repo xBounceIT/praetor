@@ -1,12 +1,59 @@
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import buildApp from './app.ts';
 import { query } from './db/index.ts';
 import { closeRedis } from './services/redis.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
+const ADMIN_USERNAME = 'admin';
+const DEFAULT_ADMIN_USER_ID = 'u1';
+const DEFAULT_ADMIN_PASSWORD = 'password';
 
 const fastify = await buildApp();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const parseBooleanEnv = (value: string | undefined): boolean => {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+};
+
+const ensureBootstrapAdmin = async () => {
+  const existingAdmin = await query('SELECT id FROM users WHERE username = $1 LIMIT 1', [
+    ADMIN_USERNAME,
+  ]);
+
+  let adminId: string;
+  if (existingAdmin.rows.length > 0) {
+    adminId = existingAdmin.rows[0].id as string;
+    console.log('Bootstrap admin already exists. Skipping admin creation.');
+  } else {
+    const defaultIdCheck = await query('SELECT 1 FROM users WHERE id = $1 LIMIT 1', [
+      DEFAULT_ADMIN_USER_ID,
+    ]);
+    adminId = defaultIdCheck.rows.length === 0 ? DEFAULT_ADMIN_USER_ID : randomUUID();
+
+    const rawPassword = process.env.ADMIN_DEFAULT_PASSWORD?.trim();
+    const adminPassword =
+      rawPassword && rawPassword.length > 0 ? rawPassword : DEFAULT_ADMIN_PASSWORD;
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
+
+    await query(
+      `INSERT INTO users (id, name, username, password_hash, role, avatar_initials)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [adminId, 'Admin User', ADMIN_USERNAME, passwordHash, 'admin', 'AD'],
+    );
+    console.log(
+      'Bootstrap admin created. Password source:',
+      rawPassword && rawPassword.length > 0 ? 'ADMIN_DEFAULT_PASSWORD' : 'fallback',
+    );
+  }
+
+  await query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
+    adminId,
+    'admin',
+  ]);
+};
 
 const shutdown = async (signal: string) => {
   try {
@@ -80,12 +127,20 @@ try {
       console.error('Failed to run quote_code migration:', err);
     }
 
-    // Run seed.sql for initial data (uses ON CONFLICT DO NOTHING, safe to run repeatedly)
+    // Ensure required bootstrap user data always exists.
+    await ensureBootstrapAdmin();
+
+    // Run demo seed.sql only when explicitly enabled.
     const seedPath = path.join(__dirname, 'db', 'seed.sql');
-    if (fs.existsSync(seedPath)) {
+    const isDemoSeedingEnabled = parseBooleanEnv(process.env.DEMO_SEEDING);
+    if (isDemoSeedingEnabled && fs.existsSync(seedPath)) {
       const seedSql = fs.readFileSync(seedPath, 'utf8');
       await query(seedSql);
-      console.log('Seed data applied.');
+      console.log('Demo seed data applied.');
+    } else if (isDemoSeedingEnabled) {
+      console.warn('Demo seeding requested but seed file not found at:', seedPath);
+    } else {
+      console.log('Demo seeding disabled (set DEMO_SEEDING=true to enable).');
     }
 
     // Run data migration for default clients
