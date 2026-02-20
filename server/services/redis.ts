@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { createClient } from 'redis';
+import { createChildLogger, serializeError } from '../utils/logger.ts';
 
 dotenv.config();
 
@@ -8,13 +9,14 @@ export type RedisClient = ReturnType<typeof createClient>;
 let client: RedisClient | null = null;
 let clientPromise: Promise<RedisClient | null> | null = null;
 let lastErrorLogAt = 0;
+const logger = createChildLogger({ module: 'redis' });
 
 const logRedisError = (label: string, err: unknown) => {
   const now = Date.now();
   // Avoid spamming logs if Redis is down/unreachable.
   if (now - lastErrorLogAt < 30_000) return;
   lastErrorLogAt = now;
-  console.error(label, err);
+  logger.error({ err: serializeError(err) }, label);
 };
 
 const isRedisEnabled = () => {

@@ -1,9 +1,11 @@
 import dotenv from 'dotenv';
 import pg from 'pg';
+import { createChildLogger, serializeError } from '../utils/logger.ts';
 
 dotenv.config();
 
 const { Pool } = pg;
+const logger = createChildLogger({ module: 'db' });
 
 const envInt = (key: string, fallback: number) => {
   const raw = process.env[key];
@@ -24,7 +26,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+  logger.error({ err: serializeError(err) }, 'Unexpected error on idle database client');
 });
 
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);

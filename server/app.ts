@@ -27,11 +27,12 @@ import suppliersRoutes from './routes/suppliers.ts';
 import tasksRoutes from './routes/tasks.ts';
 import usersRoutes from './routes/users.ts';
 import workUnitsRoutes from './routes/work-units.ts';
+import { loggerOptions, serializeError } from './utils/logger.ts';
 
 dotenv.config();
 
 export const buildApp = async () => {
-  const fastify = Fastify({ logger: false });
+  const fastify = Fastify({ logger: loggerOptions });
 
   await fastify.register(cors, {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -107,8 +108,15 @@ export const buildApp = async () => {
     },
   );
 
-  fastify.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
-    console.error('Error:', error);
+  fastify.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
+    request.log.error(
+      {
+        err: serializeError(error),
+        statusCode: error.statusCode,
+      },
+      'Unhandled request error',
+    );
+
     reply.code(error.statusCode || 500).send({
       error: error.message || 'Internal server error',
     });

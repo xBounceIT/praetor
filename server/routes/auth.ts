@@ -149,7 +149,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        console.error('LDAP Auth Attempt Failed:', errorMessage);
+        fastify.log.warn(
+          { username: usernameResult.value, errorMessage },
+          'LDAP auth attempt failed; falling back to local password validation',
+        );
       }
 
       let validPassword = false;
@@ -174,7 +177,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ]);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        console.error('Audit log insert failed during login:', errorMessage);
+        fastify.log.error(
+          { userId: user.id, errorMessage },
+          'Audit log insert failed during login',
+        );
       }
       const availableRoles = await getAvailableRolesForUser(user.id);
       const effectiveAvailableRoles =
