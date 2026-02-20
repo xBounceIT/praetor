@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -15,6 +16,13 @@ export interface ClientsViewProps {
   onDeleteClient: (id: string) => Promise<void>;
   permissions: string[];
 }
+
+const OFFICE_COUNT_RANGE_OPTIONS = [
+  { id: '1', name: '1' },
+  { id: '2...5', name: '2...5' },
+  { id: '6...10', name: '6...10' },
+  { id: '>10', name: '>10' },
+];
 
 const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
@@ -521,26 +529,24 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('crm:clients.officeCountRange')}
                   </label>
-                  <select
+                  <CustomSelect
+                    options={OFFICE_COUNT_RANGE_OPTIONS}
                     value={formData.officeCountRange || ''}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       setFormData({
                         ...formData,
-                        officeCountRange: (e.target.value ||
-                          undefined) as Client['officeCountRange'],
+                        officeCountRange: (value || undefined) as Client['officeCountRange'],
                       });
-                      if (errors.officeCountRange) setErrors({ ...errors, officeCountRange: '' });
+                      if (errors.officeCountRange) {
+                        setErrors({ ...errors, officeCountRange: '' });
+                      }
                     }}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.officeCountRange ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                    placeholder={t('common:form.selectOption')}
+                    searchable={false}
+                    buttonClassName={`py-2.5 text-sm ${
+                      errors.officeCountRange ? '!border-red-500 !bg-red-50' : ''
                     }`}
-                  >
-                    <option value="">{t('common:form.selectOption')}</option>
-                    <option value="1">1</option>
-                    <option value="2...5">2...5</option>
-                    <option value="6...10">6...10</option>
-                    <option value=">10">&gt;10</option>
-                  </select>
+                  />
                   {errors.officeCountRange && (
                     <p className="text-red-500 text-[10px] font-bold ml-1">
                       {errors.officeCountRange}
