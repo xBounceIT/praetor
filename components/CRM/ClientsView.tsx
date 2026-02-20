@@ -55,6 +55,17 @@ const REVENUE_OPTIONS: Array<{ id: NonNullable<Client['revenue']>; labelKey: str
   { id: '> 1000', labelKey: 'over1000' },
 ];
 
+const toOptionalTrimmedString = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const toTrimmedString = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+};
+
 const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
   onAddClient,
@@ -131,11 +142,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       description: client.description || '',
       atecoCode: client.atecoCode || '',
       website: client.website || '',
-      sector: client.sector,
-      numberOfEmployees: client.numberOfEmployees,
-      revenue: client.revenue,
+      sector: client.sector ?? undefined,
+      numberOfEmployees: client.numberOfEmployees ?? undefined,
+      revenue: client.revenue ?? undefined,
       fiscalCode: client.fiscalCode || client.vatNumber || client.taxCode || '',
-      officeCountRange: client.officeCountRange,
+      officeCountRange: client.officeCountRange ?? undefined,
       billingCode: client.billingCode || '',
     });
     setErrors({});
@@ -152,10 +163,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     const trimmedName = formData.name?.trim() || '';
     const trimmedClientCode = formData.clientCode?.trim() || '';
     const trimmedFiscalCode = formData.fiscalCode?.trim() || '';
-    const trimmedDescription = formData.description?.trim() || '';
-    const trimmedAtecoCode = formData.atecoCode?.trim() || '';
-    const trimmedWebsite = formData.website?.trim() || '';
-    const trimmedBillingCode = formData.billingCode?.trim() || '';
+    const trimmedContactName = toTrimmedString(formData.contactName);
+    const trimmedEmail = toOptionalTrimmedString(formData.email);
+    const trimmedPhone = toTrimmedString(formData.phone);
+    const trimmedAddress = toTrimmedString(formData.address);
+    const trimmedDescription = toOptionalTrimmedString(formData.description);
+    const trimmedAtecoCode = toOptionalTrimmedString(formData.atecoCode);
+    const trimmedWebsite = toOptionalTrimmedString(formData.website);
+    const trimmedBillingCode = toOptionalTrimmedString(formData.billingCode);
     const officeCountRange = formData.officeCountRange;
     const newErrors: Record<string, string> = {};
     if (!trimmedName) {
@@ -188,15 +203,22 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
 
     const payload = {
-      ...formData,
       name: trimmedName,
+      type: formData.type,
+      contactName: trimmedContactName,
       clientCode: trimmedClientCode,
-      description: trimmedDescription || undefined,
-      atecoCode: trimmedAtecoCode || undefined,
-      website: trimmedWebsite || undefined,
-      billingCode: trimmedBillingCode || undefined,
+      email: trimmedEmail,
+      phone: trimmedPhone,
+      address: trimmedAddress,
+      description: trimmedDescription,
+      atecoCode: trimmedAtecoCode,
+      website: trimmedWebsite,
+      sector: formData.sector ?? undefined,
+      numberOfEmployees: formData.numberOfEmployees ?? undefined,
+      revenue: formData.revenue ?? undefined,
       fiscalCode: trimmedFiscalCode,
       officeCountRange,
+      billingCode: trimmedBillingCode,
     };
 
     try {

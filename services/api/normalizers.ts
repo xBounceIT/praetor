@@ -1,4 +1,5 @@
 import type {
+  Client,
   ClientsOrder,
   ClientsOrderItem,
   Expense,
@@ -16,6 +17,26 @@ import type {
   TimeEntry,
   User,
 } from '../../types';
+
+export const normalizeClient = (c: Client): Client => ({
+  ...c,
+  contactName: c.contactName ?? undefined,
+  clientCode: c.clientCode ?? undefined,
+  email: c.email ?? undefined,
+  phone: c.phone ?? undefined,
+  address: c.address ?? undefined,
+  description: c.description ?? undefined,
+  atecoCode: c.atecoCode ?? undefined,
+  website: c.website ?? undefined,
+  sector: c.sector ?? undefined,
+  numberOfEmployees: c.numberOfEmployees ?? undefined,
+  revenue: c.revenue ?? undefined,
+  fiscalCode: c.fiscalCode ?? undefined,
+  officeCountRange: c.officeCountRange ?? undefined,
+  vatNumber: c.vatNumber ?? undefined,
+  taxCode: c.taxCode ?? undefined,
+  billingCode: c.billingCode ?? undefined,
+});
 
 export const normalizeUser = (u: User): User => ({
   ...u,
