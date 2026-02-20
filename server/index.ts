@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import buildApp from './app.ts';
 import { query } from './db/index.ts';
 import { closeRedis } from './services/redis.ts';
+import { createChildLogger, serializeError } from './utils/logger.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const ADMIN_USERNAME = 'admin';
@@ -10,6 +11,7 @@ const DEFAULT_ADMIN_USER_ID = 'u1';
 const DEFAULT_ADMIN_PASSWORD = 'password';
 const DEFAULT_JWT_SECRET = 'praetor-secret-key-change-in-production';
 const DEFAULT_ENCRYPTION_KEY = 'praetor-encryption-key-change-in-production';
+const logger = createChildLogger({ module: 'startup' });
 
 const fastify = await buildApp();
 
@@ -36,7 +38,7 @@ const warnInsecureRuntimeDefaults = () => {
   }
 
   for (const warning of warnings) {
-    console.warn(`Security warning: ${warning}`);
+    logger.warn({ warning }, 'Security warning');
   }
 };
 
@@ -48,7 +50,7 @@ const ensureBootstrapAdmin = async () => {
   let adminId: string;
   if (existingAdmin.rows.length > 0) {
     adminId = existingAdmin.rows[0].id as string;
-    console.log('Bootstrap admin already exists. Skipping admin creation.');
+    logger.info('Bootstrap admin already exists. Skipping admin creation');
   } else {
     const defaultIdCheck = await query('SELECT 1 FROM users WHERE id = $1 LIMIT 1', [
       DEFAULT_ADMIN_USER_ID,
@@ -65,9 +67,12 @@ const ensureBootstrapAdmin = async () => {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [adminId, 'Admin User', ADMIN_USERNAME, passwordHash, 'admin', 'AD'],
     );
-    console.log(
-      'Bootstrap admin created. Password source:',
-      rawPassword && rawPassword.length > 0 ? 'ADMIN_DEFAULT_PASSWORD' : 'fallback',
+    logger.info(
+      {
+        passwordSource:
+          rawPassword && rawPassword.length > 0 ? 'ADMIN_DEFAULT_PASSWORD' : 'fallback',
+      },
+      'Bootstrap admin created',
     );
   }
 
@@ -79,11 +84,11 @@ const ensureBootstrapAdmin = async () => {
 
 const shutdown = async (signal: string) => {
   try {
-    console.log(`Shutting down (${signal})...`);
+    logger.info({ signal }, 'Shutting down');
     await closeRedis();
     await fastify.close();
   } catch (err) {
-    console.error('Shutdown error:', err);
+    logger.error({ signal, err: serializeError(err) }, 'Shutdown error');
   } finally {
     process.exit(0);
   }
@@ -106,11 +111,14 @@ try {
       break;
     } catch (err) {
       if (attempt === 10) throw err;
-      console.error(`PostgreSQL not ready (attempt ${attempt}/10). Retrying...`, err);
+      logger.warn(
+        { attempt, maxAttempts: 10, err: serializeError(err) },
+        'PostgreSQL not ready; retrying',
+      );
       await sleep(1000);
     }
   }
-  if (dbReady) console.log('PostgreSQL ready.');
+  if (dbReady) logger.info('PostgreSQL ready');
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
 
@@ -137,10 +145,10 @@ try {
     `);
 
     const foundTables = tableCheck.rows.map((r) => r.table_name);
-    console.log(`Database schema verified. Found tables: ${foundTables.join(', ')}`);
+    logger.info({ foundTables }, 'Database schema verified');
 
     if (!foundTables.includes('user_clients')) {
-      console.error('CRITICAL: user_clients table was not created!');
+      logger.error({ foundTables }, 'Critical schema issue: user_clients table was not created');
     }
 
     // Run migration to add quote_code (Must run BEFORE seed.sql because seed.sql references this column)
@@ -148,7 +156,7 @@ try {
       const { addQuoteCode } = await import('./db/add_quote_code.ts');
       await addQuoteCode();
     } catch (err) {
-      console.error('Failed to run quote_code migration:', err);
+      logger.error({ err: serializeError(err), migration: 'add_quote_code' }, 'Migration failed');
     }
 
     // Ensure required bootstrap user data always exists.
@@ -160,11 +168,11 @@ try {
     if (isDemoSeedingEnabled && fs.existsSync(seedPath)) {
       const seedSql = fs.readFileSync(seedPath, 'utf8');
       await query(seedSql);
-      console.log('Demo seed data applied.');
+      logger.info('Demo seed data applied');
     } else if (isDemoSeedingEnabled) {
-      console.warn('Demo seeding requested but seed file not found at:', seedPath);
+      logger.warn({ seedPath }, 'Demo seeding requested but seed file not found');
     } else {
-      console.log('Demo seeding disabled (set DEMO_SEEDING=true to enable).');
+      logger.info('Demo seeding disabled (set DEMO_SEEDING=true to enable)');
     }
 
     // Merge legacy client VAT/tax fields into a canonical fiscal_code field
@@ -172,7 +180,10 @@ try {
       const { mergeClientFiscalFields } = await import('./db/merge_client_fiscal_fields.ts');
       await mergeClientFiscalFields();
     } catch (err) {
-      console.error('Failed to run client fiscal merge migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'merge_client_fiscal_fields' },
+        'Migration failed',
+      );
     }
 
     // Run data migration for default clients
@@ -180,7 +191,10 @@ try {
       const { migrate: updateClients } = await import('./db/update_default_clients.ts');
       await updateClients();
     } catch (err) {
-      console.error('Failed to run default clients data update:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'update_default_clients' },
+        'Migration failed',
+      );
     }
 
     // Run settings language migration
@@ -193,7 +207,10 @@ try {
       );
       await updateLanguageConstraint();
     } catch (err) {
-      console.error('Failed to run settings language migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'settings_language' },
+        'Migration failed',
+      );
     }
 
     // Run migration to remove payment_terms from clients
@@ -201,7 +218,10 @@ try {
       const { up: removePaymentTerms } = await import('./db/remove_payment_terms_from_clients.ts');
       await removePaymentTerms();
     } catch (err) {
-      console.error('Failed to run payment_terms removal migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'remove_payment_terms_from_clients' },
+        'Migration failed',
+      );
     }
 
     // Run sale status migration
@@ -209,7 +229,10 @@ try {
       const { migrate: migrateSaleStatus } = await import('./db/migrate_sale_status.ts');
       await migrateSaleStatus();
     } catch (err) {
-      console.error('Failed to run sale status migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'migrate_sale_status' },
+        'Migration failed',
+      );
     }
 
     // Run products structure update migration
@@ -219,7 +242,10 @@ try {
       );
       await updateProductsStructure();
     } catch (err) {
-      console.error('Failed to run products structure update migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'update_products_structure' },
+        'Migration failed',
+      );
     }
 
     // Run migration to assign all items to manager users
@@ -227,7 +253,10 @@ try {
       const { migrate: assignItemsToManagers } = await import('./db/assign_items_to_managers.ts');
       await assignItemsToManagers();
     } catch (err) {
-      console.error('Failed to run manager assignments migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'assign_items_to_managers' },
+        'Migration failed',
+      );
     }
 
     // Run migration to update currency precision
@@ -237,7 +266,10 @@ try {
       );
       await updateCurrencyPrecision();
     } catch (err) {
-      console.error('Failed to run currency precision update migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'update_currency_precision' },
+        'Migration failed',
+      );
     }
 
     // Run migration to add unique constraint to client_code
@@ -245,13 +277,16 @@ try {
       const { addUniqueClientCode } = await import('./db/add_unique_client_code.ts');
       await addUniqueClientCode();
     } catch (err) {
-      console.error('Failed to run client_code unique constraint migration:', err);
+      logger.error(
+        { err: serializeError(err), migration: 'add_unique_client_code' },
+        'Migration failed',
+      );
     }
   } else {
-    console.warn('Schema file not found at:', schemaPath);
+    logger.warn({ schemaPath }, 'Schema file not found');
   }
 
-  console.log(`Praetor API server running on port ${PORT} with HTTP/1.1 over HTTP`);
+  logger.info({ port: PORT }, 'Praetor API server running with HTTP/1.1 over HTTP');
 
   // Periodic LDAP Sync Task (every hour)
   try {
@@ -262,19 +297,19 @@ try {
       try {
         await ldapService.loadConfig();
         if (ldapService.config?.enabled) {
-          console.log('Running periodic LDAP sync...');
+          logger.info('Running periodic LDAP sync');
           await ldapService.syncUsers();
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        console.error('Periodic LDAP Sync Error:', errorMessage);
+        logger.error({ errorMessage }, 'Periodic LDAP sync error');
       }
     }, SYNC_INTERVAL);
   } catch (err) {
-    console.error('Failed to initialize LDAP sync task:', err);
+    logger.error({ err: serializeError(err) }, 'Failed to initialize LDAP sync task');
   }
 } catch (err) {
-  console.error('Failed to start server:', err);
+  logger.error({ err: serializeError(err) }, 'Failed to start server');
   process.exit(1);
 }
 

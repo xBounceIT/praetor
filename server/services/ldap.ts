@@ -2,6 +2,9 @@ import fs from 'fs';
 import ldap from 'ldapjs';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/index.ts';
+import { createChildLogger, serializeError } from '../utils/logger.ts';
+
+const logger = createChildLogger({ module: 'ldap' });
 
 type LdapConfig = {
   enabled: boolean;
@@ -135,12 +138,14 @@ class LDAPService {
 
       return true;
     } catch (err) {
-      console.error('LDAP Auth Error:', err);
+      logger.error({ err: serializeError(err), username }, 'LDAP auth error');
       return false;
     } finally {
       if (client) {
         client.unbind((err) => {
-          if (err) console.error('Error unbinding LDAP client:', err);
+          if (err) {
+            logger.warn({ err: serializeError(err) }, 'Error unbinding LDAP client');
+          }
         });
       }
     }
@@ -191,10 +196,10 @@ class LDAPService {
   }> {
     let client: LdapClient | null = null;
     try {
-      console.log('Starting LDAP Sync...');
+      logger.info('Starting LDAP sync');
       client = await this.getClient();
       if (!client) {
-        console.log('LDAP Sync skipped: LDAP is disabled.');
+        logger.info('LDAP sync skipped: LDAP is disabled');
         return { skipped: true, reason: 'LDAP is disabled' };
       }
       const ldapClient = client;
@@ -231,7 +236,7 @@ class LDAPService {
           });
 
           res.on('error', (err: Error) => {
-            console.error('LDAP Search Error:', err);
+            logger.error({ err: serializeError(err) }, 'LDAP search error');
           });
 
           res.on('end', () => {
@@ -240,7 +245,7 @@ class LDAPService {
         });
       });
 
-      console.log(`Found ${entries.length} users in LDAP.`);
+      logger.info({ count: entries.length }, 'Found LDAP users');
 
       let syncedCount = 0;
       let createdCount = 0;
@@ -259,7 +264,7 @@ class LDAPService {
         }
 
         if (!username) {
-          console.warn('Skipping LDAP entry without username');
+          logger.warn('Skipping LDAP entry without username');
           continue;
         }
 
@@ -314,10 +319,10 @@ class LDAPService {
         }
       }
 
-      console.log(`LDAP Sync Complete. Sycned: ${syncedCount}, Created: ${createdCount}`);
+      logger.info({ syncedCount, createdCount }, 'LDAP sync completed');
       return { synced: syncedCount, created: createdCount };
     } catch (err) {
-      console.error('LDAP Sync Failed:', err);
+      logger.error({ err: serializeError(err) }, 'LDAP sync failed');
       throw err;
     } finally {
       if (client) {
