@@ -1,3 +1,8 @@
+## 20260223 - Operativo
+- Fix errori typescript
+- Aggiunte colonne "Data inserimento", "Numero sedi", "Numero dipendenti", "Numero fatturato", "Codice ateco", "Sito web" ai clienti nel modulo CRM sulla base del feedback di EC
+- Unificato P.iva e codice fiscale nella definizione dei clienti
+
 ## 20260216 - Operativo
 - Nuovo modulo Report per reportistica
 - Nuova funzionalità AI Reporting (experimental): 

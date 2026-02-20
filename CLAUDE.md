@@ -79,7 +79,6 @@ Backend routes in `/server/routes/` with prefix-based registration:
 
 ## Important Notes
 
-- **Environment**: Windows - avoid Linux-specific commands
 - **Path aliases**: `@/` maps to project root (Vite + TypeScript config)
 - **CDN dependencies**: React, Recharts
 - **Test accounts**: admin/password, manager/password, user/password

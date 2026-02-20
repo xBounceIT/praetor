@@ -322,6 +322,16 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         id: 'type',
         accessorFn: (row) =>
           row.type === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual'),
+        cell: ({ row }) => (
+          <StatusBadge
+            type={row.type === 'company' ? 'company' : 'individual'}
+            label={
+              row.type === 'company'
+                ? t('crm:clients.typeCompany')
+                : t('crm:clients.typeIndividual')
+            }
+          />
+        ),
       },
       {
         header: t('crm:clients.tableHeaders.email'),
