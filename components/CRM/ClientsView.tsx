@@ -23,7 +23,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   onDeleteClient,
   permissions,
 }) => {
-  const { t } = useTranslation(['crm', 'common', 'form']);
+  const { t, i18n } = useTranslation(['crm', 'common', 'form']);
   const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
   const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
   const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
@@ -171,6 +171,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   };
 
   const canSubmit = editingClient ? canUpdateClients : canCreateClients;
+  const insertDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(i18n.language, {
+        dateStyle: 'medium',
+      }),
+    [i18n.language],
+  );
 
   // Column definitions
   const columns = useMemo<Column<Client>[]>(
@@ -228,6 +235,28 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.billingCode'),
         accessorKey: 'billingCode',
         className: 'font-mono text-xs text-slate-400',
+      },
+      {
+        header: t('crm:clients.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        cell: ({ row }) => {
+          if (!row.createdAt) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {insertDateFormatter.format(new Date(row.createdAt))}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) {
+            return '-';
+          }
+          return insertDateFormatter.format(new Date(timestamp));
+        },
       },
       {
         header: t('crm:clients.tableHeaders.status'),
@@ -289,7 +318,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
     ],
-    [t, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete],
+    [t, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete, insertDateFormatter],
   );
 
   return (

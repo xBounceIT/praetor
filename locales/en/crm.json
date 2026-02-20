@@ -9,6 +9,7 @@
       "vat": "VAT",
       "taxCode": "Tax Code",
       "billingCode": "SDI",
+      "insertDate": "Insert Date",
       "status": "Status"
     },
     "title": "Clients",

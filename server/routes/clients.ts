@@ -42,6 +42,7 @@ const clientSchema = {
     vatNumber: { type: ['string', 'null'] },
     taxCode: { type: ['string', 'null'] },
     billingCode: { type: ['string', 'null'] },
+    createdAt: { type: 'number' },
   },
   required: ['id', 'name'],
 } as const;
@@ -136,7 +137,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { status, value } = await cacheGetSetJson(
         'clients',
-        `v=1:scope=${scopeKey}:details=${detailsKey}`,
+        `v=2:scope=${scopeKey}:details=${detailsKey}`,
         TTL_LIST_SECONDS,
         async () => {
           let queryText = 'SELECT * FROM clients ORDER BY name';
@@ -176,6 +177,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               vatNumber: c.vat_number,
               taxCode: c.tax_code,
               billingCode: c.billing_code,
+              createdAt: c.created_at ? new Date(c.created_at).getTime() : undefined,
             };
           });
         },
@@ -270,12 +272,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = 'c-' + Date.now();
 
       try {
-        await query(
+        const created = await query(
           `
             INSERT INTO clients (
                 id, name, is_disabled, type, contact_name, client_code,
                 email, phone, address, vat_number, tax_code, billing_code
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING *
         `,
           [
             id,
@@ -293,20 +296,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
+        const c = created.rows[0];
+
         await bumpNamespaceVersion('clients');
         return reply.code(201).send({
-          id,
-          name: nameResult.value,
-          isDisabled: false,
-          type,
-          contactName,
-          clientCode: clientCodeResult.value,
-          email: emailResult.value,
-          phone,
-          address,
-          vatNumber: vatNumberResult.value,
-          taxCode: taxCodeResult.value,
-          billingCode,
+          id: c.id,
+          name: c.name,
+          isDisabled: c.is_disabled,
+          type: c.type,
+          contactName: c.contact_name,
+          clientCode: c.client_code,
+          email: c.email,
+          phone: c.phone,
+          address: c.address,
+          vatNumber: c.vat_number,
+          taxCode: c.tax_code,
+          billingCode: c.billing_code,
+          createdAt: c.created_at ? new Date(c.created_at).getTime() : undefined,
         });
       } catch (err) {
         const error = err as DatabaseError;
@@ -491,6 +497,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           vatNumber: c.vat_number,
           taxCode: c.tax_code,
           billingCode: c.billing_code,
+          createdAt: c.created_at ? new Date(c.created_at).getTime() : undefined,
         };
       } catch (err) {
         const error = err as DatabaseError;

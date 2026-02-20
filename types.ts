@@ -72,6 +72,7 @@ export interface GeneralSettings {
 export interface Client {
   id: string;
   name: string;
+  createdAt?: number;
   isDisabled?: boolean;
   type?: 'individual' | 'company';
   contactName?: string;

@@ -9,6 +9,7 @@
       "vat": "P.IVA",
       "taxCode": "C.F.",
       "billingCode": "SDI",
+      "insertDate": "Data inserimento",
       "status": "Stato"
     },
     "title": "Clienti",
