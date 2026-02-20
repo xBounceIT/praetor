@@ -15,7 +15,8 @@ export async function migrate() {
                 address = 'Via delle Industrie 42, 00100 Roma (RM)',
                 vat_number = 'IT01234567890',
                 tax_code = '01234567890',
-                billing_code = 'KRRH6B9'
+                billing_code = 'KRRH6B9',
+                created_at = '2024-01-15 09:30:00'
             WHERE id = 'c1';
 
             UPDATE clients SET
@@ -28,7 +29,8 @@ export async function migrate() {
                 address = 'Via Roma 123, 20100 Milano (MI)',
                 vat_number = NULL,
                 tax_code = 'RSSMRA80A01H501U',
-                billing_code = '0000000'
+                billing_code = '0000000',
+                created_at = '2024-03-05 14:15:00'
             WHERE id = 'c2';
         `,
       [],

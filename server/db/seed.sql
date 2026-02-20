@@ -16,9 +16,9 @@ WHERE u.id IN ('u1', 'u2', 'u3')
 ON CONFLICT DO NOTHING;
 
 -- Default clients
-INSERT INTO clients (id, name) VALUES
-    ('c1', 'Acme Corp'),
-    ('c2', 'Global Tech')
+INSERT INTO clients (id, name, created_at) VALUES
+    ('c1', 'Acme Corp', '2024-01-15 09:30:00'),
+    ('c2', 'Global Tech', '2024-03-05 14:15:00')
 ON CONFLICT (id) DO NOTHING;
 
 -- Default projects
