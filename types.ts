@@ -80,6 +80,23 @@ export interface Client {
   email?: string;
   phone?: string;
   address?: string;
+  description?: string;
+  atecoCode?: string;
+  website?: string;
+  sector?:
+    | 'FINANCE'
+    | 'TELCO'
+    | 'UTILITIES'
+    | 'ENERGY'
+    | 'SERVICES'
+    | 'GDO'
+    | 'HEALTH'
+    | 'INDUSTRY'
+    | 'PA'
+    | 'TRASPORTI'
+    | 'ALTRO';
+  numberOfEmployees?: '< 50' | '50..250' | '251..1000' | '> 1000';
+  revenue?: '< 10' | '11..50' | '51..1000' | '> 1000';
   fiscalCode?: string;
   officeCountRange?: '1' | '2...5' | '6...10' | '>10';
   // Legacy compatibility fields (mapped from fiscalCode by API)

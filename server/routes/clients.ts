@@ -20,8 +20,29 @@ import {
 
 const OFFICE_COUNT_RANGE_VALUES = ['1', '2...5', '6...10', '>10'] as const;
 const OFFICE_COUNT_RANGE_SET = new Set<string>(OFFICE_COUNT_RANGE_VALUES);
+const SECTOR_VALUES = [
+  'FINANCE',
+  'TELCO',
+  'UTILITIES',
+  'ENERGY',
+  'SERVICES',
+  'GDO',
+  'HEALTH',
+  'INDUSTRY',
+  'PA',
+  'TRASPORTI',
+  'ALTRO',
+] as const;
+const SECTOR_SET = new Set<string>(SECTOR_VALUES);
+const NUMBER_OF_EMPLOYEES_VALUES = ['< 50', '50..250', '251..1000', '> 1000'] as const;
+const NUMBER_OF_EMPLOYEES_SET = new Set<string>(NUMBER_OF_EMPLOYEES_VALUES);
+const REVENUE_VALUES = ['< 10', '11..50', '51..1000', '> 1000'] as const;
+const REVENUE_SET = new Set<string>(REVENUE_VALUES);
 
 type OfficeCountRange = (typeof OFFICE_COUNT_RANGE_VALUES)[number];
+type Sector = (typeof SECTOR_VALUES)[number];
+type NumberOfEmployees = (typeof NUMBER_OF_EMPLOYEES_VALUES)[number];
+type Revenue = (typeof REVENUE_VALUES)[number];
 
 const idParamSchema = {
   type: 'object',
@@ -44,6 +65,11 @@ const clientSchema = {
     email: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
     address: { type: ['string', 'null'] },
+    atecoCode: { type: ['string', 'null'] },
+    website: { type: ['string', 'null'] },
+    sector: { type: ['string', 'null'] },
+    numberOfEmployees: { type: ['string', 'null'] },
+    revenue: { type: ['string', 'null'] },
     fiscalCode: { type: ['string', 'null'] },
     officeCountRange: { type: ['string', 'null'] },
     vatNumber: { type: ['string', 'null'] },
@@ -64,6 +90,12 @@ const clientCreateBodySchema = {
     email: { type: 'string' },
     phone: { type: 'string' },
     address: { type: 'string' },
+    description: { type: 'string' },
+    atecoCode: { type: 'string' },
+    website: { type: 'string' },
+    sector: { type: 'string', enum: SECTOR_VALUES },
+    numberOfEmployees: { type: 'string', enum: NUMBER_OF_EMPLOYEES_VALUES },
+    revenue: { type: 'string', enum: REVENUE_VALUES },
     fiscalCode: { type: 'string' },
     officeCountRange: { type: 'string' },
     vatNumber: { type: 'string' },
@@ -84,6 +116,12 @@ const clientUpdateBodySchema = {
     email: { type: 'string' },
     phone: { type: 'string' },
     address: { type: 'string' },
+    description: { type: 'string' },
+    atecoCode: { type: 'string' },
+    website: { type: 'string' },
+    sector: { type: 'string', enum: SECTOR_VALUES },
+    numberOfEmployees: { type: 'string', enum: NUMBER_OF_EMPLOYEES_VALUES },
+    revenue: { type: 'string', enum: REVENUE_VALUES },
     fiscalCode: { type: 'string' },
     officeCountRange: { type: 'string' },
     vatNumber: { type: 'string' },
@@ -116,6 +154,35 @@ const parseRequiredOfficeCountRange = (
   return { ok: true, value: result.value as OfficeCountRange };
 };
 
+const parseOptionalEnum = <T extends string>(
+  value: unknown,
+  fieldName: string,
+  allowedSet: Set<string>,
+  allowedValues: readonly T[],
+): { ok: true; value: T | null } | { ok: false; message: string } => {
+  const result = optionalNonEmptyString(value, fieldName);
+  if (!result.ok) return result;
+  if (result.value === null) return { ok: true, value: null };
+  if (!allowedSet.has(result.value)) {
+    return { ok: false, message: `${fieldName} must be one of: ${allowedValues.join(', ')}` };
+  }
+  return { ok: true, value: result.value as T };
+};
+
+const parseOptionalSector = (value: unknown) =>
+  parseOptionalEnum(value, 'sector', SECTOR_SET, SECTOR_VALUES);
+
+const parseOptionalNumberOfEmployees = (value: unknown) =>
+  parseOptionalEnum(
+    value,
+    'numberOfEmployees',
+    NUMBER_OF_EMPLOYEES_SET,
+    NUMBER_OF_EMPLOYEES_VALUES,
+  );
+
+const parseOptionalRevenue = (value: unknown) =>
+  parseOptionalEnum(value, 'revenue', REVENUE_SET, REVENUE_VALUES);
+
 const resolveFiscalCode = ({
   vatNumber,
   fiscalCode,
@@ -133,6 +200,7 @@ const mapClientRow = (c: Record<string, unknown>) => {
   return {
     id: c.id,
     name: c.name,
+    description: c.description,
     isDisabled: c.is_disabled,
     type: c.type,
     contactName: c.contact_name,
@@ -140,6 +208,11 @@ const mapClientRow = (c: Record<string, unknown>) => {
     email: c.email,
     phone: c.phone,
     address: c.address,
+    atecoCode: c.ateco_code,
+    website: c.website,
+    sector: c.sector,
+    numberOfEmployees: c.number_of_employees,
+    revenue: c.revenue,
     fiscalCode,
     officeCountRange: c.office_count_range,
     // Legacy compatibility aliases
@@ -197,7 +270,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { status, value } = await cacheGetSetJson(
         'clients',
-        `v=3:scope=${scopeKey}:details=${detailsKey}`,
+        `v=4:scope=${scopeKey}:details=${detailsKey}`,
         TTL_LIST_SECONDS,
         async () => {
           let queryText = 'SELECT * FROM clients ORDER BY name';
@@ -259,6 +332,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email,
         phone,
         address,
+        description,
+        atecoCode,
+        website,
+        sector,
+        numberOfEmployees,
+        revenue,
         fiscalCode,
         officeCountRange,
         vatNumber,
@@ -272,6 +351,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email: unknown;
         phone: unknown;
         address: unknown;
+        description: unknown;
+        atecoCode: unknown;
+        website: unknown;
+        sector: unknown;
+        numberOfEmployees: unknown;
+        revenue: unknown;
         fiscalCode: unknown;
         officeCountRange: unknown;
         vatNumber: unknown;
@@ -312,6 +397,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
+      const descriptionResult = optionalNonEmptyString(description, 'description');
+      if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
+
+      const atecoCodeResult = optionalNonEmptyString(atecoCode, 'atecoCode');
+      if (!atecoCodeResult.ok) return badRequest(reply, atecoCodeResult.message);
+
+      const websiteResult = optionalNonEmptyString(website, 'website');
+      if (!websiteResult.ok) return badRequest(reply, websiteResult.message);
+
+      const sectorResult = parseOptionalSector(sector);
+      if (!sectorResult.ok) return badRequest(reply, sectorResult.message);
+
+      const numberOfEmployeesResult = parseOptionalNumberOfEmployees(numberOfEmployees);
+      if (!numberOfEmployeesResult.ok) return badRequest(reply, numberOfEmployeesResult.message);
+
+      const revenueResult = parseOptionalRevenue(revenue);
+      if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
+
       // Check for existing fiscal code
       const existingFiscalCode = await query(
         'SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1)',
@@ -338,8 +441,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `
             INSERT INTO clients (
                 id, name, is_disabled, type, contact_name, client_code,
-                email, phone, address, fiscal_code, office_count_range, billing_code
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                email, phone, address, description, ateco_code, website, sector,
+                number_of_employees, revenue, fiscal_code, office_count_range, billing_code
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING *
         `,
           [
@@ -352,6 +456,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             emailResult.value,
             phone,
             address,
+            descriptionResult.value,
+            atecoCodeResult.value,
+            websiteResult.value,
+            sectorResult.value,
+            numberOfEmployeesResult.value,
+            revenueResult.value,
             resolvedFiscalCode,
             officeCountRangeResult.value,
             billingCode,
@@ -408,6 +518,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email,
         phone,
         address,
+        description,
+        atecoCode,
+        website,
+        sector,
+        numberOfEmployees,
+        revenue,
         fiscalCode,
         officeCountRange,
         vatNumber,
@@ -422,6 +538,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email: unknown;
         phone: unknown;
         address: unknown;
+        description: unknown;
+        atecoCode: unknown;
+        website: unknown;
+        sector: unknown;
+        numberOfEmployees: unknown;
+        revenue: unknown;
         fiscalCode: unknown;
         officeCountRange: unknown;
         vatNumber: unknown;
@@ -433,6 +555,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const hasClientCode = Object.hasOwn(body, 'clientCode');
       const hasFiscalCode = Object.hasOwn(body, 'fiscalCode');
       const hasOfficeCountRange = Object.hasOwn(body, 'officeCountRange');
+      const hasDescription = Object.hasOwn(body, 'description');
+      const hasAtecoCode = Object.hasOwn(body, 'atecoCode');
+      const hasWebsite = Object.hasOwn(body, 'website');
+      const hasSector = Object.hasOwn(body, 'sector');
+      const hasNumberOfEmployees = Object.hasOwn(body, 'numberOfEmployees');
+      const hasRevenue = Object.hasOwn(body, 'revenue');
       const hasVatNumber = Object.hasOwn(body, 'vatNumber');
       const hasTaxCode = Object.hasOwn(body, 'taxCode');
       const idResult = requireNonEmptyString(id, 'id');
@@ -497,6 +625,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
+      let descriptionValue: string | null = null;
+      if (hasDescription) {
+        const descriptionResult = optionalNonEmptyString(description, 'description');
+        if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
+        descriptionValue = descriptionResult.value;
+      }
+
+      let atecoCodeValue: string | null = null;
+      if (hasAtecoCode) {
+        const atecoCodeResult = optionalNonEmptyString(atecoCode, 'atecoCode');
+        if (!atecoCodeResult.ok) return badRequest(reply, atecoCodeResult.message);
+        atecoCodeValue = atecoCodeResult.value;
+      }
+
+      let websiteValue: string | null = null;
+      if (hasWebsite) {
+        const websiteResult = optionalNonEmptyString(website, 'website');
+        if (!websiteResult.ok) return badRequest(reply, websiteResult.message);
+        websiteValue = websiteResult.value;
+      }
+
+      let sectorValue: Sector | null = null;
+      if (hasSector) {
+        const sectorResult = parseOptionalSector(sector);
+        if (!sectorResult.ok) return badRequest(reply, sectorResult.message);
+        sectorValue = sectorResult.value;
+      }
+
+      let numberOfEmployeesValue: NumberOfEmployees | null = null;
+      if (hasNumberOfEmployees) {
+        const numberOfEmployeesResult = parseOptionalNumberOfEmployees(numberOfEmployees);
+        if (!numberOfEmployeesResult.ok) return badRequest(reply, numberOfEmployeesResult.message);
+        numberOfEmployeesValue = numberOfEmployeesResult.value;
+      }
+
+      let revenueValue: Revenue | null = null;
+      if (hasRevenue) {
+        const revenueResult = parseOptionalRevenue(revenue);
+        if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
+        revenueValue = revenueResult.value;
+      }
+
       // Check for existing fiscal code on other clients
       if (resolvedFiscalCode) {
         const existingFiscalCode = await query(
@@ -531,10 +701,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 email = COALESCE($6, email),
                 phone = COALESCE($7, phone),
                 address = COALESCE($8, address),
-                fiscal_code = COALESCE($9, fiscal_code),
-                office_count_range = COALESCE($10, office_count_range),
-                billing_code = COALESCE($11, billing_code)
-            WHERE id = $12 
+                description = COALESCE($9, description),
+                ateco_code = COALESCE($10, ateco_code),
+                website = COALESCE($11, website),
+                sector = COALESCE($12, sector),
+                number_of_employees = COALESCE($13, number_of_employees),
+                revenue = COALESCE($14, revenue),
+                fiscal_code = COALESCE($15, fiscal_code),
+                office_count_range = COALESCE($16, office_count_range),
+                billing_code = COALESCE($17, billing_code)
+            WHERE id = $18
             RETURNING *
         `,
           [
@@ -546,6 +722,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             emailResult.value,
             phone,
             address,
+            descriptionValue,
+            atecoCodeValue,
+            websiteValue,
+            sectorValue,
+            numberOfEmployeesValue,
+            revenueValue,
             resolvedFiscalCode,
             officeCountRangeValue,
             billingCode,

@@ -11,6 +11,12 @@ async function migrate() {
             ADD COLUMN IF NOT EXISTS email VARCHAR(255),
             ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
             ADD COLUMN IF NOT EXISTS address TEXT,
+            ADD COLUMN IF NOT EXISTS description TEXT,
+            ADD COLUMN IF NOT EXISTS ateco_code VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS website VARCHAR(255),
+            ADD COLUMN IF NOT EXISTS sector VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS number_of_employees VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS revenue VARCHAR(20),
             ADD COLUMN IF NOT EXISTS fiscal_code VARCHAR(50),
             ADD COLUMN IF NOT EXISTS office_count_range VARCHAR(10),
             ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);

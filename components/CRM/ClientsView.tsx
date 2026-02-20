@@ -24,6 +24,37 @@ const OFFICE_COUNT_RANGE_OPTIONS = [
   { id: '>10', name: '>10' },
 ];
 
+const SECTOR_OPTIONS: Array<{ id: NonNullable<Client['sector']>; labelKey: string }> = [
+  { id: 'FINANCE', labelKey: 'finance' },
+  { id: 'TELCO', labelKey: 'telco' },
+  { id: 'UTILITIES', labelKey: 'utilities' },
+  { id: 'ENERGY', labelKey: 'energy' },
+  { id: 'SERVICES', labelKey: 'services' },
+  { id: 'GDO', labelKey: 'gdo' },
+  { id: 'HEALTH', labelKey: 'health' },
+  { id: 'INDUSTRY', labelKey: 'industry' },
+  { id: 'PA', labelKey: 'pa' },
+  { id: 'TRASPORTI', labelKey: 'trasporti' },
+  { id: 'ALTRO', labelKey: 'altro' },
+];
+
+const NUMBER_OF_EMPLOYEES_OPTIONS: Array<{
+  id: NonNullable<Client['numberOfEmployees']>;
+  labelKey: string;
+}> = [
+  { id: '< 50', labelKey: 'under50' },
+  { id: '50..250', labelKey: 'from50To250' },
+  { id: '251..1000', labelKey: 'from251To1000' },
+  { id: '> 1000', labelKey: 'over1000' },
+];
+
+const REVENUE_OPTIONS: Array<{ id: NonNullable<Client['revenue']>; labelKey: string }> = [
+  { id: '< 10', labelKey: 'under10' },
+  { id: '11..50', labelKey: 'from11To50' },
+  { id: '51..1000', labelKey: 'from51To1000' },
+  { id: '> 1000', labelKey: 'over1000' },
+];
+
 const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
   onAddClient,
@@ -50,6 +81,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     email: '',
     phone: '',
     address: '',
+    description: '',
+    atecoCode: '',
+    website: '',
+    sector: undefined,
+    numberOfEmployees: undefined,
+    revenue: undefined,
     fiscalCode: '',
     officeCountRange: undefined,
     billingCode: '',
@@ -66,6 +103,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       email: '',
       phone: '',
       address: '',
+      description: '',
+      atecoCode: '',
+      website: '',
+      sector: undefined,
+      numberOfEmployees: undefined,
+      revenue: undefined,
       fiscalCode: '',
       officeCountRange: undefined,
       billingCode: '',
@@ -85,6 +128,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       email: client.email || '',
       phone: client.phone || '',
       address: client.address || '',
+      description: client.description || '',
+      atecoCode: client.atecoCode || '',
+      website: client.website || '',
+      sector: client.sector,
+      numberOfEmployees: client.numberOfEmployees,
+      revenue: client.revenue,
       fiscalCode: client.fiscalCode || client.vatNumber || client.taxCode || '',
       officeCountRange: client.officeCountRange,
       billingCode: client.billingCode || '',
@@ -103,6 +152,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     const trimmedName = formData.name?.trim() || '';
     const trimmedClientCode = formData.clientCode?.trim() || '';
     const trimmedFiscalCode = formData.fiscalCode?.trim() || '';
+    const trimmedDescription = formData.description?.trim() || '';
+    const trimmedAtecoCode = formData.atecoCode?.trim() || '';
+    const trimmedWebsite = formData.website?.trim() || '';
+    const trimmedBillingCode = formData.billingCode?.trim() || '';
     const officeCountRange = formData.officeCountRange;
     const newErrors: Record<string, string> = {};
     if (!trimmedName) {
@@ -138,6 +191,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       ...formData,
       name: trimmedName,
       clientCode: trimmedClientCode,
+      description: trimmedDescription || undefined,
+      atecoCode: trimmedAtecoCode || undefined,
+      website: trimmedWebsite || undefined,
+      billingCode: trimmedBillingCode || undefined,
       fiscalCode: trimmedFiscalCode,
       officeCountRange,
     };
@@ -495,6 +552,30 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.website')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.website || ''}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    placeholder={t('crm:clients.websitePlaceholder')}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  />
+                </div>
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.description')}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={formData.description || ''}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder={t('form:placeholderDescription')}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                  />
+                </div>
               </div>
             </div>
 
@@ -527,6 +608,18 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.atecoCode')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.atecoCode || ''}
+                    onChange={(e) => setFormData({ ...formData, atecoCode: e.target.value })}
+                    placeholder={t('crm:clients.atecoCodePlaceholder')}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('crm:clients.officeCountRange')}
                   </label>
                   <CustomSelect
@@ -552,6 +645,69 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       {errors.officeCountRange}
                     </p>
                   )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.sector')}
+                  </label>
+                  <CustomSelect
+                    options={SECTOR_OPTIONS.map((option) => ({
+                      id: option.id,
+                      name: t(`crm:clients.sectorOptions.${option.labelKey}`),
+                    }))}
+                    value={formData.sector || ''}
+                    onChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        sector: (value || undefined) as Client['sector'],
+                      })
+                    }
+                    placeholder={t('common:form.selectOption')}
+                    searchable={false}
+                    buttonClassName="py-2.5 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.numberOfEmployees')}
+                  </label>
+                  <CustomSelect
+                    options={NUMBER_OF_EMPLOYEES_OPTIONS.map((option) => ({
+                      id: option.id,
+                      name: t(`crm:clients.numberOfEmployeesOptions.${option.labelKey}`),
+                    }))}
+                    value={formData.numberOfEmployees || ''}
+                    onChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        numberOfEmployees: (value || undefined) as Client['numberOfEmployees'],
+                      })
+                    }
+                    placeholder={t('common:form.selectOption')}
+                    searchable={false}
+                    buttonClassName="py-2.5 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.revenueMillions')}
+                  </label>
+                  <CustomSelect
+                    options={REVENUE_OPTIONS.map((option) => ({
+                      id: option.id,
+                      name: t(`crm:clients.revenueOptions.${option.labelKey}`),
+                    }))}
+                    value={formData.revenue || ''}
+                    onChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        revenue: (value || undefined) as Client['revenue'],
+                      })
+                    }
+                    placeholder={t('common:form.selectOption')}
+                    searchable={false}
+                    buttonClassName="py-2.5 text-sm"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">

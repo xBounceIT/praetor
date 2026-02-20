@@ -288,6 +288,12 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS ateco_code VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS website VARCHAR(255);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS sector VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS number_of_employees VARCHAR(20);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS revenue VARCHAR(20);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS fiscal_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS office_count_range VARCHAR(10);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
@@ -297,6 +303,33 @@ ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_office_count_range;
 ALTER TABLE clients
     ADD CONSTRAINT chk_clients_office_count_range
     CHECK (office_count_range IS NULL OR office_count_range IN ('1', '2...5', '6...10', '>10'));
+
+-- Ensure sector is limited to supported values
+ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_sector;
+ALTER TABLE clients
+    ADD CONSTRAINT chk_clients_sector
+    CHECK (
+        sector IS NULL OR
+        sector IN ('FINANCE', 'TELCO', 'UTILITIES', 'ENERGY', 'SERVICES', 'GDO', 'HEALTH', 'INDUSTRY', 'PA', 'TRASPORTI', 'ALTRO')
+    );
+
+-- Ensure number of employees range is limited to supported values
+ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_number_of_employees;
+ALTER TABLE clients
+    ADD CONSTRAINT chk_clients_number_of_employees
+    CHECK (
+        number_of_employees IS NULL OR
+        number_of_employees IN ('< 50', '50..250', '251..1000', '> 1000')
+    );
+
+-- Ensure revenue range is limited to supported values
+ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_revenue;
+ALTER TABLE clients
+    ADD CONSTRAINT chk_clients_revenue
+    CHECK (
+        revenue IS NULL OR
+        revenue IN ('< 10', '11..50', '51..1000', '> 1000')
+    );
 
 -- Ensure fiscal code is unique (case-insensitive, non-empty)
 DROP INDEX IF EXISTS idx_clients_vat_number_unique;
