@@ -18,6 +18,11 @@ export interface AiReportingViewProps {
   enableAiReporting: boolean;
 }
 
+type MarkdownRendererProps<Tag extends keyof React.JSX.IntrinsicElements> =
+  React.ComponentPropsWithoutRef<Tag> & {
+    children?: React.ReactNode;
+  };
+
 const toOptionLabel = (session: ReportChatSessionSummary) => {
   const title = session.title?.trim() ? session.title.trim() : '';
   return title;
@@ -1572,7 +1577,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm, remarkBreaks]}
                               components={{
-                                a: ({ children, href }) => {
+                                a: ({ children, href }: MarkdownRendererProps<'a'>) => {
                                   const safe = safeHref(href);
                                   if (!safe) return <>{children}</>;
                                   return (
@@ -1586,7 +1591,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     </a>
                                   );
                                 },
-                                img: ({ alt, src }) => {
+                                img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
                                   const safe = safeHref(src);
                                   const label = alt?.trim() ? alt.trim() : src || 'image';
                                   if (!safe)
@@ -1602,42 +1607,44 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     </a>
                                   );
                                 },
-                                p: ({ children }) => (
+                                p: ({ children }: MarkdownRendererProps<'p'>) => (
                                   <p className="my-2 first:mt-0 last:mb-0">{children}</p>
                                 ),
-                                h1: ({ children }) => (
+                                h1: ({ children }: MarkdownRendererProps<'h1'>) => (
                                   <h1 className="mt-4 mb-2 text-lg font-extrabold text-slate-900">
                                     {children}
                                   </h1>
                                 ),
-                                h2: ({ children }) => (
+                                h2: ({ children }: MarkdownRendererProps<'h2'>) => (
                                   <h2 className="mt-4 mb-2 text-base font-extrabold text-slate-900">
                                     {children}
                                   </h2>
                                 ),
-                                h3: ({ children }) => (
+                                h3: ({ children }: MarkdownRendererProps<'h3'>) => (
                                   <h3 className="mt-3 mb-1 text-sm font-extrabold text-slate-900">
                                     {children}
                                   </h3>
                                 ),
-                                ul: ({ children }) => (
+                                ul: ({ children }: MarkdownRendererProps<'ul'>) => (
                                   <ul className="my-2 list-disc pl-5 marker:text-slate-400">
                                     {children}
                                   </ul>
                                 ),
-                                ol: ({ children }) => (
+                                ol: ({ children }: MarkdownRendererProps<'ol'>) => (
                                   <ol className="my-2 list-decimal pl-5 marker:text-slate-400">
                                     {children}
                                   </ol>
                                 ),
-                                li: ({ children }) => <li className="my-1">{children}</li>,
-                                blockquote: ({ children }) => (
+                                li: ({ children }: MarkdownRendererProps<'li'>) => (
+                                  <li className="my-1">{children}</li>
+                                ),
+                                blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
                                   <blockquote className="my-2 border-l-4 border-slate-200 pl-3 text-slate-700">
                                     {children}
                                   </blockquote>
                                 ),
                                 hr: () => <hr className="my-3 border-slate-200" />,
-                                table: ({ children }) => {
+                                table: ({ children }: MarkdownRendererProps<'table'>) => {
                                   tableRenderIndex += 1;
                                   const tableId = `${assistantMessage.id}-table-${tableRenderIndex}`;
                                   const copied = copiedTableId === tableId;
@@ -1678,29 +1685,29 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                     </div>
                                   );
                                 },
-                                th: ({ children }) => (
+                                th: ({ children }: MarkdownRendererProps<'th'>) => (
                                   <th className="align-top whitespace-nowrap border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
                                     {children}
                                   </th>
                                 ),
-                                td: ({ children }) => (
+                                td: ({ children }: MarkdownRendererProps<'td'>) => (
                                   <td className="align-top break-words border border-slate-200/80 px-3 py-2">
                                     {children}
                                   </td>
                                 ),
-                                pre: ({ children }) => (
+                                pre: ({ children }: MarkdownRendererProps<'pre'>) => (
                                   <pre className="my-2 overflow-x-auto rounded-xl bg-slate-950 p-3 text-slate-100">
                                     {children}
                                   </pre>
                                 ),
-                                code: (props) => {
+                                code: (
+                                  props: MarkdownRendererProps<'code'> & {
+                                    inline?: boolean;
+                                  },
+                                ) => {
                                   // react-markdown provides `inline` here, but it is not represented in the
                                   // published `Components` typing (intrinsic `code` props only).
-                                  const { inline, className, children } = props as unknown as {
-                                    inline?: boolean;
-                                    className?: string;
-                                    children?: React.ReactNode;
-                                  };
+                                  const { inline, className, children } = props;
 
                                   const value =
                                     typeof children === 'string'
