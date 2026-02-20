@@ -42,8 +42,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     email: '',
     phone: '',
     address: '',
-    vatNumber: '',
-    taxCode: '',
+    fiscalCode: '',
+    officeCountRange: undefined,
     billingCode: '',
   });
 
@@ -58,8 +58,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       email: '',
       phone: '',
       address: '',
-      vatNumber: '',
-      taxCode: '',
+      fiscalCode: '',
+      officeCountRange: undefined,
       billingCode: '',
     });
     setErrors({});
@@ -77,8 +77,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       email: client.email || '',
       phone: client.phone || '',
       address: client.address || '',
-      vatNumber: client.vatNumber || '',
-      taxCode: client.taxCode || '',
+      fiscalCode: client.fiscalCode || client.vatNumber || client.taxCode || '',
+      officeCountRange: client.officeCountRange,
       billingCode: client.billingCode || '',
     });
     setErrors({});
@@ -94,8 +94,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     // Validation
     const trimmedName = formData.name?.trim() || '';
     const trimmedClientCode = formData.clientCode?.trim() || '';
-    const trimmedVatNumber = formData.vatNumber?.trim() || '';
-    const trimmedTaxCode = formData.taxCode?.trim() || '';
+    const trimmedFiscalCode = formData.fiscalCode?.trim() || '';
+    const officeCountRange = formData.officeCountRange;
     const newErrors: Record<string, string> = {};
     if (!trimmedName) {
       newErrors.name = t('common:validation.nameRequired');
@@ -114,10 +114,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         newErrors.clientCode = t('common:validation.clientCodeUnique');
       }
     }
-    if (!trimmedVatNumber && !trimmedTaxCode) {
-      const msg = t('common:validation.vatOrTaxRequired');
-      newErrors.vatNumber = msg;
-      newErrors.taxCode = msg;
+    if (!trimmedFiscalCode) {
+      newErrors.fiscalCode = t('common:validation.fiscalCodeRequired');
+    }
+    if (!officeCountRange) {
+      newErrors.officeCountRange = t('common:validation.required');
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -129,8 +130,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       ...formData,
       name: trimmedName,
       clientCode: trimmedClientCode,
-      vatNumber: trimmedVatNumber,
-      taxCode: trimmedTaxCode,
+      fiscalCode: trimmedFiscalCode,
+      officeCountRange,
     };
 
     try {
@@ -142,8 +143,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       setIsModalOpen(false);
     } catch (err) {
       const message = (err as Error).message;
-      if (message.toLowerCase().includes('vat number')) {
-        setErrors({ ...newErrors, vatNumber: message });
+      if (
+        message.toLowerCase().includes('fiscal code') ||
+        message.toLowerCase().includes('vat number')
+      ) {
+        setErrors({ ...newErrors, fiscalCode: message });
       } else if (
         message.toLowerCase().includes('client id') ||
         message.toLowerCase().includes('client code')
@@ -245,19 +249,22 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
       {
-        header: t('crm:clients.tableHeaders.vat'),
-        accessorKey: 'vatNumber',
+        header: t('crm:clients.tableHeaders.fiscalCode'),
+        id: 'fiscalCode',
+        accessorFn: (row) => row.fiscalCode || row.vatNumber || row.taxCode || '',
         className: 'font-mono text-xs text-slate-400',
       },
       {
-        header: t('crm:clients.tableHeaders.taxCode'),
-        accessorKey: 'taxCode',
-        className: 'font-mono text-xs text-slate-400 pr-8',
+        header: t('crm:clients.tableHeaders.officeCountRange'),
+        accessorKey: 'officeCountRange',
+        cell: ({ row }) => (
+          <span className="text-xs text-slate-500">{row.officeCountRange || '-'}</span>
+        ),
       },
       {
         header: t('crm:clients.tableHeaders.billingCode'),
         accessorKey: 'billingCode',
-        className: 'font-mono text-xs text-slate-400',
+        className: 'font-mono text-xs text-slate-400 pr-8',
       },
       {
         header: t('crm:clients.tableHeaders.status'),
@@ -492,41 +499,52 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.vatNumber')}
+                    {t('crm:clients.fiscalCode')}
                   </label>
                   <input
                     type="text"
-                    value={formData.vatNumber}
+                    value={formData.fiscalCode}
                     onChange={(e) => {
-                      setFormData({ ...formData, vatNumber: e.target.value });
-                      if (errors.vatNumber) setErrors({ ...errors, vatNumber: '', taxCode: '' });
+                      setFormData({ ...formData, fiscalCode: e.target.value });
+                      if (errors.fiscalCode) setErrors({ ...errors, fiscalCode: '' });
                     }}
                     placeholder={t('form:placeholderCode')}
                     className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.vatNumber ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
                     }`}
                   />
-                  {errors.vatNumber && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.vatNumber}</p>
+                  {errors.fiscalCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.fiscalCode}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.taxCode')}
+                    {t('crm:clients.officeCountRange')}
                   </label>
-                  <input
-                    type="text"
-                    value={formData.taxCode}
+                  <select
+                    value={formData.officeCountRange || ''}
                     onChange={(e) => {
-                      setFormData({ ...formData, taxCode: e.target.value });
-                      if (errors.taxCode) setErrors({ ...errors, taxCode: '', vatNumber: '' });
+                      setFormData({
+                        ...formData,
+                        officeCountRange: (e.target.value ||
+                          undefined) as Client['officeCountRange'],
+                      });
+                      if (errors.officeCountRange) setErrors({ ...errors, officeCountRange: '' });
                     }}
                     className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.taxCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      errors.officeCountRange ? 'border-red-500 bg-red-50' : 'border-slate-200'
                     }`}
-                  />
-                  {errors.taxCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.taxCode}</p>
+                  >
+                    <option value="">{t('common:form.selectOption')}</option>
+                    <option value="1">1</option>
+                    <option value="2...5">2...5</option>
+                    <option value="6...10">6...10</option>
+                    <option value=">10">&gt;10</option>
+                  </select>
+                  {errors.officeCountRange && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">
+                      {errors.officeCountRange}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-1.5">

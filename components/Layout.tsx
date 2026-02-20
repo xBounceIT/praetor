@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import type { Notification, Role, User, View } from '../types';
 import { buildPermission, hasPermission, VIEW_PERMISSION_MAP } from '../utils/permissions';
 import NotificationBell from './shared/NotificationBell';
-import StatusBadge from './shared/StatusBadge';
 import Tooltip from './shared/Tooltip';
 
 interface Module {

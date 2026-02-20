@@ -102,6 +102,7 @@
     "projectRequired": "Il progetto è obbligatorio",
     "clientCodeRequired": "Il codice cliente è obbligatorio",
     "vatOrTaxRequired": "Partita IVA o Codice Fiscale richiesto",
+    "fiscalCodeRequired": "Partita IVA / Codice Fiscale obbligatoria",
     "productNameRequired": "Il nome del prodotto è obbligatorio",
     "supplierRequired": "Il fornitore è obbligatorio",
     "costRequired": "Il costo è obbligatorio",

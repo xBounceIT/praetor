@@ -18,6 +18,11 @@ import {
   validateClientIdentifier,
 } from '../utils/validation.ts';
 
+const OFFICE_COUNT_RANGE_VALUES = ['1', '2...5', '6...10', '>10'] as const;
+const OFFICE_COUNT_RANGE_SET = new Set<string>(OFFICE_COUNT_RANGE_VALUES);
+
+type OfficeCountRange = (typeof OFFICE_COUNT_RANGE_VALUES)[number];
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -39,6 +44,8 @@ const clientSchema = {
     email: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
     address: { type: ['string', 'null'] },
+    fiscalCode: { type: ['string', 'null'] },
+    officeCountRange: { type: ['string', 'null'] },
     vatNumber: { type: ['string', 'null'] },
     taxCode: { type: ['string', 'null'] },
     billingCode: { type: ['string', 'null'] },
@@ -57,6 +64,8 @@ const clientCreateBodySchema = {
     email: { type: 'string' },
     phone: { type: 'string' },
     address: { type: 'string' },
+    fiscalCode: { type: 'string' },
+    officeCountRange: { type: 'string' },
     vatNumber: { type: 'string' },
     taxCode: { type: 'string' },
     billingCode: { type: 'string' },
@@ -75,6 +84,8 @@ const clientUpdateBodySchema = {
     email: { type: 'string' },
     phone: { type: 'string' },
     address: { type: 'string' },
+    fiscalCode: { type: 'string' },
+    officeCountRange: { type: 'string' },
     vatNumber: { type: 'string' },
     taxCode: { type: 'string' },
     billingCode: { type: 'string' },
@@ -89,6 +100,55 @@ interface DatabaseError extends Error {
 
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
+
+const parseRequiredOfficeCountRange = (
+  value: unknown,
+): { ok: true; value: OfficeCountRange } | { ok: false; message: string } => {
+  const result = requireNonEmptyString(value, 'officeCountRange');
+  if (!result.ok) return result;
+  if (!OFFICE_COUNT_RANGE_SET.has(result.value)) {
+    return {
+      ok: false,
+      message: `officeCountRange must be one of: ${OFFICE_COUNT_RANGE_VALUES.join(', ')}`,
+    };
+  }
+
+  return { ok: true, value: result.value as OfficeCountRange };
+};
+
+const resolveFiscalCode = ({
+  vatNumber,
+  fiscalCode,
+  taxCode,
+}: {
+  vatNumber: string | null;
+  fiscalCode: string | null;
+  taxCode: string | null;
+}) => vatNumber || fiscalCode || taxCode || null;
+
+const mapClientRow = (c: Record<string, unknown>) => {
+  const fiscalCode = (c.fiscal_code as string | null) || null;
+  const createdAt = c.created_at ? new Date(c.created_at as string).getTime() : undefined;
+
+  return {
+    id: c.id,
+    name: c.name,
+    isDisabled: c.is_disabled,
+    type: c.type,
+    contactName: c.contact_name,
+    clientCode: c.client_code,
+    email: c.email,
+    phone: c.phone,
+    address: c.address,
+    fiscalCode,
+    officeCountRange: c.office_count_range,
+    // Legacy compatibility aliases
+    vatNumber: fiscalCode,
+    taxCode: fiscalCode,
+    billingCode: c.billing_code,
+    createdAt,
+  };
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all clients
@@ -137,7 +197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const { status, value } = await cacheGetSetJson(
         'clients',
-        `v=2:scope=${scopeKey}:details=${detailsKey}`,
+        `v=3:scope=${scopeKey}:details=${detailsKey}`,
         TTL_LIST_SECONDS,
         async () => {
           let queryText = 'SELECT * FROM clients ORDER BY name';
@@ -164,21 +224,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
 
-            return {
-              id: c.id,
-              name: c.name,
-              isDisabled: c.is_disabled,
-              type: c.type,
-              contactName: c.contact_name,
-              clientCode: c.client_code,
-              email: c.email,
-              phone: c.phone,
-              address: c.address,
-              vatNumber: c.vat_number,
-              taxCode: c.tax_code,
-              billingCode: c.billing_code,
-              createdAt: c.created_at ? new Date(c.created_at).getTime() : undefined,
-            };
+            return mapClientRow(c);
           });
         },
         { bypass },
@@ -213,6 +259,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email,
         phone,
         address,
+        fiscalCode,
+        officeCountRange,
         vatNumber,
         taxCode,
         billingCode,
@@ -224,6 +272,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email: unknown;
         phone: unknown;
         address: unknown;
+        fiscalCode: unknown;
+        officeCountRange: unknown;
         vatNumber: unknown;
         taxCode: unknown;
         billingCode: unknown;
@@ -235,28 +285,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const clientCodeResult = validateClientIdentifier(clientCode, 'clientCode');
       if (!clientCodeResult.ok) return badRequest(reply, clientCodeResult.message);
 
+      const fiscalCodeResult = optionalNonEmptyString(fiscalCode, 'fiscalCode');
+      if (!fiscalCodeResult.ok) return badRequest(reply, fiscalCodeResult.message);
+
       const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
       if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
 
       const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
       if (!taxCodeResult.ok) return badRequest(reply, taxCodeResult.message);
 
-      if (!vatNumberResult.value && !taxCodeResult.value) {
-        return badRequest(reply, 'Either VAT Number or Fiscal Code is required');
+      const resolvedFiscalCode = resolveFiscalCode({
+        vatNumber: vatNumberResult.value,
+        fiscalCode: fiscalCodeResult.value,
+        taxCode: taxCodeResult.value,
+      });
+
+      if (!resolvedFiscalCode) {
+        return badRequest(reply, 'Fiscal code is required');
+      }
+
+      const officeCountRangeResult = parseRequiredOfficeCountRange(officeCountRange);
+      if (!officeCountRangeResult.ok) {
+        return badRequest(reply, officeCountRangeResult.message);
       }
 
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-      // Check for existing VAT number
-      if (vatNumberResult.value) {
-        const existingVat = await query(
-          'SELECT id FROM clients WHERE LOWER(vat_number) = LOWER($1)',
-          [vatNumberResult.value],
-        );
-        if (existingVat.rows.length > 0) {
-          return badRequest(reply, 'VAT number already exists');
-        }
+      // Check for existing fiscal code
+      const existingFiscalCode = await query(
+        'SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1)',
+        [resolvedFiscalCode],
+      );
+      if (existingFiscalCode.rows.length > 0) {
+        return badRequest(reply, 'Fiscal code already exists');
       }
 
       // Check for existing client ID
@@ -276,7 +338,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `
             INSERT INTO clients (
                 id, name, is_disabled, type, contact_name, client_code,
-                email, phone, address, vat_number, tax_code, billing_code
+                email, phone, address, fiscal_code, office_count_range, billing_code
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING *
         `,
@@ -290,8 +352,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             emailResult.value,
             phone,
             address,
-            vatNumberResult.value,
-            taxCodeResult.value,
+            resolvedFiscalCode,
+            officeCountRangeResult.value,
             billingCode,
           ],
         );
@@ -299,36 +361,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const c = created.rows[0];
 
         await bumpNamespaceVersion('clients');
-        return reply.code(201).send({
-          id: c.id,
-          name: c.name,
-          isDisabled: c.is_disabled,
-          type: c.type,
-          contactName: c.contact_name,
-          clientCode: c.client_code,
-          email: c.email,
-          phone: c.phone,
-          address: c.address,
-          vatNumber: c.vat_number,
-          taxCode: c.tax_code,
-          billingCode: c.billing_code,
-          createdAt: c.created_at ? new Date(c.created_at).getTime() : undefined,
-        });
+        return reply.code(201).send(mapClientRow(c));
       } catch (err) {
         const error = err as DatabaseError;
         if (error.code === '23505') {
-          // Unique violation
-          if (error.constraint === 'idx_clients_vat_number_unique') {
-            return badRequest(reply, 'VAT number already exists');
+          if (error.constraint === 'idx_clients_fiscal_code_unique') {
+            return badRequest(reply, 'Fiscal code already exists');
           }
           if (error.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
           }
-          // Fallback or generic unique error
           if (error.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
-          return badRequest(reply, 'VAT number already exists');
+          return badRequest(reply, 'Fiscal code already exists');
         }
         throw err;
       }
@@ -362,6 +408,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email,
         phone,
         address,
+        fiscalCode,
+        officeCountRange,
         vatNumber,
         taxCode,
         billingCode,
@@ -374,6 +422,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         email: unknown;
         phone: unknown;
         address: unknown;
+        fiscalCode: unknown;
+        officeCountRange: unknown;
         vatNumber: unknown;
         taxCode: unknown;
         billingCode: unknown;
@@ -381,6 +431,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const body = request.body ?? {};
       const hasName = Object.hasOwn(body, 'name');
       const hasClientCode = Object.hasOwn(body, 'clientCode');
+      const hasFiscalCode = Object.hasOwn(body, 'fiscalCode');
+      const hasOfficeCountRange = Object.hasOwn(body, 'officeCountRange');
       const hasVatNumber = Object.hasOwn(body, 'vatNumber');
       const hasTaxCode = Object.hasOwn(body, 'taxCode');
       const idResult = requireNonEmptyString(id, 'id');
@@ -400,6 +452,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientCodeValue = clientCodeResult.value;
       }
 
+      let fiscalCodeValue: string | null = null;
+      if (hasFiscalCode) {
+        const fiscalCodeResult = optionalNonEmptyString(fiscalCode, 'fiscalCode');
+        if (!fiscalCodeResult.ok) return badRequest(reply, fiscalCodeResult.message);
+        fiscalCodeValue = fiscalCodeResult.value;
+      }
+
       let vatNumberValue: string | null = null;
       if (hasVatNumber) {
         const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
@@ -414,21 +473,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCodeValue = taxCodeResult.value;
       }
 
-      if ((hasVatNumber || hasTaxCode) && !vatNumberValue && !taxCodeValue) {
-        return badRequest(reply, 'Either VAT Number or Fiscal Code is required');
+      const hasFiscalUpdate = hasVatNumber || hasFiscalCode || hasTaxCode;
+      let resolvedFiscalCode: string | null = null;
+      if (hasFiscalUpdate) {
+        resolvedFiscalCode = resolveFiscalCode({
+          vatNumber: vatNumberValue,
+          fiscalCode: fiscalCodeValue,
+          taxCode: taxCodeValue,
+        });
+
+        if (!resolvedFiscalCode) {
+          return badRequest(reply, 'Fiscal code is required');
+        }
+      }
+
+      let officeCountRangeValue: OfficeCountRange | null = null;
+      if (hasOfficeCountRange) {
+        const officeCountRangeResult = parseRequiredOfficeCountRange(officeCountRange);
+        if (!officeCountRangeResult.ok) return badRequest(reply, officeCountRangeResult.message);
+        officeCountRangeValue = officeCountRangeResult.value;
       }
 
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
-      // Check for existing VAT number on other clients
-      if (vatNumberValue) {
-        const existingVat = await query(
-          'SELECT id FROM clients WHERE LOWER(vat_number) = LOWER($1) AND id <> $2',
-          [vatNumberValue, idResult.value],
+      // Check for existing fiscal code on other clients
+      if (resolvedFiscalCode) {
+        const existingFiscalCode = await query(
+          'SELECT id FROM clients WHERE LOWER(fiscal_code) = LOWER($1) AND id <> $2',
+          [resolvedFiscalCode, idResult.value],
         );
-        if (existingVat.rows.length > 0) {
-          return badRequest(reply, 'VAT number already exists');
+        if (existingFiscalCode.rows.length > 0) {
+          return badRequest(reply, 'Fiscal code already exists');
         }
       }
 
@@ -455,8 +531,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 email = COALESCE($6, email),
                 phone = COALESCE($7, phone),
                 address = COALESCE($8, address),
-                vat_number = COALESCE($9, vat_number),
-                tax_code = COALESCE($10, tax_code),
+                fiscal_code = COALESCE($9, fiscal_code),
+                office_count_range = COALESCE($10, office_count_range),
                 billing_code = COALESCE($11, billing_code)
             WHERE id = $12 
             RETURNING *
@@ -470,8 +546,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             emailResult.value,
             phone,
             address,
-            vatNumberValue,
-            taxCodeValue,
+            resolvedFiscalCode,
+            officeCountRangeValue,
             billingCode,
             idResult.value,
           ],
@@ -484,27 +560,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const c = result.rows[0];
 
         await bumpNamespaceVersion('clients');
-        return {
-          id: c.id,
-          name: c.name,
-          isDisabled: c.is_disabled,
-          type: c.type,
-          contactName: c.contact_name,
-          clientCode: c.client_code,
-          email: c.email,
-          phone: c.phone,
-          address: c.address,
-          vatNumber: c.vat_number,
-          taxCode: c.tax_code,
-          billingCode: c.billing_code,
-          createdAt: c.created_at ? new Date(c.created_at).getTime() : undefined,
-        };
+        return mapClientRow(c);
       } catch (err) {
         const error = err as DatabaseError;
         if (error.code === '23505') {
-          // Unique violation
-          if (error.constraint === 'idx_clients_vat_number_unique') {
-            return badRequest(reply, 'VAT number already exists');
+          if (error.constraint === 'idx_clients_fiscal_code_unique') {
+            return badRequest(reply, 'Fiscal code already exists');
           }
           if (error.constraint === 'idx_clients_client_code_unique') {
             return badRequest(reply, 'Client ID already exists');
@@ -512,7 +573,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (error.detail?.includes('client_code')) {
             return badRequest(reply, 'Client ID already exists');
           }
-          return badRequest(reply, 'VAT number already exists');
+          return badRequest(reply, 'Fiscal code already exists');
         }
         throw err;
       }

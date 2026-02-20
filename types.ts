@@ -80,6 +80,9 @@ export interface Client {
   email?: string;
   phone?: string;
   address?: string;
+  fiscalCode?: string;
+  officeCountRange?: '1' | '2...5' | '6...10' | '>10';
+  // Legacy compatibility fields (mapped from fiscalCode by API)
   vatNumber?: string;
   taxCode?: string;
   billingCode?: string;

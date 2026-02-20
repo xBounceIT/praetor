@@ -11,10 +11,9 @@ async function migrate() {
             ADD COLUMN IF NOT EXISTS email VARCHAR(255),
             ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
             ADD COLUMN IF NOT EXISTS address TEXT,
-            ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50),
-            ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50),
-            ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50),
-            ADD COLUMN IF NOT EXISTS payment_terms TEXT;
+            ADD COLUMN IF NOT EXISTS fiscal_code VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS office_count_range VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
         `);
     console.log('Migration completed successfully.');
   } catch (err) {

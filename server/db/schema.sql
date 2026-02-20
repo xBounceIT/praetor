@@ -288,14 +288,21 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS fiscal_code VARCHAR(50);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS office_count_range VARCHAR(10);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
 
--- Ensure VAT number is unique (case-insensitive, non-empty)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_vat_number_unique
-    ON clients (LOWER(vat_number))
-    WHERE vat_number IS NOT NULL AND vat_number <> '';
+-- Ensure office count range is limited to supported values
+ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_office_count_range;
+ALTER TABLE clients
+    ADD CONSTRAINT chk_clients_office_count_range
+    CHECK (office_count_range IS NULL OR office_count_range IN ('1', '2...5', '6...10', '>10'));
+
+-- Ensure fiscal code is unique (case-insensitive, non-empty)
+DROP INDEX IF EXISTS idx_clients_vat_number_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_fiscal_code_unique
+    ON clients (LOWER(fiscal_code))
+    WHERE fiscal_code IS NOT NULL AND fiscal_code <> '';
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (

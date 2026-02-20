@@ -167,6 +167,14 @@ try {
       console.log('Demo seeding disabled (set DEMO_SEEDING=true to enable).');
     }
 
+    // Merge legacy client VAT/tax fields into a canonical fiscal_code field
+    try {
+      const { mergeClientFiscalFields } = await import('./db/merge_client_fiscal_fields.ts');
+      await mergeClientFiscalFields();
+    } catch (err) {
+      console.error('Failed to run client fiscal merge migration:', err);
+    }
+
     // Run data migration for default clients
     try {
       const { migrate: updateClients } = await import('./db/update_default_clients.ts');

@@ -102,6 +102,7 @@
     "projectRequired": "Project is required",
     "clientCodeRequired": "Client Code is required",
     "vatOrTaxRequired": "Either VAT Number or Tax Code is required",
+    "fiscalCodeRequired": "VAT Number / Tax Code is required",
     "productNameRequired": "Product name is required",
     "supplierRequired": "Supplier is required",
     "costRequired": "Cost is required",
