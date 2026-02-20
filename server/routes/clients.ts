@@ -74,7 +74,6 @@ const clientSchema = {
     officeCountRange: { type: ['string', 'null'] },
     vatNumber: { type: ['string', 'null'] },
     taxCode: { type: ['string', 'null'] },
-    billingCode: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
   },
   required: ['id', 'name'],
@@ -100,7 +99,6 @@ const clientCreateBodySchema = {
     officeCountRange: { type: 'string' },
     vatNumber: { type: 'string' },
     taxCode: { type: 'string' },
-    billingCode: { type: 'string' },
   },
   required: ['name'],
 } as const;
@@ -126,7 +124,6 @@ const clientUpdateBodySchema = {
     officeCountRange: { type: ['string', 'null'] },
     vatNumber: { type: ['string', 'null'] },
     taxCode: { type: ['string', 'null'] },
-    billingCode: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -218,7 +215,6 @@ const mapClientRow = (c: Record<string, unknown>) => {
     // Legacy compatibility aliases
     vatNumber: fiscalCode,
     taxCode: fiscalCode,
-    billingCode: c.billing_code,
     createdAt,
   };
 };
@@ -342,7 +338,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         officeCountRange,
         vatNumber,
         taxCode,
-        billingCode,
       } = request.body as {
         name: unknown;
         type: unknown;
@@ -361,7 +356,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         officeCountRange: unknown;
         vatNumber: unknown;
         taxCode: unknown;
-        billingCode: unknown;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -442,8 +436,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             INSERT INTO clients (
                 id, name, is_disabled, type, contact_name, client_code,
                 email, phone, address, description, ateco_code, website, sector,
-                number_of_employees, revenue, fiscal_code, office_count_range, billing_code
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                number_of_employees, revenue, fiscal_code, office_count_range
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING *
         `,
           [
@@ -464,7 +458,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             revenueResult.value,
             resolvedFiscalCode,
             officeCountRangeResult.value,
-            billingCode,
           ],
         );
 
@@ -528,7 +521,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         officeCountRange,
         vatNumber,
         taxCode,
-        billingCode,
       } = request.body as {
         name: unknown;
         isDisabled: unknown;
@@ -548,7 +540,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         officeCountRange: unknown;
         vatNumber: unknown;
         taxCode: unknown;
-        billingCode: unknown;
       };
       const body = request.body ?? {};
       const hasName = Object.hasOwn(body, 'name');
@@ -708,9 +699,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 number_of_employees = COALESCE($13, number_of_employees),
                 revenue = COALESCE($14, revenue),
                 fiscal_code = COALESCE($15, fiscal_code),
-                office_count_range = COALESCE($16, office_count_range),
-                billing_code = COALESCE($17, billing_code)
-            WHERE id = $18
+                office_count_range = COALESCE($16, office_count_range)
+            WHERE id = $17
             RETURNING *
         `,
           [
@@ -730,7 +720,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             revenueValue,
             resolvedFiscalCode,
             officeCountRangeValue,
-            billingCode,
             idResult.value,
           ],
         );

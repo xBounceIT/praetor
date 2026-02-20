@@ -15,7 +15,6 @@ export async function migrate() {
                 address = 'Via delle Industrie 42, 00100 Roma (RM)',
                 fiscal_code = 'IT01234567890',
                 office_count_range = '6...10',
-                billing_code = 'KRRH6B9',
                 created_at = '2024-01-15 09:30:00'
             WHERE id = 'c1';
 
@@ -29,7 +28,6 @@ export async function migrate() {
                 address = 'Via Roma 123, 20100 Milano (MI)',
                 fiscal_code = 'RSSMRA80A01H501U',
                 office_count_range = '1',
-                billing_code = '0000000',
                 created_at = '2024-03-05 14:15:00'
             WHERE id = 'c2';
         `,

@@ -71,7 +71,6 @@
     "contactName": "Contact Name",
     "vatNumber": "VAT Number",
     "taxCode": "Tax Code",
-    "billingCode": "Billing Code",
     "clientCode": "Client Code",
     "paymentTerms": "Payment Terms",
     "clientProject": "Client / Project",

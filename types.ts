@@ -102,7 +102,6 @@ export interface Client {
   // Legacy compatibility fields (mapped from fiscalCode by API)
   vatNumber?: string;
   taxCode?: string;
-  billingCode?: string;
 }
 
 export interface Project {

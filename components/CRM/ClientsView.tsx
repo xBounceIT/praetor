@@ -100,7 +100,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     revenue: undefined,
     fiscalCode: '',
     officeCountRange: undefined,
-    billingCode: '',
   });
 
   const openAddModal = () => {
@@ -122,7 +121,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       revenue: undefined,
       fiscalCode: '',
       officeCountRange: undefined,
-      billingCode: '',
     });
     setErrors({});
     setIsModalOpen(true);
@@ -147,7 +145,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       revenue: client.revenue ?? undefined,
       fiscalCode: client.fiscalCode || client.vatNumber || client.taxCode || '',
       officeCountRange: client.officeCountRange ?? undefined,
-      billingCode: client.billingCode || '',
     });
     setErrors({});
     setIsModalOpen(true);
@@ -170,7 +167,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     const trimmedDescription = toOptionalTrimmedString(formData.description);
     const trimmedAtecoCode = toOptionalTrimmedString(formData.atecoCode);
     const trimmedWebsite = toOptionalTrimmedString(formData.website);
-    const trimmedBillingCode = toOptionalTrimmedString(formData.billingCode);
     const officeCountRange = formData.officeCountRange;
     const newErrors: Record<string, string> = {};
     if (!trimmedName) {
@@ -218,7 +214,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       revenue: formData.revenue ?? undefined,
       fiscalCode: trimmedFiscalCode,
       officeCountRange,
-      billingCode: trimmedBillingCode,
     };
 
     try {
@@ -357,11 +352,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => (
           <span className="text-xs text-slate-500">{row.officeCountRange || '-'}</span>
         ),
-      },
-      {
-        header: t('crm:clients.tableHeaders.billingCode'),
-        accessorKey: 'billingCode',
-        className: 'font-mono text-xs text-slate-400 pr-8',
       },
       {
         header: t('crm:clients.tableHeaders.status'),
@@ -560,7 +550,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                   />
                 </div>
-                <div className="col-span-full space-y-1.5">
+                <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('crm:clients.contactRole')}
                   </label>
@@ -570,18 +560,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
                     placeholder={t('form:placeholderName')}
                     className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.streetAddress')}
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder={t('form:placeholderDescription')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -598,10 +576,22 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </div>
                 <div className="col-span-full space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.description')}
+                    {t('crm:clients.streetAddress')}
                   </label>
                   <textarea
                     rows={2}
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder={t('form:placeholderDescription')}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                  />
+                </div>
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.description')}
+                  </label>
+                  <textarea
+                    rows={3}
                     value={formData.description || ''}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder={t('form:placeholderDescription')}
@@ -739,18 +729,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
                     buttonClassName="py-2.5 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.billingCode')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.billingCode}
-                    onChange={(e) => setFormData({ ...formData, billingCode: e.target.value })}
-                    placeholder={t('form:placeholderCode')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all font-mono uppercase"
                   />
                 </div>
               </div>

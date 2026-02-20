@@ -8,7 +8,6 @@
       "phone": "Phone",
       "fiscalCode": "VAT / Tax Code",
       "officeCountRange": "Number of Offices",
-      "billingCode": "SDI",
       "insertDate": "Insert Date",
       "status": "Status"
     },
@@ -64,7 +63,6 @@
     },
     "fiscalCode": "VAT Number / Tax Code",
     "officeCountRange": "Number of Offices",
-    "billingCode": "Billing Code",
     "paymentTerms": "Payment Terms",
     "noClients": "No clients found",
     "createFirst": "Create your first client to get started",

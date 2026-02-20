@@ -71,7 +71,6 @@
     "contactName": "Nome Contatto",
     "vatNumber": "Partita IVA",
     "taxCode": "Codice Fiscale",
-    "billingCode": "Codice di Fatturazione",
     "clientCode": "Codice Cliente",
     "paymentTerms": "Termini di Pagamento",
     "clientProject": "Cliente / Progetto",

@@ -35,7 +35,6 @@ export const normalizeClient = (c: Client): Client => ({
   officeCountRange: c.officeCountRange ?? undefined,
   vatNumber: c.vatNumber ?? undefined,
   taxCode: c.taxCode ?? undefined,
-  billingCode: c.billingCode ?? undefined,
 });
 
 export const normalizeUser = (u: User): User => ({

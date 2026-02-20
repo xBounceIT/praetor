@@ -296,8 +296,6 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS number_of_employees VARCHAR(20);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS revenue VARCHAR(20);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS fiscal_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS office_count_range VARCHAR(10);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_code VARCHAR(50);
-
 -- Ensure office count range is limited to supported values
 ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_office_count_range;
 ALTER TABLE clients
