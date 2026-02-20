@@ -23,7 +23,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   onDeleteClient,
   permissions,
 }) => {
-  const { t, i18n } = useTranslation(['crm', 'common', 'form']);
+  const { t } = useTranslation(['crm', 'common', 'form']);
   const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
   const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
   const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
@@ -171,13 +171,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   };
 
   const canSubmit = editingClient ? canUpdateClients : canCreateClients;
-  const insertDateFormatter = useMemo(
-    () =>
-      new Intl.DateTimeFormat(i18n.language, {
-        dateStyle: 'medium',
-      }),
-    [i18n.language],
-  );
+  const formatInsertDate = useCallback((timestamp: number) => {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '-';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  }, []);
 
   // Column definitions
   const columns = useMemo<Column<Client>[]>(
@@ -202,6 +203,28 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               {row.clientCode}
             </span>
           ) : null,
+      },
+      {
+        header: t('crm:clients.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        cell: ({ row }) => {
+          if (!row.createdAt) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) {
+            return '-';
+          }
+          return formatInsertDate(timestamp);
+        },
       },
       {
         header: t('crm:clients.tableHeaders.type'),
@@ -235,28 +258,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.billingCode'),
         accessorKey: 'billingCode',
         className: 'font-mono text-xs text-slate-400',
-      },
-      {
-        header: t('crm:clients.tableHeaders.insertDate'),
-        id: 'createdAt',
-        accessorFn: (row) => row.createdAt ?? 0,
-        cell: ({ row }) => {
-          if (!row.createdAt) {
-            return <span className="text-xs text-slate-400">-</span>;
-          }
-          return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              {insertDateFormatter.format(new Date(row.createdAt))}
-            </span>
-          );
-        },
-        filterFormat: (value) => {
-          const timestamp = typeof value === 'number' ? value : Number(value);
-          if (!Number.isFinite(timestamp) || timestamp <= 0) {
-            return '-';
-          }
-          return insertDateFormatter.format(new Date(timestamp));
-        },
       },
       {
         header: t('crm:clients.tableHeaders.status'),
@@ -318,7 +319,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
     ],
-    [t, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete, insertDateFormatter],
+    [t, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete, formatInsertDate],
   );
 
   return (
