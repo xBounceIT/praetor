@@ -97,6 +97,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'catalog.special_bids.view',
           'sales.supplier_quotes.view',
           'sales.supplier_offers.view',
+          'sales.client_offers.view',
           'accounting.supplier_orders.view',
           'accounting.supplier_invoices.view',
         ),

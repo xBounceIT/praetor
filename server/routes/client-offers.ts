@@ -13,6 +13,12 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -357,36 +363,45 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!normalizedItems) return;
 
       const offerId = 'co-' + Date.now();
-      const createdOfferResult = await query(
-        `INSERT INTO customer_offers
-          (id, offer_code, linked_quote_id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING
-            id,
-            offer_code as "offerCode",
-            linked_quote_id as "linkedQuoteId",
-            client_id as "clientId",
-            client_name as "clientName",
-            payment_terms as "paymentTerms",
-            discount,
-            status,
-            expiration_date as "expirationDate",
+      let createdOfferResult;
+      try {
+        createdOfferResult = await query(
+          `INSERT INTO customer_offers
+            (id, offer_code, linked_quote_id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING
+              id,
+              offer_code as "offerCode",
+              linked_quote_id as "linkedQuoteId",
+              client_id as "clientId",
+              client_name as "clientName",
+              payment_terms as "paymentTerms",
+              discount,
+              status,
+              expiration_date as "expirationDate",
+              notes,
+              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            offerId,
+            offerCodeResult.value,
+            linkedQuoteIdResult.value,
+            clientIdResult.value,
+            clientNameResult.value,
+            paymentTerms || 'immediate',
+            discountResult.value || 0,
+            status || 'draft',
+            expirationDateResult.value,
             notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          offerId,
-          offerCodeResult.value,
-          linkedQuoteIdResult.value,
-          clientIdResult.value,
-          clientNameResult.value,
-          paymentTerms || 'immediate',
-          discountResult.value || 0,
-          status || 'draft',
-          expirationDateResult.value,
-          notes,
-        ],
-      );
+          ],
+        );
+      } catch (err) {
+        const error = err as DatabaseError;
+        if (error.code === '23505' && error.detail?.includes('offer_code')) {
+          return reply.code(409).send({ error: 'Offer code already exists' });
+        }
+        throw err;
+      }
 
       const createdItems: unknown[] = [];
       for (const item of normalizedItems) {
@@ -482,6 +497,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const existingOfferResult = await query(
         `SELECT
             id,
+            linked_quote_id as "linkedQuoteId",
+            client_id as "clientId",
+            client_name as "clientName",
             status
          FROM customer_offers
          WHERE id = $1`,
@@ -490,6 +508,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (existingOfferResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
+
+      const existingOffer = existingOfferResult.rows[0];
 
       const isStatusChangeOnly =
         status !== undefined &&
@@ -501,10 +521,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount === undefined &&
         expirationDate === undefined &&
         notes === undefined;
-      if (existingOfferResult.rows[0].status !== 'draft' && !isStatusChangeOnly) {
+      if (existingOffer.status !== 'draft' && !isStatusChangeOnly) {
         return reply.code(409).send({
           error: 'Non-draft offers are read-only',
-          currentStatus: existingOfferResult.rows[0].status,
+          currentStatus: existingOffer.status,
         });
       }
 
@@ -529,6 +549,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientNameValue = clientNameResult.value;
       }
 
+      if (existingOffer.linkedQuoteId) {
+        const lockedFields: string[] = [];
+        if (
+          clientIdValue !== undefined &&
+          clientIdValue !== null &&
+          clientIdValue !== existingOffer.clientId
+        ) {
+          lockedFields.push('clientId');
+        }
+        if (
+          clientNameValue !== undefined &&
+          clientNameValue !== null &&
+          clientNameValue !== existingOffer.clientName
+        ) {
+          lockedFields.push('clientName');
+        }
+        if (lockedFields.length > 0) {
+          return reply.code(409).send({
+            error: 'Quote-linked offer client details are read-only',
+            fields: lockedFields,
+          });
+        }
+      }
+
       let expirationDateValue = expirationDate;
       if (expirationDate !== undefined) {
         const expirationDateResult = optionalDateString(expirationDate, 'expirationDate');
@@ -543,43 +587,52 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
-      const updatedOfferResult = await query(
-        `UPDATE customer_offers
-         SET offer_code = COALESCE($1, offer_code),
-             client_id = COALESCE($2, client_id),
-             client_name = COALESCE($3, client_name),
-             payment_terms = COALESCE($4, payment_terms),
-             discount = COALESCE($5, discount),
-             status = COALESCE($6, status),
-             expiration_date = COALESCE($7, expiration_date),
-             notes = COALESCE($8, notes),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $9
-         RETURNING
-            id,
-            offer_code as "offerCode",
-            linked_quote_id as "linkedQuoteId",
-            client_id as "clientId",
-            client_name as "clientName",
-            payment_terms as "paymentTerms",
-            discount,
+      let updatedOfferResult;
+      try {
+        updatedOfferResult = await query(
+          `UPDATE customer_offers
+           SET offer_code = COALESCE($1, offer_code),
+               client_id = COALESCE($2, client_id),
+               client_name = COALESCE($3, client_name),
+               payment_terms = COALESCE($4, payment_terms),
+               discount = COALESCE($5, discount),
+               status = COALESCE($6, status),
+               expiration_date = COALESCE($7, expiration_date),
+               notes = COALESCE($8, notes),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $9
+           RETURNING
+              id,
+              offer_code as "offerCode",
+              linked_quote_id as "linkedQuoteId",
+              client_id as "clientId",
+              client_name as "clientName",
+              payment_terms as "paymentTerms",
+              discount,
+              status,
+              expiration_date as "expirationDate",
+              notes,
+              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            offerCodeValue,
+            clientIdValue,
+            clientNameValue,
+            paymentTerms,
+            discountValue,
             status,
-            expiration_date as "expirationDate",
+            expirationDateValue,
             notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          offerCodeValue,
-          clientIdValue,
-          clientNameValue,
-          paymentTerms,
-          discountValue,
-          status,
-          expirationDateValue,
-          notes,
-          idResult.value,
-        ],
-      );
+            idResult.value,
+          ],
+        );
+      } catch (err) {
+        const error = err as DatabaseError;
+        if (error.code === '23505' && error.detail?.includes('offer_code')) {
+          return reply.code(409).send({ error: 'Offer code already exists' });
+        }
+        throw err;
+      }
 
       if (updatedOfferResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });

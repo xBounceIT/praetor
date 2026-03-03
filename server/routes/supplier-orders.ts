@@ -433,12 +433,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existingOrderResult = await query(
-        'SELECT id, status FROM supplier_sales WHERE id = $1',
+        `SELECT id, linked_offer_id as "linkedOfferId",
+                supplier_id as "supplierId", supplier_name as "supplierName", status
+         FROM supplier_sales WHERE id = $1`,
         [idResult.value],
       );
       if (existingOrderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
       }
+
+      const existingOrder = existingOrderResult.rows[0];
 
       const isStatusChangeOnly =
         status !== undefined &&
@@ -448,10 +452,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms === undefined &&
         discount === undefined &&
         notes === undefined;
-      if (existingOrderResult.rows[0].status !== 'draft' && !isStatusChangeOnly) {
+      if (existingOrder.status !== 'draft' && !isStatusChangeOnly) {
         return reply.code(409).send({
           error: 'Non-draft orders are read-only',
-          currentStatus: existingOrderResult.rows[0].status,
+          currentStatus: existingOrder.status,
         });
       }
 
@@ -467,6 +471,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
         if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
         supplierNameValue = supplierNameResult.value;
+      }
+
+      if (existingOrder.linkedOfferId) {
+        const lockedFields: string[] = [];
+        if (
+          supplierIdValue !== undefined &&
+          supplierIdValue !== null &&
+          supplierIdValue !== existingOrder.supplierId
+        ) {
+          lockedFields.push('supplierId');
+        }
+        if (
+          supplierNameValue !== undefined &&
+          supplierNameValue !== null &&
+          supplierNameValue !== existingOrder.supplierName
+        ) {
+          lockedFields.push('supplierName');
+        }
+        if (lockedFields.length > 0) {
+          return reply.code(409).send({
+            error: 'Offer-linked order supplier details are read-only',
+            fields: lockedFields,
+          });
+        }
       }
 
       let discountValue = discount;

@@ -1064,6 +1064,7 @@ const App: React.FC = () => {
           buildPermission('catalog.special_bids', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
           buildPermission('sales.supplier_offers', 'view'),
+          buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
