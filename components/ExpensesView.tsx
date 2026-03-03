@@ -80,6 +80,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     receiptReference: '',
     notes: '',
   });
+  const isReadOnly = editingExpense?.sourceType === 'supplier_invoice';
 
   const openAddModal = () => {
     setEditingExpense(null);
@@ -116,6 +117,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      return;
+    }
+
+    if (isReadOnly) {
       return;
     }
 
@@ -161,6 +166,11 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {isReadOnly && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                This expense is managed by a supplier invoice and cannot be edited here.
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 ml-1">
                 {t('expenses.description')}
@@ -170,6 +180,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 required
                 placeholder={t('expenses.descriptionPlaceholder')}
                 value={formData.description}
+                disabled={isReadOnly}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold"
               />
@@ -189,6 +200,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   onChange={(val) =>
                     setFormData({ ...formData, category: val as Expense['category'] })
                   }
+                  disabled={isReadOnly}
                   searchable={false}
                 />
               </div>
@@ -200,6 +212,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   step="0.01"
                   required
                   value={formData.amount}
+                  disabled={isReadOnly}
                   onValueChange={(value) => {
                     const parsed = parseFloat(value);
                     setFormData({
@@ -224,6 +237,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   type="date"
                   required
                   value={formData.expenseDate}
+                  disabled={isReadOnly}
                   onChange={(e) => setFormData({ ...formData, expenseDate: e.target.value })}
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
                 />
@@ -239,6 +253,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   type="text"
                   placeholder={t('expenses.vendorPlaceholder')}
                   value={formData.vendor || ''}
+                  disabled={isReadOnly}
                   onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
                 />
@@ -253,6 +268,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 type="text"
                 placeholder={t('expenses.receiptPlaceholder')}
                 value={formData.receiptReference || ''}
+                disabled={isReadOnly}
                 onChange={(e) => setFormData({ ...formData, receiptReference: e.target.value })}
                 className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
               />
@@ -263,6 +279,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
               <textarea
                 rows={3}
                 value={formData.notes || ''}
+                disabled={isReadOnly}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder={t('expenses.notesPlaceholder')}
                 className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none resize-none"
@@ -277,12 +294,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
               >
                 {t('common.buttons.cancel')}
               </button>
-              <button
-                type="submit"
-                className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
-              >
-                {t('common.buttons.save')}
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="submit"
+                  className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
+                >
+                  {t('common.buttons.save')}
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -444,7 +463,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <td className="px-6 py-4 text-sm text-slate-600">
                   {new Date(expense.expenseDate).toLocaleDateString()}
                 </td>
-                <td className="px-6 py-4 font-bold text-slate-800">{expense.description}</td>
+                <td className="px-6 py-4 font-bold text-slate-800">
+                  <div>{expense.description}</div>
+                  {expense.sourceType === 'supplier_invoice' && (
+                    <div className="text-[10px] font-black uppercase tracking-widest text-amber-600">
+                      System-managed
+                    </div>
+                  )}
+                </td>
                 <td className="px-6 py-4">
                   <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold capitalize">
                     {categoryOptions.find((opt) => opt.id === expense.category)?.name ||
@@ -459,19 +485,23 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (expense.sourceType === 'supplier_invoice') return;
                       openEditModal(expense);
                     }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                    disabled={expense.sourceType === 'supplier_invoice'}
+                    className={`p-2 rounded-lg transition-all ${expense.sourceType === 'supplier_invoice' ? 'cursor-not-allowed opacity-50 text-slate-300' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (expense.sourceType === 'supplier_invoice') return;
                       setExpenseToDelete(expense);
                       setIsDeleteConfirmOpen(true);
                     }}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    disabled={expense.sourceType === 'supplier_invoice'}
+                    className={`p-2 rounded-lg transition-all ${expense.sourceType === 'supplier_invoice' ? 'cursor-not-allowed opacity-50 text-slate-300' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
                   >
                     <i className="fa-solid fa-trash-can"></i>
                   </button>

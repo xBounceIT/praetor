@@ -252,6 +252,51 @@ export interface Quote {
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string; // ISO date string
   isExpired?: boolean;
+  linkedOfferId?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ClientOfferItem {
+  id: string;
+  offerId: string;
+  productId: string;
+  productName: string;
+  specialBidId?: string;
+  quantity: number;
+  unitPrice: number;
+  productCost?: number;
+  productTaxRate?: number;
+  productMolPercentage?: number | null;
+  specialBidUnitPrice?: number | null;
+  specialBidMolPercentage?: number | null;
+  discount?: number;
+  note?: string;
+}
+
+export interface ClientOffer {
+  id: string;
+  offerCode: string;
+  linkedQuoteId: string;
+  clientId: string;
+  clientName: string;
+  items: ClientOfferItem[];
+  paymentTerms:
+    | 'immediate'
+    | '15gg'
+    | '21gg'
+    | '30gg'
+    | '45gg'
+    | '60gg'
+    | '90gg'
+    | '120gg'
+    | '180gg'
+    | '240gg'
+    | '365gg';
+  discount: number;
+  status: 'draft' | 'sent' | 'accepted' | 'denied';
+  expirationDate: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -277,6 +322,7 @@ export interface ClientsOrderItem {
 export interface ClientsOrder {
   id: string;
   linkedQuoteId?: string; // Reference to source quote
+  linkedOfferId?: string;
   clientId: string;
   clientName: string;
   items: ClientsOrderItem[];
@@ -316,6 +362,9 @@ export type View =
   | 'crm/suppliers'
   // Sales module
   | 'sales/client-quotes'
+  | 'sales/client-offers'
+  | 'sales/supplier-quotes'
+  | 'sales/supplier-offers'
   // Catalog module
   | 'catalog/internal-listing'
   | 'catalog/external-listing'
@@ -323,6 +372,8 @@ export type View =
   // Accounting module
   | 'accounting/clients-orders'
   | 'accounting/clients-invoices'
+  | 'accounting/supplier-orders'
+  | 'accounting/supplier-invoices'
   // Finances module
   | 'finances/payments'
   | 'finances/expenses'
@@ -332,9 +383,6 @@ export type View =
   // Projects module
   | 'projects/manage'
   | 'projects/tasks'
-  // Suppliers module
-  | 'suppliers/manage'
-  | 'suppliers/quotes'
   // HR module
   | 'hr/internal'
   | 'hr/external'
@@ -393,6 +441,7 @@ export interface InvoiceItem {
 export interface Invoice {
   id: string;
   linkedOrderId?: string;
+  linkedSaleId?: string;
   clientId: string;
   clientName: string;
   invoiceNumber: string;
@@ -431,6 +480,8 @@ export interface Expense {
   vendor?: string;
   receiptReference?: string;
   notes?: string;
+  sourceType?: 'manual' | 'supplier_invoice';
+  linkedSupplierInvoiceId?: string;
   createdAt: number;
 }
 
@@ -464,7 +515,8 @@ export interface SupplierQuote {
   id: string;
   supplierId: string;
   supplierName: string;
-  purchaseOrderNumber: string;
+  quoteCode: string;
+  purchaseOrderNumber?: string;
   items: SupplierQuoteItem[];
   paymentTerms:
     | 'immediate'
@@ -479,9 +531,120 @@ export interface SupplierQuote {
     | '240gg'
     | '365gg';
   discount: number;
-  status: 'received' | 'approved' | 'rejected';
+  status: 'draft' | 'sent' | 'accepted' | 'denied';
+  expirationDate: string;
+  linkedOfferId?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SupplierOfferItem {
+  id: string;
+  offerId: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  productTaxRate?: number;
+  discount?: number;
+  note?: string;
+}
+
+export interface SupplierOffer {
+  id: string;
+  offerCode: string;
+  linkedQuoteId: string;
+  linkedOrderId?: string;
+  supplierId: string;
+  supplierName: string;
+  items: SupplierOfferItem[];
+  paymentTerms:
+    | 'immediate'
+    | '15gg'
+    | '21gg'
+    | '30gg'
+    | '45gg'
+    | '60gg'
+    | '90gg'
+    | '120gg'
+    | '180gg'
+    | '240gg'
+    | '365gg';
+  discount: number;
+  status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SupplierSaleOrderItem {
+  id: string;
+  orderId: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  productTaxRate?: number;
+  discount?: number;
+  note?: string;
+}
+
+export interface SupplierSaleOrder {
+  id: string;
+  linkedQuoteId?: string;
+  linkedOfferId: string;
+  supplierId: string;
+  supplierName: string;
+  items: SupplierSaleOrderItem[];
+  paymentTerms:
+    | 'immediate'
+    | '15gg'
+    | '21gg'
+    | '30gg'
+    | '45gg'
+    | '60gg'
+    | '90gg'
+    | '120gg'
+    | '180gg'
+    | '240gg'
+    | '365gg';
+  discount: number;
+  status: 'draft' | 'sent' | 'confirmed' | 'denied';
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SupplierInvoiceItem {
+  id: string;
+  invoiceId: string;
+  productId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  discount?: number;
+}
+
+export interface SupplierInvoice {
+  id: string;
+  linkedOrderId?: string;
+  linkedSaleId?: string;
+  supplierId: string;
+  supplierName: string;
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate: string;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  amountPaid: number;
+  notes?: string;
+  items: SupplierInvoiceItem[];
+  linkedExpenseId?: string;
   createdAt: number;
   updatedAt: number;
 }

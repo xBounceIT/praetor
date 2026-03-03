@@ -272,6 +272,19 @@ try {
       );
     }
 
+    // Run migration to enforce unique downstream link indexes
+    try {
+      const { migrate: addUniqueDownstreamLinks } = await import(
+        './db/add_unique_downstream_links.ts'
+      );
+      await addUniqueDownstreamLinks();
+    } catch (err) {
+      logger.error(
+        { err: serializeError(err), migration: 'add_unique_downstream_links' },
+        'Migration failed',
+      );
+    }
+
     // Run migration to add unique constraint to client_code
     try {
       const { addUniqueClientCode } = await import('./db/add_unique_client_code.ts');

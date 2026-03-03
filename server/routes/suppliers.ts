@@ -82,7 +82,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'crm.suppliers.view',
           'crm.suppliers_all.view',
           'catalog.external_listing.view',
-          'suppliers.quotes.view',
+          'sales.supplier_quotes.view',
+          'sales.supplier_offers.view',
+          'accounting.supplier_orders.view',
+          'accounting.supplier_invoices.view',
         ),
       ],
       schema: {

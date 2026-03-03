@@ -1,5 +1,7 @@
 import type {
   Client,
+  ClientOffer,
+  ClientOfferItem,
   ClientsOrder,
   ClientsOrderItem,
   Expense,
@@ -12,8 +14,14 @@ import type {
   Quote,
   QuoteItem,
   SpecialBid,
+  SupplierInvoice,
+  SupplierInvoiceItem,
+  SupplierOffer,
+  SupplierOfferItem,
   SupplierQuote,
   SupplierQuoteItem,
+  SupplierSaleOrder,
+  SupplierSaleOrderItem,
   TimeEntry,
   User,
 } from '../../types';
@@ -80,6 +88,38 @@ export const normalizeQuote = (q: Quote): Quote => ({
   ...q,
   discount: Number(q.discount || 0),
   items: (q.items || []).map(normalizeQuoteItem),
+});
+
+export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem => ({
+  ...item,
+  quantity: Number(item.quantity || 0),
+  unitPrice: Number(item.unitPrice || 0),
+  productCost:
+    item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
+  productTaxRate:
+    item.productTaxRate === undefined || item.productTaxRate === null
+      ? 0
+      : Number(item.productTaxRate),
+  productMolPercentage:
+    item.productMolPercentage === undefined || item.productMolPercentage === null
+      ? null
+      : Number(item.productMolPercentage),
+  specialBidUnitPrice:
+    item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
+      ? null
+      : Number(item.specialBidUnitPrice),
+  specialBidMolPercentage:
+    item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
+      ? null
+      : Number(item.specialBidMolPercentage),
+  discount: Number(item.discount || 0),
+  note: item.note || '',
+});
+
+export const normalizeClientOffer = (offer: ClientOffer): ClientOffer => ({
+  ...offer,
+  discount: Number(offer.discount || 0),
+  items: (offer.items || []).map(normalizeClientOfferItem),
 });
 
 export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderItem => ({
@@ -168,6 +208,62 @@ export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
   discount: Number(q.discount || 0),
   items: (q.items || []).map(normalizeSupplierQuoteItem),
+});
+
+export const normalizeSupplierOfferItem = (item: SupplierOfferItem): SupplierOfferItem => ({
+  ...item,
+  quantity: Number(item.quantity || 0),
+  unitPrice: Number(item.unitPrice || 0),
+  productTaxRate:
+    item.productTaxRate === undefined || item.productTaxRate === null
+      ? 0
+      : Number(item.productTaxRate),
+  discount: Number(item.discount || 0),
+  note: item.note || '',
+});
+
+export const normalizeSupplierOffer = (offer: SupplierOffer): SupplierOffer => ({
+  ...offer,
+  linkedOrderId: offer.linkedOrderId ?? undefined,
+  discount: Number(offer.discount || 0),
+  items: (offer.items || []).map(normalizeSupplierOfferItem),
+});
+
+export const normalizeSupplierSaleOrderItem = (
+  item: SupplierSaleOrderItem,
+): SupplierSaleOrderItem => ({
+  ...item,
+  quantity: Number(item.quantity || 0),
+  unitPrice: Number(item.unitPrice || 0),
+  productTaxRate:
+    item.productTaxRate === undefined || item.productTaxRate === null
+      ? 0
+      : Number(item.productTaxRate),
+  discount: Number(item.discount || 0),
+  note: item.note || '',
+});
+
+export const normalizeSupplierSaleOrder = (order: SupplierSaleOrder): SupplierSaleOrder => ({
+  ...order,
+  discount: Number(order.discount || 0),
+  items: (order.items || []).map(normalizeSupplierSaleOrderItem),
+});
+
+export const normalizeSupplierInvoiceItem = (item: SupplierInvoiceItem): SupplierInvoiceItem => ({
+  ...item,
+  quantity: Number(item.quantity || 0),
+  unitPrice: Number(item.unitPrice || 0),
+  taxRate: Number(item.taxRate || 0),
+  discount: Number(item.discount || 0),
+});
+
+export const normalizeSupplierInvoice = (invoice: SupplierInvoice): SupplierInvoice => ({
+  ...invoice,
+  subtotal: Number(invoice.subtotal ?? 0),
+  taxAmount: Number(invoice.taxAmount ?? 0),
+  total: Number(invoice.total ?? 0),
+  amountPaid: Number(invoice.amountPaid ?? 0),
+  items: (invoice.items || []).map(normalizeSupplierInvoiceItem),
 });
 
 export const normalizeSpecialBid = (b: SpecialBid): SpecialBid => ({

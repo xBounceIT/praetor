@@ -95,7 +95,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'catalog.internal_listing.view',
           'catalog.external_listing.view',
           'catalog.special_bids.view',
-          'suppliers.quotes.view',
+          'sales.supplier_quotes.view',
+          'sales.supplier_offers.view',
+          'sales.client_offers.view',
+          'accounting.supplier_orders.view',
+          'accounting.supplier_invoices.view',
         ),
       ],
       schema: {

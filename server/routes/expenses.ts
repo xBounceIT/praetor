@@ -31,6 +31,8 @@ const expenseSchema = {
     vendor: { type: ['string', 'null'] },
     receiptReference: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
+    sourceType: { type: ['string', 'null'] },
+    linkedSupplierInvoiceId: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
   },
   required: ['id', 'description', 'amount', 'expenseDate', 'createdAt'],
@@ -92,6 +94,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 vendor,
                 receipt_reference as "receiptReference",
                 notes,
+                source_type as "sourceType",
+                supplier_invoice_id as "linkedSupplierInvoiceId",
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
             FROM expenses 
             ORDER BY expense_date DESC`,
@@ -171,6 +175,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     vendor,
                     receipt_reference as "receiptReference",
                     notes,
+                    source_type as "sourceType",
+                    supplier_invoice_id as "linkedSupplierInvoiceId",
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
         [
           expenseId,
@@ -223,6 +229,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const existingResult = await query(
+        'SELECT source_type as "sourceType" FROM expenses WHERE id = $1',
+        [idResult.value],
+      );
+      if (existingResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Expense not found' });
+      }
+      if (existingResult.rows[0].sourceType === 'supplier_invoice') {
+        return reply.code(409).send({
+          error: 'Supplier invoice expenses are read-only and must be edited from the invoice',
+        });
+      }
 
       let descriptionValue: string | undefined = description;
       if (description !== undefined) {
@@ -305,6 +324,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     vendor,
                     receipt_reference as "receiptReference",
                     notes,
+                    source_type as "sourceType",
+                    supplier_invoice_id as "linkedSupplierInvoiceId",
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"`,
         [
           descriptionValue,
@@ -350,6 +371,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const existingResult = await query(
+        'SELECT source_type as "sourceType" FROM expenses WHERE id = $1',
+        [idResult.value],
+      );
+      if (existingResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Expense not found' });
+      }
+      if (existingResult.rows[0].sourceType === 'supplier_invoice') {
+        return reply.code(409).send({
+          error: 'Supplier invoice expenses are read-only and must be deleted from the invoice',
+        });
+      }
 
       const result = await query('DELETE FROM expenses WHERE id = $1 RETURNING id', [
         idResult.value,

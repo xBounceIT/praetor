@@ -42,11 +42,13 @@ const supplierQuoteSchema = {
     id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    quoteCode: { type: 'string' },
     purchaseOrderNumber: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
+    linkedOfferId: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -56,6 +58,7 @@ const supplierQuoteSchema = {
     'id',
     'supplierId',
     'supplierName',
+    'quoteCode',
     'purchaseOrderNumber',
     'discount',
     'status',
@@ -83,6 +86,7 @@ const supplierQuoteCreateBodySchema = {
   properties: {
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    quoteCode: { type: 'string' },
     purchaseOrderNumber: { type: 'string' },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
@@ -91,7 +95,7 @@ const supplierQuoteCreateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
-  required: ['supplierId', 'supplierName', 'purchaseOrderNumber', 'items', 'expirationDate'],
+  required: ['supplierId', 'supplierName', 'items', 'expirationDate'],
 } as const;
 
 const supplierQuoteUpdateBodySchema = {
@@ -99,6 +103,7 @@ const supplierQuoteUpdateBodySchema = {
   properties: {
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    quoteCode: { type: 'string' },
     purchaseOrderNumber: { type: 'string' },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
@@ -112,10 +117,17 @@ const supplierQuoteUpdateBodySchema = {
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
+  const normalizeSupplierQuoteStatus = (status: string) => {
+    if (status === 'received') return 'sent';
+    if (status === 'approved') return 'accepted';
+    if (status === 'rejected') return 'denied';
+    return status;
+  };
+
   fastify.get(
     '/',
     {
-      onRequest: [requirePermission('suppliers.quotes.view')],
+      onRequest: [requirePermission('sales.supplier_quotes.view')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'List supplier quotes',
@@ -131,11 +143,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id,
         supplier_id as "supplierId",
         supplier_name as "supplierName",
-        purchase_order_number as "purchaseOrderNumber",
+        COALESCE(quote_code, purchase_order_number) as "quoteCode",
+        COALESCE(quote_code, purchase_order_number) as "purchaseOrderNumber",
         payment_terms as "paymentTerms",
         discount,
         status,
         expiration_date as "expirationDate",
+        (
+          SELECT so.id
+          FROM supplier_offers so
+          WHERE so.linked_quote_id = supplier_quotes.id
+          LIMIT 1
+        ) as "linkedOfferId",
         notes,
         EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
         EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
@@ -168,6 +187,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return quotesResult.rows.map((quote) => ({
         ...quote,
+        status: normalizeSupplierQuoteStatus((quote as { status: string }).status),
         items: itemsByQuote[quote.id] || [],
       }));
     },
@@ -176,7 +196,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [requirePermission('suppliers.quotes.create')],
+      onRequest: [requirePermission('sales.supplier_quotes.create')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'Create supplier quote',
@@ -191,6 +211,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const {
         supplierId,
         supplierName,
+        quoteCode,
         purchaseOrderNumber,
         items,
         paymentTerms,
@@ -201,6 +222,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } = request.body as {
         supplierId?: string;
         supplierName?: string;
+        quoteCode?: string;
         purchaseOrderNumber?: string;
         items?: Array<{
           productId?: string;
@@ -223,12 +245,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
 
-      const purchaseOrderNumberResult = requireNonEmptyString(
-        purchaseOrderNumber,
-        'purchaseOrderNumber',
-      );
-      if (!purchaseOrderNumberResult.ok)
-        return badRequest(reply, purchaseOrderNumberResult.message);
+      const quoteCodeResult = requireNonEmptyString(quoteCode ?? purchaseOrderNumber, 'quoteCode');
+      if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -272,17 +290,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const quoteId = 'sq-' + Date.now();
       const quoteResult = await query(
         `INSERT INTO supplier_quotes (
-        id, supplier_id, supplier_name, purchase_order_number, payment_terms, discount, status, expiration_date, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        id, supplier_id, supplier_name, quote_code, purchase_order_number, payment_terms, discount, status, expiration_date, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING
         id,
         supplier_id as "supplierId",
         supplier_name as "supplierName",
+        quote_code as "quoteCode",
         purchase_order_number as "purchaseOrderNumber",
         payment_terms as "paymentTerms",
         discount,
         status,
         expiration_date as "expirationDate",
+        null::varchar as "linkedOfferId",
         notes,
         EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
         EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -290,10 +310,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quoteId,
           supplierIdResult.value,
           supplierNameResult.value,
-          purchaseOrderNumberResult.value,
+          quoteCodeResult.value,
+          quoteCodeResult.value,
           paymentTerms || 'immediate',
           discountResult.value || 0,
-          status || 'received',
+          status || 'draft',
           expirationDateResult.value,
           notes,
         ],
@@ -331,6 +352,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return reply.code(201).send({
         ...quoteResult.rows[0],
+        status: normalizeSupplierQuoteStatus(quoteResult.rows[0].status),
         items: createdItems,
       });
     },
@@ -339,7 +361,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [requirePermission('suppliers.quotes.update')],
+      onRequest: [requirePermission('sales.supplier_quotes.update')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'Update supplier quote',
@@ -356,6 +378,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const {
         supplierId,
         supplierName,
+        quoteCode,
         purchaseOrderNumber,
         items,
         paymentTerms,
@@ -366,6 +389,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } = request.body as {
         supplierId?: string;
         supplierName?: string;
+        quoteCode?: string;
         purchaseOrderNumber?: string;
         items?: Array<{
           productId?: string;
@@ -385,6 +409,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const linkedOfferResult = await query(
+        'SELECT id FROM supplier_offers WHERE linked_quote_id = $1 LIMIT 1',
+        [idResult.value],
+      );
+      if (linkedOfferResult.rows.length > 0) {
+        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
+      }
+
       let supplierIdValue: string | undefined | null = supplierId;
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
@@ -399,15 +431,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierNameValue = supplierNameResult.value;
       }
 
-      let purchaseOrderNumberValue: string | undefined | null = purchaseOrderNumber;
-      if (purchaseOrderNumber !== undefined) {
-        const purchaseOrderNumberResult = optionalNonEmptyString(
-          purchaseOrderNumber,
-          'purchaseOrderNumber',
+      let quoteCodeValue: string | undefined | null = quoteCode ?? purchaseOrderNumber;
+      if (quoteCode !== undefined || purchaseOrderNumber !== undefined) {
+        const quoteCodeResult = optionalNonEmptyString(
+          quoteCode ?? purchaseOrderNumber,
+          'quoteCode',
         );
-        if (!purchaseOrderNumberResult.ok)
-          return badRequest(reply, purchaseOrderNumberResult.message);
-        purchaseOrderNumberValue = purchaseOrderNumberResult.value;
+        if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
+        quoteCodeValue = quoteCodeResult.value;
       }
 
       let expirationDateValue: string | undefined | null = expirationDate;
@@ -428,6 +459,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `UPDATE supplier_quotes
        SET supplier_id = COALESCE($1, supplier_id),
            supplier_name = COALESCE($2, supplier_name),
+           quote_code = COALESCE($3, quote_code),
            purchase_order_number = COALESCE($3, purchase_order_number),
            payment_terms = COALESCE($4, payment_terms),
            discount = COALESCE($5, discount),
@@ -440,18 +472,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id,
         supplier_id as "supplierId",
         supplier_name as "supplierName",
+        quote_code as "quoteCode",
         purchase_order_number as "purchaseOrderNumber",
         payment_terms as "paymentTerms",
         discount,
         status,
         expiration_date as "expirationDate",
+        null::varchar as "linkedOfferId",
         notes,
         EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
         EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
         [
           supplierIdValue,
           supplierNameValue,
-          purchaseOrderNumberValue,
+          quoteCodeValue,
           paymentTerms,
           discountValue,
           status,
@@ -552,6 +586,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return {
         ...quoteResult.rows[0],
+        status: normalizeSupplierQuoteStatus(quoteResult.rows[0].status),
         items: updatedItems,
       };
     },
@@ -560,7 +595,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [requirePermission('suppliers.quotes.delete')],
+      onRequest: [requirePermission('sales.supplier_quotes.delete')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'Delete supplier quote',
@@ -575,6 +610,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      const linkedOfferResult = await query(
+        'SELECT id FROM supplier_offers WHERE linked_quote_id = $1 LIMIT 1',
+        [idResult.value],
+      );
+      if (linkedOfferResult.rows.length > 0) {
+        return reply
+          .code(409)
+          .send({ error: 'Cannot delete a quote once an offer has been created from it' });
+      }
       const result = await query('DELETE FROM supplier_quotes WHERE id = $1 RETURNING id', [
         idResult.value,
       ]);

@@ -11,6 +11,12 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
 // Project color palette for auto-created projects
 const PROJECT_COLORS = [
   '#3b82f6', // blue
@@ -70,6 +76,7 @@ const clientOrderSchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: ['string', 'null'] },
+    linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
@@ -116,6 +123,7 @@ const clientOrderCreateBodySchema = {
   type: 'object',
   properties: {
     linkedQuoteId: { type: 'string' },
+    linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: clientOrderItemBodySchema },
@@ -130,6 +138,7 @@ const clientOrderCreateBodySchema = {
 const clientOrderUpdateBodySchema = {
   type: 'object',
   properties: {
+    linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: clientOrderItemBodySchema },
@@ -165,6 +174,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
                 id,
                 linked_quote_id as "linkedQuoteId",
+                linked_offer_id as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -233,23 +243,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { linkedQuoteId, clientId, clientName, items, paymentTerms, discount, status, notes } =
-        request.body as {
-          linkedQuoteId: unknown;
-          clientId: unknown;
-          clientName: unknown;
-          items: unknown;
-          paymentTerms: unknown;
-          discount: unknown;
-          status: unknown;
-          notes: unknown;
-        };
+      const {
+        linkedQuoteId,
+        linkedOfferId,
+        clientId,
+        clientName,
+        items,
+        paymentTerms,
+        discount,
+        status,
+        notes,
+      } = request.body as {
+        linkedQuoteId: unknown;
+        linkedOfferId: unknown;
+        clientId: unknown;
+        clientName: unknown;
+        items: unknown;
+        paymentTerms: unknown;
+        discount: unknown;
+        status: unknown;
+        notes: unknown;
+      };
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
 
       const clientNameResult = requireNonEmptyString(clientName, 'clientName');
       if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
+
+      const linkedOfferIdResult = optionalNonEmptyString(linkedOfferId, 'linkedOfferId');
+      if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
+      const linkedQuoteIdResult = optionalNonEmptyString(linkedQuoteId, 'linkedQuoteId');
+      if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -301,34 +326,81 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
+      let linkedQuoteIdValue = linkedQuoteIdResult.value;
+      if (linkedOfferIdResult.value) {
+        const offerResult = await query(
+          'SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1',
+          [linkedOfferIdResult.value],
+        );
+        if (offerResult.rows.length === 0) {
+          return reply.code(404).send({ error: 'Source offer not found' });
+        }
+        if (offerResult.rows[0].status !== 'accepted') {
+          return reply
+            .code(409)
+            .send({ error: 'Sale orders can only be created from accepted offers' });
+        }
+
+        const existingOrderResult = await query(
+          'SELECT id FROM sales WHERE linked_offer_id = $1 LIMIT 1',
+          [linkedOfferIdResult.value],
+        );
+        if (existingOrderResult.rows.length > 0) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+
+        if (
+          linkedQuoteIdResult.value !== null &&
+          linkedQuoteIdResult.value !== offerResult.rows[0].linkedQuoteId
+        ) {
+          return reply.code(409).send({ error: 'linkedQuoteId must match the source offer quote' });
+        }
+
+        linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
+      }
+
       const orderId = 's-' + Date.now();
 
-      // Insert order
-      const orderResult = await query(
-        `INSERT INTO sales (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING
-                id,
-                linked_quote_id as "linkedQuoteId",
-                client_id as "clientId",
-                client_name as "clientName",
-                payment_terms as "paymentTerms",
-                discount,
-                status,
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          orderId,
-          linkedQuoteId || null,
-          clientIdResult.value,
-          clientNameResult.value,
-          paymentTerms || 'immediate',
-          discountResult.value || 0,
-          status || 'draft',
-          notes,
-        ],
-      );
+      let orderResult: Awaited<ReturnType<typeof query>>;
+      try {
+        orderResult = await query(
+          `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+               RETURNING
+                  id,
+                  linked_quote_id as "linkedQuoteId",
+                  linked_offer_id as "linkedOfferId",
+                  client_id as "clientId",
+                  client_name as "clientName",
+                  payment_terms as "paymentTerms",
+                  discount,
+                  status,
+                  notes,
+                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            orderId,
+            linkedQuoteIdValue,
+            linkedOfferIdResult.value || null,
+            clientIdResult.value,
+            clientNameResult.value,
+            paymentTerms || 'immediate',
+            discountResult.value || 0,
+            status || 'draft',
+            notes,
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
+            databaseError.detail?.includes('(linked_offer_id)'))
+        ) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+        throw error;
+      }
 
       // Insert order items
       const createdItems = [];
@@ -397,8 +469,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { clientId, clientName, items, paymentTerms, discount, status, notes } =
+      const { linkedOfferId, clientId, clientName, items, paymentTerms, discount, status, notes } =
         request.body as {
+          linkedOfferId: unknown;
           clientId: unknown;
           clientName: unknown;
           items: unknown;
@@ -429,6 +502,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
+      }
+
+      let linkedOfferIdValue = linkedOfferId;
+      if (linkedOfferId !== undefined) {
+        const linkedOfferIdResult = optionalNonEmptyString(linkedOfferId, 'linkedOfferId');
+        if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
+        linkedOfferIdValue = linkedOfferIdResult.value;
       }
 
       const normalizeNotesValue = (value: unknown) => String(value ?? '');
@@ -556,6 +636,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
                     id,
                     linked_quote_id as "linkedQuoteId",
+                    linked_offer_id as "linkedOfferId",
                     client_id as "clientId",
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
@@ -578,6 +659,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Status changes are always allowed, but other field changes are blocked for non-draft clients_orders
       const isStatusChangeOnly =
         status !== undefined &&
+        linkedOfferId === undefined &&
         clientIdValue === undefined &&
         clientNameValue === undefined &&
         paymentTerms === undefined &&
@@ -592,7 +674,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      if (existingOrder.linkedQuoteId) {
+      const isSourceLinkedOrder = Boolean(
+        existingOrder.linkedQuoteId || existingOrder.linkedOfferId,
+      );
+
+      if (isSourceLinkedOrder) {
         const lockedFields: string[] = [];
 
         if (
@@ -676,38 +762,96 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      let linkedQuoteIdValue: string | null = null;
+      if (linkedOfferId !== undefined && linkedOfferIdValue) {
+        if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== linkedOfferIdValue) {
+          return reply.code(409).send({
+            error: 'Orders cannot be relinked to a different offer',
+          });
+        }
+
+        const offerResult = await query(
+          'SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1',
+          [linkedOfferIdValue],
+        );
+        if (offerResult.rows.length === 0) {
+          return reply.code(404).send({ error: 'Source offer not found' });
+        }
+        if (offerResult.rows[0].status !== 'accepted') {
+          return reply
+            .code(409)
+            .send({ error: 'Sale orders can only be created from accepted offers' });
+        }
+        if (
+          existingOrder.linkedQuoteId &&
+          existingOrder.linkedQuoteId !== offerResult.rows[0].linkedQuoteId
+        ) {
+          return reply.code(409).send({
+            error: 'The selected offer does not match the order quote link',
+          });
+        }
+
+        const existingLinkedOrderResult = await query(
+          'SELECT id FROM sales WHERE linked_offer_id = $1 AND id <> $2 LIMIT 1',
+          [linkedOfferIdValue, idResult.value],
+        );
+        if (existingLinkedOrderResult.rows.length > 0) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+
+        linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
+      }
+
       // Update order
-      const orderResult = await query(
-        `UPDATE sales
-             SET client_id = COALESCE($1, client_id),
-                 client_name = COALESCE($2, client_name),
-                 payment_terms = COALESCE($3, payment_terms),
-                 discount = COALESCE($4, discount),
-                 status = COALESCE($5, status),
-                 notes = COALESCE($6, notes),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7
-             RETURNING
-                id,
-                linked_quote_id as "linkedQuoteId",
-                client_id as "clientId",
-                client_name as "clientName",
-                payment_terms as "paymentTerms",
-                discount,
-                status,
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          clientIdValue,
-          clientNameValue,
-          paymentTerms,
-          discountValue,
-          status,
-          notes,
-          idResult.value,
-        ],
-      );
+      let orderResult: Awaited<ReturnType<typeof query>>;
+      try {
+        orderResult = await query(
+          `UPDATE sales
+               SET linked_offer_id = COALESCE($1, linked_offer_id),
+                   linked_quote_id = COALESCE($2, linked_quote_id),
+                   client_id = COALESCE($3, client_id),
+                   client_name = COALESCE($4, client_name),
+                   payment_terms = COALESCE($5, payment_terms),
+                   discount = COALESCE($6, discount),
+                   status = COALESCE($7, status),
+                   notes = COALESCE($8, notes),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $9
+               RETURNING
+                  id,
+                  linked_quote_id as "linkedQuoteId",
+                  linked_offer_id as "linkedOfferId",
+                  client_id as "clientId",
+                  client_name as "clientName",
+                  payment_terms as "paymentTerms",
+                  discount,
+                  status,
+                  notes,
+                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            linkedOfferIdValue,
+            linkedQuoteIdValue,
+            clientIdValue,
+            clientNameValue,
+            paymentTerms,
+            discountValue,
+            status,
+            notes,
+            idResult.value,
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
+            databaseError.detail?.includes('(linked_offer_id)'))
+        ) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+        throw error;
+      }
 
       if (orderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
@@ -715,7 +859,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // If items are provided, update them
       let updatedItems = [];
-      if (existingOrder.linkedQuoteId) {
+      if (isSourceLinkedOrder) {
         if (existingItems) {
           updatedItems = existingItems;
         } else {
