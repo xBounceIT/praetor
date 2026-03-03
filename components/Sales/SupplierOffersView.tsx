@@ -60,14 +60,17 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   onViewQuote,
   currency,
 }) => {
-  const { t } = useTranslation(['layout', 'common', 'crm']);
+  const { t } = useTranslation(['sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(
     () => [
-      { id: 'draft', name: t('layout:routes.quotes', { defaultValue: 'Draft' }) },
-      { id: 'sent', name: t('common.sent', { defaultValue: 'Sent' }) },
-      { id: 'accepted', name: t('common.accepted', { defaultValue: 'Accepted' }) },
-      { id: 'denied', name: t('common.denied', { defaultValue: 'Denied' }) },
+      { id: 'draft', name: t('sales:supplierOffers.statusDraft', { defaultValue: 'Draft' }) },
+      { id: 'sent', name: t('sales:supplierOffers.statusSent', { defaultValue: 'Sent' }) },
+      {
+        id: 'accepted',
+        name: t('sales:supplierOffers.statusAccepted', { defaultValue: 'Accepted' }),
+      },
+      { id: 'denied', name: t('sales:supplierOffers.statusDenied', { defaultValue: 'Denied' }) },
     ],
     [t],
   );
@@ -87,6 +90,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<SupplierOffer>>({
     offerCode: '',
     linkedQuoteId: '',
@@ -121,6 +125,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       ...offer,
       expirationDate: offer.expirationDate?.split('T')[0] || '',
     });
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -147,7 +152,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800">Supplier Offer</h3>
+            <h3 className="text-xl font-black text-slate-800">
+              {t('sales:supplierOffers.editOffer', { defaultValue: 'Supplier Offer' })}
+            </h3>
             <button
               onClick={() => setIsModalOpen(false)}
               className="w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100"
@@ -159,6 +166,25 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
             onSubmit={async (event) => {
               event.preventDefault();
               if (!editingOffer) return;
+              const nextErrors: Record<string, string> = {};
+              if (!formData.supplierId) {
+                nextErrors.supplierId =
+                  t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' }) + ' is required';
+              }
+              if (!formData.offerCode?.trim()) {
+                nextErrors.offerCode =
+                  t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' }) +
+                  ' is required';
+              }
+              if (!formData.items || formData.items.length === 0) {
+                nextErrors.items = t('crm:quotes.errors.itemsRequired', {
+                  defaultValue: 'At least one item is required',
+                });
+              }
+              if (Object.keys(nextErrors).length > 0) {
+                setErrors(nextErrors);
+                return;
+              }
               await onUpdateOffer(editingOffer.id, {
                 ...formData,
                 discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
@@ -175,26 +201,36 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
           >
             {editingOffer?.linkedQuoteId && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 flex items-center justify-between">
-                <span>Source quote: {editingOffer.linkedQuoteId}</span>
+                <span>
+                  {t('sales:supplierOffers.sourceQuote', {
+                    defaultValue: 'Source quote: {{quoteId}}',
+                    quoteId: editingOffer.linkedQuoteId,
+                  })}
+                </span>
                 {onViewQuote && (
                   <button
                     type="button"
                     onClick={() => onViewQuote(editingOffer.linkedQuoteId)}
                     className="text-praetor font-bold"
                   >
-                    View quote
+                    {t('sales:supplierOffers.viewQuote', { defaultValue: 'View quote' })}
                   </button>
                 )}
               </div>
             )}
             {isReadOnly && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-                Non-draft offers are read-only. Change status from the list actions.
+                {t('sales:supplierOffers.readOnlyStatus', {
+                  defaultValue:
+                    'Non-draft offers are read-only. Change status from the list actions.',
+                })}
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Supplier</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' })}
+                </label>
                 <CustomSelect
                   options={activeSuppliers.map((supplier) => ({
                     id: supplier.id,
@@ -212,9 +248,14 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                   searchable={true}
                   disabled={isReadOnly || isSupplierLocked}
                 />
+                {errors.supplierId && (
+                  <p className="text-red-500 text-xs mt-1">{errors.supplierId}</p>
+                )}
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Offer Code</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' })}
+                </label>
                 <input
                   type="text"
                   value={formData.offerCode || ''}
@@ -224,9 +265,14 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                   }
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
                 />
+                {errors.offerCode && (
+                  <p className="text-red-500 text-xs mt-1">{errors.offerCode}</p>
+                )}
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Payment Terms</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierOffers.paymentTerms', { defaultValue: 'Payment Terms' })}
+                </label>
                 <CustomSelect
                   options={paymentTermsOptions}
                   value={formData.paymentTerms || 'immediate'}
@@ -241,7 +287,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Expiration Date</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierOffers.expirationDate', { defaultValue: 'Expiration Date' })}
+                </label>
                 <input
                   type="date"
                   value={formData.expirationDate || ''}
@@ -312,7 +360,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Discount %</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierOffers.discount', { defaultValue: 'Discount %' })}
+                </label>
                 <ValidatedNumberInput
                   value={formData.discount || 0}
                   onValueChange={(value) =>
@@ -322,7 +372,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Status</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierOffers.status', { defaultValue: 'Status' })}
+                </label>
                 <CustomSelect
                   options={statusOptions}
                   value={formData.status || 'draft'}
@@ -336,7 +388,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
               <div className="flex items-end justify-end text-right">
                 <div>
                   <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    Total
+                    {t('sales:supplierOffers.total', { defaultValue: 'Total' })}
                   </div>
                   <div className="text-2xl font-black text-praetor">
                     {calculateTotals(
@@ -349,7 +401,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('sales:supplierOffers.notes', { defaultValue: 'Notes' })}
+              </label>
               <textarea
                 rows={3}
                 value={formData.notes || ''}
@@ -383,7 +437,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">Delete supplier offer?</h3>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('sales:supplierOffers.deleteTitle', { defaultValue: 'Delete supplier offer?' })}
+          </h3>
           <p className="text-sm text-slate-500">{offerToDelete?.offerCode}</p>
           <div className="flex gap-3">
             <button
@@ -408,8 +464,14 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       </Modal>
 
       <div className="space-y-1">
-        <h2 className="text-2xl font-black text-slate-800">Supplier Offers</h2>
-        <p className="text-sm text-slate-500">Offers created from supplier quotes.</p>
+        <h2 className="text-2xl font-black text-slate-800">
+          {t('sales:supplierOffers.title', { defaultValue: 'Supplier Offers' })}
+        </h2>
+        <p className="text-sm text-slate-500">
+          {t('sales:supplierOffers.subtitle', {
+            defaultValue: 'Offers created from supplier quotes.',
+          })}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -437,16 +499,16 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Supplier
+                {t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' })}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Offer Code
+                {t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' })}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Status
+                {t('sales:supplierOffers.status', { defaultValue: 'Status' })}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Total
+                {t('sales:supplierOffers.total', { defaultValue: 'Total' })}
               </th>
               <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
                 {t('common.actions')}
@@ -458,7 +520,6 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
               <tr key={offer.id} className="hover:bg-slate-50/70">
                 <td className="px-4 py-4">
                   <div className="font-bold text-slate-800">{offer.supplierName}</div>
-                  <div className="text-xs text-slate-400">{offer.linkedQuoteId}</div>
                 </td>
                 <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
                   {offer.offerCode}
@@ -481,7 +542,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                       <button
                         onClick={() => onViewQuote(offer.linkedQuoteId)}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                        title="View quote"
+                        title={t('sales:supplierOffers.viewQuote', { defaultValue: 'View quote' })}
                       >
                         <i className="fa-solid fa-link"></i>
                       </button>
@@ -497,7 +558,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                       <button
                         onClick={() => onUpdateOffer(offer.id, { status: 'sent' })}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                        title="Mark as sent"
+                        title={t('sales:supplierOffers.markSent', {
+                          defaultValue: 'Mark as sent',
+                        })}
                       >
                         <i className="fa-solid fa-paper-plane"></i>
                       </button>
@@ -507,14 +570,18 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                         <button
                           onClick={() => onUpdateOffer(offer.id, { status: 'accepted' })}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                          title="Mark as accepted"
+                          title={t('sales:supplierOffers.markAccepted', {
+                            defaultValue: 'Mark as accepted',
+                          })}
                         >
                           <i className="fa-solid fa-check"></i>
                         </button>
                         <button
                           onClick={() => onUpdateOffer(offer.id, { status: 'denied' })}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                          title="Mark as denied"
+                          title={t('sales:supplierOffers.markDenied', {
+                            defaultValue: 'Mark as denied',
+                          })}
                         >
                           <i className="fa-solid fa-xmark"></i>
                         </button>
@@ -524,7 +591,9 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                       <button
                         onClick={() => onCreateOrder(offer)}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                        title="Create sale order"
+                        title={t('sales:supplierOffers.createOrder', {
+                          defaultValue: 'Create sale order',
+                        })}
                       >
                         <i className="fa-solid fa-cart-plus"></i>
                       </button>

@@ -719,7 +719,7 @@ CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
 -- Customer offers
 CREATE TABLE IF NOT EXISTS customer_offers (
     id VARCHAR(50) PRIMARY KEY,
-    offer_code VARCHAR(20) UNIQUE NOT NULL,
+    offer_code VARCHAR(100) UNIQUE NOT NULL,
     linked_quote_id VARCHAR(50) NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,

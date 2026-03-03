@@ -125,7 +125,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800">Supplier Invoice</h3>
+            <h3 className="text-xl font-black text-slate-800">
+              {t('accounting:supplierInvoices.editInvoice', { defaultValue: 'Supplier Invoice' })}
+            </h3>
             <button
               onClick={() => setIsModalOpen(false)}
               className="w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100"
@@ -156,7 +158,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Supplier</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierInvoices.supplier')}
+                </label>
                 <CustomSelect
                   options={activeSuppliers.map((supplier) => ({
                     id: supplier.id,
@@ -175,7 +179,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Invoice Number</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierInvoices.invoiceNumber')}
+                </label>
                 <input
                   type="text"
                   value={formData.invoiceNumber || ''}
@@ -186,7 +192,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Issue Date</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierInvoices.issueDate')}
+                </label>
                 <input
                   type="date"
                   value={formData.issueDate || ''}
@@ -197,7 +205,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Due Date</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierInvoices.dueDate')}
+                </label>
                 <input
                   type="date"
                   value={formData.dueDate || ''}
@@ -265,7 +275,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Status</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierInvoices.status')}
+                </label>
                 <CustomSelect
                   options={statusOptions}
                   value={formData.status || 'draft'}
@@ -279,7 +291,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Amount Paid</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierInvoices.amountPaid')}
+                </label>
                 <ValidatedNumberInput
                   value={formData.amountPaid || 0}
                   onValueChange={(value) =>
@@ -294,7 +308,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               <div className="md:col-span-2 flex items-end justify-end text-right">
                 <div>
                   <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    Total
+                    {t('accounting:supplierInvoices.total')}
                   </div>
                   <div className="text-2xl font-black text-praetor">
                     {calculateTotals(formData.items || []).total.toFixed(2)} {currency}
@@ -303,7 +317,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('accounting:supplierInvoices.notes')}
+              </label>
               <textarea
                 rows={3}
                 value={formData.notes || ''}
@@ -334,7 +350,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">Delete supplier invoice?</h3>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('accounting:supplierInvoices.deleteTitle', {
+              defaultValue: 'Delete supplier invoice?',
+            })}
+          </h3>
           <p className="text-sm text-slate-500">{invoiceToDelete?.invoiceNumber}</p>
           <div className="flex gap-3">
             <button
@@ -359,8 +379,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       </Modal>
 
       <div className="space-y-1">
-        <h2 className="text-2xl font-black text-slate-800">Supplier Invoices</h2>
-        <p className="text-sm text-slate-500">Invoices created from supplier sale orders.</p>
+        <h2 className="text-2xl font-black text-slate-800">
+          {t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+        </h2>
+        <p className="text-sm text-slate-500">
+          {t('accounting:supplierInvoices.subtitle', {
+            defaultValue: 'Invoices created from supplier orders.',
+          })}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -388,16 +414,16 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Supplier
+                {t('accounting:supplierInvoices.supplier')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Invoice Number
+                {t('accounting:supplierInvoices.invoiceNumber')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Status
+                {t('accounting:supplierInvoices.status')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Total
+                {t('accounting:supplierInvoices.total')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
                 {t('common.actions')}
@@ -411,8 +437,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   <div className="font-bold text-slate-800">{invoice.supplierName}</div>
                   <div className="text-xs text-slate-400">
                     {invoice.linkedExpenseId
-                      ? `Expense ${invoice.linkedExpenseId}`
-                      : 'No linked expense'}
+                      ? t('accounting:supplierInvoices.linkedExpense', {
+                          id: invoice.linkedExpenseId,
+                        })
+                      : t('accounting:supplierInvoices.noLinkedExpense')}
                   </div>
                 </td>
                 <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">

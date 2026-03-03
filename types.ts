@@ -383,9 +383,6 @@ export type View =
   // Projects module
   | 'projects/manage'
   | 'projects/tasks'
-  // Suppliers module
-  | 'suppliers/manage'
-  | 'suppliers/quotes'
   // HR module
   | 'hr/internal'
   | 'hr/external'

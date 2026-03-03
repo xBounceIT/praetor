@@ -61,14 +61,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onCreateOffer,
   currency,
 }) => {
-  const { t } = useTranslation(['layout', 'common', 'crm']);
+  const { t } = useTranslation(['sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(
     () => [
-      { id: 'draft', name: t('common.draft', { defaultValue: 'Draft' }) },
-      { id: 'sent', name: t('common.sent', { defaultValue: 'Sent' }) },
-      { id: 'accepted', name: t('common.accepted', { defaultValue: 'Accepted' }) },
-      { id: 'denied', name: t('common.denied', { defaultValue: 'Denied' }) },
+      { id: 'draft', name: t('sales:supplierQuotes.statusDraft', { defaultValue: 'Draft' }) },
+      { id: 'sent', name: t('sales:supplierQuotes.statusSent', { defaultValue: 'Sent' }) },
+      {
+        id: 'accepted',
+        name: t('sales:supplierQuotes.statusAccepted', { defaultValue: 'Accepted' }),
+      },
+      { id: 'denied', name: t('sales:supplierQuotes.statusDenied', { defaultValue: 'Denied' }) },
     ],
     [t],
   );
@@ -88,6 +91,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<SupplierQuote>>({
     supplierId: '',
     supplierName: '',
@@ -129,6 +133,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       expirationDate: new Date().toISOString().split('T')[0],
       notes: '',
     });
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -140,6 +145,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       purchaseOrderNumber: quote.quoteCode || quote.purchaseOrderNumber || '',
       expirationDate: quote.expirationDate?.split('T')[0] || '',
     });
+    setErrors({});
     setIsModalOpen(true);
   };
 
@@ -166,7 +172,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800">
-              {editingQuote ? 'Supplier Quote' : 'New Supplier Quote'}
+              {editingQuote
+                ? t('sales:supplierQuotes.editQuote', { defaultValue: 'Supplier Quote' })
+                : t('sales:supplierQuotes.newQuote', { defaultValue: 'New Supplier Quote' })}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -178,6 +186,26 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           <form
             onSubmit={async (event) => {
               event.preventDefault();
+              const nextErrors: Record<string, string> = {};
+              if (!formData.supplierId) {
+                nextErrors.supplierId = t('crm:quotes.errors.clientRequired', {
+                  defaultValue: 'Supplier is required',
+                });
+              }
+              if (!formData.quoteCode?.trim()) {
+                nextErrors.quoteCode = t('crm:quotes.errors.quoteCodeRequired', {
+                  defaultValue: 'Quote Code is required',
+                });
+              }
+              if (!formData.items || formData.items.length === 0) {
+                nextErrors.items = t('crm:quotes.errors.itemsRequired', {
+                  defaultValue: 'At least one item is required',
+                });
+              }
+              if (Object.keys(nextErrors).length > 0) {
+                setErrors(nextErrors);
+                return;
+              }
               const payload: Partial<SupplierQuote> = {
                 ...formData,
                 quoteCode: formData.quoteCode,
@@ -200,12 +228,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           >
             {isReadOnly && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-                This quote is read-only because an offer was created from it.
+                {t('sales:supplierQuotes.readOnlyLinked', {
+                  defaultValue: 'This quote is read-only because an offer was created from it.',
+                })}
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Supplier</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierQuotes.supplier')}
+                </label>
                 <CustomSelect
                   options={activeSuppliers.map((supplier) => ({
                     id: supplier.id,
@@ -223,9 +255,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   searchable={true}
                   disabled={isReadOnly}
                 />
+                {errors.supplierId && (
+                  <p className="text-red-500 text-xs mt-1">{errors.supplierId}</p>
+                )}
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Quote Code</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierQuotes.quoteCode')}
+                </label>
                 <input
                   type="text"
                   value={formData.quoteCode || ''}
@@ -239,9 +276,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   }
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
                 />
+                {errors.quoteCode && (
+                  <p className="text-red-500 text-xs mt-1">{errors.quoteCode}</p>
+                )}
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Payment Terms</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierQuotes.paymentTerms')}
+                </label>
                 <CustomSelect
                   options={paymentTermsOptions}
                   value={formData.paymentTerms || 'immediate'}
@@ -256,7 +298,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Expiration Date</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierQuotes.expirationDate')}
+                </label>
                 <input
                   type="date"
                   value={formData.expirationDate || ''}
@@ -270,7 +314,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor">Items</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest text-praetor">
+                  {t('sales:supplierQuotes.items')}
+                </h4>
                 {!isReadOnly && (
                   <button
                     type="button"
@@ -295,7 +341,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     className="text-sm font-bold text-praetor"
                   >
                     <i className="fa-solid fa-plus mr-1"></i>
-                    Add item
+                    {t('sales:supplierQuotes.addItem')}
                   </button>
                 )}
               </div>
@@ -357,7 +403,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Discount %</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierQuotes.discount')}
+                </label>
                 <ValidatedNumberInput
                   value={formData.discount || 0}
                   onValueChange={(value) =>
@@ -367,7 +415,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Status</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('sales:supplierQuotes.status')}
+                </label>
                 <CustomSelect
                   options={statusOptions}
                   value={formData.status || 'draft'}
@@ -381,7 +431,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               <div className="flex items-end justify-end text-right">
                 <div>
                   <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    Total
+                    {t('sales:supplierQuotes.total')}
                   </div>
                   <div className="text-2xl font-black text-praetor">
                     {calculateTotals(
@@ -395,7 +445,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('sales:supplierQuotes.notes')}
+              </label>
               <textarea
                 rows={3}
                 value={formData.notes || ''}
@@ -429,7 +481,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">Delete supplier quote?</h3>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
+          </h3>
           <p className="text-sm text-slate-500">{quoteToDelete?.quoteCode}</p>
           <div className="flex gap-3">
             <button
@@ -455,9 +509,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">Supplier Quotes</h2>
+          <h2 className="text-2xl font-black text-slate-800">
+            {t('sales:supplierQuotes.title', { defaultValue: 'Supplier Quotes' })}
+          </h2>
           <p className="text-sm text-slate-500">
-            Quotes that can be converted into supplier offers.
+            {t('sales:supplierQuotes.subtitle', {
+              defaultValue: 'Quotes that can be converted into supplier offers.',
+            })}
           </p>
         </div>
         <button
@@ -465,7 +523,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           className="px-4 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold"
         >
           <i className="fa-solid fa-plus mr-2"></i>
-          Add quote
+          {t('sales:supplierQuotes.addQuote', { defaultValue: 'Add quote' })}
         </button>
       </div>
 
@@ -494,16 +552,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Supplier
+                {t('sales:supplierQuotes.supplier')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Quote Code
+                {t('sales:supplierQuotes.quoteCode')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Status
+                {t('sales:supplierQuotes.status')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Total
+                {t('sales:supplierQuotes.total')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
                 {t('common.actions')}
@@ -517,7 +575,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <div className="font-bold text-slate-800">{quote.supplierName}</div>
                   <div className="text-xs text-slate-400">
                     {quote.linkedOfferId
-                      ? `Offer ${quote.linkedOfferId}`
+                      ? `${t('sales:supplierQuotes.linkedOffer', { defaultValue: 'Linked to offer' })} ${quote.linkedOfferId}`
                       : new Date(quote.expirationDate).toLocaleDateString()}
                   </div>
                 </td>
@@ -549,7 +607,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <button
                         onClick={() => onUpdateQuote(quote.id, { status: 'sent' })}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                        title="Mark as sent"
+                        title={t('sales:supplierQuotes.markSent')}
                       >
                         <i className="fa-solid fa-paper-plane"></i>
                       </button>
@@ -559,14 +617,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         <button
                           onClick={() => onUpdateQuote(quote.id, { status: 'accepted' })}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                          title="Mark as accepted"
+                          title={t('sales:supplierQuotes.markAccepted')}
                         >
                           <i className="fa-solid fa-check"></i>
                         </button>
                         <button
                           onClick={() => onUpdateQuote(quote.id, { status: 'denied' })}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                          title="Mark as denied"
+                          title={t('sales:supplierQuotes.markDenied')}
                         >
                           <i className="fa-solid fa-xmark"></i>
                         </button>
@@ -576,7 +634,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <button
                         onClick={() => onCreateOffer(quote)}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                        title="Create offer"
+                        title={t('sales:supplierQuotes.createOffer')}
                       >
                         <i className="fa-solid fa-file-signature"></i>
                       </button>

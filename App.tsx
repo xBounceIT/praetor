@@ -661,7 +661,6 @@ const App: React.FC = () => {
       'finances/expenses',
       'projects/manage',
       'projects/tasks',
-      'suppliers/quotes',
       'hr/internal',
       'hr/external',
       // Reports module
@@ -715,7 +714,6 @@ const App: React.FC = () => {
       'finances/expenses',
       'projects/manage',
       'projects/tasks',
-      'suppliers/quotes',
       'hr/internal',
       'hr/external',
       // Reports module
@@ -1932,16 +1930,6 @@ const App: React.FC = () => {
     }
   };
 
-  const _addClientOffer = async (offerData: Partial<ClientOffer>) => {
-    try {
-      const offer = await api.clientOffers.create(offerData);
-      setClientOffers((prev) => [offer, ...prev]);
-    } catch (err) {
-      console.error('Failed to add client offer:', err);
-      throw err;
-    }
-  };
-
   const handleUpdateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       const updated = await api.clientOffers.update(id, updates);
@@ -2224,16 +2212,6 @@ const App: React.FC = () => {
     }
   };
 
-  const _addSupplierOffer = async (offerData: Partial<SupplierOffer>) => {
-    try {
-      const offer = await api.supplierOffers.create(offerData);
-      setSupplierOffers((prev) => [offer, ...prev]);
-    } catch (err) {
-      console.error('Failed to add supplier offer:', err);
-      throw err;
-    }
-  };
-
   const handleUpdateSupplierOffer = async (id: string, updates: Partial<SupplierOffer>) => {
     try {
       const updated = await api.supplierOffers.update(id, updates);
@@ -2291,16 +2269,6 @@ const App: React.FC = () => {
     }
   };
 
-  const _addSupplierOrder = async (orderData: Partial<SupplierSaleOrder>) => {
-    try {
-      const order = await api.supplierOrders.create(orderData);
-      setSupplierOrders((prev) => [order, ...prev]);
-    } catch (err) {
-      console.error('Failed to add supplier order:', err);
-      throw err;
-    }
-  };
-
   const handleUpdateSupplierOrder = async (id: string, updates: Partial<SupplierSaleOrder>) => {
     try {
       const updated = await api.supplierOrders.update(id, updates);
@@ -2351,17 +2319,6 @@ const App: React.FC = () => {
     }
   };
 
-  const _addSupplierInvoice = async (invoiceData: Partial<SupplierInvoice>) => {
-    try {
-      const invoice = await api.supplierInvoices.create(invoiceData);
-      setSupplierInvoices((prev) => [invoice, ...prev]);
-      await refreshExpensesIfAllowed();
-    } catch (err) {
-      console.error('Failed to add supplier invoice:', err);
-      throw err;
-    }
-  };
-
   const handleUpdateSupplierInvoice = async (id: string, updates: Partial<SupplierInvoice>) => {
     try {
       const updated = await api.supplierInvoices.update(id, updates);
@@ -2387,7 +2344,8 @@ const App: React.FC = () => {
   const handleCreateSupplierInvoiceFromOrder = async (order: SupplierSaleOrder) => {
     try {
       const now = new Date();
-      const dueDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const paymentDays = Number.parseInt(order.paymentTerms?.replace(/\D/g, '') || '30', 10) || 30;
+      const dueDate = new Date(now.getTime() + paymentDays * 24 * 60 * 60 * 1000);
       const items = order.items.map((item) => ({
         id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
         invoiceId: '',

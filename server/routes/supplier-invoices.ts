@@ -715,6 +715,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const existingInvoiceResult = await query(
         `SELECT
             id,
+            status,
             issue_date as "issueDate",
             due_date as "dueDate"
          FROM supplier_invoices
@@ -723,6 +724,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (existingInvoiceResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Invoice not found' });
+      }
+
+      const existingInvoice = existingInvoiceResult.rows[0];
+      const isStatusChangeOnly =
+        status !== undefined &&
+        supplierId === undefined &&
+        supplierName === undefined &&
+        invoiceNumber === undefined &&
+        issueDate === undefined &&
+        dueDate === undefined &&
+        subtotal === undefined &&
+        taxAmount === undefined &&
+        total === undefined &&
+        amountPaid === undefined &&
+        notes === undefined &&
+        items === undefined;
+      if (existingInvoice.status !== 'draft' && !isStatusChangeOnly) {
+        return reply.code(409).send({
+          error: 'Non-draft invoices are read-only',
+          currentStatus: existingInvoice.status,
+        });
       }
 
       const effectiveIssueDate = issueDateValue ?? existingInvoiceResult.rows[0].issueDate;
@@ -871,14 +893,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const invoice = invoiceResult.rows[0];
-        const linkedExpenseId = await syncExpenseForInvoice({
-          id: idResult.value,
-          supplierName: String(invoice.supplierName),
-          invoiceNumber: String(invoice.invoiceNumber),
-          issueDate: invoice.issueDate as string | Date,
-          total: invoice.total as string | number,
-          notes: (invoice.notes as string | null | undefined) ?? null,
-        });
+        let linkedExpenseId = invoice.linkedExpenseId;
+        if (!isStatusChangeOnly) {
+          linkedExpenseId = await syncExpenseForInvoice({
+            id: idResult.value,
+            supplierName: String(invoice.supplierName),
+            invoiceNumber: String(invoice.invoiceNumber),
+            issueDate: invoice.issueDate as string | Date,
+            total: invoice.total as string | number,
+            notes: (invoice.notes as string | null | undefined) ?? null,
+          });
+        }
 
         return formatInvoiceResponse({ ...invoice, linkedExpenseId }, updatedItems);
       } catch (error) {
@@ -910,11 +935,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const invoiceResult = await query('SELECT id FROM supplier_invoices WHERE id = $1', [
+      const invoiceResult = await query('SELECT id, status FROM supplier_invoices WHERE id = $1', [
         idResult.value,
       ]);
       if (invoiceResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Invoice not found' });
+      }
+      if (invoiceResult.rows[0].status !== 'draft') {
+        return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
       }
 
       await query('DELETE FROM expenses WHERE supplier_invoice_id = $1', [idResult.value]);

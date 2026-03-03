@@ -141,7 +141,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800">Supplier Sale Order</h3>
+            <h3 className="text-xl font-black text-slate-800">
+              {t('accounting:supplierOrders.editOrder', { defaultValue: 'Supplier Order' })}
+            </h3>
             <button
               onClick={() => setIsModalOpen(false)}
               className="w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100"
@@ -169,12 +171,17 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           >
             {isReadOnly && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-                Non-draft sale orders are read-only. Change status from the list actions.
+                {t('accounting:supplierOrders.readOnlyStatus', {
+                  defaultValue:
+                    'Non-draft orders are read-only. Change status from the list actions.',
+                })}
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Supplier</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierOrders.supplier')}
+                </label>
                 <CustomSelect
                   options={activeSuppliers.map((supplier) => ({
                     id: supplier.id,
@@ -194,7 +201,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Payment Terms</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierOrders.paymentTerms')}
+                </label>
                 <CustomSelect
                   options={paymentTermsOptions}
                   value={formData.paymentTerms || 'immediate'}
@@ -268,7 +277,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Discount %</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierOrders.discount')}
+                </label>
                 <ValidatedNumberInput
                   value={formData.discount || 0}
                   onValueChange={(value) =>
@@ -278,7 +289,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">Status</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('accounting:supplierOrders.status')}
+                </label>
                 <CustomSelect
                   options={statusOptions}
                   value={formData.status || 'draft'}
@@ -295,7 +308,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               <div className="flex items-end justify-end text-right">
                 <div>
                   <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    Total
+                    {t('accounting:supplierOrders.total')}
                   </div>
                   <div className="text-2xl font-black text-praetor">
                     {calculateTotal(formData.items || [], Number(formData.discount || 0)).toFixed(
@@ -307,7 +320,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">Notes</label>
+              <label className="text-xs font-bold text-slate-500 ml-1">
+                {t('accounting:supplierOrders.notes')}
+              </label>
               <textarea
                 rows={3}
                 value={formData.notes || ''}
@@ -341,7 +356,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">Delete supplier sale order?</h3>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('accounting:supplierOrders.deleteTitle', { defaultValue: 'Delete supplier order?' })}
+          </h3>
           <p className="text-sm text-slate-500">{orderToDelete?.linkedOfferId}</p>
           <div className="flex gap-3">
             <button
@@ -366,8 +383,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       </Modal>
 
       <div className="space-y-1">
-        <h2 className="text-2xl font-black text-slate-800">Supplier Sale Orders</h2>
-        <p className="text-sm text-slate-500">Sale orders created from supplier offers.</p>
+        <h2 className="text-2xl font-black text-slate-800">
+          {t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
+        </h2>
+        <p className="text-sm text-slate-500">
+          {t('accounting:supplierOrders.subtitle', {
+            defaultValue: 'Orders created from supplier offers.',
+          })}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -395,16 +418,16 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Supplier
+                {t('accounting:supplierOrders.supplier')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Linked Offer
+                {t('accounting:supplierOrders.linkedOffer')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Status
+                {t('accounting:supplierOrders.status')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                Total
+                {t('accounting:supplierOrders.total')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
                 {t('common.actions')}
@@ -419,7 +442,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   <td className="px-4 py-4">
                     <div className="font-bold text-slate-800">{order.supplierName}</div>
                     <div className="text-xs text-slate-400">
-                      {order.linkedQuoteId || 'No quote link'}
+                      {order.linkedQuoteId ||
+                        t('accounting:supplierOrders.noQuoteLink', {
+                          defaultValue: 'No quote link',
+                        })}
                     </div>
                   </td>
                   <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
@@ -450,7 +476,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         <button
                           onClick={() => onUpdateOrder(order.id, { status: 'sent' })}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                          title="Mark as sent"
+                          title={t('accounting:supplierOrders.markSent')}
                         >
                           <i className="fa-solid fa-paper-plane"></i>
                         </button>
@@ -460,14 +486,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           <button
                             onClick={() => onUpdateOrder(order.id, { status: 'confirmed' })}
                             className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                            title="Mark as confirmed"
+                            title={t('accounting:supplierOrders.markConfirmed')}
                           >
                             <i className="fa-solid fa-check"></i>
                           </button>
                           <button
                             onClick={() => onUpdateOrder(order.id, { status: 'denied' })}
                             className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            title="Mark as denied"
+                            title={t('accounting:supplierOrders.markDenied')}
                           >
                             <i className="fa-solid fa-xmark"></i>
                           </button>
@@ -477,7 +503,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         <button
                           onClick={() => onCreateInvoice(order)}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                          title="Create invoice"
+                          title={t('accounting:supplierOrders.createInvoice')}
                         >
                           <i className="fa-solid fa-file-invoice-dollar"></i>
                         </button>

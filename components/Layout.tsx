@@ -745,25 +745,21 @@ const Layout: React.FC<LayoutProps> = ({
                             ? t('titles.externalProducts')
                             : activeView === 'catalog/special-bids'
                               ? t('titles.externalListing')
-                              : activeView === 'suppliers/manage'
-                                ? t('titles.suppliers')
-                                : activeView === 'suppliers/quotes'
-                                  ? t('titles.supplierQuotes')
-                                  : activeView === 'hr/internal'
-                                    ? t('titles.internalEmployees')
-                                    : activeView === 'hr/external'
-                                      ? t('titles.externalEmployees')
-                                      : t(
-                                          `routes.${activeView
-                                            .split('/')
-                                            .pop()
-                                            ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
-                                          {
-                                            defaultValue:
-                                              activeView.split('/').pop()?.replace('-', ' ') ||
-                                              activeView,
-                                          },
-                                        )}
+                              : activeView === 'hr/internal'
+                                ? t('titles.internalEmployees')
+                                : activeView === 'hr/external'
+                                  ? t('titles.externalEmployees')
+                                  : t(
+                                      `routes.${activeView
+                                        .split('/')
+                                        .pop()
+                                        ?.replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`,
+                                      {
+                                        defaultValue:
+                                          activeView.split('/').pop()?.replace('-', ' ') ||
+                                          activeView,
+                                      },
+                                    )}
           </h2>
           <div className="flex items-center gap-6">
             <span className="text-sm text-slate-400 font-medium hidden lg:inline">

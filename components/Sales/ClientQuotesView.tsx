@@ -189,7 +189,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     expirationDate: new Date().toISOString().split('T')[0],
     notes: '',
   });
-  const isReadOnly = Boolean(editingQuote?.linkedOfferId);
+  const isReadOnly = Boolean(
+    editingQuote &&
+      (editingQuote.linkedOfferId ||
+        editingQuote.status === 'sent' ||
+        editingQuote.status === 'accepted' ||
+        editingQuote.status === 'denied'),
+  );
 
   const openAddModal = () => {
     setEditingQuote(null);
