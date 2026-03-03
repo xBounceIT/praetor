@@ -11,6 +11,12 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -271,6 +277,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const linkedOfferIdResult = requireNonEmptyString(linkedOfferId, 'linkedOfferId');
       if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
+      const linkedQuoteIdResult = optionalNonEmptyString(linkedQuoteId, 'linkedQuoteId');
+      if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
       const supplierIdResult = requireNonEmptyString(supplierId, 'supplierId');
       if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
@@ -299,6 +307,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (existingOrderResult.rows.length > 0) {
         return reply.code(409).send({ error: 'A sale order already exists for this offer' });
       }
+      if (
+        linkedQuoteIdResult.value !== null &&
+        linkedQuoteIdResult.value !== offerResult.rows[0].linkedQuoteId
+      ) {
+        return reply.code(409).send({ error: 'linkedQuoteId must match the source offer quote' });
+      }
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
@@ -306,34 +320,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!normalizedItems) return;
 
       const orderId = 'ss-' + Date.now();
-      const createdOrderResult = await query(
-        `INSERT INTO supplier_sales
-          (id, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING
-            id,
-            linked_quote_id as "linkedQuoteId",
-            linked_offer_id as "linkedOfferId",
-            supplier_id as "supplierId",
-            supplier_name as "supplierName",
-            payment_terms as "paymentTerms",
-            discount,
-            status,
+      let createdOrderResult: Awaited<ReturnType<typeof query>>;
+      try {
+        createdOrderResult = await query(
+          `INSERT INTO supplier_sales
+            (id, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING
+              id,
+              linked_quote_id as "linkedQuoteId",
+              linked_offer_id as "linkedOfferId",
+              supplier_id as "supplierId",
+              supplier_name as "supplierName",
+              payment_terms as "paymentTerms",
+              discount,
+              status,
+              notes,
+              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            orderId,
+            offerResult.rows[0].linkedQuoteId || null,
+            linkedOfferIdResult.value,
+            supplierIdResult.value,
+            supplierNameResult.value,
+            paymentTerms || 'immediate',
+            discountResult.value || 0,
+            status || 'draft',
             notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          orderId,
-          linkedQuoteId || offerResult.rows[0].linkedQuoteId || null,
-          linkedOfferIdResult.value,
-          supplierIdResult.value,
-          supplierNameResult.value,
-          paymentTerms || 'immediate',
-          discountResult.value || 0,
-          status || 'draft',
-          notes,
-        ],
-      );
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'idx_supplier_sales_linked_offer_id' ||
+            databaseError.detail?.includes('(linked_offer_id)'))
+        ) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+        throw error;
+      }
 
       const createdItems: unknown[] = [];
       for (const item of normalizedItems) {

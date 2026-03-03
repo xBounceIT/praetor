@@ -273,6 +273,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const linkedOfferIdResult = optionalNonEmptyString(linkedOfferId, 'linkedOfferId');
       if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
+      const linkedQuoteIdResult = optionalNonEmptyString(linkedQuoteId, 'linkedQuoteId');
+      if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -324,7 +326,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
-      let linkedQuoteIdValue = linkedQuoteId || null;
+      let linkedQuoteIdValue = linkedQuoteIdResult.value;
       if (linkedOfferIdResult.value) {
         const offerResult = await query(
           'SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1',
@@ -347,7 +349,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(409).send({ error: 'A sale order already exists for this offer' });
         }
 
-        linkedQuoteIdValue = linkedQuoteIdValue || offerResult.rows[0].linkedQuoteId || null;
+        if (
+          linkedQuoteIdResult.value !== null &&
+          linkedQuoteIdResult.value !== offerResult.rows[0].linkedQuoteId
+        ) {
+          return reply.code(409).send({ error: 'linkedQuoteId must match the source offer quote' });
+        }
+
+        linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
       }
 
       const orderId = 's-' + Date.now();
@@ -650,6 +659,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Status changes are always allowed, but other field changes are blocked for non-draft clients_orders
       const isStatusChangeOnly =
         status !== undefined &&
+        linkedOfferId === undefined &&
         clientIdValue === undefined &&
         clientNameValue === undefined &&
         paymentTerms === undefined &&
@@ -748,41 +758,96 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      let linkedQuoteIdValue: string | null = null;
+      if (linkedOfferId !== undefined && linkedOfferIdValue) {
+        if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== linkedOfferIdValue) {
+          return reply.code(409).send({
+            error: 'Orders cannot be relinked to a different offer',
+          });
+        }
+
+        const offerResult = await query(
+          'SELECT id, linked_quote_id as "linkedQuoteId", status FROM customer_offers WHERE id = $1',
+          [linkedOfferIdValue],
+        );
+        if (offerResult.rows.length === 0) {
+          return reply.code(404).send({ error: 'Source offer not found' });
+        }
+        if (offerResult.rows[0].status !== 'accepted') {
+          return reply
+            .code(409)
+            .send({ error: 'Sale orders can only be created from accepted offers' });
+        }
+        if (
+          existingOrder.linkedQuoteId &&
+          existingOrder.linkedQuoteId !== offerResult.rows[0].linkedQuoteId
+        ) {
+          return reply.code(409).send({
+            error: 'The selected offer does not match the order quote link',
+          });
+        }
+
+        const existingLinkedOrderResult = await query(
+          'SELECT id FROM sales WHERE linked_offer_id = $1 AND id <> $2 LIMIT 1',
+          [linkedOfferIdValue, idResult.value],
+        );
+        if (existingLinkedOrderResult.rows.length > 0) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+
+        linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
+      }
+
       // Update order
-      const orderResult = await query(
-        `UPDATE sales
-             SET linked_offer_id = COALESCE($1, linked_offer_id),
-                 client_id = COALESCE($2, client_id),
-                 client_name = COALESCE($3, client_name),
-                 payment_terms = COALESCE($4, payment_terms),
-                 discount = COALESCE($5, discount),
-                 status = COALESCE($6, status),
-                 notes = COALESCE($7, notes),
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8
-             RETURNING
-                id,
-                linked_quote_id as "linkedQuoteId",
-                linked_offer_id as "linkedOfferId",
-                client_id as "clientId",
-                client_name as "clientName",
-                payment_terms as "paymentTerms",
-                discount,
-                status,
-                notes,
-                EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          linkedOfferIdValue,
-          clientIdValue,
-          clientNameValue,
-          paymentTerms,
-          discountValue,
-          status,
-          notes,
-          idResult.value,
-        ],
-      );
+      let orderResult: Awaited<ReturnType<typeof query>>;
+      try {
+        orderResult = await query(
+          `UPDATE sales
+               SET linked_offer_id = COALESCE($1, linked_offer_id),
+                   linked_quote_id = COALESCE($2, linked_quote_id),
+                   client_id = COALESCE($3, client_id),
+                   client_name = COALESCE($4, client_name),
+                   payment_terms = COALESCE($5, payment_terms),
+                   discount = COALESCE($6, discount),
+                   status = COALESCE($7, status),
+                   notes = COALESCE($8, notes),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $9
+               RETURNING
+                  id,
+                  linked_quote_id as "linkedQuoteId",
+                  linked_offer_id as "linkedOfferId",
+                  client_id as "clientId",
+                  client_name as "clientName",
+                  payment_terms as "paymentTerms",
+                  discount,
+                  status,
+                  notes,
+                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            linkedOfferIdValue,
+            linkedQuoteIdValue,
+            clientIdValue,
+            clientNameValue,
+            paymentTerms,
+            discountValue,
+            status,
+            notes,
+            idResult.value,
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
+            databaseError.detail?.includes('(linked_offer_id)'))
+        ) {
+          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        }
+        throw error;
+      }
 
       if (orderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });

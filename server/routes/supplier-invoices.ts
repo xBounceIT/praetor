@@ -667,11 +667,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         dueDateValue = dueDateResult.value;
       }
 
-      if (
-        typeof issueDateValue === 'string' &&
-        typeof dueDateValue === 'string' &&
-        new Date(dueDateValue) < new Date(issueDateValue)
-      ) {
+      const existingInvoiceResult = await query(
+        `SELECT
+            id,
+            issue_date as "issueDate",
+            due_date as "dueDate"
+         FROM supplier_invoices
+         WHERE id = $1`,
+        [idResult.value],
+      );
+      if (existingInvoiceResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
+
+      const effectiveIssueDate = issueDateValue ?? existingInvoiceResult.rows[0].issueDate;
+      const effectiveDueDate = dueDateValue ?? existingInvoiceResult.rows[0].dueDate;
+
+      if (new Date(String(effectiveDueDate)) < new Date(String(effectiveIssueDate))) {
         return badRequest(reply, 'dueDate must be on or after issueDate');
       }
 
@@ -756,10 +768,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             idResult.value,
           ],
         );
-
-        if (invoiceResult.rows.length === 0) {
-          return reply.code(404).send({ error: 'Invoice not found' });
-        }
 
         let updatedItems: Array<Record<string, unknown>> = [];
         if (items !== undefined) {
