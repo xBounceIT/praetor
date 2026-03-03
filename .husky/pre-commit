@@ -13,5 +13,26 @@ if ! bun -e "require('rollup')" >/dev/null 2>&1; then
 fi
 
 git add bun.lock
+
+# Check if server dependencies need updating
+if [ -f "server/package.json" ] && [ -f "server/bun.lock" ]; then
+  # Only update lockfile if server/package.json is staged (avoid pulling in unstaged WIP edits)
+  if git diff --cached --name-only | grep -q "^server/package.json$"; then
+    if ! (cd server && bun install --frozen-lockfile >/dev/null 2>&1); then
+      echo "pre-commit: updating server/bun.lock..."
+      (cd server && bun install)
+      git add server/bun.lock
+    fi
+  else
+    # If package.json isn't staged, just verify lockfile is in sync
+    if ! (cd server && bun install --frozen-lockfile >/dev/null 2>&1); then
+      echo "error: server/bun.lock is out of sync with server/package.json"
+      echo "       Stage server/package.json to update the lockfile, or run:"
+      echo "       (cd server && bun install) && git add server/bun.lock"
+      exit 1
+    fi
+  fi
+fi
+
 bunx lint-staged
 tsc --noEmit
