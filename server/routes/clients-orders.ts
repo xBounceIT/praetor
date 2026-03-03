@@ -70,6 +70,7 @@ const clientOrderSchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: ['string', 'null'] },
+    linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
@@ -116,6 +117,7 @@ const clientOrderCreateBodySchema = {
   type: 'object',
   properties: {
     linkedQuoteId: { type: 'string' },
+    linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: clientOrderItemBodySchema },
@@ -130,6 +132,7 @@ const clientOrderCreateBodySchema = {
 const clientOrderUpdateBodySchema = {
   type: 'object',
   properties: {
+    linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: clientOrderItemBodySchema },
@@ -165,6 +168,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
                 id,
                 linked_quote_id as "linkedQuoteId",
+                linked_offer_id as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -233,17 +237,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { linkedQuoteId, clientId, clientName, items, paymentTerms, discount, status, notes } =
-        request.body as {
-          linkedQuoteId: unknown;
-          clientId: unknown;
-          clientName: unknown;
-          items: unknown;
-          paymentTerms: unknown;
-          discount: unknown;
-          status: unknown;
-          notes: unknown;
-        };
+      const {
+        linkedQuoteId,
+        linkedOfferId,
+        clientId,
+        clientName,
+        items,
+        paymentTerms,
+        discount,
+        status,
+        notes,
+      } = request.body as {
+        linkedQuoteId: unknown;
+        linkedOfferId: unknown;
+        clientId: unknown;
+        clientName: unknown;
+        items: unknown;
+        paymentTerms: unknown;
+        discount: unknown;
+        status: unknown;
+        notes: unknown;
+      };
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
@@ -305,11 +319,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Insert order
       const orderResult = await query(
-        `INSERT INTO sales (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING
                 id,
                 linked_quote_id as "linkedQuoteId",
+                linked_offer_id as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -321,6 +336,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [
           orderId,
           linkedQuoteId || null,
+          linkedOfferId || null,
           clientIdResult.value,
           clientNameResult.value,
           paymentTerms || 'immediate',
@@ -397,8 +413,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { clientId, clientName, items, paymentTerms, discount, status, notes } =
+      const { linkedOfferId, clientId, clientName, items, paymentTerms, discount, status, notes } =
         request.body as {
+          linkedOfferId: unknown;
           clientId: unknown;
           clientName: unknown;
           items: unknown;
@@ -429,6 +446,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
+      }
+
+      let linkedOfferIdValue = linkedOfferId;
+      if (linkedOfferId !== undefined) {
+        const linkedOfferIdResult = optionalNonEmptyString(linkedOfferId, 'linkedOfferId');
+        if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
+        linkedOfferIdValue = linkedOfferIdResult.value;
       }
 
       const normalizeNotesValue = (value: unknown) => String(value ?? '');
@@ -556,6 +580,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
                     id,
                     linked_quote_id as "linkedQuoteId",
+                    linked_offer_id as "linkedOfferId",
                     client_id as "clientId",
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
@@ -592,7 +617,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      if (existingOrder.linkedQuoteId) {
+      if (existingOrder.linkedQuoteId && !existingOrder.linkedOfferId) {
         const lockedFields: string[] = [];
 
         if (
@@ -679,17 +704,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Update order
       const orderResult = await query(
         `UPDATE sales
-             SET client_id = COALESCE($1, client_id),
-                 client_name = COALESCE($2, client_name),
-                 payment_terms = COALESCE($3, payment_terms),
-                 discount = COALESCE($4, discount),
-                 status = COALESCE($5, status),
-                 notes = COALESCE($6, notes),
+             SET linked_offer_id = COALESCE($1, linked_offer_id),
+                 client_id = COALESCE($2, client_id),
+                 client_name = COALESCE($3, client_name),
+                 payment_terms = COALESCE($4, payment_terms),
+                 discount = COALESCE($5, discount),
+                 status = COALESCE($6, status),
+                 notes = COALESCE($7, notes),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7
+             WHERE id = $8
              RETURNING
                 id,
                 linked_quote_id as "linkedQuoteId",
+                linked_offer_id as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -699,6 +726,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
         [
+          linkedOfferIdValue,
           clientIdValue,
           clientNameValue,
           paymentTerms,
@@ -715,7 +743,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // If items are provided, update them
       let updatedItems = [];
-      if (existingOrder.linkedQuoteId) {
+      if (existingOrder.linkedQuoteId && !existingOrder.linkedOfferId) {
         if (existingItems) {
           updatedItems = existingItems;
         } else {

@@ -16,12 +16,21 @@ interface Module {
 const moduleRoutes: Record<string, View[]> = {
   timesheets: ['timesheets/tracker', 'timesheets/recurring'],
   crm: ['crm/clients', 'crm/suppliers'],
-  sales: ['sales/client-quotes'],
+  sales: [
+    'sales/client-quotes',
+    'sales/client-offers',
+    'sales/supplier-quotes',
+    'sales/supplier-offers',
+  ],
   catalog: ['catalog/internal-listing', 'catalog/external-listing', 'catalog/special-bids'],
   projects: ['projects/manage', 'projects/tasks'],
-  accounting: ['accounting/clients-orders', 'accounting/clients-invoices'],
+  accounting: [
+    'accounting/clients-orders',
+    'accounting/clients-invoices',
+    'accounting/supplier-orders',
+    'accounting/supplier-invoices',
+  ],
   finances: ['finances/payments', 'finances/expenses'],
-  suppliers: ['suppliers/manage', 'suppliers/quotes'],
   hr: ['hr/internal', 'hr/external'],
   reports: ['reports/ai-reporting'],
   administration: [
@@ -45,7 +54,6 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('projects/')) return 'projects';
   if (route.startsWith('accounting/')) return 'accounting';
   if (route.startsWith('finances/')) return 'finances';
-  if (route.startsWith('suppliers/')) return 'suppliers';
   if (route.startsWith('reports/')) return 'reports';
   if (route.startsWith('administration/')) return 'administration';
   return 'timesheets'; // default
@@ -253,6 +261,42 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
               />
             )}
+            {canAccessView('sales/client-offers') && (
+              <NavItem
+                icon="fa-file-signature"
+                label={t('routes.clientOffers')}
+                active={activeView === 'sales/client-offers'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('sales/client-offers');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('sales/supplier-quotes') && (
+              <NavItem
+                icon="fa-file-lines"
+                label={t('routes.supplierQuotes')}
+                active={activeView === 'sales/supplier-quotes'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('sales/supplier-quotes');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('sales/supplier-offers') && (
+              <NavItem
+                icon="fa-file-signature"
+                label={t('routes.supplierOffers')}
+                active={activeView === 'sales/supplier-offers'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('sales/supplier-offers');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'accounting':
@@ -278,6 +322,30 @@ const Layout: React.FC<LayoutProps> = ({
                 isCollapsed={isCollapsed}
                 onClick={() => {
                   onViewChange('accounting/clients-invoices');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('accounting/supplier-orders') && (
+              <NavItem
+                icon="fa-cart-shopping"
+                label={t('routes.supplierOrders')}
+                active={activeView === 'accounting/supplier-orders'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('accounting/supplier-orders');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
+            {canAccessView('accounting/supplier-invoices') && (
+              <NavItem
+                icon="fa-file-invoice-dollar"
+                label={t('routes.supplierInvoices')}
+                active={activeView === 'accounting/supplier-invoices'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('accounting/supplier-invoices');
                   setIsMobileMenuOpen(false);
                 }}
               />
@@ -407,35 +475,6 @@ const Layout: React.FC<LayoutProps> = ({
                 isCollapsed={isCollapsed}
                 onClick={() => {
                   onViewChange('finances/expenses');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'suppliers':
-        return (
-          <>
-            {canAccessView('suppliers/manage') && (
-              <NavItem
-                icon="fa-industry"
-                label={t('routes.suppliers')}
-                active={activeView === 'suppliers/manage'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('suppliers/manage');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('suppliers/quotes') && (
-              <NavItem
-                icon="fa-file-invoice"
-                label={t('routes.supplierQuotes')}
-                active={activeView === 'suppliers/quotes'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('suppliers/quotes');
                   setIsMobileMenuOpen(false);
                 }}
               />

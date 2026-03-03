@@ -276,6 +276,7 @@ const quoteSchema = {
   properties: {
     id: { type: 'string' },
     quoteCode: { type: 'string' },
+    linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
@@ -397,6 +398,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
                 id,
                 quote_code as "quoteCode",
+                (
+                  SELECT co.id
+                  FROM customer_offers co
+                  WHERE co.linked_quote_id = quotes.id
+                  LIMIT 1
+                ) as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -579,6 +586,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  RETURNING
                     id,
                     quote_code as "quoteCode",
+                    null::varchar as "linkedOfferId",
                     client_id as "clientId",
                     client_name as "clientName",
                     payment_terms as "paymentTerms",
@@ -595,7 +603,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientNameResult.value,
             paymentTerms || 'immediate',
             discountValue,
-            status || 'quoted',
+            status || 'draft',
             expirationDateResult.value,
             notes,
           ],
@@ -699,6 +707,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const linkedOfferResult = await query(
+        'SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1',
+        [idResult.value],
+      );
+      if (linkedOfferResult.rows.length > 0) {
+        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
+      }
 
       const currentStatusResult = await query('SELECT status, discount FROM quotes WHERE id = $1', [
         idResult.value,
@@ -927,6 +943,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              RETURNING
                 id,
                 quote_code as "quoteCode",
+                null::varchar as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
                 payment_terms as "paymentTerms",
@@ -1054,6 +1071,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as unknown as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const linkedOfferResult = await query(
+        'SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1',
+        [idResult.value],
+      );
+      if (linkedOfferResult.rows.length > 0) {
+        return reply
+          .code(409)
+          .send({ error: 'Cannot delete a quote once an offer has been created from it' });
+      }
 
       const statusResult = await query('SELECT status FROM quotes WHERE id = $1', [idResult.value]);
       if (statusResult.rows.length === 0) {

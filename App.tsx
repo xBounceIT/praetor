@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } fro
 import { useTranslation } from 'react-i18next';
 import ClientsInvoicesView from './components/accounting/ClientsInvoicesView';
 import ClientsOrdersView from './components/accounting/ClientsOrdersView';
+import SupplierInvoicesView from './components/accounting/SupplierInvoicesView';
+import SupplierOrdersView from './components/accounting/SupplierOrdersView';
 import AuthSettings from './components/administration/AuthSettings';
 import EmailSettings from './components/administration/EmailSettings';
 import GeneralSettings from './components/administration/GeneralSettings';
@@ -26,7 +28,9 @@ import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
 import AiReportingView from './components/reports/AiReportingView';
+import ClientOffersView from './components/Sales/ClientOffersView';
 import ClientQuotesView from './components/Sales/ClientQuotesView';
+import SupplierOffersView from './components/Sales/SupplierOffersView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import SupplierQuotesView from './components/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
@@ -41,6 +45,7 @@ import i18n from './i18n';
 import api, { getAuthToken, type Settings, setAuthToken } from './services/api';
 import type {
   Client,
+  ClientOffer,
   ClientsOrder,
   EmailConfig,
   Expense,
@@ -56,7 +61,10 @@ import type {
   Role,
   SpecialBid,
   Supplier,
+  SupplierInvoice,
+  SupplierOffer,
   SupplierQuote,
+  SupplierSaleOrder,
   TimeEntry,
   TimeEntryLocation,
   User,
@@ -544,12 +552,16 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [specialBids, setSpecialBids] = useState<SpecialBid[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [clientOffers, setClientOffers] = useState<ClientOffer[]>([]);
   const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuote[]>([]);
+  const [supplierOffers, setSupplierOffers] = useState<SupplierOffer[]>([]);
+  const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
+  const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>({
     enabled: false,
@@ -626,9 +638,14 @@ const App: React.FC = () => {
       'crm/suppliers',
       // Sales module
       'sales/client-quotes',
+      'sales/client-offers',
+      'sales/supplier-quotes',
+      'sales/supplier-offers',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
+      'accounting/supplier-orders',
+      'accounting/supplier-invoices',
       // Catalog module
       'catalog/internal-listing',
       'catalog/external-listing',
@@ -659,7 +676,6 @@ const App: React.FC = () => {
       return 'docs/frontend';
     }
     const rawHash = window.location.hash.replace('#/', '').replace('#', '');
-    const hash = rawHash as View;
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
     const validViews: View[] = [
@@ -676,9 +692,14 @@ const App: React.FC = () => {
       'crm/suppliers',
       // Sales module
       'sales/client-quotes',
+      'sales/client-offers',
+      'sales/supplier-quotes',
+      'sales/supplier-offers',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
+      'accounting/supplier-orders',
+      'accounting/supplier-invoices',
       // Catalog module
       'catalog/internal-listing',
       'catalog/external-listing',
@@ -697,33 +718,35 @@ const App: React.FC = () => {
       'docs/api',
       'docs/frontend',
     ];
+    const canonicalHash = rawHash === 'suppliers/quotes' ? 'sales/supplier-quotes' : rawHash;
+    const hash = canonicalHash as View;
     return validViews.includes(hash)
       ? hash
-      : rawHash === '' || rawHash === 'login'
+      : canonicalHash === '' || canonicalHash === 'login'
         ? 'timesheets/tracker'
         : '404';
   });
   const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
 
-  const quoteIdsWithOrders = useMemo(() => {
+  const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
-    clientsOrders.forEach((order) => {
-      if (order.linkedQuoteId) {
-        ids.add(order.linkedQuoteId);
+    clientOffers.forEach((offer) => {
+      if (offer.linkedQuoteId) {
+        ids.add(offer.linkedQuoteId);
       }
     });
     return ids;
-  }, [clientsOrders]);
+  }, [clientOffers]);
 
-  const quoteOrderStatuses = useMemo(() => {
-    const map: Record<string, ClientsOrder['status']> = {};
-    clientsOrders.forEach((order) => {
-      if (order.linkedQuoteId) {
-        map[order.linkedQuoteId] = order.status;
+  const quoteOfferStatuses = useMemo(() => {
+    const map: Record<string, ClientOffer['status']> = {};
+    clientOffers.forEach((offer) => {
+      if (offer.linkedQuoteId) {
+        map[offer.linkedQuoteId] = offer.status;
       }
     });
     return map;
-  }, [clientsOrders]);
+  }, [clientOffers]);
 
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
@@ -777,6 +800,10 @@ const App: React.FC = () => {
       // Redirect old suppliers/manage to new crm/suppliers
       if (rawHash === 'suppliers/manage') {
         window.location.hash = '/crm/suppliers';
+        return;
+      }
+      if (rawHash === 'suppliers/quotes') {
+        window.location.hash = '/sales/supplier-quotes';
         return;
       }
       const hash = rawHash as View;
@@ -913,10 +940,12 @@ const App: React.FC = () => {
           buildPermission('crm.suppliers', 'view'),
           buildPermission('crm.suppliers_all', 'view'),
         ]);
-        const canViewSales = hasPermission(
-          permissions,
+        const canViewSales = hasAnyPermission(permissions, [
           buildPermission('sales.client_quotes', 'view'),
-        );
+          buildPermission('sales.client_offers', 'view'),
+          buildPermission('sales.supplier_quotes', 'view'),
+          buildPermission('sales.supplier_offers', 'view'),
+        ]);
         const canViewCatalog = hasAnyPermission(permissions, [
           buildPermission('catalog.internal_listing', 'view'),
           buildPermission('catalog.external_listing', 'view'),
@@ -925,6 +954,8 @@ const App: React.FC = () => {
         const canViewAccounting = hasAnyPermission(permissions, [
           buildPermission('accounting.clients_orders', 'view'),
           buildPermission('accounting.clients_invoices', 'view'),
+          buildPermission('accounting.supplier_orders', 'view'),
+          buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canViewFinances = hasAnyPermission(permissions, [
           buildPermission('finances.payments', 'view'),
@@ -947,6 +978,7 @@ const App: React.FC = () => {
           buildPermission('projects.manage', 'view'),
           buildPermission('projects.tasks', 'view'),
           buildPermission('sales.client_quotes', 'view'),
+          buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.clients_orders', 'view'),
           buildPermission('accounting.clients_invoices', 'view'),
           buildPermission('catalog.special_bids', 'view'),
@@ -954,7 +986,6 @@ const App: React.FC = () => {
           buildPermission('catalog.external_listing', 'view'),
           buildPermission('finances.payments', 'view'),
           buildPermission('finances.expenses', 'view'),
-          buildPermission('suppliers.quotes', 'view'),
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
         ]);
@@ -985,11 +1016,18 @@ const App: React.FC = () => {
           permissions,
           buildPermission('sales.client_quotes', 'view'),
         );
+        const canListClientOffers = hasPermission(
+          permissions,
+          buildPermission('sales.client_offers', 'view'),
+        );
         const canListProducts = hasAnyPermission(permissions, [
           buildPermission('catalog.internal_listing', 'view'),
           buildPermission('catalog.external_listing', 'view'),
           buildPermission('catalog.special_bids', 'view'),
-          buildPermission('suppliers.quotes', 'view'),
+          buildPermission('sales.supplier_quotes', 'view'),
+          buildPermission('sales.supplier_offers', 'view'),
+          buildPermission('accounting.supplier_orders', 'view'),
+          buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canListSpecialBids = hasPermission(
           permissions,
@@ -999,11 +1037,18 @@ const App: React.FC = () => {
           buildPermission('crm.suppliers', 'view'),
           buildPermission('crm.suppliers_all', 'view'),
           buildPermission('catalog.external_listing', 'view'),
-          buildPermission('suppliers.quotes', 'view'),
+          buildPermission('sales.supplier_quotes', 'view'),
+          buildPermission('sales.supplier_offers', 'view'),
+          buildPermission('accounting.supplier_orders', 'view'),
+          buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canListSupplierQuotes = hasPermission(
           permissions,
-          buildPermission('suppliers.quotes', 'view'),
+          buildPermission('sales.supplier_quotes', 'view'),
+        );
+        const canListSupplierOffers = hasPermission(
+          permissions,
+          buildPermission('sales.supplier_offers', 'view'),
         );
         const canListOrders = hasPermission(
           permissions,
@@ -1012,6 +1057,14 @@ const App: React.FC = () => {
         const canListInvoices = hasPermission(
           permissions,
           buildPermission('accounting.clients_invoices', 'view'),
+        );
+        const canListSupplierOrders = hasPermission(
+          permissions,
+          buildPermission('accounting.supplier_orders', 'view'),
+        );
+        const canListSupplierInvoices = hasPermission(
+          permissions,
+          buildPermission('accounting.supplier_invoices', 'view'),
         );
         const canListPayments = hasPermission(
           permissions,
@@ -1145,32 +1198,63 @@ const App: React.FC = () => {
           }
           case 'sales': {
             if (!canViewSales) return;
-            const [quotesData, clientsData, productsData, specialBidsData] = await Promise.all([
+            const [
+              quotesData,
+              clientOffersData,
+              supplierQuotesData,
+              supplierOffersData,
+              clientsData,
+              suppliersData,
+              productsData,
+              specialBidsData,
+            ] = await Promise.all([
               canListQuotes ? api.quotes.list() : Promise.resolve([]),
+              canListClientOffers ? api.clientOffers.list() : Promise.resolve([]),
+              canListSupplierQuotes ? api.supplierQuotes.list() : Promise.resolve([]),
+              canListSupplierOffers ? api.supplierOffers.list() : Promise.resolve([]),
               canListClients ? api.clients.list() : Promise.resolve([]),
+              canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
               canListProducts ? api.products.list() : Promise.resolve([]),
               canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
             ]);
-            setQuotes(quotesData);
-            setClients(clientsData);
-            setProducts(productsData);
-            setSpecialBids(specialBidsData);
+            if (canListQuotes) setQuotes(quotesData);
+            if (canListClientOffers) setClientOffers(clientOffersData);
+            if (canListSupplierQuotes) setSupplierQuotes(supplierQuotesData);
+            if (canListSupplierOffers) setSupplierOffers(supplierOffersData);
+            if (canListClients) setClients(clientsData);
+            if (canListSuppliers) setSuppliers(suppliersData);
+            if (canListProducts) setProducts(productsData);
+            if (canListSpecialBids) setSpecialBids(specialBidsData);
             await loadGeneralSettings();
             break;
           }
           case 'accounting': {
             if (!canViewAccounting) return;
-            const [ordersData, invoicesData, clientsData, productsData, specialBidsData] =
-              await Promise.all([
-                canListOrders ? api.clientsOrders.list() : Promise.resolve([]),
-                canListInvoices ? api.invoices.list() : Promise.resolve([]),
-                canListClients ? api.clients.list() : Promise.resolve([]),
-                canListProducts ? api.products.list() : Promise.resolve([]),
-                canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
-              ]);
+            const [
+              ordersData,
+              invoicesData,
+              supplierOrdersData,
+              supplierInvoicesData,
+              clientsData,
+              suppliersData,
+              productsData,
+              specialBidsData,
+            ] = await Promise.all([
+              canListOrders ? api.clientsOrders.list() : Promise.resolve([]),
+              canListInvoices ? api.invoices.list() : Promise.resolve([]),
+              canListSupplierOrders ? api.supplierOrders.list() : Promise.resolve([]),
+              canListSupplierInvoices ? api.supplierInvoices.list() : Promise.resolve([]),
+              canListClients ? api.clients.list() : Promise.resolve([]),
+              canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
+              canListProducts ? api.products.list() : Promise.resolve([]),
+              canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
+            ]);
             if (canListOrders) setClientsOrders(ordersData);
             if (canListInvoices) setInvoices(invoicesData);
+            if (canListSupplierOrders) setSupplierOrders(supplierOrdersData);
+            if (canListSupplierInvoices) setSupplierInvoices(supplierInvoicesData);
             if (canListClients) setClients(clientsData);
+            if (canListSuppliers) setSuppliers(suppliersData);
             if (canListProducts) setProducts(productsData);
             if (canListSpecialBids) setSpecialBids(specialBidsData);
             await loadGeneralSettings();
@@ -1809,6 +1893,67 @@ const App: React.FC = () => {
     }
   };
 
+  const _addClientOffer = async (offerData: Partial<ClientOffer>) => {
+    try {
+      const offer = await api.clientOffers.create(offerData);
+      setClientOffers((prev) => [offer, ...prev]);
+    } catch (err) {
+      console.error('Failed to add client offer:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
+    try {
+      const updated = await api.clientOffers.update(id, updates);
+      setClientOffers((prev) => prev.map((offer) => (offer.id === id ? updated : offer)));
+    } catch (err) {
+      console.error('Failed to update client offer:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteClientOffer = async (id: string) => {
+    try {
+      await api.clientOffers.delete(id);
+      setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
+    } catch (err) {
+      console.error('Failed to delete client offer:', err);
+      throw err;
+    }
+  };
+
+  const handleCreateClientOfferFromQuote = async (quote: Quote) => {
+    try {
+      const offer = await api.clientOffers.create({
+        offerCode: `${quote.quoteCode}-OF`,
+        linkedQuoteId: quote.id,
+        clientId: quote.clientId,
+        clientName: quote.clientName,
+        paymentTerms: quote.paymentTerms,
+        discount: quote.discount,
+        status: 'draft',
+        expirationDate: quote.expirationDate,
+        notes: quote.notes,
+        items: quote.items.map((item) => ({
+          ...item,
+          id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
+          offerId: '',
+        })),
+      });
+      setClientOffers((prev) => [offer, ...prev]);
+      setQuotes((prev) =>
+        prev.map((entry) =>
+          entry.id === quote.id ? { ...entry, linkedOfferId: offer.id } : entry,
+        ),
+      );
+      setActiveView('sales/client-offers');
+    } catch (err) {
+      console.error('Failed to create offer from quote:', err);
+      alert((err as Error).message || 'Failed to create offer from quote');
+    }
+  };
+
   const addClientsOrder = async (orderData: Partial<ClientsOrder>) => {
     try {
       const order = await api.clientsOrders.create(orderData);
@@ -1843,15 +1988,16 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateClientsOrderFromQuote = async (quote: Quote) => {
+  const handleCreateClientsOrderFromOffer = async (offer: ClientOffer) => {
     try {
       const orderData: Partial<ClientsOrder> = {
-        clientId: quote.clientId,
-        clientName: quote.clientName,
+        clientId: offer.clientId,
+        clientName: offer.clientName,
         status: 'draft',
-        linkedQuoteId: quote.id,
-        paymentTerms: quote.paymentTerms,
-        items: quote.items.map((item) => ({
+        linkedQuoteId: offer.linkedQuoteId,
+        linkedOfferId: offer.id,
+        paymentTerms: offer.paymentTerms,
+        items: offer.items.map((item) => ({
           productId: item.productId,
           productName: item.productName,
           specialBidId: item.specialBidId,
@@ -1867,16 +2013,16 @@ const App: React.FC = () => {
           id: 'temp-' + Math.random().toString(36).substr(2, 9),
           orderId: '',
         })),
-        discount: quote.discount,
-        notes: quote.notes,
+        discount: offer.discount,
+        notes: offer.notes,
       };
 
       const order = await api.clientsOrders.create(orderData);
       setClientsOrders([...clientsOrders, order]);
       setActiveView('accounting/clients-orders');
     } catch (err) {
-      console.error('Failed to create order from quote:', err);
-      alert('Failed to create order from quote');
+      console.error('Failed to create order from offer:', err);
+      alert('Failed to create order from offer');
     }
   };
 
@@ -2031,6 +2177,210 @@ const App: React.FC = () => {
       setSupplierQuotes(supplierQuotes.filter((q) => q.id !== id));
     } catch (err) {
       console.error('Failed to delete supplier quote:', err);
+    }
+  };
+
+  const _addSupplierOffer = async (offerData: Partial<SupplierOffer>) => {
+    try {
+      const offer = await api.supplierOffers.create(offerData);
+      setSupplierOffers((prev) => [offer, ...prev]);
+    } catch (err) {
+      console.error('Failed to add supplier offer:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateSupplierOffer = async (id: string, updates: Partial<SupplierOffer>) => {
+    try {
+      const updated = await api.supplierOffers.update(id, updates);
+      setSupplierOffers((prev) => prev.map((offer) => (offer.id === id ? updated : offer)));
+    } catch (err) {
+      console.error('Failed to update supplier offer:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteSupplierOffer = async (id: string) => {
+    try {
+      await api.supplierOffers.delete(id);
+      setSupplierOffers((prev) => prev.filter((offer) => offer.id !== id));
+    } catch (err) {
+      console.error('Failed to delete supplier offer:', err);
+      throw err;
+    }
+  };
+
+  const handleCreateSupplierOfferFromQuote = async (quote: SupplierQuote) => {
+    try {
+      const offer = await api.supplierOffers.create({
+        offerCode: `${quote.quoteCode || quote.purchaseOrderNumber}-OF`,
+        linkedQuoteId: quote.id,
+        supplierId: quote.supplierId,
+        supplierName: quote.supplierName,
+        paymentTerms: quote.paymentTerms,
+        discount: quote.discount,
+        status: 'draft',
+        expirationDate: quote.expirationDate,
+        notes: quote.notes,
+        items: quote.items.map((item) => ({
+          ...item,
+          id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
+          offerId: '',
+          productTaxRate: products.find((product) => product.id === item.productId)?.taxRate || 0,
+        })),
+      });
+      setSupplierOffers((prev) => [offer, ...prev]);
+      setSupplierQuotes((prev) =>
+        prev.map((entry) =>
+          entry.id === quote.id ? { ...entry, linkedOfferId: offer.id } : entry,
+        ),
+      );
+      setActiveView('sales/supplier-offers');
+    } catch (err) {
+      console.error('Failed to create supplier offer from quote:', err);
+      alert((err as Error).message || 'Failed to create supplier offer from quote');
+    }
+  };
+
+  const _addSupplierOrder = async (orderData: Partial<SupplierSaleOrder>) => {
+    try {
+      const order = await api.supplierOrders.create(orderData);
+      setSupplierOrders((prev) => [order, ...prev]);
+    } catch (err) {
+      console.error('Failed to add supplier order:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateSupplierOrder = async (id: string, updates: Partial<SupplierSaleOrder>) => {
+    try {
+      const updated = await api.supplierOrders.update(id, updates);
+      setSupplierOrders((prev) => prev.map((order) => (order.id === id ? updated : order)));
+    } catch (err) {
+      console.error('Failed to update supplier order:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteSupplierOrder = async (id: string) => {
+    try {
+      await api.supplierOrders.delete(id);
+      setSupplierOrders((prev) => prev.filter((order) => order.id !== id));
+    } catch (err) {
+      console.error('Failed to delete supplier order:', err);
+      throw err;
+    }
+  };
+
+  const handleCreateSupplierOrderFromOffer = async (offer: SupplierOffer) => {
+    try {
+      const order = await api.supplierOrders.create({
+        linkedOfferId: offer.id,
+        linkedQuoteId: offer.linkedQuoteId,
+        supplierId: offer.supplierId,
+        supplierName: offer.supplierName,
+        paymentTerms: offer.paymentTerms,
+        discount: offer.discount,
+        status: 'draft',
+        notes: offer.notes,
+        items: offer.items.map((item) => ({
+          ...item,
+          id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
+          orderId: '',
+        })),
+      });
+      setSupplierOrders((prev) => [order, ...prev]);
+      setActiveView('accounting/supplier-orders');
+    } catch (err) {
+      console.error('Failed to create supplier order from offer:', err);
+      alert((err as Error).message || 'Failed to create supplier order from offer');
+    }
+  };
+
+  const _addSupplierInvoice = async (invoiceData: Partial<SupplierInvoice>) => {
+    try {
+      const invoice = await api.supplierInvoices.create(invoiceData);
+      setSupplierInvoices((prev) => [invoice, ...prev]);
+      const expensesData = await api.expenses.list();
+      setExpenses(expensesData);
+    } catch (err) {
+      console.error('Failed to add supplier invoice:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateSupplierInvoice = async (id: string, updates: Partial<SupplierInvoice>) => {
+    try {
+      const updated = await api.supplierInvoices.update(id, updates);
+      setSupplierInvoices((prev) => prev.map((invoice) => (invoice.id === id ? updated : invoice)));
+      const expensesData = await api.expenses.list();
+      setExpenses(expensesData);
+    } catch (err) {
+      console.error('Failed to update supplier invoice:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteSupplierInvoice = async (id: string) => {
+    try {
+      await api.supplierInvoices.delete(id);
+      setSupplierInvoices((prev) => prev.filter((invoice) => invoice.id !== id));
+      const expensesData = await api.expenses.list();
+      setExpenses(expensesData);
+    } catch (err) {
+      console.error('Failed to delete supplier invoice:', err);
+      throw err;
+    }
+  };
+
+  const handleCreateSupplierInvoiceFromOrder = async (order: SupplierSaleOrder) => {
+    try {
+      const now = new Date();
+      const dueDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const invoiceNumber = `SINV-${now.getFullYear()}-${String(supplierInvoices.length + 1).padStart(4, '0')}`;
+      const items = order.items.map((item) => ({
+        id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
+        invoiceId: '',
+        productId: item.productId,
+        description: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        taxRate: item.productTaxRate || 0,
+        discount: item.discount || 0,
+      }));
+      const totals = items.reduce(
+        (acc, item) => {
+          const lineSubtotal = item.quantity * item.unitPrice;
+          const lineDiscount = (lineSubtotal * item.discount) / 100;
+          const lineNet = lineSubtotal - lineDiscount;
+          acc.subtotal += lineNet;
+          acc.taxAmount += lineNet * (item.taxRate / 100);
+          return acc;
+        },
+        { subtotal: 0, taxAmount: 0 },
+      );
+      const invoice = await api.supplierInvoices.create({
+        linkedSaleId: order.id,
+        supplierId: order.supplierId,
+        supplierName: order.supplierName,
+        invoiceNumber,
+        issueDate: now.toISOString().split('T')[0],
+        dueDate: dueDate.toISOString().split('T')[0],
+        status: 'draft',
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        total: totals.subtotal + totals.taxAmount,
+        amountPaid: 0,
+        notes: order.notes,
+        items,
+      });
+      setSupplierInvoices((prev) => [invoice, ...prev]);
+      const expensesData = await api.expenses.list();
+      setExpenses(expensesData);
+      setActiveView('accounting/supplier-invoices');
+    } catch (err) {
+      console.error('Failed to create supplier invoice from order:', err);
+      alert((err as Error).message || 'Failed to create supplier invoice from order');
     }
   };
 
@@ -2283,12 +2633,16 @@ const App: React.FC = () => {
     setProducts([]);
     setSpecialBids([]);
     setQuotes([]);
+    setClientOffers([]);
     setClientsOrders([]);
     setInvoices([]);
     setPayments([]);
     setExpenses([]);
     setSuppliers([]);
     setSupplierQuotes([]);
+    setSupplierOffers([]);
+    setSupplierOrders([]);
+    setSupplierInvoices([]);
     setEntries([]);
     setWorkUnits([]);
     setLogoutReason(reason || null);
@@ -2310,12 +2664,16 @@ const App: React.FC = () => {
       setProducts([]);
       setSpecialBids([]);
       setQuotes([]);
+      setClientOffers([]);
       setClientsOrders([]);
       setInvoices([]);
       setPayments([]);
       setExpenses([]);
       setSuppliers([]);
       setSupplierQuotes([]);
+      setSupplierOffers([]);
+      setSupplierOrders([]);
+      setSupplierInvoices([]);
       setEntries([]);
       setWorkUnits([]);
 
@@ -2611,10 +2969,55 @@ const App: React.FC = () => {
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}
-                  onCreateClientsOrder={handleCreateClientsOrderFromQuote}
+                  onCreateOffer={handleCreateClientOfferFromQuote}
                   quoteFilterId={quoteFilterId}
-                  quoteIdsWithOrders={quoteIdsWithOrders}
-                  quoteOrderStatuses={quoteOrderStatuses}
+                  quoteIdsWithOffers={quoteIdsWithOffers}
+                  quoteOfferStatuses={quoteOfferStatuses}
+                  currency={generalSettings.currency}
+                />
+              )}
+
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']) &&
+              activeView === 'sales/client-offers' && (
+                <ClientOffersView
+                  offers={clientOffers}
+                  clients={clients}
+                  products={products}
+                  specialBids={specialBids}
+                  onUpdateOffer={handleUpdateClientOffer}
+                  onDeleteOffer={handleDeleteClientOffer}
+                  onCreateClientsOrder={handleCreateClientsOrderFromOffer}
+                  onViewQuote={(quoteId) => {
+                    setQuoteFilterId(quoteId);
+                    setActiveView('sales/client-quotes');
+                  }}
+                  currency={generalSettings.currency}
+                />
+              )}
+
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-quotes']) &&
+              activeView === 'sales/supplier-quotes' && (
+                <SupplierQuotesView
+                  quotes={supplierQuotes}
+                  suppliers={suppliers}
+                  products={products}
+                  onAddQuote={addSupplierQuote}
+                  onUpdateQuote={handleUpdateSupplierQuote}
+                  onDeleteQuote={handleDeleteSupplierQuote}
+                  onCreateOffer={handleCreateSupplierOfferFromQuote}
+                  currency={generalSettings.currency}
+                />
+              )}
+
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-offers']) &&
+              activeView === 'sales/supplier-offers' && (
+                <SupplierOffersView
+                  offers={supplierOffers}
+                  suppliers={suppliers}
+                  products={products}
+                  onUpdateOffer={handleUpdateSupplierOffer}
+                  onDeleteOffer={handleDeleteSupplierOffer}
+                  onCreateOrder={handleCreateSupplierOrderFromOffer}
                   currency={generalSettings.currency}
                 />
               )}
@@ -2657,6 +3060,37 @@ const App: React.FC = () => {
                 />
               )}
 
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['accounting/supplier-orders'],
+            ) &&
+              activeView === 'accounting/supplier-orders' && (
+                <SupplierOrdersView
+                  orders={supplierOrders}
+                  suppliers={suppliers}
+                  products={products}
+                  onUpdateOrder={handleUpdateSupplierOrder}
+                  onDeleteOrder={handleDeleteSupplierOrder}
+                  onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
+                  currency={generalSettings.currency}
+                />
+              )}
+
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['accounting/supplier-invoices'],
+            ) &&
+              activeView === 'accounting/supplier-invoices' && (
+                <SupplierInvoicesView
+                  invoices={supplierInvoices}
+                  suppliers={suppliers}
+                  products={products}
+                  onUpdateInvoice={handleUpdateSupplierInvoice}
+                  onDeleteInvoice={handleDeleteSupplierInvoice}
+                  currency={generalSettings.currency}
+                />
+              )}
+
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['finances/payments']) &&
               activeView === 'finances/payments' && (
                 <PaymentsView
@@ -2689,19 +3123,6 @@ const App: React.FC = () => {
                   onUpdateSupplier={handleUpdateSupplier}
                   onDeleteSupplier={handleDeleteSupplier}
                   permissions={currentUser.permissions || []}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['suppliers/quotes']) &&
-              activeView === 'suppliers/quotes' && (
-                <SupplierQuotesView
-                  quotes={supplierQuotes}
-                  suppliers={suppliers}
-                  products={products}
-                  onAddQuote={addSupplierQuote}
-                  onUpdateQuote={handleUpdateSupplierQuote}
-                  onDeleteQuote={handleDeleteSupplierQuote}
-                  currency={generalSettings.currency}
                 />
               )}
 

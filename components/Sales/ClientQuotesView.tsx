@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, ClientsOrder, Product, Quote, QuoteItem, SpecialBid } from '../../types';
+import type { Client, ClientOffer, Product, Quote, QuoteItem, SpecialBid } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -18,10 +18,10 @@ export interface ClientQuotesViewProps {
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
-  onCreateClientsOrder?: (quote: Quote) => void;
+  onCreateOffer?: (quote: Quote) => void;
   quoteFilterId?: string | null;
-  quoteIdsWithOrders?: Set<string>;
-  quoteOrderStatuses?: Record<string, ClientsOrder['status']>;
+  quoteIdsWithOffers?: Set<string>;
+  quoteOfferStatuses?: Record<string, ClientOffer['status']>;
   currency: string;
 }
 
@@ -38,9 +38,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onAddQuote,
   onUpdateQuote,
   onDeleteQuote,
-  onCreateClientsOrder,
-  quoteIdsWithOrders,
-  quoteOrderStatuses,
+  onCreateOffer,
+  quoteIdsWithOffers,
+  quoteOfferStatuses,
   currency,
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
@@ -64,10 +64,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const STATUS_OPTIONS = useMemo(
     () => [
-      { id: 'draft', name: t('sales:clientQuotes.statusQuoted') },
-      { id: 'sent', name: t('sales:clientQuotes.statusConfirmed') },
-      { id: 'accepted', name: t('sales:clientQuotes.statusAccepted') },
-      { id: 'denied', name: t('sales:clientQuotes.statusDenied') },
+      { id: 'draft', name: t('sales:clientQuotes.statusDraft', { defaultValue: 'Draft' }) },
+      { id: 'sent', name: t('sales:clientQuotes.statusSent', { defaultValue: 'Sent' }) },
+      {
+        id: 'accepted',
+        name: t('sales:clientQuotes.statusAccepted', { defaultValue: 'Accepted' }),
+      },
+      { id: 'denied', name: t('sales:clientQuotes.statusDenied', { defaultValue: 'Denied' }) },
     ],
     [t],
   );
@@ -112,23 +115,23 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [isExpired],
   );
 
-  const hasOrderForQuote = useCallback(
-    (quote: Quote) => Boolean(quoteIdsWithOrders?.has(quote.id)),
-    [quoteIdsWithOrders],
+  const hasOfferForQuote = useCallback(
+    (quote: Quote) => Boolean(quote.linkedOfferId || quoteIdsWithOffers?.has(quote.id)),
+    [quoteIdsWithOffers],
   );
 
-  const getOrderStatusForQuote = useCallback(
-    (quote: Quote) => quoteOrderStatuses?.[quote.id],
-    [quoteOrderStatuses],
+  const getOfferStatusForQuote = useCallback(
+    (quote: Quote) => quoteOfferStatuses?.[quote.id],
+    [quoteOfferStatuses],
   );
 
   const isHistoryRow = useCallback(
     (quote: Quote) => {
       const expired = isQuoteExpired(quote);
-      const hasOrder = hasOrderForQuote(quote);
-      return quote.status === 'denied' || expired || hasOrder;
+      const hasOffer = hasOfferForQuote(quote);
+      return quote.status === 'denied' || expired || hasOffer;
     },
-    [isQuoteExpired, hasOrderForQuote],
+    [isQuoteExpired, hasOfferForQuote],
   );
 
   // Calculate totals for a quote
@@ -186,12 +189,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     expirationDate: new Date().toISOString().split('T')[0],
     notes: '',
   });
-  const isReadOnly = Boolean(
-    editingQuote &&
-      (editingQuote.status === 'sent' ||
-        editingQuote.status === 'accepted' ||
-        editingQuote.status === 'denied'),
-  );
+  const isReadOnly = Boolean(editingQuote?.linkedOfferId);
 
   const openAddModal = () => {
     setEditingQuote(null);
@@ -711,8 +709,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
-          const hasOrder = hasOrderForQuote(row);
-          const orderStatus = getOrderStatusForQuote(row);
+          const hasOffer = hasOfferForQuote(row);
+          const offerStatus = getOfferStatusForQuote(row);
           const history = isHistoryRow(row);
 
           const isDeleteDisabled = expired || row.status !== 'draft' || history;
@@ -724,21 +722,23 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               ? t('sales:clientQuotes.errors.expiredCannotDelete')
               : t('sales:clientQuotes.deleteQuote');
 
-          const isCreateSaleDisabled = history || hasOrder;
-          const createSaleTitle = hasOrder
-            ? t('sales:clientQuotes.orderAlreadyExists', {
-                defaultValue: 'An order for this quote already exists.',
+          const isCreateOfferDisabled = history || hasOffer;
+          const createOfferTitle = hasOffer
+            ? t('sales:clientQuotes.offerAlreadyExists', {
+                defaultValue: 'An offer for this quote already exists.',
               })
             : history
               ? t('sales:clientQuotes.historyActionsDisabled', {
                   defaultValue: 'History entries cannot be modified.',
                 })
-              : t('sales:clientQuotes.convertToOrder');
+              : t('sales:clientQuotes.convertToOffer', {
+                  defaultValue: 'Convert to offer',
+                });
 
-          const canRestore = !hasOrder || orderStatus === 'draft';
+          const canRestore = !hasOffer || offerStatus === 'draft';
           const restoreTitle = !canRestore
-            ? t('sales:clientQuotes.restoreDisabledOrderStatus', {
-                defaultValue: 'Restore is only possible when the linked order is in draft status.',
+            ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
+                defaultValue: 'Restore is only possible when the linked offer is in draft status.',
               })
             : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
 
@@ -767,19 +767,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </button>
                 )}
               </Tooltip>
-              {row.status === 'accepted' && onCreateClientsOrder && (
-                <Tooltip label={createSaleTitle}>
+              {row.status === 'accepted' && onCreateOffer && (
+                <Tooltip label={createOfferTitle}>
                   {() => (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (isCreateSaleDisabled) return;
-                        onCreateClientsOrder(row);
+                        if (isCreateOfferDisabled) return;
+                        onCreateOffer(row);
                       }}
-                      disabled={isCreateSaleDisabled}
-                      className={`p-2 rounded-lg transition-all ${isCreateSaleDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
+                      disabled={isCreateOfferDisabled}
+                      className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
                     >
-                      <i className="fa-solid fa-cart-plus"></i>
+                      <i className="fa-solid fa-file-signature"></i>
                     </button>
                   )}
                 </Tooltip>
@@ -903,11 +903,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       currency,
       isHistoryRow,
       isQuoteExpired,
-      hasOrderForQuote,
-      getOrderStatusForQuote,
+      hasOfferForQuote,
+      getOfferStatusForQuote,
       calculateQuoteTotals,
       getStatusLabel,
-      onCreateClientsOrder,
+      onCreateOffer,
       onUpdateQuote,
       confirmDelete,
       openEditModal,
@@ -942,8 +942,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
-                  {t('sales:clientQuotes.readOnlyStatus', {
-                    status: getStatusLabel(editingQuote?.status || ''),
+                  {t('sales:clientQuotes.readOnlyBecauseOffer', {
+                    defaultValue: 'This quote is read-only because an offer was created from it.',
                   })}
                 </span>
               </div>

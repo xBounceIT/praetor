@@ -6,6 +6,7 @@
 export { aiApi } from './api/ai';
 export { authApi } from './api/auth';
 export { getAuthToken, setAuthToken } from './api/client';
+export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';
 export { clientsOrdersApi } from './api/clientsOrders';
@@ -26,6 +27,9 @@ export { reportsApi } from './api/reports';
 export { rolesApi } from './api/roles';
 export { settingsApi } from './api/settings';
 export { specialBidsApi } from './api/specialBids';
+export { supplierInvoicesApi } from './api/supplierInvoices';
+export { supplierOffersApi } from './api/supplierOffers';
+export { supplierOrdersApi } from './api/supplierOrders';
 export { supplierQuotesApi } from './api/supplierQuotes';
 export { suppliersApi } from './api/suppliers';
 export { tasksApi } from './api/tasks';
@@ -35,6 +39,7 @@ export { workUnitsApi } from './api/workUnits';
 import { aiApi } from './api/ai';
 import { authApi } from './api/auth';
 import { getAuthToken, setAuthToken } from './api/client';
+import { clientOffersApi } from './api/clientOffers';
 import { clientQuotesApi } from './api/clientQuotes';
 import { clientsApi } from './api/clients';
 import { clientsOrdersApi } from './api/clientsOrders';
@@ -54,6 +59,9 @@ import { reportsApi } from './api/reports';
 import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
 import { specialBidsApi } from './api/specialBids';
+import { supplierInvoicesApi } from './api/supplierInvoices';
+import { supplierOffersApi } from './api/supplierOffers';
+import { supplierOrdersApi } from './api/supplierOrders';
 import { supplierQuotesApi } from './api/supplierQuotes';
 import { suppliersApi } from './api/suppliers';
 import { tasksApi } from './api/tasks';
@@ -72,12 +80,16 @@ export default {
   entries: entriesApi,
   products: productsApi,
   quotes: clientQuotesApi,
+  clientOffers: clientOffersApi,
   clientsOrders: clientsOrdersApi,
   invoices: invoicesApi,
   payments: paymentsApi,
   expenses: expensesApi,
   suppliers: suppliersApi,
   supplierQuotes: supplierQuotesApi,
+  supplierOffers: supplierOffersApi,
+  supplierOrders: supplierOrdersApi,
+  supplierInvoices: supplierInvoicesApi,
   specialBids: specialBidsApi,
   notifications: notificationsApi,
   workUnits: workUnitsApi,

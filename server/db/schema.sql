@@ -126,6 +126,37 @@ BEGIN
     END IF;
 END $$;
 
+-- Seed workflow permissions for manager role and migrate supplier quote permissions
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'sales.client_offers.view'),
+    ('manager', 'sales.client_offers.create'),
+    ('manager', 'sales.client_offers.update'),
+    ('manager', 'sales.client_offers.delete'),
+    ('manager', 'sales.supplier_quotes.view'),
+    ('manager', 'sales.supplier_quotes.create'),
+    ('manager', 'sales.supplier_quotes.update'),
+    ('manager', 'sales.supplier_quotes.delete'),
+    ('manager', 'sales.supplier_offers.view'),
+    ('manager', 'sales.supplier_offers.create'),
+    ('manager', 'sales.supplier_offers.update'),
+    ('manager', 'sales.supplier_offers.delete'),
+    ('manager', 'accounting.supplier_orders.view'),
+    ('manager', 'accounting.supplier_orders.create'),
+    ('manager', 'accounting.supplier_orders.update'),
+    ('manager', 'accounting.supplier_orders.delete'),
+    ('manager', 'accounting.supplier_invoices.view'),
+    ('manager', 'accounting.supplier_invoices.create'),
+    ('manager', 'accounting.supplier_invoices.update'),
+    ('manager', 'accounting.supplier_invoices.delete')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission)
+SELECT role_id, REPLACE(permission, 'suppliers.quotes', 'sales.supplier_quotes')
+FROM role_permissions
+WHERE permission LIKE 'suppliers.quotes.%'
+ON CONFLICT DO NOTHING;
+
 -- Migration: Remove previously-seeded admin permissions so admin only has
 -- Administration access (from is_admin flag). Other modules must be added
 -- explicitly via the permissions UI.
@@ -685,6 +716,48 @@ ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
 
+-- Customer offers
+CREATE TABLE IF NOT EXISTS customer_offers (
+    id VARCHAR(50) PRIMARY KEY,
+    offer_code VARCHAR(20) UNIQUE NOT NULL,
+    linked_quote_id VARCHAR(50) NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT,
+    client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    client_name VARCHAR(255) NOT NULL,
+    payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
+    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'accepted', 'denied')),
+    expiration_date DATE NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_offers_linked_quote_id
+    ON customer_offers(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_customer_offers_client_id ON customer_offers(client_id);
+CREATE INDEX IF NOT EXISTS idx_customer_offers_status ON customer_offers(status);
+CREATE INDEX IF NOT EXISTS idx_customer_offers_created_at ON customer_offers(created_at);
+
+CREATE TABLE IF NOT EXISTS customer_offer_items (
+    id VARCHAR(50) PRIMARY KEY,
+    offer_id VARCHAR(50) NOT NULL REFERENCES customer_offers(id) ON DELETE CASCADE,
+    product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
+    product_name VARCHAR(255) NOT NULL,
+    special_bid_id VARCHAR(50),
+    quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
+    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    product_mol_percentage DECIMAL(5, 2),
+    special_bid_unit_price DECIMAL(15, 6),
+    special_bid_mol_percentage DECIMAL(5, 2),
+    discount DECIMAL(5, 2) DEFAULT 0,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_offer_items_offer_id ON customer_offer_items(offer_id);
+
 -- Special bids table
 CREATE TABLE IF NOT EXISTS special_bids (
     id VARCHAR(50) PRIMARY KEY,
@@ -747,6 +820,7 @@ ALTER TABLE general_settings ADD CONSTRAINT general_settings_ai_provider_check
 CREATE TABLE IF NOT EXISTS sales (
     id VARCHAR(50) PRIMARY KEY,
     linked_quote_id VARCHAR(50) REFERENCES quotes(id) ON DELETE SET NULL,
+    linked_offer_id VARCHAR(50) REFERENCES customer_offers(id) ON DELETE SET NULL,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -770,9 +844,25 @@ BEGIN
     END IF;
 END $$;
 
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS linked_offer_id VARCHAR(50);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'sales_linked_offer_id_fkey'
+    ) THEN
+        ALTER TABLE sales
+            ADD CONSTRAINT sales_linked_offer_id_fkey
+            FOREIGN KEY (linked_offer_id) REFERENCES customer_offers(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_sales_client_id ON sales(client_id);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
 CREATE INDEX IF NOT EXISTS idx_sales_linked_quote_id ON sales(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_sales_linked_offer_id ON sales(linked_offer_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 
 -- Sale items table (safe for existing installations)
@@ -821,9 +911,10 @@ CREATE TABLE IF NOT EXISTS supplier_quotes (
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
     purchase_order_number VARCHAR(100) NOT NULL,
+    quote_code VARCHAR(100),
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
     discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'approved', 'rejected')),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')),
     expiration_date DATE NOT NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -833,7 +924,29 @@ CREATE TABLE IF NOT EXISTS supplier_quotes (
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_supplier_id ON supplier_quotes(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_status ON supplier_quotes(status);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_po ON supplier_quotes(purchase_order_number);
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_quote_code ON supplier_quotes(quote_code);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_created_at ON supplier_quotes(created_at);
+
+ALTER TABLE supplier_quotes ADD COLUMN IF NOT EXISTS quote_code VARCHAR(100);
+UPDATE supplier_quotes
+SET quote_code = purchase_order_number
+WHERE quote_code IS NULL;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'supplier_quotes_status_check'
+    ) THEN
+        ALTER TABLE supplier_quotes DROP CONSTRAINT supplier_quotes_status_check;
+    END IF;
+    ALTER TABLE supplier_quotes
+        ADD CONSTRAINT supplier_quotes_status_check
+        CHECK (status IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied'));
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Supplier Quote Items table
 CREATE TABLE IF NOT EXISTS supplier_quote_items (
@@ -849,6 +962,78 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_supplier_quote_items_quote_id ON supplier_quote_items(quote_id);
+
+-- Supplier offers
+CREATE TABLE IF NOT EXISTS supplier_offers (
+    id VARCHAR(50) PRIMARY KEY,
+    offer_code VARCHAR(100) UNIQUE NOT NULL,
+    linked_quote_id VARCHAR(50) NOT NULL REFERENCES supplier_quotes(id) ON DELETE RESTRICT,
+    supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+    supplier_name VARCHAR(255) NOT NULL,
+    payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
+    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'accepted', 'denied')),
+    expiration_date DATE NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_offers_linked_quote_id
+    ON supplier_offers(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_offers_supplier_id ON supplier_offers(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_offers_status ON supplier_offers(status);
+
+CREATE TABLE IF NOT EXISTS supplier_offer_items (
+    id VARCHAR(50) PRIMARY KEY,
+    offer_id VARCHAR(50) NOT NULL REFERENCES supplier_offers(id) ON DELETE CASCADE,
+    product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
+    product_name VARCHAR(255) NOT NULL,
+    quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
+    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    discount DECIMAL(5, 2) DEFAULT 0,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_offer_items_offer_id ON supplier_offer_items(offer_id);
+
+-- Supplier sale orders
+CREATE TABLE IF NOT EXISTS supplier_sales (
+    id VARCHAR(50) PRIMARY KEY,
+    linked_quote_id VARCHAR(50) REFERENCES supplier_quotes(id) ON DELETE SET NULL,
+    linked_offer_id VARCHAR(50) NOT NULL REFERENCES supplier_offers(id) ON DELETE RESTRICT,
+    supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+    supplier_name VARCHAR(255) NOT NULL,
+    payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
+    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'confirmed', 'denied')),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_sales_linked_offer_id
+    ON supplier_sales(linked_offer_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_sales_linked_quote_id ON supplier_sales(linked_quote_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_sales_supplier_id ON supplier_sales(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_sales_status ON supplier_sales(status);
+
+CREATE TABLE IF NOT EXISTS supplier_sale_items (
+    id VARCHAR(50) PRIMARY KEY,
+    sale_id VARCHAR(50) NOT NULL REFERENCES supplier_sales(id) ON DELETE CASCADE,
+    product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
+    product_name VARCHAR(255) NOT NULL,
+    quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
+    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    discount DECIMAL(5, 2) DEFAULT 0,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_sale_items_sale_id ON supplier_sale_items(sale_id);
 
 -- Migration: Rename 'tempoRole' to 'praetorRole' in existing LDAP role mappings
 DO $$
@@ -909,6 +1094,45 @@ CREATE TABLE IF NOT EXISTS invoice_items (
 
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
 
+-- Supplier invoices
+CREATE TABLE IF NOT EXISTS supplier_invoices (
+    id VARCHAR(50) PRIMARY KEY,
+    linked_sale_id VARCHAR(50) REFERENCES supplier_sales(id) ON DELETE SET NULL,
+    supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+    supplier_name VARCHAR(255) NOT NULL,
+    invoice_number VARCHAR(50) UNIQUE NOT NULL,
+    issue_date DATE NOT NULL,
+    due_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
+    subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    total DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    amount_paid DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_invoices_supplier_id ON supplier_invoices(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoices_status ON supplier_invoices(status);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoices_issue_date ON supplier_invoices(issue_date);
+CREATE INDEX IF NOT EXISTS idx_supplier_invoices_linked_sale_id ON supplier_invoices(linked_sale_id);
+
+CREATE TABLE IF NOT EXISTS supplier_invoice_items (
+    id VARCHAR(50) PRIMARY KEY,
+    invoice_id VARCHAR(50) NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
+    product_id VARCHAR(50) REFERENCES products(id) ON DELETE SET NULL,
+    description VARCHAR(255) NOT NULL,
+    quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
+    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
+    discount DECIMAL(5, 2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_invoice_items_invoice_id
+    ON supplier_invoice_items(invoice_id);
+
 -- Payments table (tracks payments for invoices)
 CREATE TABLE IF NOT EXISTS payments (
     id VARCHAR(50) PRIMARY KEY,
@@ -935,12 +1159,49 @@ CREATE TABLE IF NOT EXISTS expenses (
     category VARCHAR(50) NOT NULL DEFAULT 'other',
     vendor VARCHAR(255),
     receipt_reference VARCHAR(255),
+    source_type VARCHAR(30) NOT NULL DEFAULT 'manual',
+    supplier_invoice_id VARCHAR(50),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'manual';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_invoice_id VARCHAR(50);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'expenses_supplier_invoice_id_fkey'
+    ) THEN
+        ALTER TABLE expenses
+            ADD CONSTRAINT expenses_supplier_invoice_id_fkey
+            FOREIGN KEY (supplier_invoice_id) REFERENCES supplier_invoices(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'expenses_source_type_check'
+    ) THEN
+        ALTER TABLE expenses DROP CONSTRAINT expenses_source_type_check;
+    END IF;
+    ALTER TABLE expenses
+        ADD CONSTRAINT expenses_source_type_check
+        CHECK (source_type IN ('manual', 'supplier_invoice'));
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_supplier_invoice_id
+    ON expenses(supplier_invoice_id)
+    WHERE supplier_invoice_id IS NOT NULL;
 
 -- Migration: Ensure payments foreign key has ON DELETE CASCADE
 DO $$

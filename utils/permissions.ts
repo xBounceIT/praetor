@@ -32,6 +32,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Sales
   { id: 'sales.client_quotes', actions: CRUD, module: 'sales' },
+  { id: 'sales.client_offers', actions: CRUD, module: 'sales' },
+  { id: 'sales.supplier_quotes', actions: CRUD, module: 'sales' },
+  { id: 'sales.supplier_offers', actions: CRUD, module: 'sales' },
 
   // Catalog
   { id: 'catalog.internal_listing', actions: CRUD, module: 'catalog' },
@@ -41,6 +44,8 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Accounting
   { id: 'accounting.clients_orders', actions: CRUD, module: 'accounting' },
   { id: 'accounting.clients_invoices', actions: CRUD, module: 'accounting' },
+  { id: 'accounting.supplier_orders', actions: CRUD, module: 'accounting' },
+  { id: 'accounting.supplier_invoices', actions: CRUD, module: 'accounting' },
 
   // Finances
   { id: 'finances.payments', actions: CRUD, module: 'finances' },
@@ -140,17 +145,22 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'crm/clients': buildPermission('crm.clients', 'view'),
   'crm/suppliers': buildPermission('crm.suppliers', 'view'),
   'sales/client-quotes': buildPermission('sales.client_quotes', 'view'),
+  'sales/client-offers': buildPermission('sales.client_offers', 'view'),
+  'sales/supplier-quotes': buildPermission('sales.supplier_quotes', 'view'),
+  'sales/supplier-offers': buildPermission('sales.supplier_offers', 'view'),
   'catalog/internal-listing': buildPermission('catalog.internal_listing', 'view'),
   'catalog/external-listing': buildPermission('catalog.external_listing', 'view'),
   'catalog/special-bids': buildPermission('catalog.special_bids', 'view'),
   'accounting/clients-orders': buildPermission('accounting.clients_orders', 'view'),
   'accounting/clients-invoices': buildPermission('accounting.clients_invoices', 'view'),
+  'accounting/supplier-orders': buildPermission('accounting.supplier_orders', 'view'),
+  'accounting/supplier-invoices': buildPermission('accounting.supplier_invoices', 'view'),
   'finances/payments': buildPermission('finances.payments', 'view'),
   'finances/expenses': buildPermission('finances.expenses', 'view'),
   'projects/manage': buildPermission('projects.manage', 'view'),
   'projects/tasks': buildPermission('projects.tasks', 'view'),
   'suppliers/manage': buildPermission('crm.suppliers', 'view'),
-  'suppliers/quotes': buildPermission('suppliers.quotes', 'view'),
+  'suppliers/quotes': buildPermission('sales.supplier_quotes', 'view'),
   'hr/internal': buildPermission('hr.internal', 'view'),
   'hr/external': buildPermission('hr.external', 'view'),
   'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
