@@ -90,6 +90,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const [formData, setFormData] = useState<Partial<SupplierOffer>>({
     offerCode: '',
     linkedQuoteId: '',
+    linkedOrderId: undefined,
     supplierId: '',
     supplierName: '',
     items: [],
@@ -101,6 +102,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   });
 
   const isReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
+  const isSupplierLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
     return offers.filter((offer) => {
@@ -208,7 +210,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                     }));
                   }}
                   searchable={true}
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || isSupplierLocked}
                 />
               </div>
               <div>
@@ -518,7 +520,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                         </button>
                       </>
                     )}
-                    {offer.status === 'accepted' && onCreateOrder && (
+                    {offer.status === 'accepted' && !offer.linkedOrderId && onCreateOrder && (
                       <button
                         onClick={() => onCreateOrder(offer)}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"

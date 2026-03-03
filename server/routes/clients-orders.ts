@@ -674,7 +674,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      if (existingOrder.linkedQuoteId && !existingOrder.linkedOfferId) {
+      const isSourceLinkedOrder = Boolean(
+        existingOrder.linkedQuoteId || existingOrder.linkedOfferId,
+      );
+
+      if (isSourceLinkedOrder) {
         const lockedFields: string[] = [];
 
         if (
@@ -855,7 +859,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // If items are provided, update them
       let updatedItems = [];
-      if (existingOrder.linkedQuoteId && !existingOrder.linkedOfferId) {
+      if (isSourceLinkedOrder) {
         if (existingItems) {
           updatedItems = existingItems;
         } else {

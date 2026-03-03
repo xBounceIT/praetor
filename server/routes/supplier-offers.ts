@@ -43,6 +43,7 @@ const offerSchema = {
     id: { type: 'string' },
     offerCode: { type: 'string' },
     linkedQuoteId: { type: 'string' },
+    linkedOrderId: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
@@ -194,20 +195,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async () => {
       const offersResult = await query(
         `SELECT
-            id,
-            offer_code as "offerCode",
-            linked_quote_id as "linkedQuoteId",
-            supplier_id as "supplierId",
-            supplier_name as "supplierName",
-            payment_terms as "paymentTerms",
-            discount,
-            status,
-            expiration_date as "expirationDate",
-            notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-         FROM supplier_offers
-         ORDER BY created_at DESC`,
+            so.id,
+            so.offer_code as "offerCode",
+            so.linked_quote_id as "linkedQuoteId",
+            ss.id as "linkedOrderId",
+            so.supplier_id as "supplierId",
+            so.supplier_name as "supplierName",
+            so.payment_terms as "paymentTerms",
+            so.discount,
+            so.status,
+            so.expiration_date as "expirationDate",
+            so.notes,
+            EXTRACT(EPOCH FROM so.created_at) * 1000 as "createdAt",
+            EXTRACT(EPOCH FROM so.updated_at) * 1000 as "updatedAt"
+         FROM supplier_offers so
+         LEFT JOIN supplier_sales ss ON ss.linked_offer_id = so.id
+         ORDER BY so.created_at DESC`,
       );
 
       const itemsResult = await query(
@@ -325,6 +328,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id,
             offer_code as "offerCode",
             linked_quote_id as "linkedQuoteId",
+            null::varchar as "linkedOrderId",
             supplier_id as "supplierId",
             supplier_name as "supplierName",
             payment_terms as "paymentTerms",
@@ -430,12 +434,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existingOfferResult = await query(
-        'SELECT id, status FROM supplier_offers WHERE id = $1',
+        `SELECT
+            id,
+            linked_quote_id as "linkedQuoteId",
+            supplier_id as "supplierId",
+            supplier_name as "supplierName",
+            status
+         FROM supplier_offers
+         WHERE id = $1`,
         [idResult.value],
       );
       if (existingOfferResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
+
+      const existingOffer = existingOfferResult.rows[0];
 
       const isStatusChangeOnly =
         status !== undefined &&
@@ -447,10 +460,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount === undefined &&
         expirationDate === undefined &&
         notes === undefined;
-      if (existingOfferResult.rows[0].status !== 'draft' && !isStatusChangeOnly) {
+      if (existingOffer.status !== 'draft' && !isStatusChangeOnly) {
         return reply.code(409).send({
           error: 'Non-draft offers are read-only',
-          currentStatus: existingOfferResult.rows[0].status,
+          currentStatus: existingOffer.status,
         });
       }
 
@@ -489,6 +502,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
+      if (existingOffer.linkedQuoteId) {
+        const lockedFields: string[] = [];
+
+        if (
+          supplierIdValue !== undefined &&
+          supplierIdValue !== null &&
+          supplierIdValue !== existingOffer.supplierId
+        ) {
+          lockedFields.push('supplierId');
+        }
+
+        if (
+          supplierNameValue !== undefined &&
+          supplierNameValue !== null &&
+          supplierNameValue !== existingOffer.supplierName
+        ) {
+          lockedFields.push('supplierName');
+        }
+
+        if (lockedFields.length > 0) {
+          return reply.code(409).send({
+            error: 'Quote-linked offer supplier details are read-only',
+            fields: lockedFields,
+          });
+        }
+      }
+
       const updatedOfferResult = await query(
         `UPDATE supplier_offers
          SET offer_code = COALESCE($1, offer_code),
@@ -505,6 +545,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id,
             offer_code as "offerCode",
             linked_quote_id as "linkedQuoteId",
+            (
+              SELECT ss.id
+              FROM supplier_sales ss
+              WHERE ss.linked_offer_id = supplier_offers.id
+              LIMIT 1
+            ) as "linkedOrderId",
             supplier_id as "supplierId",
             supplier_name as "supplierName",
             payment_terms as "paymentTerms",

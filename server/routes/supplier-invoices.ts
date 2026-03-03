@@ -19,6 +19,10 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+const isSupplierInvoiceNumberConflict = (databaseError: DatabaseError) =>
+  databaseError.constraint === 'supplier_invoices_invoice_number_key' ||
+  databaseError.detail?.includes('(invoice_number)');
+
 const duplicateInvoiceError = (databaseError: DatabaseError) => {
   if (databaseError.constraint === 'idx_supplier_invoices_linked_sale_id_unique') {
     return 'An invoice already exists for this order';
@@ -127,7 +131,7 @@ const createBodySchema = {
     notes: { type: 'string' },
     items: { type: 'array', items: invoiceItemBodySchema },
   },
-  required: ['supplierId', 'supplierName', 'invoiceNumber', 'issueDate', 'dueDate', 'items'],
+  required: ['supplierId', 'supplierName', 'issueDate', 'dueDate', 'items'],
 } as const;
 
 const updateBodySchema = {
@@ -269,6 +273,18 @@ const syncExpenseForInvoice = async (invoice: {
     ],
   );
   return expenseResult.rows[0]?.id ?? null;
+};
+
+const generateSupplierInvoiceNumber = async (issueDate: string) => {
+  const year = issueDate.split('-')[0];
+  const matchingInvoicesResult = await query(
+    `SELECT COALESCE(MAX(CAST(split_part(invoice_number, '-', 3) AS INTEGER)), 0) as "maxSequence"
+     FROM supplier_invoices
+     WHERE invoice_number ~ $1`,
+    [`^SINV-${year}-[0-9]+$`],
+  );
+  const nextSequence = Number(matchingInvoicesResult.rows[0]?.maxSequence ?? 0) + 1;
+  return `SINV-${year}-${String(nextSequence).padStart(4, '0')}`;
 };
 
 const formatInvoiceResponse = (
@@ -437,7 +453,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
 
-      const invoiceNumberResult = requireNonEmptyString(invoiceNumber, 'invoiceNumber');
+      const invoiceNumberResult = optionalNonEmptyString(invoiceNumber, 'invoiceNumber');
       if (!invoiceNumberResult.ok) return badRequest(reply, invoiceNumberResult.message);
 
       const issueDateResult = parseDateString(issueDate, 'issueDate');
@@ -492,45 +508,74 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoiceId = `sinv-${Date.now()}`;
+      const maxInsertAttempts = invoiceNumberResult.value ? 1 : 5;
 
       try {
-        const invoiceResult = await query(
-          `INSERT INTO supplier_invoices
-            (id, linked_sale_id, supplier_id, supplier_name, invoice_number, issue_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-           RETURNING
-              id,
-              linked_sale_id as "linkedSaleId",
-              supplier_id as "supplierId",
-              supplier_name as "supplierName",
-              invoice_number as "invoiceNumber",
-              issue_date as "issueDate",
-              due_date as "dueDate",
-              status,
-              subtotal,
-              tax_amount as "taxAmount",
-              total,
-              amount_paid as "amountPaid",
-              notes,
-              null::varchar as "linkedExpenseId",
-              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-          [
-            invoiceId,
-            linkedSaleIdResult.value || null,
-            supplierIdResult.value,
-            supplierNameResult.value,
-            invoiceNumberResult.value,
-            issueDateResult.value,
-            dueDateResult.value,
-            status || 'draft',
-            subtotalResult.value || 0,
-            taxAmountResult.value || 0,
-            totalResult.value || 0,
-            amountPaidResult.value || 0,
-            notes || null,
-          ],
-        );
+        let invoiceResult: Awaited<ReturnType<typeof query>> | null = null;
+        let resolvedInvoiceNumber = invoiceNumberResult.value;
+
+        for (let attempt = 0; attempt < maxInsertAttempts; attempt++) {
+          if (!resolvedInvoiceNumber) {
+            resolvedInvoiceNumber = await generateSupplierInvoiceNumber(issueDateResult.value);
+          }
+
+          try {
+            invoiceResult = await query(
+              `INSERT INTO supplier_invoices
+                (id, linked_sale_id, supplier_id, supplier_name, invoice_number, issue_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+               RETURNING
+                  id,
+                  linked_sale_id as "linkedSaleId",
+                  supplier_id as "supplierId",
+                  supplier_name as "supplierName",
+                  invoice_number as "invoiceNumber",
+                  issue_date as "issueDate",
+                  due_date as "dueDate",
+                  status,
+                  subtotal,
+                  tax_amount as "taxAmount",
+                  total,
+                  amount_paid as "amountPaid",
+                  notes,
+                  null::varchar as "linkedExpenseId",
+                  EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                  EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+              [
+                invoiceId,
+                linkedSaleIdResult.value || null,
+                supplierIdResult.value,
+                supplierNameResult.value,
+                resolvedInvoiceNumber,
+                issueDateResult.value,
+                dueDateResult.value,
+                status || 'draft',
+                subtotalResult.value || 0,
+                taxAmountResult.value || 0,
+                totalResult.value || 0,
+                amountPaidResult.value || 0,
+                notes || null,
+              ],
+            );
+            break;
+          } catch (error) {
+            const databaseError = error as DatabaseError;
+            if (
+              !invoiceNumberResult.value &&
+              databaseError.code === '23505' &&
+              isSupplierInvoiceNumberConflict(databaseError) &&
+              attempt < maxInsertAttempts - 1
+            ) {
+              resolvedInvoiceNumber = null;
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        if (!invoiceResult || !resolvedInvoiceNumber) {
+          return reply.code(409).send({ error: 'Invoice number already exists' });
+        }
 
         const createdItems: Array<Record<string, unknown>> = [];
         for (const item of normalizedItems) {
@@ -565,7 +610,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const linkedExpenseId = await syncExpenseForInvoice({
           id: invoiceId,
           supplierName: supplierNameResult.value,
-          invoiceNumber: invoiceNumberResult.value,
+          invoiceNumber: resolvedInvoiceNumber,
           issueDate: issueDateResult.value,
           total: totalResult.value || 0,
           notes: (notes as string | undefined) || null,

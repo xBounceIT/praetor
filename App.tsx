@@ -2338,6 +2338,11 @@ const App: React.FC = () => {
         })),
       });
       setSupplierOrders((prev) => [order, ...prev]);
+      setSupplierOffers((prev) =>
+        prev.map((entry) =>
+          entry.id === offer.id ? { ...entry, linkedOrderId: order.id } : entry,
+        ),
+      );
       setActiveView('accounting/supplier-orders');
     } catch (err) {
       console.error('Failed to create supplier order from offer:', err);
@@ -2382,7 +2387,6 @@ const App: React.FC = () => {
     try {
       const now = new Date();
       const dueDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-      const invoiceNumber = `SINV-${now.getFullYear()}-${String(supplierInvoices.length + 1).padStart(4, '0')}`;
       const items = order.items.map((item) => ({
         id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
         invoiceId: '',
@@ -2408,7 +2412,6 @@ const App: React.FC = () => {
         linkedSaleId: order.id,
         supplierId: order.supplierId,
         supplierName: order.supplierName,
-        invoiceNumber,
         issueDate: now.toISOString().split('T')[0],
         dueDate: dueDate.toISOString().split('T')[0],
         status: 'draft',

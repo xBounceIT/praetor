@@ -558,6 +558,7 @@ export interface SupplierOffer {
   id: string;
   offerCode: string;
   linkedQuoteId: string;
+  linkedOrderId?: string;
   supplierId: string;
   supplierName: string;
   items: SupplierOfferItem[];

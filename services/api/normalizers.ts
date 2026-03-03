@@ -224,6 +224,7 @@ export const normalizeSupplierOfferItem = (item: SupplierOfferItem): SupplierOff
 
 export const normalizeSupplierOffer = (offer: SupplierOffer): SupplierOffer => ({
   ...offer,
+  linkedOrderId: offer.linkedOrderId ?? undefined,
   discount: Number(offer.discount || 0),
   items: (offer.items || []).map(normalizeSupplierOfferItem),
 });

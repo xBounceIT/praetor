@@ -1994,6 +1994,48 @@
                           "string"
                         ]
                       },
+                      "atecoCode": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "website": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "sector": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "numberOfEmployees": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "revenue": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "fiscalCode": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "officeCountRange": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "vatNumber": {
                         "type": [
                           "null",
@@ -2006,11 +2048,8 @@
                           "string"
                         ]
                       },
-                      "billingCode": {
-                        "type": [
-                          "null",
-                          "string"
-                        ]
+                      "createdAt": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -2146,13 +2185,59 @@
                   "address": {
                     "type": "string"
                   },
+                  "description": {
+                    "type": "string"
+                  },
+                  "atecoCode": {
+                    "type": "string"
+                  },
+                  "website": {
+                    "type": "string"
+                  },
+                  "sector": {
+                    "type": "string",
+                    "enum": [
+                      "FINANCE",
+                      "TELCO",
+                      "UTILITIES",
+                      "ENERGY",
+                      "SERVICES",
+                      "GDO",
+                      "HEALTH",
+                      "INDUSTRY",
+                      "PA",
+                      "TRASPORTI",
+                      "ALTRO"
+                    ]
+                  },
+                  "numberOfEmployees": {
+                    "type": "string",
+                    "enum": [
+                      "< 50",
+                      "50..250",
+                      "251..1000",
+                      "> 1000"
+                    ]
+                  },
+                  "revenue": {
+                    "type": "string",
+                    "enum": [
+                      "< 10",
+                      "11..50",
+                      "51..1000",
+                      "> 1000"
+                    ]
+                  },
+                  "fiscalCode": {
+                    "type": "string"
+                  },
+                  "officeCountRange": {
+                    "type": "string"
+                  },
                   "vatNumber": {
                     "type": "string"
                   },
                   "taxCode": {
-                    "type": "string"
-                  },
-                  "billingCode": {
                     "type": "string"
                   }
                 },
@@ -2220,6 +2305,48 @@
                         "string"
                       ]
                     },
+                    "atecoCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "website": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "sector": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "numberOfEmployees": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "revenue": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "fiscalCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "officeCountRange": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "vatNumber": {
                       "type": [
                         "null",
@@ -2232,11 +2359,8 @@
                         "string"
                       ]
                     },
-                    "billingCode": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -2353,37 +2477,109 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "isDisabled": {
                     "type": "boolean"
                   },
                   "type": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "contactName": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "clientCode": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "email": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "phone": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "address": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "atecoCode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "website": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sector": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "numberOfEmployees": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "revenue": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fiscalCode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "officeCountRange": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "vatNumber": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "taxCode": {
-                    "type": "string"
-                  },
-                  "billingCode": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -2456,6 +2652,48 @@
                         "string"
                       ]
                     },
+                    "atecoCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "website": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "sector": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "numberOfEmployees": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "revenue": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "fiscalCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "officeCountRange": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "vatNumber": {
                       "type": [
                         "null",
@@ -2468,11 +2706,8 @@
                         "string"
                       ]
                     },
-                    "billingCode": {
-                      "type": [
-                        "null",
-                        "string"
-                      ]
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -7291,6 +7526,12 @@
                       "quoteCode": {
                         "type": "string"
                       },
+                      "linkedOfferId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "clientId": {
                         "type": "string"
                       },
@@ -7632,6 +7873,12 @@
                     },
                     "quoteCode": {
                       "type": "string"
+                    },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "clientId": {
                       "type": "string"
@@ -7981,6 +8228,12 @@
                     "quoteCode": {
                       "type": "string"
                     },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "clientId": {
                       "type": "string"
                     },
@@ -8210,6 +8463,1060 @@
         "summary": "Delete client quote",
         "tags": [
           "client-quotes"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/client-offers/": {
+      "get": {
+        "summary": "List client offers",
+        "tags": [
+          "client-offers"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "offerCode": {
+                        "type": "string"
+                      },
+                      "linkedQuoteId": {
+                        "type": "string"
+                      },
+                      "clientId": {
+                        "type": "string"
+                      },
+                      "clientName": {
+                        "type": "string"
+                      },
+                      "paymentTerms": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "discount": {
+                        "type": "number"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "expirationDate": {
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "format": "date"
+                      },
+                      "notes": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "offerId": {
+                              "type": "string"
+                            },
+                            "productId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "productName": {
+                              "type": "string"
+                            },
+                            "specialBidId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unitPrice": {
+                              "type": "number"
+                            },
+                            "productCost": {
+                              "type": "number"
+                            },
+                            "productTaxRate": {
+                              "type": "number"
+                            },
+                            "productMolPercentage": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "specialBidUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "specialBidMolPercentage": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "note": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "discount": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "offerId",
+                            "productName",
+                            "quantity",
+                            "unitPrice",
+                            "productCost",
+                            "productTaxRate",
+                            "discount"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "offerCode",
+                      "linkedQuoteId",
+                      "clientId",
+                      "clientName",
+                      "discount",
+                      "status",
+                      "createdAt",
+                      "updatedAt",
+                      "items"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create client offer",
+        "tags": [
+          "client-offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offerCode": {
+                    "type": "string"
+                  },
+                  "linkedQuoteId": {
+                    "type": "string"
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "clientName": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "specialBidId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "productCost": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
+                          "type": "number"
+                        },
+                        "productMolPercentage": {
+                          "type": "number"
+                        },
+                        "specialBidUnitPrice": {
+                          "type": "number"
+                        },
+                        "specialBidMolPercentage": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "expirationDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "offerCode",
+                  "linkedQuoteId",
+                  "clientId",
+                  "clientName",
+                  "items",
+                  "expirationDate"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "linkedQuoteId": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "offerId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "specialBidId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productCost": {
+                            "type": "number"
+                          },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
+                          "productMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "specialBidUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "offerId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "productCost",
+                          "productTaxRate",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "offerCode",
+                    "linkedQuoteId",
+                    "clientId",
+                    "clientName",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/client-offers/{id}": {
+      "put": {
+        "summary": "Update client offer",
+        "tags": [
+          "client-offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offerCode": {
+                    "type": "string"
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "clientName": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "specialBidId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "productCost": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
+                          "type": "number"
+                        },
+                        "productMolPercentage": {
+                          "type": "number"
+                        },
+                        "specialBidUnitPrice": {
+                          "type": "number"
+                        },
+                        "specialBidMolPercentage": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "expirationDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "linkedQuoteId": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "offerId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "specialBidId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productCost": {
+                            "type": "number"
+                          },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
+                          "productMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "specialBidUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "offerId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "productCost",
+                          "productTaxRate",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "offerCode",
+                    "linkedQuoteId",
+                    "clientId",
+                    "clientName",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete client offer",
+        "tags": [
+          "client-offers"
         ],
         "parameters": [
           {
@@ -9269,6 +10576,12 @@
                           "string"
                         ]
                       },
+                      "linkedOfferId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "clientId": {
                         "type": "string"
                       },
@@ -9499,6 +10812,9 @@
                   "linkedQuoteId": {
                     "type": "string"
                   },
+                  "linkedOfferId": {
+                    "type": "string"
+                  },
                   "clientId": {
                     "type": "string"
                   },
@@ -9592,6 +10908,12 @@
                       "type": "string"
                     },
                     "linkedQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedOfferId": {
                       "type": [
                         "null",
                         "string"
@@ -9825,6 +11147,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "linkedOfferId": {
+                    "type": "string"
+                  },
                   "clientId": {
                     "type": "string"
                   },
@@ -9922,6 +11247,12 @@
                       "type": "string"
                     },
                     "linkedQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedOfferId": {
                       "type": [
                         "null",
                         "string"
@@ -11937,6 +13268,18 @@
                           "string"
                         ]
                       },
+                      "sourceType": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "linkedSupplierInvoiceId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "createdAt": {
                         "type": "number"
                       }
@@ -12129,6 +13472,18 @@
                       ]
                     },
                     "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "sourceType": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedSupplierInvoiceId": {
                       "type": [
                         "null",
                         "string"
@@ -12331,6 +13686,18 @@
                       ]
                     },
                     "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "sourceType": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedSupplierInvoiceId": {
                       "type": [
                         "null",
                         "string"
@@ -13307,7 +14674,7 @@
         }
       }
     },
-    "/api/supplier-quotes/": {
+    "/api/sales/supplier-quotes/": {
       "get": {
         "summary": "List supplier quotes",
         "tags": [
@@ -13332,6 +14699,9 @@
                       "supplierName": {
                         "type": "string"
                       },
+                      "quoteCode": {
+                        "type": "string"
+                      },
                       "purchaseOrderNumber": {
                         "type": "string"
                       },
@@ -13353,6 +14723,12 @@
                           "string"
                         ],
                         "format": "date"
+                      },
+                      "linkedOfferId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
                       },
                       "notes": {
                         "type": [
@@ -13417,6 +14793,7 @@
                       "id",
                       "supplierId",
                       "supplierName",
+                      "quoteCode",
                       "purchaseOrderNumber",
                       "discount",
                       "status",
@@ -13538,6 +14915,9 @@
                   "supplierName": {
                     "type": "string"
                   },
+                  "quoteCode": {
+                    "type": "string"
+                  },
                   "purchaseOrderNumber": {
                     "type": "string"
                   },
@@ -13592,7 +14972,6 @@
                 "required": [
                   "supplierId",
                   "supplierName",
-                  "purchaseOrderNumber",
                   "items",
                   "expirationDate"
                 ]
@@ -13618,6 +14997,9 @@
                     "supplierName": {
                       "type": "string"
                     },
+                    "quoteCode": {
+                      "type": "string"
+                    },
                     "purchaseOrderNumber": {
                       "type": "string"
                     },
@@ -13639,6 +15021,12 @@
                         "string"
                       ],
                       "format": "date"
+                    },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -13703,6 +15091,3776 @@
                     "id",
                     "supplierId",
                     "supplierName",
+                    "quoteCode",
+                    "purchaseOrderNumber",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/supplier-quotes/{id}": {
+      "put": {
+        "summary": "Update supplier quote",
+        "tags": [
+          "supplier-quotes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "quoteCode": {
+                    "type": "string"
+                  },
+                  "purchaseOrderNumber": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "expirationDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "quoteCode": {
+                      "type": "string"
+                    },
+                    "purchaseOrderNumber": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supplierId",
+                    "supplierName",
+                    "quoteCode",
+                    "purchaseOrderNumber",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete supplier quote",
+        "tags": [
+          "supplier-quotes"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/supplier-offers/": {
+      "get": {
+        "summary": "List supplier offers",
+        "tags": [
+          "supplier-offers"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "offerCode": {
+                        "type": "string"
+                      },
+                      "linkedQuoteId": {
+                        "type": "string"
+                      },
+                      "linkedOrderId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "supplierId": {
+                        "type": "string"
+                      },
+                      "supplierName": {
+                        "type": "string"
+                      },
+                      "paymentTerms": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "discount": {
+                        "type": "number"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "expirationDate": {
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "format": "date"
+                      },
+                      "notes": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "offerId": {
+                              "type": "string"
+                            },
+                            "productId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "productName": {
+                              "type": "string"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unitPrice": {
+                              "type": "number"
+                            },
+                            "productTaxRate": {
+                              "type": "number"
+                            },
+                            "discount": {
+                              "type": "number"
+                            },
+                            "note": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "offerId",
+                            "productName",
+                            "quantity",
+                            "unitPrice",
+                            "discount"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "offerCode",
+                      "linkedQuoteId",
+                      "supplierId",
+                      "supplierName",
+                      "discount",
+                      "status",
+                      "createdAt",
+                      "updatedAt",
+                      "items"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create supplier offer",
+        "tags": [
+          "supplier-offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offerCode": {
+                    "type": "string"
+                  },
+                  "linkedQuoteId": {
+                    "type": "string"
+                  },
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "expirationDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "offerCode",
+                  "linkedQuoteId",
+                  "supplierId",
+                  "supplierName",
+                  "items",
+                  "expirationDate"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "linkedQuoteId": {
+                      "type": "string"
+                    },
+                    "linkedOrderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "offerId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "offerId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "offerCode",
+                    "linkedQuoteId",
+                    "supplierId",
+                    "supplierName",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/supplier-offers/{id}": {
+      "put": {
+        "summary": "Update supplier offer",
+        "tags": [
+          "supplier-offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offerCode": {
+                    "type": "string"
+                  },
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "expirationDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "offerCode": {
+                      "type": "string"
+                    },
+                    "linkedQuoteId": {
+                      "type": "string"
+                    },
+                    "linkedOrderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "offerId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "offerId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "offerCode",
+                    "linkedQuoteId",
+                    "supplierId",
+                    "supplierName",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete supplier offer",
+        "tags": [
+          "supplier-offers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounting/supplier-orders/": {
+      "get": {
+        "summary": "List supplier sale orders",
+        "tags": [
+          "supplier-orders"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "linkedQuoteId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "linkedOfferId": {
+                        "type": "string"
+                      },
+                      "supplierId": {
+                        "type": "string"
+                      },
+                      "supplierName": {
+                        "type": "string"
+                      },
+                      "paymentTerms": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "discount": {
+                        "type": "number"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "notes": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderId": {
+                              "type": "string"
+                            },
+                            "productId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "productName": {
+                              "type": "string"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unitPrice": {
+                              "type": "number"
+                            },
+                            "productTaxRate": {
+                              "type": "number"
+                            },
+                            "note": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "discount": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "orderId",
+                            "productName",
+                            "quantity",
+                            "unitPrice",
+                            "discount"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkedOfferId",
+                      "supplierId",
+                      "supplierName",
+                      "discount",
+                      "status",
+                      "createdAt",
+                      "updatedAt",
+                      "items"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create supplier sale order",
+        "tags": [
+          "supplier-orders"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "linkedQuoteId": {
+                    "type": "string"
+                  },
+                  "linkedOfferId": {
+                    "type": "string"
+                  },
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "linkedOfferId",
+                  "supplierId",
+                  "supplierName",
+                  "items"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "linkedQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedOfferId": {
+                      "type": "string"
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "orderId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "orderId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "linkedOfferId",
+                    "supplierId",
+                    "supplierName",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounting/supplier-orders/{id}": {
+      "put": {
+        "summary": "Update supplier sale order",
+        "tags": [
+          "supplier-orders"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "productTaxRate": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "linkedQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedOfferId": {
+                      "type": "string"
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "orderId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productTaxRate": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "orderId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "linkedOfferId",
+                    "supplierId",
+                    "supplierName",
+                    "discount",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete supplier sale order",
+        "tags": [
+          "supplier-orders"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounting/supplier-invoices/": {
+      "get": {
+        "summary": "List supplier invoices",
+        "tags": [
+          "supplier-invoices"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "linkedSaleId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "supplierId": {
+                        "type": "string"
+                      },
+                      "supplierName": {
+                        "type": "string"
+                      },
+                      "invoiceNumber": {
+                        "type": "string"
+                      },
+                      "issueDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "dueDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "subtotal": {
+                        "type": "number"
+                      },
+                      "taxAmount": {
+                        "type": "number"
+                      },
+                      "total": {
+                        "type": "number"
+                      },
+                      "amountPaid": {
+                        "type": "number"
+                      },
+                      "notes": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "linkedExpenseId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "invoiceId": {
+                              "type": "string"
+                            },
+                            "productId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unitPrice": {
+                              "type": "number"
+                            },
+                            "taxRate": {
+                              "type": "number"
+                            },
+                            "discount": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "invoiceId",
+                            "description",
+                            "quantity",
+                            "unitPrice",
+                            "taxRate",
+                            "discount"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "supplierId",
+                      "supplierName",
+                      "invoiceNumber",
+                      "issueDate",
+                      "dueDate",
+                      "status",
+                      "subtotal",
+                      "taxAmount",
+                      "total",
+                      "amountPaid",
+                      "createdAt",
+                      "updatedAt",
+                      "items"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create supplier invoice",
+        "tags": [
+          "supplier-invoices"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "linkedSaleId": {
+                    "type": "string"
+                  },
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "invoiceNumber": {
+                    "type": "string"
+                  },
+                  "issueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "subtotal": {
+                    "type": "number"
+                  },
+                  "taxAmount": {
+                    "type": "number"
+                  },
+                  "total": {
+                    "type": "number"
+                  },
+                  "amountPaid": {
+                    "type": "number"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "taxRate": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "description",
+                        "quantity",
+                        "unitPrice",
+                        "taxRate"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "supplierId",
+                  "supplierName",
+                  "issueDate",
+                  "dueDate",
+                  "items"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "linkedSaleId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "invoiceNumber": {
+                      "type": "string"
+                    },
+                    "issueDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "dueDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "subtotal": {
+                      "type": "number"
+                    },
+                    "taxAmount": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "amountPaid": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedExpenseId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "invoiceId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "taxRate": {
+                            "type": "number"
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "invoiceId",
+                          "description",
+                          "quantity",
+                          "unitPrice",
+                          "taxRate",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supplierId",
+                    "supplierName",
+                    "invoiceNumber",
+                    "issueDate",
+                    "dueDate",
+                    "status",
+                    "subtotal",
+                    "taxAmount",
+                    "total",
+                    "amountPaid",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounting/supplier-invoices/{id}": {
+      "put": {
+        "summary": "Update supplier invoice",
+        "tags": [
+          "supplier-invoices"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "invoiceNumber": {
+                    "type": "string"
+                  },
+                  "issueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "subtotal": {
+                    "type": "number"
+                  },
+                  "taxAmount": {
+                    "type": "number"
+                  },
+                  "total": {
+                    "type": "number"
+                  },
+                  "amountPaid": {
+                    "type": "number"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "taxRate": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "description",
+                        "quantity",
+                        "unitPrice",
+                        "taxRate"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "linkedSaleId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "invoiceNumber": {
+                      "type": "string"
+                    },
+                    "issueDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "dueDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "subtotal": {
+                      "type": "number"
+                    },
+                    "taxAmount": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "amountPaid": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedExpenseId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "invoiceId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "taxRate": {
+                            "type": "number"
+                          },
+                          "discount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "invoiceId",
+                          "description",
+                          "quantity",
+                          "unitPrice",
+                          "taxRate",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supplierId",
+                    "supplierName",
+                    "invoiceNumber",
+                    "issueDate",
+                    "dueDate",
+                    "status",
+                    "subtotal",
+                    "taxAmount",
+                    "total",
+                    "amountPaid",
+                    "createdAt",
+                    "updatedAt",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete supplier invoice",
+        "tags": [
+          "supplier-invoices"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplier-quotes/": {
+      "get": {
+        "summary": "List supplier quotes",
+        "tags": [
+          "supplier-quotes"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "supplierId": {
+                        "type": "string"
+                      },
+                      "supplierName": {
+                        "type": "string"
+                      },
+                      "quoteCode": {
+                        "type": "string"
+                      },
+                      "purchaseOrderNumber": {
+                        "type": "string"
+                      },
+                      "paymentTerms": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "discount": {
+                        "type": "number"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "expirationDate": {
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "format": "date"
+                      },
+                      "linkedOfferId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "notes": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "quoteId": {
+                              "type": "string"
+                            },
+                            "productId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "productName": {
+                              "type": "string"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unitPrice": {
+                              "type": "number"
+                            },
+                            "discount": {
+                              "type": "number"
+                            },
+                            "note": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "quoteId",
+                            "productName",
+                            "quantity",
+                            "unitPrice",
+                            "discount"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "supplierId",
+                      "supplierName",
+                      "quoteCode",
+                      "purchaseOrderNumber",
+                      "discount",
+                      "status",
+                      "createdAt",
+                      "updatedAt",
+                      "items"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create supplier quote",
+        "tags": [
+          "supplier-quotes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "supplierId": {
+                    "type": "string"
+                  },
+                  "supplierName": {
+                    "type": "string"
+                  },
+                  "quoteCode": {
+                    "type": "string"
+                  },
+                  "purchaseOrderNumber": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "productName": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitPrice": {
+                          "type": "number"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "productName",
+                        "quantity",
+                        "unitPrice"
+                      ]
+                    }
+                  },
+                  "paymentTerms": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "expirationDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "supplierId",
+                  "supplierName",
+                  "items",
+                  "expirationDate"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "supplierId": {
+                      "type": "string"
+                    },
+                    "supplierName": {
+                      "type": "string"
+                    },
+                    "quoteCode": {
+                      "type": "string"
+                    },
+                    "purchaseOrderNumber": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "discount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supplierId",
+                    "supplierName",
+                    "quoteCode",
                     "purchaseOrderNumber",
                     "discount",
                     "status",
@@ -13825,6 +18983,9 @@
                   "supplierName": {
                     "type": "string"
                   },
+                  "quoteCode": {
+                    "type": "string"
+                  },
                   "purchaseOrderNumber": {
                     "type": "string"
                   },
@@ -13907,6 +19068,9 @@
                     "supplierName": {
                       "type": "string"
                     },
+                    "quoteCode": {
+                      "type": "string"
+                    },
                     "purchaseOrderNumber": {
                       "type": "string"
                     },
@@ -13928,6 +19092,12 @@
                         "string"
                       ],
                       "format": "date"
+                    },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -13992,6 +19162,7 @@
                     "id",
                     "supplierId",
                     "supplierName",
+                    "quoteCode",
                     "purchaseOrderNumber",
                     "discount",
                     "status",
