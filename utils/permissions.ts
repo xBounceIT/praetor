@@ -57,9 +57,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'projects.tasks', actions: CRUD, module: 'projects' },
   { id: 'projects.tasks_all', actions: VIEW_ONLY, isScope: true, module: 'projects' },
 
-  // Suppliers
-  { id: 'suppliers.quotes', actions: CRUD, module: 'suppliers' },
-
   // HR
   { id: 'hr.internal', actions: CRUD, module: 'hr' },
   { id: 'hr.external', actions: CRUD, module: 'hr' },

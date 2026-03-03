@@ -30,6 +30,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Sales
   { id: 'sales.client_quotes', actions: CRUD },
+  { id: 'sales.client_offers', actions: CRUD },
+  { id: 'sales.supplier_quotes', actions: CRUD },
+  { id: 'sales.supplier_offers', actions: CRUD },
 
   // Catalog
   { id: 'catalog.internal_listing', actions: CRUD },
@@ -39,6 +42,8 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Accounting
   { id: 'accounting.clients_orders', actions: CRUD },
   { id: 'accounting.clients_invoices', actions: CRUD },
+  { id: 'accounting.supplier_orders', actions: CRUD },
+  { id: 'accounting.supplier_invoices', actions: CRUD },
 
   // Finances
   { id: 'finances.payments', actions: CRUD },
@@ -49,9 +54,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'projects.manage_all', actions: VIEW_ONLY, isScope: true },
   { id: 'projects.tasks', actions: CRUD },
   { id: 'projects.tasks_all', actions: VIEW_ONLY, isScope: true },
-
-  // Suppliers
-  { id: 'suppliers.quotes', actions: CRUD },
 
   // HR
   { id: 'hr.internal', actions: CRUD },
@@ -108,7 +110,9 @@ export const ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS: Permission[] = buildPermis
 export const normalizePermission = (permission: string): Permission =>
   (permission.startsWith('configuration.')
     ? permission.replace('configuration.', 'administration.')
-    : permission) as Permission;
+    : permission.startsWith('suppliers.quotes.')
+      ? permission.replace('suppliers.quotes.', 'sales.supplier_quotes.')
+      : permission) as Permission;
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   manager: [
@@ -119,18 +123,22 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('crm.suppliers', CRUD),
     buildPermission('crm.suppliers_all', 'view'),
     ...buildPermissions('sales.client_quotes', CRUD),
+    ...buildPermissions('sales.client_offers', CRUD),
+    ...buildPermissions('sales.supplier_quotes', CRUD),
+    ...buildPermissions('sales.supplier_offers', CRUD),
     ...buildPermissions('catalog.internal_listing', CRUD),
     ...buildPermissions('catalog.external_listing', CRUD),
     ...buildPermissions('catalog.special_bids', CRUD),
     ...buildPermissions('accounting.clients_orders', CRUD),
     ...buildPermissions('accounting.clients_invoices', CRUD),
+    ...buildPermissions('accounting.supplier_orders', CRUD),
+    ...buildPermissions('accounting.supplier_invoices', CRUD),
     ...buildPermissions('finances.payments', CRUD),
     ...buildPermissions('finances.expenses', CRUD),
     ...buildPermissions('projects.manage', CRUD),
     buildPermission('projects.manage_all', 'view'),
     ...buildPermissions('projects.tasks', CRUD),
     buildPermission('projects.tasks_all', 'view'),
-    ...buildPermissions('suppliers.quotes', CRUD),
     ...buildPermissions('hr.internal', CRUD),
     ...buildPermissions('hr.external', CRUD),
     ...buildPermissions('hr.costs', VIEW_UPDATE),

@@ -105,6 +105,9 @@ const isForbiddenAdministrationPermissionForNonAdmin = (permission: string) =>
 const findForbiddenAdministrationPermission = (permissions: string[]) =>
   permissions.find(isForbiddenAdministrationPermissionForNonAdmin);
 
+const normalizeSubmittedPermissions = (permissions: string[]) =>
+  Array.from(new Set(permissions.map((permission) => normalizePermission(permission))));
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List roles
   fastify.get(
@@ -165,13 +168,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!permissionsResult.ok)
         return badRequest(reply, (permissionsResult as { ok: false; message: string }).message);
 
-      const invalidPermission = permissionsResult.value.find(
+      const normalizedPermissions = normalizeSubmittedPermissions(permissionsResult.value);
+
+      const invalidPermission = normalizedPermissions.find(
         (permission) => !isPermissionKnown(permission),
       );
       if (invalidPermission) {
         return badRequest(reply, `Unknown permission: ${invalidPermission}`);
       }
-      const forbiddenPermission = findForbiddenAdministrationPermission(permissionsResult.value);
+      const forbiddenPermission = findForbiddenAdministrationPermission(normalizedPermissions);
       if (forbiddenPermission) {
         return badRequest(
           reply,
@@ -190,7 +195,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           false,
         ]);
 
-        for (const permission of permissionsResult.value) {
+        for (const permission of normalizedPermissions) {
           await query(
             'INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [id, permission],
@@ -334,7 +339,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!permissionsResult.ok)
         return badRequest(reply, (permissionsResult as { ok: false; message: string }).message);
 
-      const invalidPermission = permissionsResult.value.find(
+      const normalizedPermissions = normalizeSubmittedPermissions(permissionsResult.value);
+
+      const invalidPermission = normalizedPermissions.find(
         (permission) => !isPermissionKnown(permission),
       );
       if (invalidPermission) {
@@ -350,7 +357,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (roleResult.rows[0].is_admin) {
         return reply.code(403).send({ error: 'Admin role permissions are locked' });
       }
-      const forbiddenPermission = findForbiddenAdministrationPermission(permissionsResult.value);
+      const forbiddenPermission = findForbiddenAdministrationPermission(normalizedPermissions);
       if (forbiddenPermission) {
         return badRequest(
           reply,
@@ -361,7 +368,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         await query('BEGIN');
         await query('DELETE FROM role_permissions WHERE role_id = $1', [idResult.value]);
-        for (const permission of permissionsResult.value) {
+        for (const permission of normalizedPermissions) {
           await query(
             'INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [idResult.value, permission],

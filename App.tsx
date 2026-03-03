@@ -111,6 +111,12 @@ const getModuleFromView = (view: View | '404'): string | null => {
   return null;
 };
 
+const canonicalizeLegacyHash = (hash: string) => {
+  if (hash === 'suppliers/manage') return 'crm/suppliers';
+  if (hash === 'suppliers/quotes') return 'sales/supplier-quotes';
+  return hash;
+};
+
 const TrackerView: React.FC<{
   entries: TimeEntry[];
   clients: Client[];
@@ -718,7 +724,7 @@ const App: React.FC = () => {
       'docs/api',
       'docs/frontend',
     ];
-    const canonicalHash = rawHash === 'suppliers/quotes' ? 'sales/supplier-quotes' : rawHash;
+    const canonicalHash = canonicalizeLegacyHash(rawHash);
     const hash = canonicalHash as View;
     return validViews.includes(hash)
       ? hash
@@ -833,19 +839,15 @@ const App: React.FC = () => {
         }
         return;
       }
-      // Redirect old suppliers/manage to new crm/suppliers
-      if (rawHash === 'suppliers/manage') {
-        window.location.hash = '/crm/suppliers';
+      const canonicalHash = canonicalizeLegacyHash(rawHash);
+      if (canonicalHash !== rawHash) {
+        window.location.hash = `/${canonicalHash}`;
         return;
       }
-      if (rawHash === 'suppliers/quotes') {
-        window.location.hash = '/sales/supplier-quotes';
-        return;
-      }
-      const hash = rawHash as View;
+      const hash = canonicalHash as View;
       const nextView = VALID_VIEWS.includes(hash)
         ? hash
-        : rawHash === ''
+        : canonicalHash === ''
           ? 'timesheets/tracker'
           : '404';
       if (nextView !== activeView) {
@@ -1003,7 +1005,7 @@ const App: React.FC = () => {
         ]);
         const canViewSuppliersModule = hasPermission(
           permissions,
-          buildPermission('suppliers.quotes', 'view'),
+          buildPermission('sales.supplier_quotes', 'view'),
         );
 
         const canListClients = hasAnyPermission(permissions, [
@@ -1953,6 +1955,11 @@ const App: React.FC = () => {
     try {
       await api.clientOffers.delete(id);
       setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
+      setQuotes((prev) =>
+        prev.map((quote) =>
+          quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
+        ),
+      );
     } catch (err) {
       console.error('Failed to delete client offer:', err);
       throw err;
@@ -2240,6 +2247,11 @@ const App: React.FC = () => {
     try {
       await api.supplierOffers.delete(id);
       setSupplierOffers((prev) => prev.filter((offer) => offer.id !== id));
+      setSupplierQuotes((prev) =>
+        prev.map((quote) =>
+          quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
+        ),
+      );
     } catch (err) {
       console.error('Failed to delete supplier offer:', err);
       throw err;

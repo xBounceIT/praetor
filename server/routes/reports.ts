@@ -1030,12 +1030,50 @@ const buildBusinessDataset = async (
       };
     }
 
+    const supplierWorkflowViewPermissions = [
+      'sales.supplier_quotes.view',
+      'sales.supplier_offers.view',
+      'accounting.supplier_orders.view',
+      'accounting.supplier_invoices.view',
+    ];
+    const productListPermissions = [
+      'catalog.internal_listing.view',
+      'catalog.external_listing.view',
+      'catalog.special_bids.view',
+      ...supplierWorkflowViewPermissions,
+    ];
+    const clientListPermissions = [
+      'crm.clients.view',
+      'crm.clients_all.view',
+      'timesheets.tracker.view',
+      'timesheets.recurring.view',
+      'projects.manage.view',
+      'projects.tasks.view',
+      'sales.client_quotes.view',
+      'sales.client_offers.view',
+      'accounting.clients_orders.view',
+      'accounting.clients_invoices.view',
+      'catalog.special_bids.view',
+      'catalog.internal_listing.view',
+      'catalog.external_listing.view',
+      'finances.payments.view',
+      'finances.expenses.view',
+      'sales.supplier_quotes.view',
+      'administration.user_management.view',
+      'administration.user_management.update',
+    ];
+    const supplierListPermissions = [
+      'crm.suppliers.view',
+      'crm.suppliers_all.view',
+      'catalog.external_listing.view',
+      ...supplierWorkflowViewPermissions,
+    ];
     const canViewQuotes = hasPermission(request, 'sales.client_quotes.view');
     const canViewOrders = hasPermission(request, 'accounting.clients_orders.view');
     const canViewInvoices = hasPermission(request, 'accounting.clients_invoices.view');
     const canViewPayments = hasPermission(request, 'finances.payments.view');
     const canViewExpenses = hasPermission(request, 'finances.expenses.view');
-    const canViewSupplierQuotes = hasPermission(request, 'suppliers.quotes.view');
+    const canViewSupplierQuotes = hasPermission(request, 'sales.supplier_quotes.view');
     const canViewSpecialBids = hasPermission(request, 'catalog.special_bids.view');
 
     if (canViewQuotes)
@@ -1053,77 +1091,23 @@ const buildBusinessDataset = async (
       addGrantedPermissions(request, ['finances.expenses.view'], permissionsApplied);
     }
     if (canViewSupplierQuotes) {
-      addGrantedPermissions(request, ['suppliers.quotes.view'], permissionsApplied);
+      addGrantedPermissions(request, ['sales.supplier_quotes.view'], permissionsApplied);
     }
     if (canViewSpecialBids) {
       addGrantedPermissions(request, ['catalog.special_bids.view'], permissionsApplied);
     }
 
-    const canListProducts = [
-      'catalog.internal_listing.view',
-      'catalog.external_listing.view',
-      'catalog.special_bids.view',
-      'suppliers.quotes.view',
-    ].some((p) => hasPermission(request, p));
+    const canListProducts = productListPermissions.some((p) => hasPermission(request, p));
     if (canListProducts) {
-      addGrantedPermissions(
-        request,
-        [
-          'catalog.internal_listing.view',
-          'catalog.external_listing.view',
-          'catalog.special_bids.view',
-          'suppliers.quotes.view',
-        ],
-        permissionsApplied,
-      );
+      addGrantedPermissions(request, productListPermissions, permissionsApplied);
     }
 
     // Clients (scoped if clients_all not present)
-    const canListClients = [
-      'crm.clients.view',
-      'crm.clients_all.view',
-      'timesheets.tracker.view',
-      'timesheets.recurring.view',
-      'projects.manage.view',
-      'projects.tasks.view',
-      'sales.client_quotes.view',
-      'accounting.clients_orders.view',
-      'accounting.clients_invoices.view',
-      'catalog.special_bids.view',
-      'catalog.internal_listing.view',
-      'catalog.external_listing.view',
-      'finances.payments.view',
-      'finances.expenses.view',
-      'suppliers.quotes.view',
-      'administration.user_management.view',
-      'administration.user_management.update',
-    ].some((p) => hasPermission(request, p));
+    const canListClients = clientListPermissions.some((p) => hasPermission(request, p));
 
     if (canListClients && shouldIncludeDatasetSection(requestedSections, 'clients')) {
       includedSections.add('clients');
-      addGrantedPermissions(
-        request,
-        [
-          'crm.clients.view',
-          'crm.clients_all.view',
-          'timesheets.tracker.view',
-          'timesheets.recurring.view',
-          'projects.manage.view',
-          'projects.tasks.view',
-          'sales.client_quotes.view',
-          'accounting.clients_orders.view',
-          'accounting.clients_invoices.view',
-          'catalog.special_bids.view',
-          'catalog.internal_listing.view',
-          'catalog.external_listing.view',
-          'finances.payments.view',
-          'finances.expenses.view',
-          'suppliers.quotes.view',
-          'administration.user_management.view',
-          'administration.user_management.update',
-        ],
-        permissionsApplied,
-      );
+      addGrantedPermissions(request, clientListPermissions, permissionsApplied);
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const countRes = canViewAllClients
@@ -2273,24 +2257,10 @@ const buildBusinessDataset = async (
     }
 
     // Suppliers (global in current access model)
-    const canListSuppliers = [
-      'crm.suppliers.view',
-      'crm.suppliers_all.view',
-      'catalog.external_listing.view',
-      'suppliers.quotes.view',
-    ].some((p) => hasPermission(request, p));
+    const canListSuppliers = supplierListPermissions.some((p) => hasPermission(request, p));
     if (canListSuppliers && shouldIncludeDatasetSection(requestedSections, 'suppliers')) {
       includedSections.add('suppliers');
-      addGrantedPermissions(
-        request,
-        [
-          'crm.suppliers.view',
-          'crm.suppliers_all.view',
-          'catalog.external_listing.view',
-          'suppliers.quotes.view',
-        ],
-        permissionsApplied,
-      );
+      addGrantedPermissions(request, supplierListPermissions, permissionsApplied);
 
       const summaryRes = await query(
         `SELECT
