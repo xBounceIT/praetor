@@ -748,6 +748,42 @@ const App: React.FC = () => {
     return map;
   }, [clientOffers]);
 
+  const offerIdsWithOrders = useMemo(() => {
+    const ids = new Set<string>();
+    clientsOrders.forEach((order) => {
+      if (order.linkedOfferId) {
+        ids.add(order.linkedOfferId);
+      }
+    });
+    return ids;
+  }, [clientsOrders]);
+
+  const orderIdsWithInvoices = useMemo(() => {
+    const ids = new Set<string>();
+    supplierInvoices.forEach((invoice) => {
+      if (invoice.linkedSaleId) {
+        ids.add(invoice.linkedSaleId);
+      }
+    });
+    return ids;
+  }, [supplierInvoices]);
+
+  const canViewExpenses = hasPermission(
+    currentUser?.permissions,
+    buildPermission('finances.expenses', 'view'),
+  );
+
+  const refreshExpensesIfAllowed = useCallback(async () => {
+    if (!canViewExpenses) return;
+
+    try {
+      const expensesData = await api.expenses.list();
+      setExpenses(expensesData);
+    } catch (err) {
+      console.error('Failed to refresh expenses after supplier invoice change:', err);
+    }
+  }, [canViewExpenses]);
+
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
     if (!currentUser) return false;
@@ -2018,11 +2054,11 @@ const App: React.FC = () => {
       };
 
       const order = await api.clientsOrders.create(orderData);
-      setClientsOrders([...clientsOrders, order]);
+      setClientsOrders((prev) => [...prev, order]);
       setActiveView('accounting/clients-orders');
     } catch (err) {
       console.error('Failed to create order from offer:', err);
-      alert('Failed to create order from offer');
+      alert((err as Error).message || 'Failed to create order from offer');
     }
   };
 
@@ -2301,8 +2337,7 @@ const App: React.FC = () => {
     try {
       const invoice = await api.supplierInvoices.create(invoiceData);
       setSupplierInvoices((prev) => [invoice, ...prev]);
-      const expensesData = await api.expenses.list();
-      setExpenses(expensesData);
+      await refreshExpensesIfAllowed();
     } catch (err) {
       console.error('Failed to add supplier invoice:', err);
       throw err;
@@ -2313,8 +2348,7 @@ const App: React.FC = () => {
     try {
       const updated = await api.supplierInvoices.update(id, updates);
       setSupplierInvoices((prev) => prev.map((invoice) => (invoice.id === id ? updated : invoice)));
-      const expensesData = await api.expenses.list();
-      setExpenses(expensesData);
+      await refreshExpensesIfAllowed();
     } catch (err) {
       console.error('Failed to update supplier invoice:', err);
       throw err;
@@ -2325,8 +2359,7 @@ const App: React.FC = () => {
     try {
       await api.supplierInvoices.delete(id);
       setSupplierInvoices((prev) => prev.filter((invoice) => invoice.id !== id));
-      const expensesData = await api.expenses.list();
-      setExpenses(expensesData);
+      await refreshExpensesIfAllowed();
     } catch (err) {
       console.error('Failed to delete supplier invoice:', err);
       throw err;
@@ -2375,8 +2408,7 @@ const App: React.FC = () => {
         items,
       });
       setSupplierInvoices((prev) => [invoice, ...prev]);
-      const expensesData = await api.expenses.list();
-      setExpenses(expensesData);
+      await refreshExpensesIfAllowed();
       setActiveView('accounting/supplier-invoices');
     } catch (err) {
       console.error('Failed to create supplier invoice from order:', err);
@@ -2984,6 +3016,7 @@ const App: React.FC = () => {
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
+                  offerIdsWithOrders={offerIdsWithOrders}
                   onUpdateOffer={handleUpdateClientOffer}
                   onDeleteOffer={handleDeleteClientOffer}
                   onCreateClientsOrder={handleCreateClientsOrderFromOffer}
@@ -3069,6 +3102,7 @@ const App: React.FC = () => {
                   orders={supplierOrders}
                   suppliers={suppliers}
                   products={products}
+                  orderIdsWithInvoices={orderIdsWithInvoices}
                   onUpdateOrder={handleUpdateSupplierOrder}
                   onDeleteOrder={handleDeleteSupplierOrder}
                   onCreateInvoice={handleCreateSupplierInvoiceFromOrder}

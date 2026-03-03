@@ -15,7 +15,25 @@ import {
 
 interface DatabaseError extends Error {
   code?: string;
+  constraint?: string;
+  detail?: string;
 }
+
+const duplicateInvoiceError = (databaseError: DatabaseError) => {
+  if (databaseError.constraint === 'idx_supplier_invoices_linked_sale_id_unique') {
+    return 'An invoice already exists for this order';
+  }
+  if (databaseError.constraint === 'supplier_invoices_invoice_number_key') {
+    return 'Invoice number already exists';
+  }
+  if (databaseError.detail?.includes('(linked_sale_id)')) {
+    return 'An invoice already exists for this order';
+  }
+  if (databaseError.detail?.includes('(invoice_number)')) {
+    return 'Invoice number already exists';
+  }
+  return 'Invoice number already exists';
+};
 
 const idParamSchema = {
   type: 'object',
@@ -451,6 +469,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
 
+      if (linkedSaleIdResult.value) {
+        const orderResult = await query('SELECT id, status FROM supplier_sales WHERE id = $1', [
+          linkedSaleIdResult.value,
+        ]);
+        if (orderResult.rows.length === 0) {
+          return reply.code(404).send({ error: 'Source order not found' });
+        }
+        if (orderResult.rows[0].status !== 'confirmed') {
+          return reply
+            .code(409)
+            .send({ error: 'Invoices can only be created from confirmed orders' });
+        }
+
+        const existingInvoiceResult = await query(
+          'SELECT id FROM supplier_invoices WHERE linked_sale_id = $1 LIMIT 1',
+          [linkedSaleIdResult.value],
+        );
+        if (existingInvoiceResult.rows.length > 0) {
+          return reply.code(409).send({ error: 'An invoice already exists for this order' });
+        }
+      }
+
       const invoiceId = `sinv-${Date.now()}`;
 
       try {
@@ -537,7 +577,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (error) {
         const databaseError = error as DatabaseError;
         if (databaseError.code === '23505') {
-          return reply.code(409).send({ error: 'Invoice number already exists' });
+          return reply.code(409).send({ error: duplicateInvoiceError(databaseError) });
         }
         throw error;
       }
@@ -791,7 +831,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (error) {
         const databaseError = error as DatabaseError;
         if (databaseError.code === '23505') {
-          return reply.code(409).send({ error: 'Invoice number already exists' });
+          return reply.code(409).send({ error: duplicateInvoiceError(databaseError) });
         }
         throw error;
       }

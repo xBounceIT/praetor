@@ -863,6 +863,25 @@ CREATE INDEX IF NOT EXISTS idx_sales_client_id ON sales(client_id);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
 CREATE INDEX IF NOT EXISTS idx_sales_linked_quote_id ON sales(linked_quote_id);
 CREATE INDEX IF NOT EXISTS idx_sales_linked_offer_id ON sales(linked_offer_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'idx_sales_linked_offer_id_unique'
+    ) AND NOT EXISTS (
+        SELECT linked_offer_id
+        FROM sales
+        WHERE linked_offer_id IS NOT NULL
+        GROUP BY linked_offer_id
+        HAVING COUNT(*) > 1
+    ) THEN
+        EXECUTE 'CREATE UNIQUE INDEX idx_sales_linked_offer_id_unique
+            ON sales(linked_offer_id)
+            WHERE linked_offer_id IS NOT NULL';
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 
 -- Sale items table (safe for existing installations)
@@ -1117,6 +1136,25 @@ CREATE INDEX IF NOT EXISTS idx_supplier_invoices_supplier_id ON supplier_invoice
 CREATE INDEX IF NOT EXISTS idx_supplier_invoices_status ON supplier_invoices(status);
 CREATE INDEX IF NOT EXISTS idx_supplier_invoices_issue_date ON supplier_invoices(issue_date);
 CREATE INDEX IF NOT EXISTS idx_supplier_invoices_linked_sale_id ON supplier_invoices(linked_sale_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'idx_supplier_invoices_linked_sale_id_unique'
+    ) AND NOT EXISTS (
+        SELECT linked_sale_id
+        FROM supplier_invoices
+        WHERE linked_sale_id IS NOT NULL
+        GROUP BY linked_sale_id
+        HAVING COUNT(*) > 1
+    ) THEN
+        EXECUTE 'CREATE UNIQUE INDEX idx_supplier_invoices_linked_sale_id_unique
+            ON supplier_invoices(linked_sale_id)
+            WHERE linked_sale_id IS NOT NULL';
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS supplier_invoice_items (
     id VARCHAR(50) PRIMARY KEY,

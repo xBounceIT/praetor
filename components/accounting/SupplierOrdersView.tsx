@@ -39,6 +39,7 @@ export interface SupplierOrdersViewProps {
   orders: SupplierSaleOrder[];
   suppliers: Supplier[];
   products: Product[];
+  orderIdsWithInvoices: ReadonlySet<string>;
   onUpdateOrder: (id: string, updates: Partial<SupplierSaleOrder>) => void | Promise<void>;
   onDeleteOrder: (id: string) => void | Promise<void>;
   onCreateInvoice?: (order: SupplierSaleOrder) => void | Promise<void>;
@@ -49,6 +50,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   orders,
   suppliers,
   products,
+  orderIdsWithInvoices,
   onUpdateOrder,
   onDeleteOrder,
   onCreateInvoice,
@@ -410,90 +412,93 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filteredOrders.map((order) => (
-              <tr key={order.id} className="hover:bg-slate-50/70">
-                <td className="px-4 py-4">
-                  <div className="font-bold text-slate-800">{order.supplierName}</div>
-                  <div className="text-xs text-slate-400">
-                    {order.linkedQuoteId || 'No quote link'}
-                  </div>
-                </td>
-                <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
-                  {order.linkedOfferId}
-                </td>
-                <td className="px-4 py-4">
-                  <StatusBadge
-                    type={order.status as StatusType}
-                    label={
-                      statusOptions.find((option) => option.id === order.status)?.name ||
-                      order.status
-                    }
-                  />
-                </td>
-                <td className="px-4 py-4 text-sm font-bold text-slate-700">
-                  {calculateTotal(order.items, order.discount).toFixed(2)} {currency}
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => openEditModal(order)}
-                      className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                      title={t('common.edit')}
-                    >
-                      <i className="fa-solid fa-pen-to-square"></i>
-                    </button>
-                    {order.status === 'draft' && (
+            {filteredOrders.map((order) => {
+              const hasInvoice = orderIdsWithInvoices.has(order.id);
+              return (
+                <tr key={order.id} className="hover:bg-slate-50/70">
+                  <td className="px-4 py-4">
+                    <div className="font-bold text-slate-800">{order.supplierName}</div>
+                    <div className="text-xs text-slate-400">
+                      {order.linkedQuoteId || 'No quote link'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
+                    {order.linkedOfferId}
+                  </td>
+                  <td className="px-4 py-4">
+                    <StatusBadge
+                      type={order.status as StatusType}
+                      label={
+                        statusOptions.find((option) => option.id === order.status)?.name ||
+                        order.status
+                      }
+                    />
+                  </td>
+                  <td className="px-4 py-4 text-sm font-bold text-slate-700">
+                    {calculateTotal(order.items, order.discount).toFixed(2)} {currency}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => onUpdateOrder(order.id, { status: 'sent' })}
-                        className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                        title="Mark as sent"
-                      >
-                        <i className="fa-solid fa-paper-plane"></i>
-                      </button>
-                    )}
-                    {order.status === 'sent' && (
-                      <>
-                        <button
-                          onClick={() => onUpdateOrder(order.id, { status: 'confirmed' })}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                          title="Mark as confirmed"
-                        >
-                          <i className="fa-solid fa-check"></i>
-                        </button>
-                        <button
-                          onClick={() => onUpdateOrder(order.id, { status: 'denied' })}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                          title="Mark as denied"
-                        >
-                          <i className="fa-solid fa-xmark"></i>
-                        </button>
-                      </>
-                    )}
-                    {order.status === 'confirmed' && onCreateInvoice && (
-                      <button
-                        onClick={() => onCreateInvoice(order)}
+                        onClick={() => openEditModal(order)}
                         className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                        title="Create invoice"
+                        title={t('common.edit')}
                       >
-                        <i className="fa-solid fa-file-invoice-dollar"></i>
+                        <i className="fa-solid fa-pen-to-square"></i>
                       </button>
-                    )}
-                    {order.status === 'draft' && (
-                      <button
-                        onClick={() => {
-                          setOrderToDelete(order);
-                          setIsDeleteConfirmOpen(true);
-                        }}
-                        className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                        title={t('common.delete')}
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {order.status === 'draft' && (
+                        <button
+                          onClick={() => onUpdateOrder(order.id, { status: 'sent' })}
+                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                          title="Mark as sent"
+                        >
+                          <i className="fa-solid fa-paper-plane"></i>
+                        </button>
+                      )}
+                      {order.status === 'sent' && (
+                        <>
+                          <button
+                            onClick={() => onUpdateOrder(order.id, { status: 'confirmed' })}
+                            className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                            title="Mark as confirmed"
+                          >
+                            <i className="fa-solid fa-check"></i>
+                          </button>
+                          <button
+                            onClick={() => onUpdateOrder(order.id, { status: 'denied' })}
+                            className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            title="Mark as denied"
+                          >
+                            <i className="fa-solid fa-xmark"></i>
+                          </button>
+                        </>
+                      )}
+                      {order.status === 'confirmed' && !hasInvoice && onCreateInvoice && (
+                        <button
+                          onClick={() => onCreateInvoice(order)}
+                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
+                          title="Create invoice"
+                        >
+                          <i className="fa-solid fa-file-invoice-dollar"></i>
+                        </button>
+                      )}
+                      {order.status === 'draft' && (
+                        <button
+                          onClick={() => {
+                            setOrderToDelete(order);
+                            setIsDeleteConfirmOpen(true);
+                          }}
+                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
+                          title={t('common.delete')}
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

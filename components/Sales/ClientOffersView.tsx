@@ -50,6 +50,7 @@ export interface ClientOffersViewProps {
   clients: Client[];
   products: Product[];
   specialBids: SpecialBid[];
+  offerIdsWithOrders: ReadonlySet<string>;
   onAddOffer?: (offerData: Partial<ClientOffer>) => void | Promise<void>;
   onUpdateOffer: (id: string, updates: Partial<ClientOffer>) => void | Promise<void>;
   onDeleteOffer: (id: string) => void | Promise<void>;
@@ -63,6 +64,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   clients,
   products,
   specialBids,
+  offerIdsWithOrders,
   onAddOffer,
   onUpdateOffer,
   onDeleteOffer,
@@ -659,6 +661,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           <tbody className="divide-y divide-slate-100">
             {filteredOffers.map((offer) => {
               const totals = calculateTotals(offer.items, offer.discount);
+              const hasOrder = offerIdsWithOrders.has(offer.id);
               return (
                 <tr key={offer.id} className="hover:bg-slate-50/70">
                   <td className="px-4 py-4">
@@ -729,7 +732,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           </button>
                         </>
                       )}
-                      {offer.status === 'accepted' && onCreateClientsOrder && (
+                      {offer.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
                         <button
                           onClick={() => onCreateClientsOrder(offer)}
                           className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
