@@ -13,5 +13,17 @@ if ! bun -e "require('rollup')" >/dev/null 2>&1; then
 fi
 
 git add bun.lock
+
+# Check if server dependencies need updating
+if [ -f "server/package.json" ] && [ -f "server/bun.lock" ]; then
+  # Check if package.json is newer than bun.lock or if lockfile is out of sync
+  if [ "server/package.json" -nt "server/bun.lock" ] || \
+     ! (cd server && bun install --frozen-lockfile >/dev/null 2>&1); then
+    echo "pre-commit: updating server/bun.lock..."
+    (cd server && bun install)
+    git add server/bun.lock
+  fi
+fi
+
 bunx lint-staged
 tsc --noEmit
