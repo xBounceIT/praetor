@@ -159,10 +159,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [requirePermission('accounting.clients_orders.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.clients_orders.view'),
+      ],
       schema: {
         tags: ['clients-orders'],
         summary: 'List client orders',

@@ -49,10 +49,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [requirePermission('notifications.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('notifications.view'),
+      ],
       schema: {
         tags: ['notifications'],
         summary: 'Fetch notifications',

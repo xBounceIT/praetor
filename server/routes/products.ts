@@ -91,10 +91,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
       onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         requireAnyPermission(
           'catalog.internal_listing.view',
           'catalog.external_listing.view',

@@ -327,10 +327,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [requirePermission('accounting.supplier_invoices.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.supplier_invoices.view'),
+      ],
       schema: {
         tags: ['supplier-invoices'],
         summary: 'List supplier invoices',

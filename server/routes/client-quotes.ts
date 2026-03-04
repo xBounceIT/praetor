@@ -383,10 +383,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [requirePermission('sales.client_quotes.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('sales.client_quotes.view'),
+      ],
       schema: {
         tags: ['client-quotes'],
         summary: 'List client quotes',

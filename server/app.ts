@@ -33,7 +33,6 @@ import tasksRoutes from './routes/tasks.ts';
 import usersRoutes from './routes/users.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
-import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
 dotenv.config();
 
@@ -46,9 +45,8 @@ export const buildApp = async () => {
   });
 
   await fastify.register(rateLimit, {
-    global: true,
+    global: false,
     hook: 'onRequest',
-    ...GLOBAL_RATE_LIMIT,
     errorResponseBuilder: () => ({
       error: 'Too many requests',
     }),
@@ -108,9 +106,6 @@ export const buildApp = async () => {
   fastify.get(
     '/api/health',
     {
-      config: {
-        rateLimit: false,
-      },
       schema: {
         tags: ['health'],
         summary: 'Health check',
