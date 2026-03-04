@@ -1,5 +1,4 @@
-#!/usr/bin/env sh
-set -eu
+#!/bin/sh
 
 mkdir -p .tmp
 export TMPDIR="$PWD/.tmp"
