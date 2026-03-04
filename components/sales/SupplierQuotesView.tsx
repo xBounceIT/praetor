@@ -1,14 +1,14 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../types';
-import { roundToTwoDecimals } from '../utils/numbers';
-import CustomSelect from './shared/CustomSelect';
-import Modal from './shared/Modal';
-import StandardTable, { type Column } from './shared/StandardTable';
-import StatusBadge, { type StatusType } from './shared/StatusBadge';
-import Tooltip from './shared/Tooltip';
-import ValidatedNumberInput from './shared/ValidatedNumberInput';
+import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
+import { roundToTwoDecimals } from '../../utils/numbers';
+import CustomSelect from '../shared/CustomSelect';
+import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
   { id: 'immediate', name: t('crm:paymentTerms.immediate') },
