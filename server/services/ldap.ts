@@ -2,6 +2,7 @@ import fs from 'fs';
 import ldap from 'ldapjs';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/index.ts';
+import { buildUserLookupFilter, buildUserSyncFilter } from '../utils/ldap-filter.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 
 const logger = createChildLogger({ module: 'ldap' });
@@ -48,11 +49,6 @@ interface LdapSearchEntry {
   objectName: string;
   object: Record<string, unknown>;
 }
-
-const getUserFilterAttribute = (userFilter: string) => {
-  const match = /^\(\s*([A-Za-z][A-Za-z0-9-]*)\s*=\s*\{0\}\s*\)$/.exec(userFilter.trim());
-  return match?.[1] || null;
-};
 
 class LDAPService {
   config: LdapConfig | null;
@@ -161,16 +157,9 @@ class LDAPService {
     if (!config) {
       return null;
     }
-    const attribute = getUserFilterAttribute(config.user_filter);
-    if (!attribute) {
-      throw new Error('LDAP user_filter must use a simple equality template such as (uid={0})');
-    }
     const searchOptions = {
       scope: 'sub',
-      filter: new ldap.EqualityFilter({
-        attribute,
-        value: username,
-      }),
+      filter: buildUserLookupFilter(config.user_filter, username),
     };
 
     return new Promise((resolve, reject) => {
@@ -226,14 +215,10 @@ class LDAPService {
         });
       });
 
-      // Search for all users
-      const filter = config.user_filter.replace('{0}', '*'); // Assumption: filter can handle * wildcard for all
-      // If user_filter is strictly (uid={0}), then (uid=*) should work.
-
       const searchOptions = {
         scope: 'sub',
-        filter: filter,
-        attributes: ['uid', 'cn', 'sn', 'givenName', 'mail'], // Request common attributes
+        filter: buildUserSyncFilter(config.user_filter),
+        attributes: ['uid', 'cn', 'sn', 'givenName', 'mail', 'displayName', 'sAMAccountName'],
       };
 
       const entries: LdapEntry[] = [];

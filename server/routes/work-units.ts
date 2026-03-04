@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -103,7 +103,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'List work units',
         response: {
           200: { type: 'array', items: workUnitSchema },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -168,7 +168,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: workUnitCreateBodySchema,
         response: {
           201: workUnitSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -237,7 +237,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: workUnitUpdateBodySchema,
         response: {
           200: workUnitSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -358,7 +358,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: idParamSchema,
         response: {
           200: messageResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -390,7 +390,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: idParamSchema,
         response: {
           200: { type: 'array', items: { type: 'string' } },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -437,7 +437,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: workUnitUsersBodySchema,
         response: {
           200: messageResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

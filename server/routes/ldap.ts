@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
@@ -74,7 +75,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Get LDAP configuration',
         response: {
           200: ldapConfigSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -125,7 +126,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: ldapConfigUpdateBodySchema,
         response: {
           200: ldapConfigSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -152,6 +153,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
       };
       const enabledValue = parseBoolean(enabled);
+      let normalizedUserFilter = userFilter;
 
       if (enabledValue) {
         const serverUrlResult = requireNonEmptyString(serverUrl, 'serverUrl');
@@ -162,6 +164,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const userFilterResult = requireNonEmptyString(userFilter, 'userFilter');
         if (!userFilterResult.ok) return badRequest(reply, userFilterResult.message);
+        const userFilterTemplateResult = validateUserFilterTemplate(userFilterResult.value);
+        if (!userFilterTemplateResult.ok) {
+          return badRequest(reply, userFilterTemplateResult.message);
+        }
+        normalizedUserFilter = userFilterTemplateResult.value;
 
         const groupBaseDnResult = requireNonEmptyString(groupBaseDn, 'groupBaseDn');
         if (!groupBaseDnResult.ok) return badRequest(reply, groupBaseDnResult.message);
@@ -233,7 +240,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           baseDn,
           bindDn,
           bindPassword,
-          userFilter,
+          normalizedUserFilter,
           groupBaseDn,
           groupFilter,
           JSON.stringify(roleMappings || []),
@@ -265,7 +272,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Trigger LDAP sync',
         response: {
           200: ldapSyncResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

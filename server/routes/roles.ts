@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   bumpNamespaceVersion,
   cacheGetSetJson,
@@ -119,7 +119,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'List roles',
         response: {
           200: rolesListSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -154,7 +154,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: roleCreateBodySchema,
         response: {
           201: roleSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -229,7 +229,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: roleUpdateBodySchema,
         response: {
           200: roleSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -278,7 +278,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: idParamSchema,
         response: {
           200: messageResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -324,7 +324,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: rolePermissionsBodySchema,
         response: {
           200: roleSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

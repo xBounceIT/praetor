@@ -77,6 +77,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
       newErrors.baseDn = t('admin.ldap.errors.baseDnRequired', 'Base DN is required');
     if (!formData.userFilter?.trim())
       newErrors.userFilter = t('admin.ldap.errors.userFilterRequired', 'User filter is required');
+    else if (!formData.userFilter.includes('{0}'))
+      newErrors.userFilter = t(
+        'admin.ldap.errors.userFilterPlaceholderRequired',
+        'User filter must include {0}',
+      );
     if (!formData.groupBaseDn?.trim())
       newErrors.groupBaseDn = t(
         'admin.ldap.errors.groupBaseDnRequired',
@@ -285,11 +290,14 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
                   setFormData({ ...formData, userFilter: e.target.value });
                   if (errors.userFilter) setErrors({ ...errors, userFilter: '' });
                 }}
-                placeholder="(uid={0}) or (sAMAccountName={0})"
+                placeholder={t('admin.ldap.userFilterPlaceholder')}
                 className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none font-mono text-sm ${errors.userFilter ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
               />
               {errors.userFilter && (
                 <p className="text-red-500 text-[10px] font-bold mt-1">{errors.userFilter}</p>
+              )}
+              {!errors.userFilter && (
+                <p className="text-slate-500 text-[10px] mt-1">{t('admin.ldap.userFilterHelp')}</p>
               )}
             </div>
 

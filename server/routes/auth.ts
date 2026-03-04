@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, generateToken } from '../middleware/auth.ts';
-import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
@@ -210,7 +210,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Get current user',
         response: {
           200: authUserSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -252,7 +252,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: switchRoleBodySchema,
         response: {
           200: loginResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

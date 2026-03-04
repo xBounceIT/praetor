@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { cacheGetSetJson } from '../services/cache.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
@@ -104,7 +104,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             required: ['ok'],
           },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

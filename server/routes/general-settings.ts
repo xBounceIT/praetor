@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   bumpNamespaceVersion,
   cacheGetSetJson,
@@ -81,7 +81,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Get global settings',
         response: {
           200: generalSettingsSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -157,7 +157,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: generalSettingsUpdateBodySchema,
         response: {
           200: generalSettingsSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
