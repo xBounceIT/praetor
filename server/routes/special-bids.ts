@@ -30,7 +30,7 @@ const specialBidSchema = {
     productId: { type: 'string' },
     productName: { type: 'string' },
     unitPrice: { type: 'number' },
-    molPercentage: { type: ['number', 'null'] },
+    molPercentage: { type: 'number', nullable: true },
     startDate: { type: 'string', format: 'date' },
     endDate: { type: 'string', format: 'date' },
     createdAt: { type: 'number' },
