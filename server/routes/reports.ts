@@ -2931,10 +2931,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/ai-reporting/sessions',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [requirePermission('reports.ai_reporting.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('reports.ai_reporting.view'),
+      ],
       schema: {
         tags: ['reports'],
         summary: 'List AI Reporting chat sessions for the current user',

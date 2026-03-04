@@ -124,10 +124,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [authenticateToken, requirePermission('timesheets.tracker.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('timesheets.tracker.view'),
+      ],
       schema: {
         tags: ['entries'],
         summary: 'List time entries',
@@ -556,10 +557,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
       onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
         requireAnyPermission('timesheets.tracker.delete', 'timesheets.recurring.delete'),
       ],

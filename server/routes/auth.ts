@@ -100,9 +100,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/login',
     {
-      config: {
-        rateLimit: LOGIN_RATE_LIMIT,
-      },
+      onRequest: fastify.rateLimit(LOGIN_RATE_LIMIT),
       schema: {
         tags: ['auth'],
         summary: 'Login',

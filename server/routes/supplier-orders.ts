@@ -181,10 +181,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      config: {
-        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
-      },
-      onRequest: [requirePermission('accounting.supplier_orders.view')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission('accounting.supplier_orders.view'),
+      ],
       schema: {
         tags: ['supplier-orders'],
         summary: 'List supplier sale orders',

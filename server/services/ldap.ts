@@ -49,14 +49,10 @@ interface LdapSearchEntry {
   object: Record<string, unknown>;
 }
 
-const escapeLdapFilterValue = (value: string) =>
-  value
-    .replace(/\\/g, '\\5c')
-    .replace(/\*/g, '\\2a')
-    .replace(/\(/g, '\\28')
-    .replace(/\)/g, '\\29')
-    .split('\0')
-    .join('\\00');
+const getUserFilterAttribute = (userFilter: string) => {
+  const match = /^\(\s*([A-Za-z][A-Za-z0-9-]*)\s*=\s*\{0\}\s*\)$/.exec(userFilter.trim());
+  return match?.[1] || null;
+};
 
 class LDAPService {
   config: LdapConfig | null;
@@ -165,12 +161,16 @@ class LDAPService {
     if (!config) {
       return null;
     }
-    const filter = ldap.parseFilter(
-      config.user_filter.replace('{0}', escapeLdapFilterValue(username)),
-    );
+    const attribute = getUserFilterAttribute(config.user_filter);
+    if (!attribute) {
+      throw new Error('LDAP user_filter must use a simple equality template such as (uid={0})');
+    }
     const searchOptions = {
       scope: 'sub',
-      filter,
+      filter: new ldap.EqualityFilter({
+        attribute,
+        value: username,
+      }),
     };
 
     return new Promise((resolve, reject) => {
