@@ -19,10 +19,13 @@
     "deleteChatTitle": "Elimina chat",
     "deleteChatConfirm": "Questo rimuovera' \"{{name}}\" dalla cronologia chat.",
     "goToBottom": "Vai in fondo",
+    "copyTable": "Copia tabella",
     "loadOlder": "Carica messaggi precedenti",
     "loadingOlder": "Caricamento messaggi precedenti...",
     "error": "Si e' verificato un errore.",
     "thoughtLabel": "Processo di pensiero",
+    "previousVersion": "Versione precedente",
+    "nextVersion": "Versione successiva",
     "stop": "Ferma",
     "retry": "Riprova"
   }

@@ -23,6 +23,8 @@
     "projectColor": "Project Color",
     "clientRequired": "Client is Required",
     "projectDisabled": "Disable Project",
+    "disableProject": "Disable Project",
+    "enableProject": "Enable Project",
     "inheritedFromDisabled": "Inherited from disabled Project",
     "createNewProject": "Create New Project",
     "projectsDirectory": "Projects Directory",

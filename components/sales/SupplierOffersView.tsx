@@ -342,15 +342,17 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
 
     const nextErrors: Record<string, string> = {};
     if (!formData.supplierId) {
-      nextErrors.supplierId =
-        t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' }) + ' is required';
+      nextErrors.supplierId = t('sales:supplierOffers.supplierRequired', {
+        defaultValue: 'Supplier is required',
+      });
     }
     if (!formData.offerCode?.trim()) {
-      nextErrors.offerCode =
-        t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' }) + ' is required';
+      nextErrors.offerCode = t('sales:supplierOffers.offerCodeRequired', {
+        defaultValue: 'Offer Code is required',
+      });
     }
     if (!formData.items || formData.items.length === 0) {
-      nextErrors.items = t('crm:quotes.errors.itemsRequired', {
+      nextErrors.items = t('sales:supplierOffers.itemsRequired', {
         defaultValue: 'At least one item is required',
       });
     }
