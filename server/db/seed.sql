@@ -43,7 +43,8 @@ ON CONFLICT (user_id) DO NOTHING;
 -- Refreshable demo dataset.
 -- Demo records intentionally use dm_* ids and DM-* business codes so reseeding restores the
 -- curated showcase rows in place without deleting non-demo records that reference demo entities.
-BEGIN;
+-- NOTE: No explicit transaction wrapper — the app layer executes each statement independently
+-- so that a single table failure does not roll back the entire seed.
 
 INSERT INTO clients (
     id,
@@ -1321,5 +1322,3 @@ ON CONFLICT (id) DO UPDATE SET
     data = EXCLUDED.data,
     is_read = EXCLUDED.is_read,
     created_at = EXCLUDED.created_at;
-
-COMMIT;
