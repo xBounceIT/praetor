@@ -96,6 +96,7 @@
     "status": "Stato",
     "total": "Totale",
     "notes": "Note",
+    "actionsColumn": "Azioni",
     "deleteTitle": "Eliminare ordine fornitore?",
     "statusDraft": "Bozza",
     "statusSent": "Inviato",
@@ -118,6 +119,7 @@
     "amountPaid": "Importo Pagato",
     "total": "Totale",
     "notes": "Note",
+    "actionsColumn": "Azioni",
     "deleteTitle": "Eliminare fattura fornitore?",
     "linkedExpense": "Spesa collegata",
     "noLinkedExpense": "Nessuna spesa collegata"

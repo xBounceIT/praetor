@@ -96,6 +96,7 @@
     "status": "Status",
     "total": "Total",
     "notes": "Notes",
+    "actionsColumn": "Actions",
     "deleteTitle": "Delete supplier order?",
     "statusDraft": "Draft",
     "statusSent": "Sent",
@@ -118,6 +119,7 @@
     "amountPaid": "Amount Paid",
     "total": "Total",
     "notes": "Notes",
+    "actionsColumn": "Actions",
     "deleteTitle": "Delete supplier invoice?",
     "linkedExpense": "Linked expense",
     "noLinkedExpense": "No linked expense"

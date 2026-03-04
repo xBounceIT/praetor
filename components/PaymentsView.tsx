@@ -215,7 +215,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('payments.invoice')} ({t('common.optional')})
+                  {t('payments.invoice')} ({t('common:common.optional')})
                 </label>
                 <CustomSelect
                   options={[
@@ -258,7 +258,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('common.labels.date')}
+                  {t('common:labels.date')}
                 </label>
                 <input
                   type="date"
@@ -316,13 +316,13 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
               >
-                {t('common.buttons.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
                 className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
               >
-                {t('common.buttons.save')}
+                {t('common:buttons.save')}
               </button>
             </div>
           </form>
@@ -342,13 +342,13 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
               onClick={() => setIsDeleteConfirmOpen(false)}
               className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
             >
-              {t('common.buttons.cancel')}
+              {t('common:buttons.cancel')}
             </button>
             <button
               onClick={handleDelete}
               className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
             >
-              {t('common.buttons.delete')}
+              {t('common:buttons.delete')}
             </button>
           </div>
         </div>

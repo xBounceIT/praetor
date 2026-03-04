@@ -1,23 +1,46 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierInvoice, SupplierInvoiceItem } from '../../types';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+
+const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
+  { id: 'draft', name: t('accounting:clientsInvoices.statusDraft') },
+  { id: 'sent', name: t('accounting:clientsInvoices.statusSent') },
+  { id: 'paid', name: t('accounting:clientsInvoices.statusPaid') },
+  { id: 'overdue', name: t('accounting:clientsInvoices.statusOverdue') },
+  { id: 'cancelled', name: t('accounting:clientsInvoices.statusCancelled') },
+];
+
+const getStatusLabel = (
+  status: SupplierInvoice['status'],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) => {
+  if (status === 'sent') return t('accounting:clientsInvoices.statusSent');
+  if (status === 'paid') return t('accounting:clientsInvoices.statusPaid');
+  if (status === 'overdue') return t('accounting:clientsInvoices.statusOverdue');
+  if (status === 'cancelled') return t('accounting:clientsInvoices.statusCancelled');
+  return t('accounting:clientsInvoices.statusDraft');
+};
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
   let subtotal = 0;
   let taxAmount = 0;
+
   items.forEach((item) => {
-    const lineSubtotal = item.quantity * item.unitPrice;
+    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
     taxAmount += lineNet * (Number(item.taxRate ?? 0) / 100);
   });
+
   return { subtotal, taxAmount, total: subtotal + taxAmount };
 };
 
@@ -38,18 +61,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   onDeleteInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common']);
-  const statusOptions = useMemo(
-    () => [
-      { id: 'draft', name: t('accounting:clientsInvoices.statusDraft') },
-      { id: 'sent', name: t('accounting:clientsInvoices.statusSent') },
-      { id: 'paid', name: t('accounting:clientsInvoices.statusPaid') },
-      { id: 'overdue', name: t('accounting:clientsInvoices.statusOverdue') },
-      { id: 'cancelled', name: t('accounting:clientsInvoices.statusCancelled') },
-    ],
-    [t],
-  );
-
+  const { t } = useTranslation(['accounting', 'common', 'crm']);
+  const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
     () => suppliers.filter((supplier) => !supplier.isDisabled),
     [suppliers],
@@ -63,8 +76,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   const [invoiceToDelete, setInvoiceToDelete] = useState<SupplierInvoice | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [formData, setFormData] = useState<Partial<SupplierInvoice>>({
     linkedSaleId: '',
     supplierId: '',
@@ -81,267 +92,527 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     items: [],
   });
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const matchesSearch =
-        searchTerm.trim() === '' ||
-        invoice.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [invoices, searchTerm, filterStatus]);
-
-  const openEditModal = (invoice: SupplierInvoice) => {
+  const openEditModal = useCallback((invoice: SupplierInvoice) => {
     setEditingInvoice(invoice);
     setFormData({
       ...invoice,
       issueDate: invoice.issueDate?.split('T')[0] || '',
       dueDate: invoice.dueDate?.split('T')[0] || '',
+      items: invoice.items.map((item) => ({ ...item })),
     });
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const updateItem = (index: number, field: keyof SupplierInvoiceItem, value: string | number) => {
-    setFormData((prev) => {
-      const items = [...(prev.items || [])];
-      const nextItem = { ...items[index], [field]: value };
-      if (field === 'productId') {
-        const product = products.find((item) => item.id === value);
-        if (product) {
-          nextItem.description = product.name;
-          nextItem.unitPrice = Number(product.costo);
-          nextItem.taxRate = Number(product.taxRate ?? 0);
+  const confirmDelete = useCallback((invoice: SupplierInvoice) => {
+    setInvoiceToDelete(invoice);
+    setIsDeleteConfirmOpen(true);
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    if (!invoiceToDelete) return;
+    await onDeleteInvoice(invoiceToDelete.id);
+    setIsDeleteConfirmOpen(false);
+    setInvoiceToDelete(null);
+  }, [invoiceToDelete, onDeleteInvoice]);
+
+  const updateItem = useCallback(
+    (index: number, field: keyof SupplierInvoiceItem, value: string | number) => {
+      setFormData((prev) => {
+        const items = [...(prev.items || [])];
+        const nextItem = { ...items[index], [field]: value };
+
+        if (field === 'productId') {
+          const product = products.find((item) => item.id === value);
+          if (product) {
+            nextItem.description = product.name;
+            nextItem.unitPrice = Number(product.costo);
+            nextItem.taxRate = Number(product.taxRate ?? 0);
+          }
         }
-      }
-      items[index] = nextItem;
-      const totals = calculateTotals(items);
-      return { ...prev, items, ...totals };
-    });
-  };
+
+        items[index] = nextItem;
+        const totals = calculateTotals(items);
+        return { ...prev, items, ...totals };
+      });
+    },
+    [products],
+  );
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (!editingInvoice) return;
+
+      const totals = calculateTotals(formData.items || []);
+      await onUpdateInvoice(editingInvoice.id, {
+        ...formData,
+        ...totals,
+        amountPaid: roundToTwoDecimals(Number(formData.amountPaid ?? 0)),
+        items: (formData.items || []).map((item) => ({
+          ...item,
+          quantity: roundToTwoDecimals(Number(item.quantity ?? 0)),
+          unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
+          taxRate: roundToTwoDecimals(Number(item.taxRate ?? 0)),
+          discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+        })),
+      });
+
+      setIsModalOpen(false);
+    },
+    [editingInvoice, formData, onUpdateInvoice],
+  );
+
+  const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
+  const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
+
+  const columns = useMemo(
+    () => [
+      {
+        header: t('accounting:supplierInvoices.supplier'),
+        id: 'supplierName',
+        accessorFn: (row: SupplierInvoice) => row.supplierName,
+        cell: ({ row }: { row: SupplierInvoice }) => {
+          const isMuted = row.status === 'paid' || row.status === 'cancelled';
+
+          return (
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor text-sm">
+                <i className="fa-solid fa-file-invoice-dollar"></i>
+              </div>
+              <div>
+                <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
+                  {row.supplierName}
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  {row.linkedExpenseId
+                    ? `${t('accounting:supplierInvoices.linkedExpense')}: ${row.linkedExpenseId}`
+                    : t('accounting:supplierInvoices.noLinkedExpense')}
+                </div>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        header: t('accounting:supplierInvoices.invoiceNumber'),
+        id: 'invoiceNumber',
+        accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-mono text-sm font-bold text-slate-600">{row.invoiceNumber}</span>
+        ),
+      },
+      {
+        header: t('accounting:supplierInvoices.total'),
+        id: 'invoiceTotal',
+        accessorFn: (row: SupplierInvoice) => Number(row.total),
+        cell: ({ row }: { row: SupplierInvoice }) => {
+          const isMuted = row.status === 'paid' || row.status === 'cancelled';
+
+          return (
+            <span className={`text-sm font-bold ${isMuted ? 'text-slate-400' : 'text-slate-700'}`}>
+              {Number(row.total).toFixed(2)} {currency}
+            </span>
+          );
+        },
+        filterFormat: (value: unknown) => Number(value).toFixed(2),
+      },
+      {
+        header: t('accounting:supplierInvoices.status'),
+        id: 'invoiceStatus',
+        accessorFn: (row: SupplierInvoice) => getStatusLabel(row.status, t),
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <div className={row.status === 'paid' || row.status === 'cancelled' ? 'opacity-60' : ''}>
+            <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status, t)} />
+          </div>
+        ),
+      },
+      {
+        header: t('accounting:supplierInvoices.actionsColumn', { defaultValue: 'Actions' }),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        align: 'right' as const,
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <div className="flex justify-end gap-2">
+            <Tooltip label={t('common:buttons.edit')}>
+              {() => (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openEditModal(row);
+                  }}
+                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
+              )}
+            </Tooltip>
+            <Tooltip label={t('common:buttons.delete')}>
+              {() => (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    confirmDelete(row);
+                  }}
+                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
+                >
+                  <i className="fa-solid fa-trash-can"></i>
+                </button>
+              )}
+            </Tooltip>
+          </div>
+        ),
+      },
+    ],
+    [confirmDelete, currency, openEditModal, t],
+  );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
-          <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800">
+        <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
+            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
+                <i className="fa-solid fa-pen-to-square"></i>
+              </div>
               {t('accounting:supplierInvoices.editInvoice', { defaultValue: 'Supplier Invoice' })}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
             >
-              <i className="fa-solid fa-xmark"></i>
+              <i className="fa-solid fa-xmark text-lg"></i>
             </button>
           </div>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (!editingInvoice) return;
-              const totals = calculateTotals(formData.items || []);
-              await onUpdateInvoice(editingInvoice.id, {
-                ...formData,
-                ...totals,
-                amountPaid: roundToTwoDecimals(Number(formData.amountPaid ?? 0)),
-                items: (formData.items || []).map((item) => ({
-                  ...item,
-                  quantity: roundToTwoDecimals(Number(item.quantity ?? 0)),
-                  unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-                  taxRate: roundToTwoDecimals(Number(item.taxRate ?? 0)),
-                  discount: roundToTwoDecimals(Number(item.discount ?? 0)),
-                })),
-              });
-              setIsModalOpen(false);
-            }}
-            className="p-6 space-y-6 max-h-[85vh] overflow-y-auto"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:supplierInvoices.supplier')}
-                </label>
-                <CustomSelect
-                  options={activeSuppliers.map((supplier) => ({
-                    id: supplier.id,
-                    name: supplier.name,
-                  }))}
-                  value={formData.supplierId || ''}
-                  onChange={(value) => {
-                    const supplier = suppliers.find((item) => item.id === value);
-                    setFormData((prev) => ({
-                      ...prev,
-                      supplierId: value as string,
-                      supplierName: supplier?.name || '',
-                    }));
-                  }}
-                  searchable={true}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:supplierInvoices.invoiceNumber')}
-                </label>
-                <input
-                  type="text"
-                  value={formData.invoiceNumber || ''}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:supplierInvoices.issueDate')}
-                </label>
-                <input
-                  type="date"
-                  value={formData.issueDate || ''}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:supplierInvoices.dueDate')}
-                </label>
-                <input
-                  type="date"
-                  value={formData.dueDate || ''}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-            </div>
-            <div className="space-y-3">
-              {(formData.items || []).map((item, index) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-12 gap-2 items-start bg-slate-50 p-3 rounded-xl"
-                >
-                  <div className="col-span-12 md:col-span-3">
-                    <CustomSelect
-                      options={activeProducts.map((product) => ({
-                        id: product.id,
-                        name: product.name,
-                      }))}
-                      value={item.productId || ''}
-                      onChange={(value) => updateItem(index, 'productId', value as string)}
-                      searchable={true}
-                    />
-                  </div>
-                  <div className="col-span-12 md:col-span-3">
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(event) => updateItem(index, 'description', event.target.value)}
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-2">
-                    <ValidatedNumberInput
-                      value={item.quantity}
-                      onValueChange={(value) =>
-                        updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                      }
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-2">
-                    <ValidatedNumberInput
-                      value={item.unitPrice}
-                      onValueChange={(value) =>
-                        updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                      }
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-2">
-                    <ValidatedNumberInput
-                      value={item.taxRate}
-                      onValueChange={(value) =>
-                        updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
-                      }
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
+
+          <form onSubmit={handleSubmit} className="space-y-8 overflow-y-auto p-8">
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                {t('accounting:clientsInvoices.invoiceDetails')}
+              </h4>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.supplier')}
+                  </label>
+                  <CustomSelect
+                    options={activeSuppliers.map((supplier) => ({
+                      id: supplier.id,
+                      name: supplier.name,
+                    }))}
+                    value={formData.supplierId || ''}
+                    onChange={(value) => {
+                      const supplier = suppliers.find((item) => item.id === value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        supplierId: value as string,
+                        supplierName: supplier?.name || '',
+                      }));
+                    }}
+                    searchable={true}
+                  />
                 </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:supplierInvoices.status')}
-                </label>
-                <CustomSelect
-                  options={statusOptions}
-                  value={formData.status || 'draft'}
-                  onChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      status: value as SupplierInvoice['status'],
-                    }))
-                  }
-                  searchable={false}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:supplierInvoices.amountPaid')}
-                </label>
-                <ValidatedNumberInput
-                  value={formData.amountPaid || 0}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      amountPaid: value === '' ? 0 : Number(value),
-                    }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div className="md:col-span-2 flex items-end justify-end text-right">
-                <div>
-                  <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    {t('accounting:supplierInvoices.total')}
-                  </div>
-                  <div className="text-2xl font-black text-praetor">
-                    {calculateTotals(formData.items || []).total.toFixed(2)} {currency}
-                  </div>
+
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.invoiceNumber')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.invoiceNumber || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.issueDate')}
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.issueDate || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.dueDate')}
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.dueDate || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
+                  />
                 </div>
               </div>
             </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('accounting:supplierInvoices.notes')}
-              </label>
-              <textarea
-                rows={3}
-                value={formData.notes || ''}
-                onChange={(event) =>
-                  setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                }
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                {t('accounting:clientsInvoices.items')}
+              </h4>
+
+              {(formData.items || []).length > 0 ? (
+                <div className="space-y-3">
+                  {formData.items?.map((item, index) => {
+                    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+                    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+                    const lineTotal = lineSubtotal - lineDiscount;
+
+                    return (
+                      <div key={item.id} className="rounded-xl bg-slate-50 p-4">
+                        <div className="mb-4 flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">
+                              {t('accounting:clientsInvoices.items')}
+                            </div>
+                            <div className="text-sm font-bold text-slate-700">
+                              {item.description ||
+                                t('accounting:clientsInvoices.descriptionPlaceholder')}
+                            </div>
+                          </div>
+                          <div className="text-left sm:text-right">
+                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">
+                              {t('accounting:supplierInvoices.total')}
+                            </div>
+                            <div className="text-lg font-black text-praetor">
+                              {lineTotal.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+                          <div className="space-y-1.5 md:col-span-3">
+                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {t('crm:quotes.productsServices')}
+                            </label>
+                            <CustomSelect
+                              options={activeProducts.map((product) => ({
+                                id: product.id,
+                                name: product.name,
+                              }))}
+                              value={item.productId || ''}
+                              onChange={(value) => updateItem(index, 'productId', value as string)}
+                              searchable={true}
+                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-3">
+                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                            </label>
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(event) =>
+                                updateItem(index, 'description', event.target.value)
+                              }
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {t('crm:quotes.qty')}
+                            </label>
+                            <ValidatedNumberInput
+                              value={item.quantity}
+                              onValueChange={(value) =>
+                                updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                              }
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {t('crm:internalListing.salePrice')}
+                            </label>
+                            <ValidatedNumberInput
+                              value={item.unitPrice}
+                              onValueChange={(value) =>
+                                updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                              }
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {t('accounting:clientsInvoices.vat')}
+                            </label>
+                            <ValidatedNumberInput
+                              value={item.taxRate}
+                              onValueChange={(value) =>
+                                updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
+                              }
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {t('accounting:supplierOrders.discount')}
+                            </label>
+                            <ValidatedNumberInput
+                              value={item.discount || 0}
+                              onValueChange={(value) =>
+                                updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                              }
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                  {t('accounting:clientsInvoices.noItems')}
+                </div>
+              )}
             </div>
-            <div className="flex justify-between border-t border-slate-100 pt-4">
+
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                {t('accounting:supplierInvoices.status')}
+              </h4>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.status')}
+                  </label>
+                  <CustomSelect
+                    options={statusOptions}
+                    value={formData.status || 'draft'}
+                    onChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        status: value as SupplierInvoice['status'],
+                      }))
+                    }
+                    searchable={false}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.amountPaid')}
+                  </label>
+                  <ValidatedNumberInput
+                    value={formData.amountPaid || 0}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        amountPaid: value === '' ? 0 : Number(value),
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="ml-1 text-xs font-bold text-slate-500">
+                    {t('accounting:supplierInvoices.notes')}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.notes || ''}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {(formData.items || []).length > 0 && (
+              <div className="border-t border-slate-100 pt-8">
+                <div className="grid grid-cols-1 items-stretch gap-8 md:grid-cols-3">
+                  <div className="flex h-full flex-col justify-center space-y-3">
+                    <div className="flex items-center justify-between px-2">
+                      <span className="text-sm font-bold text-slate-500">
+                        {t('accounting:clientsInvoices.subtotal')}
+                      </span>
+                      <span className="text-sm font-black text-slate-800">
+                        {totals.subtotal.toFixed(2)} {currency}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-2">
+                      <span className="text-sm font-bold text-slate-500">
+                        {t('accounting:clientsInvoices.vat')}
+                      </span>
+                      <span className="text-sm font-black text-slate-800">
+                        {totals.taxAmount.toFixed(2)} {currency}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-2">
+                      <span className="text-sm font-bold text-slate-500">
+                        {t('accounting:supplierInvoices.amountPaid')}
+                      </span>
+                      <span className="text-sm font-black text-emerald-600">
+                        {Number(formData.amountPaid || 0).toFixed(2)} {currency}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-100/50 bg-slate-50/50 py-4">
+                    <span className="mb-1 text-xs font-black uppercase tracking-widest text-slate-400">
+                      {t('accounting:supplierInvoices.total')}
+                    </span>
+                    <span className="text-4xl font-black leading-none text-praetor">
+                      {totals.total.toFixed(2)}
+                      <span className="ml-1 text-xl text-slate-400 opacity-60">{currency}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-100/40 bg-emerald-50/50 p-6 text-center">
+                    <span className="mb-2 text-xs font-black uppercase tracking-widest text-emerald-600">
+                      {t('accounting:clientsInvoices.balanceDue')}
+                    </span>
+                    <div className="text-2xl font-black leading-none text-emerald-700">
+                      {balanceDue.toFixed(2)} {currency}
+                    </div>
+                    <div className="mt-2 text-xs font-black text-emerald-500 opacity-70">
+                      {t('accounting:clientsOrders.itemsCount', {
+                        count: (formData.items || []).length,
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-slate-100 pt-8">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
+                className="rounded-xl border border-slate-200 px-8 py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
               >
-                {t('common.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold"
+                className="rounded-xl bg-praetor px-10 py-3 text-sm font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
               >
-                {t('common.update')}
+                {t('common:buttons.update')}
               </button>
             </div>
           </form>
@@ -349,141 +620,69 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       </Modal>
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">
-            {t('accounting:supplierInvoices.deleteTitle', {
-              defaultValue: 'Delete supplier invoice?',
-            })}
-          </h3>
-          <p className="text-sm text-slate-500">{invoiceToDelete?.invoiceNumber}</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              onClick={async () => {
-                if (!invoiceToDelete) return;
-                await onDeleteInvoice(invoiceToDelete.id);
-                setIsDeleteConfirmOpen(false);
-                setInvoiceToDelete(null);
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold"
-            >
-              {t('common.yesDelete')}
-            </button>
+        <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+          <div className="space-y-4 p-6 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('accounting:supplierInvoices.deleteTitle', {
+                  defaultValue: 'Delete supplier invoice?',
+                })}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                {invoiceToDelete?.supplierName} · {invoiceToDelete?.invoiceNumber}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 rounded-xl py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={() => {
+                  void handleDelete();
+                }}
+                className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-red-700 active:scale-95"
+              >
+                {t('common:buttons.delete')}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
 
-      <div className="space-y-1">
-        <h2 className="text-2xl font-black text-slate-800">
-          {t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
-        </h2>
-        <p className="text-sm text-slate-500">
-          {t('accounting:supplierInvoices.subtitle', {
-            defaultValue: 'Invoices created from supplier orders.',
-          })}
-        </p>
+      <div className="space-y-4">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">
+              {t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {t('accounting:supplierInvoices.subtitle', {
+                defaultValue: 'Invoices created from supplier orders.',
+              })}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder={t('common.search')}
-          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm"
-        />
-        <CustomSelect
-          options={[
-            { id: 'all', name: t('common.all', { defaultValue: 'All' }) },
-            ...statusOptions,
-          ]}
-          value={filterStatus}
-          onChange={(value) => setFilterStatus(value as string)}
-          searchable={false}
-          buttonClassName="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700"
-        />
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('accounting:supplierInvoices.supplier')}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('accounting:supplierInvoices.invoiceNumber')}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('accounting:supplierInvoices.status')}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('accounting:supplierInvoices.total')}
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('common.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredInvoices.map((invoice) => (
-              <tr key={invoice.id} className="hover:bg-slate-50/70">
-                <td className="px-4 py-4">
-                  <div className="font-bold text-slate-800">{invoice.supplierName}</div>
-                  <div className="text-xs text-slate-400">
-                    {invoice.linkedExpenseId
-                      ? t('accounting:supplierInvoices.linkedExpense', {
-                          id: invoice.linkedExpenseId,
-                        })
-                      : t('accounting:supplierInvoices.noLinkedExpense')}
-                  </div>
-                </td>
-                <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
-                  {invoice.invoiceNumber}
-                </td>
-                <td className="px-4 py-4">
-                  <StatusBadge
-                    type={invoice.status as StatusType}
-                    label={
-                      statusOptions.find((option) => option.id === invoice.status)?.name ||
-                      invoice.status
-                    }
-                  />
-                </td>
-                <td className="px-4 py-4 text-sm font-bold text-slate-700">
-                  {Number(invoice.total).toFixed(2)} {currency}
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => openEditModal(invoice)}
-                      className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                      title={t('common.edit')}
-                    >
-                      <i className="fa-solid fa-pen-to-square"></i>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setInvoiceToDelete(invoice);
-                        setIsDeleteConfirmOpen(true);
-                      }}
-                      className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                      title={t('common.delete')}
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StandardTable<SupplierInvoice>
+        title={t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+        data={invoices}
+        columns={columns}
+        defaultRowsPerPage={10}
+        containerClassName="overflow-visible"
+        rowClassName={(row: SupplierInvoice) =>
+          row.status === 'paid' || row.status === 'cancelled'
+            ? 'bg-slate-50 text-slate-400'
+            : 'hover:bg-slate-50/50'
+        }
+        onRowClick={(row: SupplierInvoice) => openEditModal(row)}
+      />
     </div>
   );
 };

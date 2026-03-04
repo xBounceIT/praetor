@@ -28,11 +28,11 @@ import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
 import AiReportingView from './components/reports/AiReportingView';
-import ClientOffersView from './components/Sales/ClientOffersView';
-import ClientQuotesView from './components/Sales/ClientQuotesView';
-import SupplierOffersView from './components/Sales/SupplierOffersView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
-import SupplierQuotesView from './components/SupplierQuotesView';
+import ClientOffersView from './components/sales/ClientOffersView';
+import ClientQuotesView from './components/sales/ClientQuotesView';
+import SupplierOffersView from './components/sales/SupplierOffersView';
+import SupplierQuotesView from './components/sales/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
 import CustomSelect from './components/shared/CustomSelect';
 import Tooltip from './components/shared/Tooltip';
@@ -1986,15 +1986,6 @@ const App: React.FC = () => {
     }
   };
 
-  const addClientsOrder = async (orderData: Partial<ClientsOrder>) => {
-    try {
-      const order = await api.clientsOrders.create(orderData);
-      setClientsOrders([...clientsOrders, order]);
-    } catch (err) {
-      console.error('Failed to add order:', err);
-    }
-  };
-
   const handleUpdateClientsOrder = async (id: string, updates: Partial<ClientsOrder>) => {
     try {
       const updated = await api.clientsOrders.update(id, updates);
@@ -3039,7 +3030,6 @@ const App: React.FC = () => {
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
-                  onAddClientsOrder={addClientsOrder}
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}
