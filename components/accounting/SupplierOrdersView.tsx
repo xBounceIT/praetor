@@ -200,6 +200,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     () => [
       {
         header: t('accounting:supplierOrders.supplier'),
+        id: 'supplierName',
         accessorFn: (row: SupplierSaleOrder) => row.supplierName,
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
@@ -229,6 +230,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       },
       {
         header: t('accounting:supplierOrders.total'),
+        id: 'orderTotal',
         accessorFn: (row: SupplierSaleOrder) => calculateTotals(row.items, row.discount).total,
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const { total } = calculateTotals(row.items, row.discount);
@@ -244,6 +246,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       },
       {
         header: t('accounting:supplierOrders.paymentTerms'),
+        id: 'paymentTerms',
         accessorFn: (row: SupplierSaleOrder) => getPaymentTermsLabel(row.paymentTerms, t),
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
@@ -259,6 +262,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       },
       {
         header: t('accounting:supplierOrders.status'),
+        id: 'orderStatus',
         accessorFn: (row: SupplierSaleOrder) => getOrderStatusLabel(row.status, t),
         cell: ({ row }: { row: SupplierSaleOrder }) => (
           <div
@@ -721,7 +725,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                       {t('crm:quotes.totalLabel')}
                     </span>
                     <div className="text-2xl font-black leading-none text-blue-700">
-                      {totals.taxableAmount.toFixed(2)} {currency}
+                      {totals.total.toFixed(2)} {currency}
                     </div>
                     <div className="mt-2 text-xs font-black text-blue-500 opacity-70">
                       {t('accounting:clientsOrders.itemsCount', {
