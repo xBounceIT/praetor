@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import emailService from '../services/email.ts';
 import { encrypt } from '../utils/crypto.ts';
 
@@ -88,7 +88,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Get email configuration',
         response: {
           200: emailConfigSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -133,7 +133,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: emailConfigUpdateBodySchema,
         response: {
           200: emailConfigSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -222,6 +222,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: emailTestBodySchema,
         response: {
           200: emailTestResponseSchema,
+          429: errorResponseSchema,
           400: errorResponseSchema,
           500: errorResponseSchema,
         },
@@ -266,6 +267,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Test SMTP connection',
         response: {
           200: emailTestConnectionResponseSchema,
+          429: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
