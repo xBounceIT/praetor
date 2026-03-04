@@ -49,6 +49,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:-praetor-secret-key-change-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-praetor-encryption-key-change-in-production}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       DEMO_SEEDING: ${DEMO_SEEDING:-false}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-password}
       FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
