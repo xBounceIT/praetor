@@ -98,7 +98,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   onViewQuote,
   currency,
 }) => {
-  const { t } = useTranslation(['sales', 'crm', 'common']);
+  const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -242,7 +242,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   )}
                 </Tooltip>
               )}
-              <Tooltip label={t('common.edit')}>
+              <Tooltip label={t('common:buttons.edit')}>
                 {() => (
                   <button
                     onClick={(e) => {
@@ -324,7 +324,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 </Tooltip>
               )}
               {row.status === 'draft' && (
-                <Tooltip label={t('common.delete')}>
+                <Tooltip label={t('common:buttons.delete')}>
                   {() => (
                     <button
                       onClick={(e) => {
@@ -450,14 +450,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     event.preventDefault();
 
     const nextErrors: Record<string, string> = {};
-    if (!formData.clientId) nextErrors.clientId = t('crm:quotes.errors.clientRequired');
+    if (!formData.clientId) {
+      nextErrors.clientId = t('sales:clientOffers.clientRequired');
+    }
     if (!formData.offerCode?.trim()) {
       nextErrors.offerCode = t('sales:clientOffers.offerCodeRequired', {
         defaultValue: 'Offer code is required',
       });
     }
     if (!formData.items || formData.items.length === 0) {
-      nextErrors.items = t('crm:quotes.errors.itemsRequired');
+      nextErrors.items = t('sales:clientOffers.itemsRequired');
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -797,7 +799,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       <div>
                         <input
                           type="text"
-                          placeholder={t('form:placeholderNotes', { defaultValue: 'Notes...' })}
+                          placeholder={t('form:placeholderNotes', {
+                            defaultValue: 'Optional notes...',
+                          })}
                           value={item.note || ''}
                           onChange={(event) => updateItem(index, 'note', event.target.value)}
                           disabled={isReadOnly}
@@ -909,7 +913,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   type="submit"
                   className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                 >
-                  {editingOffer ? t('common.update') : t('common.save')}
+                  {editingOffer ? t('common:buttons.update') : t('common:buttons.save')}
                 </button>
               )}
             </div>

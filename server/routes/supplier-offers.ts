@@ -19,6 +19,8 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+type DbQueryResult = Awaited<ReturnType<typeof query>>;
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -326,7 +328,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!normalizedItems) return;
 
       const offerId = 'so-' + Date.now();
-      let createdOfferResult;
+      let createdOfferResult: DbQueryResult;
       try {
         createdOfferResult = await query(
           `INSERT INTO supplier_offers
@@ -544,7 +546,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      let updatedOfferResult;
+      let updatedOfferResult: DbQueryResult;
       try {
         updatedOfferResult = await query(
           `UPDATE supplier_offers
