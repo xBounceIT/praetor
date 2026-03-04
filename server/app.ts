@@ -36,8 +36,32 @@ import { loggerOptions, serializeError } from './utils/logger.ts';
 
 dotenv.config();
 
+const parseTrustProxyEnv = (value: string | undefined): boolean | string | number => {
+  if (!value) return false;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+
+  if (normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+    return true;
+  }
+
+  if (normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    return Number.parseInt(normalized, 10);
+  }
+
+  return value.trim();
+};
+
 export const buildApp = async () => {
-  const fastify = Fastify({ logger: loggerOptions });
+  const fastify = Fastify({
+    logger: loggerOptions,
+    trustProxy: parseTrustProxyEnv(process.env.TRUST_PROXY),
+  });
 
   await fastify.register(cors, {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',

@@ -60,17 +60,6 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
-const getRequestIpAddress = (request: FastifyRequest) => {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length) {
-    return forwarded.split(',')[0]?.trim() || request.ip || 'unknown';
-  }
-  if (Array.isArray(forwarded) && forwarded.length > 0) {
-    return forwarded[0] || request.ip || 'unknown';
-  }
-  return request.ip || 'unknown';
-};
-
 const getAvailableRolesForUser = async (userId: string) => {
   try {
     const result = await query(
@@ -174,7 +163,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await query('INSERT INTO audit_logs (id, user_id, ip_address) VALUES ($1, $2, $3)', [
           `audit-${randomUUID()}`,
           user.id,
-          getRequestIpAddress(request),
+          request.ip || 'unknown',
         ]);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';

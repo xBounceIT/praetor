@@ -59,6 +59,8 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+The compose setup defaults backend `TRUST_PROXY=1` for the bundled Caddy -> API hop.
+
 ### Customer Compose (pulls prebuilt images)
 
 Use this when deploying from a container registry (GHCR by default), without cloning source.
@@ -70,6 +72,8 @@ cp deploy/.env.customer.example .env
 docker compose --env-file .env -f deploy/docker-compose.customer.yml pull
 docker compose --env-file .env -f deploy/docker-compose.customer.yml up -d
 ```
+
+That deployment also defaults backend `TRUST_PROXY=1`; override it if your proxy chain differs.
 
 For complete customer deployment details, see `deploy/README.md`.
 
