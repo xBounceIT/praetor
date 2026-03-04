@@ -6,6 +6,7 @@
       "name": "praetor-server",
       "dependencies": {
         "@fastify/cors": "^10.0.1",
+        "@fastify/rate-limit": "^10.3.0",
         "@fastify/swagger": "^9.3.0",
         "bcryptjs": "^2.4.3",
         "dotenv": "^16.4.5",
@@ -45,6 +46,8 @@
 
     "@fastify/proxy-addr": ["@fastify/proxy-addr@5.1.0", "", { "dependencies": { "@fastify/forwarded": "^3.0.0", "ipaddr.js": "^2.1.0" } }, "sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw=="],
 
+    "@fastify/rate-limit": ["@fastify/rate-limit@10.3.0", "", { "dependencies": { "@lukeed/ms": "^2.0.2", "fastify-plugin": "^5.0.0", "toad-cache": "^3.7.0" } }, "sha512-eIGkG9XKQs0nyynatApA3EVrojHOuq4l6fhB4eeCk4PIOeadvOJz9/4w3vGI44Go17uaXOWEcPkaD8kuKm7g6Q=="],
+
     "@fastify/swagger": ["@fastify/swagger@9.6.1", "", { "dependencies": { "fastify-plugin": "^5.0.0", "json-schema-resolver": "^3.0.0", "openapi-types": "^12.1.3", "rfdc": "^1.3.1", "yaml": "^2.4.2" } }, "sha512-fKlpJqFMWoi4H3EdUkDaMteEYRCfQMEkK0HJJ0eaf4aRlKd8cbq0pVkOfXDXmtvMTXYcnx3E+l023eFDBsA1HA=="],
 
     "@ldapjs/asn1": ["@ldapjs/asn1@2.0.0", "", {}, "sha512-G9+DkEOirNgdPmD0I8nu57ygQJKOOgFEMKknEuQvIHbGLwP3ny1mY+OTUYLCbCaGJP4sox5eYgBJRuSUpnAddA=="],
@@ -62,6 +65,8 @@
     "@ldapjs/messages": ["@ldapjs/messages@1.3.0", "", { "dependencies": { "@ldapjs/asn1": "^2.0.0", "@ldapjs/attribute": "^1.0.0", "@ldapjs/change": "^1.0.0", "@ldapjs/controls": "^2.1.0", "@ldapjs/dn": "^1.1.0", "@ldapjs/filter": "^2.1.1", "@ldapjs/protocol": "^1.2.1", "process-warning": "^2.2.0" } }, "sha512-K7xZpXJ21bj92jS35wtRbdcNrwmxAtPwy4myeh9duy/eR3xQKvikVycbdWVzkYEAVE5Ce520VXNOwCHjomjCZw=="],
 
     "@ldapjs/protocol": ["@ldapjs/protocol@1.2.1", "", {}, "sha512-O89xFDLW2gBoZWNXuXpBSM32/KealKCTb3JGtJdtUQc7RjAk8XzrRgyz02cPAwGKwKPxy0ivuC7UP9bmN87egQ=="],
+
+    "@lukeed/ms": ["@lukeed/ms@2.0.2", "", {}, "sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA=="],
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 

@@ -76,6 +76,7 @@ const normalizeTableCellText = (value: string) =>
     .map((line) => line.trim())
     .filter(Boolean)
     .join(' <br> ')
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|');
 
 const toMarkdownTableRow = (cells: string[]) => `| ${cells.join(' | ')} |`;

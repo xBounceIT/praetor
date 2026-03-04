@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
 import Fastify from 'fastify';
@@ -32,6 +33,7 @@ import tasksRoutes from './routes/tasks.ts';
 import usersRoutes from './routes/users.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
+import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
 dotenv.config();
 
@@ -41,6 +43,15 @@ export const buildApp = async () => {
   await fastify.register(cors, {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true,
+  });
+
+  await fastify.register(rateLimit, {
+    global: true,
+    hook: 'onRequest',
+    ...GLOBAL_RATE_LIMIT,
+    errorResponseBuilder: () => ({
+      error: 'Too many requests',
+    }),
   });
 
   await fastify.register(swagger, {
@@ -97,6 +108,9 @@ export const buildApp = async () => {
   fastify.get(
     '/api/health',
     {
+      config: {
+        rateLimit: false,
+      },
       schema: {
         tags: ['health'],
         summary: 'Health check',

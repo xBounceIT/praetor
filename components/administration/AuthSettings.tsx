@@ -23,6 +23,18 @@ const DEFAULT_CONFIG: LdapConfig = {
   roleMappings: [],
 };
 
+const isExampleLdapServerUrl = (serverUrl: string) => {
+  try {
+    const parsed = new URL(serverUrl);
+    return (
+      (parsed.protocol === 'ldap:' || parsed.protocol === 'ldaps:') &&
+      parsed.hostname === 'ldap.example.com'
+    );
+  } catch {
+    return false;
+  }
+};
+
 const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) => {
   const { t } = useTranslation('auth');
   const [formData, setFormData] = useState<LdapConfig>(config || DEFAULT_CONFIG);
@@ -132,7 +144,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
 
     // Mock Validation Logic
     if (
-      formData.serverUrl.includes('example.com') &&
+      isExampleLdapServerUrl(formData.serverUrl) &&
       testUser === 'admin' &&
       testPass === 'password'
     ) {

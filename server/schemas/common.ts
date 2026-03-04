@@ -22,10 +22,17 @@ export const successResponseSchema = {
   required: ['success'],
 } as const;
 
+export const rateLimitErrorResponseSchema = errorResponseSchema;
+
 export const standardErrorResponses = {
   400: errorResponseSchema,
   401: errorResponseSchema,
   403: errorResponseSchema,
   404: errorResponseSchema,
   409: errorResponseSchema,
+} as const;
+
+export const standardRateLimitedErrorResponses = {
+  429: rateLimitErrorResponseSchema,
+  ...standardErrorResponses,
 } as const;

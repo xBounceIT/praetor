@@ -433,8 +433,24 @@ export function badRequest(reply: FastifyReply, message: string): FastifyReply {
  * Validate email format (basic regex)
  */
 export function isValidEmail(value: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(value);
+  if (value !== value.trim()) return false;
+  if (!value || /\s/.test(value)) return false;
+
+  const atIndex = value.indexOf('@');
+  if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return false;
+
+  const localPart = value.slice(0, atIndex);
+  const domainPart = value.slice(atIndex + 1);
+  if (!localPart || !domainPart) return false;
+  if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
+  if (localPart.includes('..') || domainPart.includes('..')) return false;
+  if (!domainPart.includes('.')) return false;
+
+  const domainLabels = domainPart.split('.');
+  if (domainLabels.some((label) => !label)) return false;
+  if (domainLabels.some((label) => label.startsWith('-') || label.endsWith('-'))) return false;
+
+  return true;
 }
 
 export function validateEmail(

@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import { cacheGetSetJson } from '../services/cache.ts';
+import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
 
 type AiProvider = 'gemini' | 'openrouter';
@@ -31,15 +32,9 @@ const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   };
 };
 
-const normalizeGeminiModelPath = (modelId: string) => {
-  const trimmed = modelId.trim();
-  if (trimmed.startsWith('models/') || trimmed.startsWith('tunedModels/')) return trimmed;
-  return `models/${trimmed}`;
-};
-
-const googleModelExists = async (apiKey: string, modelId: string): Promise<boolean> => {
-  const path = normalizeGeminiModelPath(modelId);
-  const url = `https://generativelanguage.googleapis.com/v1beta/${path}?key=${encodeURIComponent(apiKey)}`;
+const googleModelExists = async (apiKey: string, modelPath: string): Promise<boolean> => {
+  const url = new URL(`/v1beta/${modelPath}`, 'https://generativelanguage.googleapis.com');
+  url.searchParams.set('key', apiKey);
   const res = await fetch(url, { method: 'GET' });
   if (res.status === 404) return false;
   return res.ok;
@@ -147,8 +142,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       try {
         if (providerResult.value === 'gemini') {
-          const normalizedModelId = normalizeGeminiModelPath(resolvedModelId);
-          const exists = await googleModelExists(keyToUse, resolvedModelId);
+          const normalizedModelIdResult = normalizeGeminiModelPath(resolvedModelId);
+          if (!normalizedModelIdResult.ok) {
+            return badRequest(reply, normalizedModelIdResult.message);
+          }
+          const normalizedModelId = normalizedModelIdResult.value;
+          const exists = await googleModelExists(keyToUse, normalizedModelId);
           return reply.send(
             exists
               ? { ok: true, normalizedModelId }
