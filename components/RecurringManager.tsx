@@ -2,6 +2,7 @@ import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask } from '../types';
+import { formatDateOnlyForLocale } from '../utils/date';
 import Modal from './shared/Modal';
 import Tooltip from './shared/Tooltip';
 
@@ -107,7 +108,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                     <td className="px-6 py-4">
                       {task.recurrenceEnd ? (
                         <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                          {new Date(task.recurrenceEnd).toLocaleDateString()}
+                          {formatDateOnlyForLocale(task.recurrenceEnd)}
                         </span>
                       ) : (
                         <span className="text-xs text-slate-400 italic">

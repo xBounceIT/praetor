@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -125,6 +126,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     return status;
   };
 
+  const normalizeSupplierQuoteRow = (quote: Record<string, unknown>) => ({
+    ...quote,
+    status: normalizeSupplierQuoteStatus(String(quote.status)),
+    expirationDate: normalizeNullableDateOnly(quote.expirationDate, 'supplierQuote.expirationDate'),
+  });
+
   fastify.get(
     '/',
     {
@@ -190,8 +197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       return quotesResult.rows.map((quote) => ({
-        ...quote,
-        status: normalizeSupplierQuoteStatus((quote as { status: string }).status),
+        ...normalizeSupplierQuoteRow(quote as Record<string, unknown>),
         items: itemsByQuote[quote.id] || [],
       }));
     },
@@ -355,8 +361,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return reply.code(201).send({
-        ...quoteResult.rows[0],
-        status: normalizeSupplierQuoteStatus(quoteResult.rows[0].status),
+        ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
         items: createdItems,
       });
     },
@@ -589,8 +594,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return {
-        ...quoteResult.rows[0],
-        status: normalizeSupplierQuoteStatus(quoteResult.rows[0].status),
+        ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
       };
     },

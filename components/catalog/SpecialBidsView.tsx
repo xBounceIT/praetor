@@ -2,6 +2,13 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Product, SpecialBid } from '../../types';
+import {
+  formatDateOnlyForLocale,
+  getLocalDateString,
+  isDateOnlyAfterToday,
+  isDateOnlyBeforeToday,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import Calendar from '../shared/Calendar';
 import CustomSelect from '../shared/CustomSelect';
@@ -11,8 +18,8 @@ import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-const isExpired = (endDate: string) => new Date(endDate) < new Date();
-const isNotStarted = (startDate: string) => new Date(startDate) > new Date();
+const isExpired = (endDate: string) => isDateOnlyBeforeToday(endDate);
+const isNotStarted = (startDate: string) => isDateOnlyAfterToday(startDate);
 
 export interface SpecialBidsViewProps {
   bids: SpecialBid[];
@@ -55,8 +62,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     productName: '',
     unitPrice: 0,
     molPercentage: undefined,
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    startDate: getLocalDateString(),
+    endDate: getLocalDateString(),
   });
 
   const activeClients = clients.filter((c) => !c.isDisabled);
@@ -78,8 +85,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       productName: '',
       unitPrice: 0,
       molPercentage: undefined,
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: getLocalDateString(),
+      endDate: getLocalDateString(),
     });
     setErrors({});
     setIsModalOpen(true);
@@ -87,10 +94,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
 
   const openEditModal = (bid: SpecialBid) => {
     setEditingBid(bid);
-    const formattedStartDate = bid.startDate
-      ? new Date(bid.startDate).toISOString().split('T')[0]
-      : '';
-    const formattedEndDate = bid.endDate ? new Date(bid.endDate).toISOString().split('T')[0] : '';
+    const formattedStartDate = bid.startDate ? normalizeDateOnlyString(bid.startDate) : '';
+    const formattedEndDate = bid.endDate ? normalizeDateOnlyString(bid.endDate) : '';
     setFormData({
       clientId: bid.clientId,
       clientName: bid.clientName,
@@ -323,8 +328,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
       {
         header: t('externalListing.validityPeriod'),
         accessorFn: (row: SpecialBid) => {
-          const start = new Date(row.startDate).toLocaleDateString();
-          const end = new Date(row.endDate).toLocaleDateString();
+          const start = formatDateOnlyForLocale(row.startDate);
+          const end = formatDateOnlyForLocale(row.endDate);
           return `${start} - ${end}`;
         },
         cell: ({ row }: { row: SpecialBid }) => {
@@ -334,8 +339,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
             <div
               className={`text-sm ${expired ? 'text-red-600 font-bold' : notStarted ? 'text-amber-600 font-bold' : 'text-slate-600'}`}
             >
-              {new Date(row.startDate).toLocaleDateString()} -{' '}
-              {new Date(row.endDate).toLocaleDateString()}
+              {formatDateOnlyForLocale(row.startDate)} - {formatDateOnlyForLocale(row.endDate)}
             </div>
           );
         },
@@ -588,13 +592,13 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
               <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
                 <span className="font-bold">
                   {formData.startDate
-                    ? new Date(formData.startDate).toLocaleDateString()
+                    ? formatDateOnlyForLocale(formData.startDate)
                     : t('externalListing.selectStart')}
                 </span>
                 <i className="fa-solid fa-arrow-right text-slate-400"></i>
                 <span className="font-bold">
                   {formData.endDate
-                    ? new Date(formData.endDate).toLocaleDateString()
+                    ? formatDateOnlyForLocale(formData.endDate)
                     : t('externalListing.selectEnd')}
                 </span>
               </div>

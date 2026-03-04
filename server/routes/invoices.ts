@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -132,6 +133,36 @@ const invoiceUpdateBodySchema = {
   },
 } as const;
 
+const toRequiredDateOnly = (value: unknown, fieldName: string) => {
+  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
+  if (!normalizedDate) {
+    throw new TypeError(`Invalid date value for ${fieldName}`);
+  }
+  return normalizedDate;
+};
+
+const formatInvoiceItem = (item: Record<string, unknown>) => ({
+  ...item,
+  quantity: parseFloat(String(item.quantity ?? 0)),
+  unitPrice: parseFloat(String(item.unitPrice ?? 0)),
+  taxRate: parseFloat(String(item.taxRate ?? 0)),
+  discount: parseFloat(String(item.discount ?? 0)),
+});
+
+const formatInvoiceResponse = (
+  invoice: Record<string, unknown>,
+  items: Record<string, unknown>[],
+) => ({
+  ...invoice,
+  issueDate: toRequiredDateOnly(invoice.issueDate, 'invoice.issueDate'),
+  dueDate: toRequiredDateOnly(invoice.dueDate, 'invoice.dueDate'),
+  subtotal: parseFloat(String(invoice.subtotal ?? 0)),
+  taxAmount: parseFloat(String(invoice.taxAmount ?? 0)),
+  total: parseFloat(String(invoice.total ?? 0)),
+  amountPaid: parseFloat(String(invoice.amountPaid ?? 0)),
+  items: items.map(formatInvoiceItem),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All invoices routes require authentication
   fastify.addHook('onRequest', authenticateToken);
@@ -201,39 +232,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // Attach items to invoices
-      const invoices = invoicesResult.rows.map(
-        (invoice: {
-          id: string;
-          issueDate: { toISOString: () => string };
-          dueDate: { toISOString: () => string };
-          subtotal: string;
-          taxAmount: string;
-          total: string;
-          amountPaid: string;
-        }) => ({
-          ...invoice,
-          issueDate: invoice.issueDate.toISOString().split('T')[0],
-          dueDate: invoice.dueDate.toISOString().split('T')[0],
-          subtotal: parseFloat(invoice.subtotal),
-          taxAmount: parseFloat(invoice.taxAmount),
-          total: parseFloat(invoice.total),
-          amountPaid: parseFloat(invoice.amountPaid),
-          items: (itemsByInvoice[invoice.id] || []).map((item: unknown) => {
-            const typedItem = item as {
-              quantity: string;
-              unitPrice: string;
-              taxRate: string;
-              discount: string;
-            };
-            return {
-              ...typedItem,
-              quantity: parseFloat(typedItem.quantity),
-              unitPrice: parseFloat(typedItem.unitPrice),
-              taxRate: parseFloat(typedItem.taxRate),
-              discount: parseFloat(typedItem.discount),
-            };
-          }),
-        }),
+      const invoices = invoicesResult.rows.map((invoice) =>
+        formatInvoiceResponse(
+          invoice as Record<string, unknown>,
+          (itemsByInvoice[invoice.id] || []) as Record<string, unknown>[],
+        ),
       );
 
       return invoices;
@@ -301,7 +304,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const dueDateResult = parseDateString(dueDate, 'dueDate');
       if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
 
-      if (new Date(dueDateResult.value) < new Date(issueDateResult.value)) {
+      if (dueDateResult.value < issueDateResult.value) {
         return badRequest(reply, 'dueDate must be on or after issueDate');
       }
 
@@ -428,22 +431,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoice = invoiceResult.rows[0];
-      return reply.code(201).send({
-        ...invoice,
-        issueDate: new Date(invoice.issueDate).toISOString().split('T')[0],
-        dueDate: new Date(invoice.dueDate).toISOString().split('T')[0],
-        subtotal: parseFloat(invoice.subtotal),
-        taxAmount: parseFloat(invoice.taxAmount),
-        total: parseFloat(invoice.total),
-        amountPaid: parseFloat(invoice.amountPaid),
-        items: createdItems.map((item) => ({
-          ...item,
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
-          taxRate: parseFloat(item.taxRate),
-          discount: parseFloat(item.discount),
-        })),
-      });
+      return reply
+        .code(201)
+        .send(formatInvoiceResponse(invoice as Record<string, unknown>, createdItems));
     },
   );
 
@@ -531,7 +521,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (issueDate && dueDate) {
-        if (new Date(dueDate as string) < new Date(issueDate as string)) {
+        if ((dueDate as string) < (issueDate as string)) {
           return badRequest(reply, 'dueDate must be on or after issueDate');
         }
       }
@@ -712,22 +702,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoice = invoiceResult.rows[0];
-      return {
-        ...invoice,
-        issueDate: new Date(invoice.issueDate).toISOString().split('T')[0],
-        dueDate: new Date(invoice.dueDate).toISOString().split('T')[0],
-        subtotal: parseFloat(invoice.subtotal),
-        taxAmount: parseFloat(invoice.taxAmount),
-        total: parseFloat(invoice.total),
-        amountPaid: parseFloat(invoice.amountPaid),
-        items: updatedItems.map((item) => ({
-          ...item,
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
-          taxRate: parseFloat(item.taxRate),
-          discount: parseFloat(item.discount),
-        })),
-      };
+      return formatInvoiceResponse(
+        invoice as Record<string, unknown>,
+        updatedItems as Record<string, unknown>[],
+      );
     },
   );
 

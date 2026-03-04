@@ -2,6 +2,11 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientOffer, ClientOfferItem, Product, SpecialBid } from '../../types';
+import {
+  getLocalDateString,
+  isDateOnlyWithinInclusiveRange,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -118,14 +123,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     () => products.filter((product) => !product.isDisabled),
     [products],
   );
+  const today = getLocalDateString();
   const activeSpecialBids = useMemo(() => {
-    const now = new Date();
     return specialBids.filter((bid) => {
-      const start = new Date(bid.startDate);
-      const end = new Date(bid.endDate);
-      return start <= now && end >= now;
+      return isDateOnlyWithinInclusiveRange(today, bid.startDate, bid.endDate);
     });
-  }, [specialBids]);
+  }, [specialBids, today]);
 
   const [editingOffer, setEditingOffer] = useState<ClientOffer | null>(null);
   const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
@@ -143,7 +146,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     paymentTerms: 'immediate',
     discount: 0,
     status: 'draft',
-    expirationDate: new Date().toISOString().split('T')[0],
+    expirationDate: getLocalDateString(),
     notes: '',
   });
 
@@ -164,7 +167,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     setEditingOffer(offer);
     setFormData({
       ...offer,
-      expirationDate: offer.expirationDate?.split('T')[0] || '',
+      expirationDate: offer.expirationDate ? normalizeDateOnlyString(offer.expirationDate) : '',
     });
     setErrors({});
     setIsModalOpen(true);
@@ -367,7 +370,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       paymentTerms: 'immediate',
       discount: 0,
       status: 'draft',
-      expirationDate: new Date().toISOString().split('T')[0],
+      expirationDate: getLocalDateString(),
       notes: '',
     });
     setErrors({});

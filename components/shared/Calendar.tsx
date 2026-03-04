@@ -2,7 +2,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TimeEntry } from '../../types';
-import { getLocalDateString } from '../../utils/date';
+import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
 import Tooltip from './Tooltip';
 
@@ -39,7 +39,11 @@ const Calendar: React.FC<CalendarProps> = ({
   allowWeekendSelection = false,
 }) => {
   const { t } = useTranslation('timesheets');
-  const [viewDate, setViewDate] = useState(new Date(selectedDate || startDate || new Date()));
+  const [viewDate, setViewDate] = useState(() => {
+    if (selectedDate) return dateOnlyStringToLocalDate(selectedDate);
+    if (startDate) return dateOnlyStringToLocalDate(startDate);
+    return new Date();
+  });
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -114,7 +118,7 @@ const Calendar: React.FC<CalendarProps> = ({
       } else {
         // Complete the range
         // Ensure start is before end
-        if (new Date(dateStr) < new Date(startDate)) {
+        if (dateStr < startDate) {
           onRangeSelect(dateStr, startDate);
         } else {
           onRangeSelect(startDate, dateStr);

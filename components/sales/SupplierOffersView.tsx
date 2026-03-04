@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierOffer, SupplierOfferItem } from '../../types';
+import { getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -101,7 +102,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
     paymentTerms: 'immediate',
     discount: 0,
     status: 'draft',
-    expirationDate: new Date().toISOString().split('T')[0],
+    expirationDate: getLocalDateString(),
     notes: '',
   });
 
@@ -121,7 +122,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
     setEditingOffer(offer);
     setFormData({
       ...offer,
-      expirationDate: offer.expirationDate?.split('T')[0] || '',
+      expirationDate: offer.expirationDate ? normalizeDateOnlyString(offer.expirationDate) : '',
     });
     setErrors({});
     setIsModalOpen(true);

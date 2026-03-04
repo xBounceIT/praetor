@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientsOrder, ClientsOrderItem, Product, SpecialBid } from '../../types';
+import { getLocalDateString, isDateOnlyWithinInclusiveRange } from '../../utils/date';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -370,12 +371,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const activeClients = clients.filter((c) => !c.isDisabled);
   const activeProducts = products.filter((p) => !p.isDisabled);
+  const today = getLocalDateString();
   const activeSpecialBids = specialBids.filter((b) => {
-    const now = new Date();
-    const startDate = b.startDate ? new Date(b.startDate) : null;
-    const endDate = b.endDate ? new Date(b.endDate) : null;
-    if (!startDate || !endDate) return true;
-    return now >= startDate && now <= endDate;
+    return isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate);
   });
   const clientSpecialBids = formData.clientId
     ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)

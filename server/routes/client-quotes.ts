@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -374,15 +375,6 @@ const toNullableString = (value: unknown) => {
   return String(value);
 };
 
-const toDateOnlyString = (value: Date) => value.toISOString().slice(0, 10);
-
-const toNullableDateOnlyString = (value: unknown, fieldName: string) => {
-  if (value === undefined || value === null) return null;
-  if (value instanceof Date) return toDateOnlyString(value);
-  if (typeof value === 'string') return value;
-  throw new TypeError(`Invalid date value for ${fieldName}`);
-};
-
 const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   quoteId: String(row.quoteId),
@@ -418,7 +410,7 @@ const normalizeQuoteRow = (row: Record<string, unknown>) => ({
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'quote.discount'),
   status: String(row.status),
-  expirationDate: toNullableDateOnlyString(row.expirationDate, 'quote.expirationDate'),
+  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
   notes: toNullableString(row.notes),
   createdAt: toFiniteNumber(row.createdAt, 'quote.createdAt'),
   updatedAt: toFiniteNumber(row.updatedAt, 'quote.updatedAt'),
@@ -428,23 +420,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All quote routes require authentication
   fastify.addHook('onRequest', authenticateToken);
 
-  const isQuoteExpired = (status: string, expirationDate: string | Date | null | undefined) => {
+  const isQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
     if (status === 'confirmed') return false;
     if (!expirationDate) return false;
-
-    let normalizedDate: string;
-    if (expirationDate instanceof Date) {
-      normalizedDate = expirationDate.toISOString().split('T')[0];
-    } else {
-      normalizedDate = expirationDate.toString().includes('T')
-        ? expirationDate.toString().split('T')[0]
-        : expirationDate.toString();
-    }
-
-    const expiry = new Date(normalizedDate);
-    // Set time to end of day to avoid premature expiration
-    expiry.setHours(23, 59, 59, 999);
-    return new Date() > expiry;
+    return isPastLocalDate(expirationDate);
   };
 
   // GET / - List all quotes with their items

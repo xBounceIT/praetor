@@ -2,6 +2,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Invoice, Payment } from '../types';
+import { formatDateOnlyForLocale, getLocalDateString } from '../utils/date';
 import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
 import StandardTable from './shared/StandardTable';
@@ -82,7 +83,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     clientId: '',
     invoiceId: '',
     amount: 0,
-    paymentDate: new Date().toISOString().split('T')[0],
+    paymentDate: getLocalDateString(),
     paymentMethod: 'bank_transfer',
     reference: '',
     notes: '',
@@ -94,7 +95,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       clientId: '',
       invoiceId: '',
       amount: 0,
-      paymentDate: new Date().toISOString().split('T')[0],
+      paymentDate: getLocalDateString(),
       paymentMethod: 'bank_transfer',
       reference: '',
       notes: '',
@@ -492,7 +493,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                   className="hover:bg-slate-50/50 cursor-pointer transition-colors"
                 >
                   <td className="px-6 py-4 text-sm text-slate-600">
-                    {new Date(payment.paymentDate).toLocaleDateString()}
+                    {formatDateOnlyForLocale(payment.paymentDate)}
                   </td>
                   <td className="px-6 py-4 font-bold text-slate-800">
                     {client?.name || t('payments.unknownClient')}

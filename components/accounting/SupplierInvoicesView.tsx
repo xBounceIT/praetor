@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierInvoice, SupplierInvoiceItem } from '../../types';
+import { addDaysToDateOnly, getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -81,8 +82,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     supplierId: '',
     supplierName: '',
     invoiceNumber: '',
-    issueDate: new Date().toISOString().split('T')[0],
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    issueDate: getLocalDateString(),
+    dueDate: addDaysToDateOnly(getLocalDateString(), 30),
     status: 'draft',
     subtotal: 0,
     taxAmount: 0,
@@ -96,8 +97,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     setEditingInvoice(invoice);
     setFormData({
       ...invoice,
-      issueDate: invoice.issueDate?.split('T')[0] || '',
-      dueDate: invoice.dueDate?.split('T')[0] || '',
+      issueDate: invoice.issueDate ? normalizeDateOnlyString(invoice.issueDate) : '',
+      dueDate: invoice.dueDate ? normalizeDateOnlyString(invoice.dueDate) : '',
       items: invoice.items.map((item) => ({ ...item })),
     });
     setIsModalOpen(true);

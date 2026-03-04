@@ -2,6 +2,13 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientOffer, Product, Quote, QuoteItem, SpecialBid } from '../../types';
+import {
+  formatDateOnlyForLocale,
+  getLocalDateString,
+  isDateOnlyBeforeToday,
+  isDateOnlyWithinInclusiveRange,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -94,14 +101,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   );
 
   // Helper: Check if quote is expired
-  const isExpired = useCallback((expirationDate: string) => {
-    const normalizedDate = expirationDate.includes('T')
-      ? expirationDate
-      : `${expirationDate}T00:00:00`;
-    const expiry = new Date(normalizedDate);
-    expiry.setDate(expiry.getDate() + 1);
-    return new Date() >= expiry;
-  }, []);
+  const isExpired = useCallback(
+    (expirationDate: string) => isDateOnlyBeforeToday(expirationDate),
+    [],
+  );
 
   const isQuoteExpired = useCallback(
     (quote: Quote) => {
@@ -186,7 +189,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     paymentTerms: 'immediate',
     discount: 0,
     status: 'draft',
-    expirationDate: new Date().toISOString().split('T')[0],
+    expirationDate: getLocalDateString(),
     notes: '',
   });
   const isReadOnly = Boolean(
@@ -208,7 +211,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       paymentTerms: 'immediate',
       discount: 0,
       status: 'draft',
-      expirationDate: new Date().toISOString().split('T')[0],
+      expirationDate: getLocalDateString(),
       notes: '',
     });
     setErrors({});
@@ -219,9 +222,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     setEditingQuote(quote);
     setPendingClientChange(null);
     // Ensure expirationDate is in YYYY-MM-DD format for the date input
-    const formattedDate = quote.expirationDate
-      ? new Date(quote.expirationDate).toISOString().split('T')[0]
-      : '';
+    const formattedDate = quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '';
     setFormData({
       quoteCode: quote.quoteCode,
       clientId: quote.clientId,
@@ -596,12 +597,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const activeClients = clients.filter((c) => !c.isDisabled);
   const activeProducts = products.filter((p) => !p.isDisabled);
+  const today = getLocalDateString();
   const activeSpecialBids = specialBids.filter((b) => {
-    const now = new Date();
-    const startDate = b.startDate ? new Date(b.startDate) : null;
-    const endDate = b.endDate ? new Date(b.endDate) : null;
-    if (!startDate || !endDate) return true;
-    return now >= startDate && now <= endDate;
+    return isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate);
   });
   const clientSpecialBids = formData.clientId
     ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)
@@ -681,7 +679,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 history ? 'text-slate-400' : expired ? 'text-red-600 font-bold' : 'text-slate-600'
               }`}
             >
-              {new Date(row.expirationDate).toLocaleDateString()}
+              {formatDateOnlyForLocale(row.expirationDate)}
               {expired && !history && (
                 <span className="ml-2 text-[10px] font-black">
                   {t('sales:clientQuotes.expiredLabel')}

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -236,15 +237,6 @@ const toNullableString = (value: unknown) => {
   return String(value);
 };
 
-const toDateOnlyString = (value: Date) => value.toISOString().slice(0, 10);
-
-const toNullableDateOnlyString = (value: unknown, fieldName: string) => {
-  if (value === undefined || value === null) return null;
-  if (value instanceof Date) return toDateOnlyString(value);
-  if (typeof value === 'string') return value;
-  throw new TypeError(`Invalid date value for ${fieldName}`);
-};
-
 const normalizeOfferItemRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   offerId: String(row.offerId),
@@ -280,7 +272,7 @@ const normalizeOfferRow = (row: Record<string, unknown>) => ({
   paymentTerms: toNullableString(row.paymentTerms),
   discount: toFiniteNumber(row.discount, 'offer.discount'),
   status: String(row.status),
-  expirationDate: toNullableDateOnlyString(row.expirationDate, 'offer.expirationDate'),
+  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'offer.expirationDate'),
   notes: toNullableString(row.notes),
   createdAt: toFiniteNumber(row.createdAt, 'offer.createdAt'),
   updatedAt: toFiniteNumber(row.updatedAt, 'offer.updatedAt'),

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -62,6 +63,20 @@ const paymentUpdateBodySchema = {
   },
 } as const;
 
+const toRequiredDateOnly = (value: unknown, fieldName: string) => {
+  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
+  if (!normalizedDate) {
+    throw new TypeError(`Invalid date value for ${fieldName}`);
+  }
+  return normalizedDate;
+};
+
+const formatPaymentResponse = (payment: Record<string, unknown>) => ({
+  ...payment,
+  amount: parseFloat(String(payment.amount ?? 0)),
+  paymentDate: toRequiredDateOnly(payment.paymentDate, 'payment.paymentDate'),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All payments routes require authentication
   fastify.addHook('onRequest', authenticateToken);
@@ -104,11 +119,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Actually, let's left join clients to get client name if needed, but existing `payments` table doesn't store client_name cache like others.
       // We stored client_id.
 
-      const payments = result.rows.map((payment) => ({
-        ...payment,
-        amount: parseFloat(payment.amount),
-        paymentDate: payment.paymentDate.toISOString().split('T')[0],
-      }));
+      const payments = result.rows.map((payment) =>
+        formatPaymentResponse(payment as Record<string, unknown>),
+      );
 
       return payments;
     },
@@ -226,11 +239,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await query('COMMIT');
 
         const payment = result.rows[0];
-        return reply.code(201).send({
-          ...payment,
-          amount: parseFloat(payment.amount),
-          paymentDate: new Date(payment.paymentDate).toISOString().split('T')[0],
-        });
+        return reply.code(201).send(formatPaymentResponse(payment as Record<string, unknown>));
       } catch (err) {
         await query('ROLLBACK');
         throw err;
@@ -360,11 +369,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         await query('COMMIT');
 
-        return {
-          ...updatedPayment,
-          amount: parseFloat(updatedPayment.amount),
-          paymentDate: new Date(updatedPayment.paymentDate).toISOString().split('T')[0],
-        };
+        return formatPaymentResponse(updatedPayment as Record<string, unknown>);
       } catch (err) {
         await query('ROLLBACK');
         throw err;

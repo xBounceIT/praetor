@@ -250,7 +250,7 @@ export interface Quote {
     | '365gg';
   discount: number; // global discount percentage
   status: 'draft' | 'sent' | 'accepted' | 'denied';
-  expirationDate: string; // ISO date string
+  expirationDate: string; // YYYY-MM-DD date-only string
   isExpired?: boolean;
   linkedOfferId?: string;
   notes?: string;
