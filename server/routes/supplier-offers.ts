@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { rateLimitErrorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import {
   badRequest,
   optionalDateString,
@@ -190,12 +190,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      config: {
+        rateLimit: {
+          max: 120,
+          timeWindow: '1 minute',
+        },
+      },
       onRequest: [requirePermission('sales.supplier_offers.view')],
       schema: {
         tags: ['supplier-offers'],
         summary: 'List supplier offers',
         response: {
           200: { type: 'array', items: offerSchema },
+          429: rateLimitErrorResponseSchema,
           ...standardErrorResponses,
         },
       },

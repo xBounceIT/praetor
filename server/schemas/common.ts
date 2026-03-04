@@ -22,6 +22,8 @@ export const successResponseSchema = {
   required: ['success'],
 } as const;
 
+export const rateLimitErrorResponseSchema = errorResponseSchema;
+
 export const standardErrorResponses = {
   400: errorResponseSchema,
   401: errorResponseSchema,

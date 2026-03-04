@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { rateLimitErrorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
 import {
   badRequest,
   optionalDateString,
@@ -127,12 +127,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      config: {
+        rateLimit: {
+          max: 120,
+          timeWindow: '1 minute',
+        },
+      },
       onRequest: [requirePermission('sales.supplier_quotes.view')],
       schema: {
         tags: ['supplier-quotes'],
         summary: 'List supplier quotes',
         response: {
           200: { type: 'array', items: supplierQuoteSchema },
+          429: rateLimitErrorResponseSchema,
           ...standardErrorResponses,
         },
       },
