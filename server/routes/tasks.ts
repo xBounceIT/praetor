@@ -14,6 +14,7 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -158,12 +159,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             description: t.description,
             isRecurring: t.is_recurring,
             recurrencePattern: t.recurrence_pattern,
-            recurrenceStart: t.recurrence_start
-              ? t.recurrence_start.toISOString().split('T')[0]
-              : undefined,
-            recurrenceEnd: t.recurrence_end
-              ? t.recurrence_end.toISOString().split('T')[0]
-              : undefined,
+            recurrenceStart:
+              normalizeNullableDateOnly(t.recurrence_start, 'task.recurrenceStart') ?? undefined,
+            recurrenceEnd:
+              normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
             recurrenceDuration: parseFloat(t.recurrence_duration || 0),
             isDisabled: t.is_disabled,
           }));
@@ -222,7 +221,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!patternResult.ok) return badRequest(reply, patternResult.message);
         const recurrenceStartResult = optionalDateString(recurrenceStart, 'recurrenceStart');
         if (!recurrenceStartResult.ok) return badRequest(reply, recurrenceStartResult.message);
-        start = recurrenceStartResult.value || new Date().toISOString().split('T')[0];
+        start = recurrenceStartResult.value || todayLocalDateOnly();
       }
 
       const id = 't-' + Date.now();
@@ -364,10 +363,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description: t.description,
         isRecurring: t.is_recurring,
         recurrencePattern: t.recurrence_pattern,
-        recurrenceStart: t.recurrence_start
-          ? t.recurrence_start.toISOString().split('T')[0]
-          : undefined,
-        recurrenceEnd: t.recurrence_end ? t.recurrence_end.toISOString().split('T')[0] : undefined,
+        recurrenceStart:
+          normalizeNullableDateOnly(t.recurrence_start, 'task.recurrenceStart') ?? undefined,
+        recurrenceEnd:
+          normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
         recurrenceDuration: parseFloat(t.recurrence_duration || 0),
         isDisabled: t.is_disabled,
       };

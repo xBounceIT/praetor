@@ -150,6 +150,64 @@ const clientOrderUpdateBodySchema = {
   },
 } as const;
 
+const toFiniteNumber = (value: unknown, fieldName: string) => {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) {
+    throw new TypeError(`Invalid numeric value for ${fieldName}`);
+  }
+  return parsedValue;
+};
+
+const toNullableFiniteNumber = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) return null;
+  return toFiniteNumber(value, fieldName);
+};
+
+const toNullableString = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  return String(value);
+};
+
+const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  orderId: String(row.orderId),
+  productId: toNullableString(row.productId),
+  productName: String(row.productName),
+  specialBidId: toNullableString(row.specialBidId),
+  quantity: toFiniteNumber(row.quantity, 'clientOrderItem.quantity'),
+  unitPrice: toFiniteNumber(row.unitPrice, 'clientOrderItem.unitPrice'),
+  productCost: toFiniteNumber(row.productCost, 'clientOrderItem.productCost'),
+  productTaxRate: toFiniteNumber(row.productTaxRate, 'clientOrderItem.productTaxRate'),
+  productMolPercentage: toNullableFiniteNumber(
+    row.productMolPercentage,
+    'clientOrderItem.productMolPercentage',
+  ),
+  specialBidUnitPrice: toNullableFiniteNumber(
+    row.specialBidUnitPrice,
+    'clientOrderItem.specialBidUnitPrice',
+  ),
+  specialBidMolPercentage: toNullableFiniteNumber(
+    row.specialBidMolPercentage,
+    'clientOrderItem.specialBidMolPercentage',
+  ),
+  note: toNullableString(row.note),
+  discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
+});
+
+const normalizeClientOrderRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  linkedQuoteId: toNullableString(row.linkedQuoteId),
+  linkedOfferId: toNullableString(row.linkedOfferId),
+  clientId: String(row.clientId),
+  clientName: String(row.clientName),
+  paymentTerms: toNullableString(row.paymentTerms),
+  discount: toFiniteNumber(row.discount, 'clientOrder.discount'),
+  status: String(row.status),
+  notes: toNullableString(row.notes),
+  createdAt: toFiniteNumber(row.createdAt, 'clientOrder.createdAt'),
+  updatedAt: toFiniteNumber(row.updatedAt, 'clientOrder.updatedAt'),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All clients_orders routes require authentication
   fastify.addHook('onRequest', authenticateToken);
@@ -212,9 +270,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ORDER BY created_at ASC`,
       );
 
+      const normalizedOrders = clients_ordersResult.rows.map((order) =>
+        normalizeClientOrderRow(order as Record<string, unknown>),
+      );
+      const normalizedItems = itemsResult.rows.map((item) =>
+        normalizeClientOrderItemRow(item as Record<string, unknown>),
+      );
+
       // Group items by order
-      const itemsByOrder: Record<string, unknown[]> = {};
-      itemsResult.rows.forEach((item: { orderId: string }) => {
+      const itemsByOrder: Record<string, ReturnType<typeof normalizeClientOrderItemRow>[]> = {};
+      normalizedItems.forEach((item) => {
         if (!itemsByOrder[item.orderId]) {
           itemsByOrder[item.orderId] = [];
         }
@@ -222,7 +287,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // Attach items to clients_orders
-      const clients_orders = clients_ordersResult.rows.map((order: { id: string }) => ({
+      const clients_orders = normalizedOrders.map((order) => ({
         ...order,
         items: itemsByOrder[order.id] || [],
       }));
@@ -407,7 +472,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Insert order items
-      const createdItems = [];
+      const createdItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
@@ -445,11 +510,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.note || null,
           ],
         );
-        createdItems.push(itemResult.rows[0]);
+        createdItems.push(
+          normalizeClientOrderItemRow(itemResult.rows[0] as Record<string, unknown>),
+        );
       }
 
       return reply.code(201).send({
-        ...orderResult.rows[0],
+        ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: createdItems,
       });
     },
@@ -862,10 +929,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // If items are provided, update them
-      let updatedItems = [];
+      let updatedItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
       if (isSourceLinkedOrder) {
         if (existingItems) {
-          updatedItems = existingItems;
+          updatedItems = existingItems.map((item) =>
+            normalizeClientOrderItemRow(item as Record<string, unknown>),
+          );
         } else {
           const itemsResult = await query(
             `SELECT
@@ -887,7 +956,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     WHERE sale_id = $1`,
             [idResult.value],
           );
-          updatedItems = itemsResult.rows;
+          updatedItems = itemsResult.rows.map((item) =>
+            normalizeClientOrderItemRow(item as Record<string, unknown>),
+          );
         }
       } else if (items !== undefined) {
         if (!normalizedItems) return;
@@ -932,7 +1003,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.note || null,
             ],
           );
-          updatedItems.push(itemResult.rows[0]);
+          updatedItems.push(
+            normalizeClientOrderItemRow(itemResult.rows[0] as Record<string, unknown>),
+          );
         }
       } else {
         // Fetch existing items
@@ -956,7 +1029,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE sale_id = $1`,
           [idResult.value],
         );
-        updatedItems = itemsResult.rows;
+        updatedItems = itemsResult.rows.map((item) =>
+          normalizeClientOrderItemRow(item as Record<string, unknown>),
+        );
       }
 
       // Auto-create projects when order is confirmed for the first time
@@ -1048,7 +1123,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return {
-        ...orderResult.rows[0],
+        ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
       };
     },

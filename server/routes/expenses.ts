@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -66,6 +67,20 @@ const expenseUpdateBodySchema = {
   },
 } as const;
 
+const toRequiredDateOnly = (value: unknown, fieldName: string) => {
+  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
+  if (!normalizedDate) {
+    throw new TypeError(`Invalid date value for ${fieldName}`);
+  }
+  return normalizedDate;
+};
+
+const formatExpenseResponse = (expense: Record<string, unknown>) => ({
+  ...expense,
+  amount: parseFloat(String(expense.amount ?? 0)),
+  expenseDate: toRequiredDateOnly(expense.expenseDate, 'expense.expenseDate'),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All expenses routes require authentication
   fastify.addHook('onRequest', authenticateToken);
@@ -105,11 +120,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ORDER BY expense_date DESC`,
       );
 
-      const expenses = result.rows.map((expense) => ({
-        ...expense,
-        amount: parseFloat(expense.amount),
-        expenseDate: expense.expenseDate.toISOString().split('T')[0],
-      }));
+      const expenses = result.rows.map((expense) =>
+        formatExpenseResponse(expense as Record<string, unknown>),
+      );
 
       return expenses;
     },
@@ -195,11 +208,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const expense = result.rows[0];
-      return reply.code(201).send({
-        ...expense,
-        amount: parseFloat(expense.amount),
-        expenseDate: new Date(expense.expenseDate).toISOString().split('T')[0],
-      });
+      return reply.code(201).send(formatExpenseResponse(expense as Record<string, unknown>));
     },
   );
 
@@ -348,11 +357,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const expense = result.rows[0];
-      return {
-        ...expense,
-        amount: parseFloat(expense.amount),
-        expenseDate: new Date(expense.expenseDate).toISOString().split('T')[0],
-      };
+      return formatExpenseResponse(expense as Record<string, unknown>);
     },
   );
 

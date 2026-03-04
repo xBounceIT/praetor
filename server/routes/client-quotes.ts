@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -356,27 +357,73 @@ const quoteUpdateBodySchema = {
   },
 } as const;
 
+const toFiniteNumber = (value: unknown, fieldName: string) => {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) {
+    throw new TypeError(`Invalid numeric value for ${fieldName}`);
+  }
+  return parsedValue;
+};
+
+const toNullableFiniteNumber = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) return null;
+  return toFiniteNumber(value, fieldName);
+};
+
+const toNullableString = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  return String(value);
+};
+
+const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  quoteId: String(row.quoteId),
+  productId: String(row.productId),
+  productName: String(row.productName),
+  specialBidId: toNullableString(row.specialBidId),
+  quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),
+  unitPrice: toFiniteNumber(row.unitPrice, 'quoteItem.unitPrice'),
+  productCost: toFiniteNumber(row.productCost, 'quoteItem.productCost'),
+  productTaxRate: toFiniteNumber(row.productTaxRate, 'quoteItem.productTaxRate'),
+  productMolPercentage: toNullableFiniteNumber(
+    row.productMolPercentage,
+    'quoteItem.productMolPercentage',
+  ),
+  specialBidUnitPrice: toNullableFiniteNumber(
+    row.specialBidUnitPrice,
+    'quoteItem.specialBidUnitPrice',
+  ),
+  specialBidMolPercentage: toNullableFiniteNumber(
+    row.specialBidMolPercentage,
+    'quoteItem.specialBidMolPercentage',
+  ),
+  discount: toFiniteNumber(row.discount, 'quoteItem.discount'),
+  note: toNullableString(row.note),
+});
+
+const normalizeQuoteRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  quoteCode: String(row.quoteCode),
+  linkedOfferId: toNullableString(row.linkedOfferId),
+  clientId: String(row.clientId),
+  clientName: String(row.clientName),
+  paymentTerms: toNullableString(row.paymentTerms),
+  discount: toFiniteNumber(row.discount, 'quote.discount'),
+  status: String(row.status),
+  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
+  notes: toNullableString(row.notes),
+  createdAt: toFiniteNumber(row.createdAt, 'quote.createdAt'),
+  updatedAt: toFiniteNumber(row.updatedAt, 'quote.updatedAt'),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All quote routes require authentication
   fastify.addHook('onRequest', authenticateToken);
 
-  const isQuoteExpired = (status: string, expirationDate: string | Date | null | undefined) => {
+  const isQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
     if (status === 'confirmed') return false;
     if (!expirationDate) return false;
-
-    let normalizedDate: string;
-    if (expirationDate instanceof Date) {
-      normalizedDate = expirationDate.toISOString().split('T')[0];
-    } else {
-      normalizedDate = expirationDate.toString().includes('T')
-        ? expirationDate.toString().split('T')[0]
-        : expirationDate.toString();
-    }
-
-    const expiry = new Date(normalizedDate);
-    // Set time to end of day to avoid premature expiration
-    expiry.setHours(23, 59, 59, 999);
-    return new Date() > expiry;
+    return isPastLocalDate(expirationDate);
   };
 
   // GET / - List all quotes with their items
@@ -444,9 +491,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [],
       );
 
+      const normalizedQuoteItems = itemsResult.rows.map((item) =>
+        normalizeQuoteItemRow(item as Record<string, unknown>),
+      );
+      const normalizedQuotes = quotesResult.rows.map((quote) =>
+        normalizeQuoteRow(quote as Record<string, unknown>),
+      );
+
       // Group items by quote
-      const itemsByQuote: Record<string, unknown[]> = {};
-      itemsResult.rows.forEach((item: { quoteId: string }) => {
+      const itemsByQuote: Record<string, ReturnType<typeof normalizeQuoteItemRow>[]> = {};
+      normalizedQuoteItems.forEach((item) => {
         if (!itemsByQuote[item.quoteId]) {
           itemsByQuote[item.quoteId] = [];
         }
@@ -454,17 +508,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // Attach items to quotes
-      const quotes = quotesResult.rows.map(
-        (quote: {
-          id: string;
-          status: string;
-          expirationDate: string | Date | null | undefined;
-        }) => ({
-          ...quote,
-          items: itemsByQuote[quote.id] || [],
-          isExpired: isQuoteExpired(quote.status, quote.expirationDate),
-        }),
-      );
+      const quotes = normalizedQuotes.map((quote) => ({
+        ...quote,
+        items: itemsByQuote[quote.id] || [],
+        isExpired: isQuoteExpired(quote.status, quote.expirationDate),
+      }));
 
       return quotes;
     },
@@ -614,7 +662,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         // Insert quote items
-        const createdItems: unknown[] = [];
+        const createdItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
         for (const item of resolvedItems) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
           const itemResult = await query(
@@ -652,13 +700,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.note || null,
             ],
           );
-          createdItems.push(itemResult.rows[0]);
+          createdItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
         }
 
+        const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
+
         return reply.code(201).send({
-          ...quoteResult.rows[0],
+          ...normalizedQuote,
           items: createdItems,
-          isExpired: isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate),
+          isExpired: isQuoteExpired(normalizedQuote.status, normalizedQuote.expirationDate),
         });
       } catch (err) {
         console.error('CRITICAL ERROR creating quote:', err);
@@ -975,7 +1025,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // If items are provided, update them
-      let updatedItems: unknown[] = [];
+      let updatedItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
       if (normalizedItems) {
         // Delete existing items
         await query('DELETE FROM quote_items WHERE quote_id = $1', [idResult.value]);
@@ -1018,7 +1068,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.note || null,
             ],
           );
-          updatedItems.push(itemResult.rows[0]);
+          updatedItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
         }
       } else {
         // Fetch existing items
@@ -1042,16 +1092,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE quote_id = $1`,
           [idResult.value],
         );
-        updatedItems = itemsResult.rows;
+        updatedItems = itemsResult.rows.map((item) =>
+          normalizeQuoteItemRow(item as Record<string, unknown>),
+        );
       }
 
+      const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
+
       return {
-        ...quoteResult.rows[0],
+        ...normalizedQuote,
         items: updatedItems,
         isExpired:
           typeof isExpiredOverride === 'boolean'
             ? isExpiredOverride
-            : isQuoteExpired(quoteResult.rows[0].status, quoteResult.rows[0].expirationDate),
+            : isQuoteExpired(normalizedQuote.status, normalizedQuote.expirationDate),
       };
     },
   );

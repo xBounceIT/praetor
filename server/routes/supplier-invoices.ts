@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -209,6 +210,14 @@ const normalizeItems = (items: SupplierInvoiceItemInput[], reply: FastifyReply) 
   return normalizedItems;
 };
 
+const toRequiredDateOnly = (value: unknown, fieldName: string) => {
+  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
+  if (!normalizedDate) {
+    throw new TypeError(`Invalid date value for ${fieldName}`);
+  }
+  return normalizedDate;
+};
+
 const syncExpenseForInvoice = async (invoice: {
   id: string;
   supplierName: string;
@@ -217,10 +226,7 @@ const syncExpenseForInvoice = async (invoice: {
   total: string | number;
   notes?: string | null;
 }) => {
-  const expenseDate =
-    invoice.issueDate instanceof Date
-      ? invoice.issueDate.toISOString().split('T')[0]
-      : String(invoice.issueDate).split('T')[0];
+  const expenseDate = toRequiredDateOnly(invoice.issueDate, 'supplierInvoice.issueDate');
   const description = `Supplier invoice ${invoice.invoiceNumber}`;
 
   const existingExpenseResult = await query(
@@ -300,14 +306,8 @@ const formatInvoiceResponse = (
   items: Array<Record<string, unknown>>,
 ) => ({
   ...invoice,
-  issueDate:
-    invoice.issueDate instanceof Date
-      ? invoice.issueDate.toISOString().split('T')[0]
-      : String(invoice.issueDate).split('T')[0],
-  dueDate:
-    invoice.dueDate instanceof Date
-      ? invoice.dueDate.toISOString().split('T')[0]
-      : String(invoice.dueDate).split('T')[0],
+  issueDate: toRequiredDateOnly(invoice.issueDate, 'supplierInvoice.issueDate'),
+  dueDate: toRequiredDateOnly(invoice.dueDate, 'supplierInvoice.dueDate'),
   subtotal: Number(invoice.subtotal ?? 0),
   taxAmount: Number(invoice.taxAmount ?? 0),
   total: Number(invoice.total ?? 0),
@@ -466,7 +466,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const dueDateResult = parseDateString(dueDate, 'dueDate');
       if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
 
-      if (new Date(dueDateResult.value) < new Date(issueDateResult.value)) {
+      if (dueDateResult.value < issueDateResult.value) {
         return badRequest(reply, 'dueDate must be on or after issueDate');
       }
 
@@ -751,10 +751,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const effectiveIssueDate = issueDateValue ?? existingInvoiceResult.rows[0].issueDate;
-      const effectiveDueDate = dueDateValue ?? existingInvoiceResult.rows[0].dueDate;
+      const effectiveIssueDate = toRequiredDateOnly(
+        issueDateValue ?? existingInvoiceResult.rows[0].issueDate,
+        'supplierInvoice.issueDate',
+      );
+      const effectiveDueDate = toRequiredDateOnly(
+        dueDateValue ?? existingInvoiceResult.rows[0].dueDate,
+        'supplierInvoice.dueDate',
+      );
 
-      if (new Date(String(effectiveDueDate)) < new Date(String(effectiveIssueDate))) {
+      if (effectiveDueDate < effectiveIssueDate) {
         return badRequest(reply, 'dueDate must be on or after issueDate');
       }
 

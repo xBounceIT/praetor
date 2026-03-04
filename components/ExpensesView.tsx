@@ -2,6 +2,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Expense } from '../types';
+import { formatDateOnlyForLocale, getLocalDateString } from '../utils/date';
 import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
 import StandardTable from './shared/StandardTable';
@@ -74,7 +75,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [formData, setFormData] = useState<Partial<Expense>>({
     description: '',
     amount: 0,
-    expenseDate: new Date().toISOString().split('T')[0],
+    expenseDate: getLocalDateString(),
     category: 'other',
     vendor: '',
     receiptReference: '',
@@ -87,7 +88,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     setFormData({
       description: '',
       amount: 0,
-      expenseDate: new Date().toISOString().split('T')[0],
+      expenseDate: getLocalDateString(),
       category: 'other',
       vendor: '',
       receiptReference: '',
@@ -461,7 +462,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 className="hover:bg-slate-50/50 cursor-pointer transition-colors"
               >
                 <td className="px-6 py-4 text-sm text-slate-600">
-                  {new Date(expense.expenseDate).toLocaleDateString()}
+                  {formatDateOnlyForLocale(expense.expenseDate)}
                 </td>
                 <td className="px-6 py-4 font-bold text-slate-800">
                   <div>{expense.description}</div>

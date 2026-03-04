@@ -2,6 +2,11 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
+import {
+  formatDateOnlyForLocale,
+  getLocalDateString,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -101,7 +106,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     paymentTerms: 'immediate',
     discount: 0,
     status: 'draft',
-    expirationDate: new Date().toISOString().split('T')[0],
+    expirationDate: getLocalDateString(),
     notes: '',
   });
 
@@ -131,7 +136,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       paymentTerms: 'immediate',
       discount: 0,
       status: 'draft',
-      expirationDate: new Date().toISOString().split('T')[0],
+      expirationDate: getLocalDateString(),
       notes: '',
     });
     setErrors({});
@@ -144,7 +149,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       ...quote,
       quoteCode: quote.quoteCode || quote.purchaseOrderNumber || '',
       purchaseOrderNumber: quote.quoteCode || quote.purchaseOrderNumber || '',
-      expirationDate: quote.expirationDate?.split('T')[0] || '',
+      expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
     });
     setErrors({});
     setIsModalOpen(true);
@@ -224,7 +229,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     defaultValue: 'Linked to offer',
                   })} ${row.linkedOfferId}`
                 : row.expirationDate
-                  ? new Date(row.expirationDate).toLocaleDateString()
+                  ? formatDateOnlyForLocale(row.expirationDate)
                   : ''}
             </div>
           </div>

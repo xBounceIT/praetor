@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientsOrder, Invoice, InvoiceItem, Product } from '../../types';
+import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -55,15 +56,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   // Form State
   const defaultInvoice = useMemo(() => {
-    const now = new Date();
-    const dueDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const issueDate = getLocalDateString();
     return {
       clientId: '',
       clientName: '',
       invoiceNumber: '',
       items: [],
-      issueDate: now.toISOString().split('T')[0],
-      dueDate: dueDate.toISOString().split('T')[0],
+      issueDate,
+      dueDate: addDaysToDateOnly(issueDate, 30),
       status: 'draft' as const,
       notes: '',
       amountPaid: 0,
@@ -88,8 +88,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       clientName: '',
       invoiceNumber: generateInvoiceNumber(),
       items: [],
-      issueDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      issueDate: getLocalDateString(),
+      dueDate: addDaysToDateOnly(getLocalDateString(), 30),
       status: 'draft',
       notes: '',
       amountPaid: 0,
@@ -281,20 +281,16 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('common:labels.date'),
-        accessorFn: (row: Invoice) => new Date(row.issueDate).toLocaleDateString(),
+        accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.issueDate),
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-slate-600">
-            {new Date(row.issueDate).toLocaleDateString()}
-          </span>
+          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
       },
       {
         header: t('accounting:clientsInvoices.dueDate'),
-        accessorFn: (row: Invoice) => new Date(row.dueDate).toLocaleDateString(),
+        accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.dueDate),
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-slate-600">
-            {new Date(row.dueDate).toLocaleDateString()}
-          </span>
+          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
         ),
       },
       {

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -188,6 +189,11 @@ const normalizeItems = (items: SupplierOfferItemInput[], reply: FastifyReply) =>
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
+  const normalizeSupplierOfferRow = (offer: Record<string, unknown>) => ({
+    ...offer,
+    expirationDate: normalizeNullableDateOnly(offer.expirationDate, 'supplierOffer.expirationDate'),
+  });
+
   fastify.get(
     '/',
     {
@@ -249,7 +255,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       return offersResult.rows.map((offer: { id: string }) => ({
-        ...offer,
+        ...normalizeSupplierOfferRow(offer as Record<string, unknown>),
         items: itemsByOffer[offer.id] || [],
       }));
     },
@@ -406,7 +412,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return reply.code(201).send({
-        ...createdOfferResult.rows[0],
+        ...normalizeSupplierOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
         items: createdItems,
       });
     },
@@ -665,7 +671,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return {
-        ...updatedOfferResult.rows[0],
+        ...normalizeSupplierOfferRow(updatedOfferResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
       };
     },

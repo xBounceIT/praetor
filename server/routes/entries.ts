@@ -14,6 +14,7 @@ import {
   TTL_ENTRIES_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -119,6 +120,14 @@ const entriesBulkDeleteQuerySchema = {
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
 
+const toRequiredDateOnly = (value: unknown, fieldName: string) => {
+  const normalizedDate = normalizeNullableDateOnly(value, fieldName);
+  if (!normalizedDate) {
+    throw new TypeError(`Invalid date value for ${fieldName}`);
+  }
+  return normalizedDate;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List time entries
   fastify.get(
@@ -220,7 +229,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return result.rows.map((e) => ({
             id: e.id,
             userId: e.user_id,
-            date: e.date.toISOString().split('T')[0],
+            date: toRequiredDateOnly(e.date, 'entry.date'),
             clientId: e.client_id,
             clientName: e.client_name,
             projectId: e.project_id,
@@ -482,7 +491,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         id: e.id,
         userId: e.user_id,
-        date: e.date.toISOString().split('T')[0],
+        date: toRequiredDateOnly(e.date, 'entry.date'),
         clientId: e.client_id,
         clientName: e.client_name,
         projectId: e.project_id,
@@ -609,7 +618,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (futureOnlyValue === true) {
         sql += ` AND date >= $${paramIndex++}`;
-        params.push(new Date().toISOString().split('T')[0]);
+        params.push(todayLocalDateOnly());
       }
 
       if (placeholderOnlyValue === true) {

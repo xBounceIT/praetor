@@ -71,7 +71,12 @@ import type {
   View,
   WorkUnit,
 } from './types';
-import { getLocalDateString } from './utils/date';
+import {
+  addDaysToDateOnly,
+  dateOnlyStringToLocalDate,
+  formatDateOnlyForLocale,
+  getLocalDateString,
+} from './utils/date';
 import { isItalianHoliday } from './utils/holidays';
 import {
   buildPermission,
@@ -317,7 +322,7 @@ const TrackerView: React.FC<{
                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
                     {selectedDate
                       ? t('tracker.activityFor', {
-                          date: new Date(selectedDate).toLocaleDateString(undefined, {
+                          date: formatDateOnlyForLocale(selectedDate, undefined, {
                             month: 'long',
                             day: 'numeric',
                           }),
@@ -1786,9 +1791,11 @@ const App: React.FC = () => {
       const client = project ? clients.find((c) => c.id === project.clientId) : null;
       if (!project || !client) continue;
 
-      const startDate = task.recurrenceStart ? new Date(task.recurrenceStart) : new Date();
+      const startDate = task.recurrenceStart
+        ? dateOnlyStringToLocalDate(task.recurrenceStart)
+        : new Date();
       // Use recurrence end date if specified, otherwise use default 14-day limit
-      const taskEndDate = task.recurrenceEnd ? new Date(task.recurrenceEnd) : null;
+      const taskEndDate = task.recurrenceEnd ? dateOnlyStringToLocalDate(task.recurrenceEnd) : null;
       const futureLimit =
         taskEndDate && taskEndDate > defaultFutureLimit ? taskEndDate : defaultFutureLimit;
 
@@ -2604,9 +2611,9 @@ const App: React.FC = () => {
 
   const handleCreateSupplierInvoiceFromOrder = async (order: SupplierSaleOrder) => {
     try {
-      const now = new Date();
       const paymentDays = Number.parseInt(order.paymentTerms?.replace(/\D/g, '') || '30', 10) || 30;
-      const dueDate = new Date(now.getTime() + paymentDays * 24 * 60 * 60 * 1000);
+      const issueDate = getLocalDateString();
+      const dueDate = addDaysToDateOnly(issueDate, paymentDays);
       const items = order.items.map((item) => ({
         id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
         invoiceId: '',
@@ -2632,8 +2639,8 @@ const App: React.FC = () => {
         linkedSaleId: order.id,
         supplierId: order.supplierId,
         supplierName: order.supplierName,
-        issueDate: now.toISOString().split('T')[0],
-        dueDate: dueDate.toISOString().split('T')[0],
+        issueDate,
+        dueDate,
         status: 'draft',
         subtotal: totals.subtotal,
         taxAmount: totals.taxAmount,
