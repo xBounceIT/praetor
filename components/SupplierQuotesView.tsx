@@ -1,11 +1,13 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../types';
 import { roundToTwoDecimals } from '../utils/numbers';
 import CustomSelect from './shared/CustomSelect';
 import Modal from './shared/Modal';
+import StandardTable, { type Column } from './shared/StandardTable';
 import StatusBadge, { type StatusType } from './shared/StatusBadge';
+import Tooltip from './shared/Tooltip';
 import ValidatedNumberInput from './shared/ValidatedNumberInput';
 
 const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
@@ -61,7 +63,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onCreateOffer,
   currency,
 }) => {
-  const { t } = useTranslation(['sales', 'common', 'crm']);
+  const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(
     () => [
@@ -89,8 +91,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<SupplierQuote>>({
     supplierId: '',
@@ -106,20 +106,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   });
 
   const isReadOnly = Boolean(editingQuote?.linkedOfferId);
+  const totalAmount = calculateTotals(
+    formData.items || [],
+    Number(formData.discount || 0),
+    products,
+  );
 
-  const filteredQuotes = useMemo(() => {
-    return quotes.filter((quote) => {
-      const code = quote.quoteCode || quote.purchaseOrderNumber || '';
-      const matchesSearch =
-        searchTerm.trim() === '' ||
-        quote.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        code.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || quote.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [quotes, searchTerm, filterStatus]);
+  const inputClassName =
+    'w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl ' +
+    'focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 ' +
+    'disabled:cursor-not-allowed';
+  const itemInputClassName =
+    'w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 ' +
+    'focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed';
 
-  const openAddModal = () => {
+  const openAddModal = useCallback(() => {
     setEditingQuote(null);
     setFormData({
       supplierId: '',
@@ -135,9 +136,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     });
     setErrors({});
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const openEditModal = (quote: SupplierQuote) => {
+  const openEditModal = useCallback((quote: SupplierQuote) => {
     setEditingQuote(quote);
     setFormData({
       ...quote,
@@ -147,331 +148,607 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     });
     setErrors({});
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const updateItem = (index: number, field: keyof SupplierQuoteItem, value: string | number) => {
-    if (isReadOnly) return;
-    setFormData((prev) => {
-      const items = [...(prev.items || [])];
-      const nextItem = { ...items[index], [field]: value };
-      if (field === 'productId') {
-        const product = products.find((item) => item.id === value);
-        if (product) {
-          nextItem.productName = product.name;
-          nextItem.unitPrice = Number(product.costo);
+  const getStatusLabel = useCallback(
+    (status: string) => {
+      const option = statusOptions.find((item) => item.id === status);
+      return option ? option.name : status;
+    },
+    [statusOptions],
+  );
+
+  const handleSupplierChange = useCallback(
+    (supplierId: string) => {
+      const supplier = suppliers.find((item) => item.id === supplierId);
+      setFormData((prev) => ({
+        ...prev,
+        supplierId,
+        supplierName: supplier?.name || '',
+      }));
+    },
+    [suppliers],
+  );
+
+  const updateItem = useCallback(
+    (index: number, field: keyof SupplierQuoteItem, value: string | number) => {
+      if (isReadOnly) return;
+      setFormData((prev) => {
+        const items = [...(prev.items || [])];
+        const nextItem = { ...items[index], [field]: value };
+        if (field === 'productId') {
+          const product = products.find((item) => item.id === value);
+          if (product) {
+            nextItem.productName = product.name;
+            nextItem.unitPrice = Number(product.costo);
+          }
         }
-      }
-      items[index] = nextItem;
-      return { ...prev, items };
-    });
+        items[index] = nextItem;
+        return { ...prev, items };
+      });
+    },
+    [isReadOnly, products],
+  );
+
+  const addItem = useCallback(() => {
+    if (isReadOnly) return;
+    setFormData((prev) => ({
+      ...prev,
+      items: [
+        ...(prev.items || []),
+        {
+          id: `tmp-${Date.now()}`,
+          quoteId: editingQuote?.id || '',
+          productId: '',
+          productName: '',
+          quantity: 1,
+          unitPrice: 0,
+          discount: 0,
+          note: '',
+        },
+      ],
+    }));
+  }, [editingQuote?.id, isReadOnly]);
+
+  const columns = useMemo<Column<SupplierQuote>[]>(
+    () => [
+      {
+        header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
+        accessorKey: 'supplierName',
+        cell: ({ row }) => (
+          <div>
+            <div className="font-bold text-slate-800">{row.supplierName}</div>
+            <div className="text-xs text-slate-400">
+              {row.linkedOfferId
+                ? `${t('sales:supplierQuotes.linkedOffer', {
+                    defaultValue: 'Linked to offer',
+                  })} ${row.linkedOfferId}`
+                : row.expirationDate
+                  ? new Date(row.expirationDate).toLocaleDateString()
+                  : ''}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
+        id: 'quoteCode',
+        accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
+        cell: ({ row }) => (
+          <div className="font-mono text-sm font-bold text-slate-500">
+            {row.quoteCode || row.purchaseOrderNumber}
+          </div>
+        ),
+      },
+      {
+        header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
+        id: 'total',
+        accessorFn: (row) => calculateTotals(row.items, row.discount, products),
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <span className="text-sm font-bold text-slate-700">
+            {calculateTotals(row.items, row.discount, products).toFixed(2)} {currency}
+          </span>
+        ),
+      },
+      {
+        header: t('sales:supplierQuotes.status', { defaultValue: 'Status' }),
+        accessorKey: 'status',
+        cell: ({ row }) => (
+          <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
+        ),
+      },
+      {
+        header: t('common.actions', { defaultValue: 'Actions' }),
+        id: 'actions',
+        align: 'right',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <div className="flex justify-end gap-2">
+            <Tooltip label={t('common.edit', { defaultValue: 'Edit' })}>
+              {() => (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openEditModal(row);
+                  }}
+                  className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
+              )}
+            </Tooltip>
+            {row.status === 'draft' && !row.linkedOfferId && (
+              <Tooltip label={t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}>
+                {() => (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onUpdateQuote(row.id, { status: 'sent' });
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                  >
+                    <i className="fa-solid fa-paper-plane"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {row.status === 'sent' && !row.linkedOfferId && (
+              <>
+                <Tooltip
+                  label={t('sales:supplierQuotes.markAccepted', {
+                    defaultValue: 'Mark as accepted',
+                  })}
+                >
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onUpdateQuote(row.id, { status: 'accepted' });
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                    >
+                      <i className="fa-solid fa-check"></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <Tooltip
+                  label={t('sales:supplierQuotes.markDenied', {
+                    defaultValue: 'Mark as denied',
+                  })}
+                >
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onUpdateQuote(row.id, { status: 'denied' });
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              </>
+            )}
+            {row.status === 'accepted' && !row.linkedOfferId && onCreateOffer && (
+              <Tooltip
+                label={t('sales:supplierQuotes.createOffer', { defaultValue: 'Create offer' })}
+              >
+                {() => (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCreateOffer(row);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-file-signature"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {row.status === 'draft' && !row.linkedOfferId && (
+              <Tooltip label={t('common.delete', { defaultValue: 'Delete' })}>
+                {() => (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setQuoteToDelete(row);
+                      setIsDeleteConfirmOpen(true);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [currency, getStatusLabel, onCreateOffer, onUpdateQuote, openEditModal, products, t],
+  );
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const nextErrors: Record<string, string> = {};
+    if (!formData.supplierId) {
+      nextErrors.supplierId = t('crm:quotes.errors.clientRequired', {
+        defaultValue: 'Supplier is required',
+      });
+    }
+    if (!formData.quoteCode?.trim()) {
+      nextErrors.quoteCode = t('crm:quotes.errors.quoteCodeRequired', {
+        defaultValue: 'Quote Code is required',
+      });
+    }
+    if (!formData.items || formData.items.length === 0) {
+      nextErrors.items = t('crm:quotes.errors.itemsRequired', {
+        defaultValue: 'At least one item is required',
+      });
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    const payload: Partial<SupplierQuote> = {
+      ...formData,
+      quoteCode: formData.quoteCode,
+      purchaseOrderNumber: formData.quoteCode,
+      discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
+      items: (formData.items || []).map((item) => ({
+        ...item,
+        unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
+        discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+      })),
+    };
+
+    if (editingQuote) {
+      await onUpdateQuote(editingQuote.id, payload);
+    } else {
+      await onAddQuote(payload);
+    }
+
+    setIsModalOpen(false);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
-          <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800">
-              {editingQuote
-                ? t('sales:supplierQuotes.editQuote', { defaultValue: 'Supplier Quote' })
-                : t('sales:supplierQuotes.newQuote', { defaultValue: 'New Supplier Quote' })}
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i
+                  className={`fa-solid ${
+                    isReadOnly ? 'fa-eye' : editingQuote ? 'fa-pen-to-square' : 'fa-plus'
+                  }`}
+                ></i>
+              </div>
+              {isReadOnly
+                ? t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
+                : editingQuote
+                  ? t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
+                  : t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100"
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
             >
-              <i className="fa-solid fa-xmark"></i>
+              <i className="fa-solid fa-xmark text-lg"></i>
             </button>
           </div>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const nextErrors: Record<string, string> = {};
-              if (!formData.supplierId) {
-                nextErrors.supplierId = t('crm:quotes.errors.clientRequired', {
-                  defaultValue: 'Supplier is required',
-                });
-              }
-              if (!formData.quoteCode?.trim()) {
-                nextErrors.quoteCode = t('crm:quotes.errors.quoteCodeRequired', {
-                  defaultValue: 'Quote Code is required',
-                });
-              }
-              if (!formData.items || formData.items.length === 0) {
-                nextErrors.items = t('crm:quotes.errors.itemsRequired', {
-                  defaultValue: 'At least one item is required',
-                });
-              }
-              if (Object.keys(nextErrors).length > 0) {
-                setErrors(nextErrors);
-                return;
-              }
-              const payload: Partial<SupplierQuote> = {
-                ...formData,
-                quoteCode: formData.quoteCode,
-                purchaseOrderNumber: formData.quoteCode,
-                discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
-                items: (formData.items || []).map((item) => ({
-                  ...item,
-                  unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-                  discount: roundToTwoDecimals(Number(item.discount ?? 0)),
-                })),
-              };
-              if (editingQuote) {
-                await onUpdateQuote(editingQuote.id, payload);
-              } else {
-                await onAddQuote(payload);
-              }
-              setIsModalOpen(false);
-            }}
-            className="p-6 space-y-6 max-h-[85vh] overflow-y-auto"
-          >
+
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
             {isReadOnly && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-                {t('sales:supplierQuotes.readOnlyLinked', {
-                  defaultValue: 'This quote is read-only because an offer was created from it.',
-                })}
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+                <span className="text-amber-700 text-xs font-bold">
+                  {t('sales:supplierQuotes.readOnlyLinked', {
+                    defaultValue: 'This quote is read-only because an offer was created from it.',
+                  })}
+                </span>
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:supplierQuotes.supplier')}
-                </label>
-                <CustomSelect
-                  options={activeSuppliers.map((supplier) => ({
-                    id: supplier.id,
-                    name: supplier.name,
-                  }))}
-                  value={formData.supplierId || ''}
-                  onChange={(value) => {
-                    const supplier = suppliers.find((item) => item.id === value);
-                    setFormData((prev) => ({
-                      ...prev,
-                      supplierId: value as string,
-                      supplierName: supplier?.name || '',
-                    }));
-                  }}
-                  searchable={true}
-                  disabled={isReadOnly}
-                />
-                {errors.supplierId && (
-                  <p className="text-red-500 text-xs mt-1">{errors.supplierId}</p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:supplierQuotes.quoteCode')}
-                </label>
-                <input
-                  type="text"
-                  value={formData.quoteCode || ''}
-                  disabled={isReadOnly}
-                  onChange={(event) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      quoteCode: event.target.value,
-                      purchaseOrderNumber: event.target.value,
-                    }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-                {errors.quoteCode && (
-                  <p className="text-red-500 text-xs mt-1">{errors.quoteCode}</p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:supplierQuotes.paymentTerms')}
-                </label>
-                <CustomSelect
-                  options={paymentTermsOptions}
-                  value={formData.paymentTerms || 'immediate'}
-                  onChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      paymentTerms: value as SupplierQuote['paymentTerms'],
-                    }))
-                  }
-                  searchable={false}
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:supplierQuotes.expirationDate')}
-                </label>
-                <input
-                  type="date"
-                  value={formData.expirationDate || ''}
-                  disabled={isReadOnly}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('sales:supplierQuotes.supplierInformation', {
+                  defaultValue: 'Supplier Information',
+                })}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
+                  </label>
+                  <CustomSelect
+                    options={activeSuppliers.map((supplier) => ({
+                      id: supplier.id,
+                      name: supplier.name,
+                    }))}
+                    value={formData.supplierId || ''}
+                    onChange={(value) => handleSupplierChange(value as string)}
+                    placeholder={t('sales:supplierQuotes.selectSupplier', {
+                      defaultValue: 'Select a supplier',
+                    })}
+                    searchable={true}
+                    disabled={isReadOnly}
+                    className={errors.supplierId ? 'border-red-300' : ''}
+                  />
+                  {errors.supplierId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.supplierId}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.quoteCode || ''}
+                    disabled={isReadOnly}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        quoteCode: event.target.value,
+                        purchaseOrderNumber: event.target.value,
+                      }))
+                    }
+                    className={`${inputClassName} ${errors.quoteCode ? 'border-red-300' : ''}`}
+                  />
+                  {errors.quoteCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor">
-                  {t('sales:supplierQuotes.items')}
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('sales:supplierQuotes.quoteDetails', { defaultValue: 'Quote Details' })}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' })}
+                  </label>
+                  <CustomSelect
+                    options={paymentTermsOptions}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        paymentTerms: value as SupplierQuote['paymentTerms'],
+                      }))
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' })}
+                  </label>
+                  <ValidatedNumberInput
+                    value={formData.discount || 0}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        discount: value === '' ? 0 : Number(value),
+                      }))
+                    }
+                    disabled={isReadOnly}
+                    className={inputClassName}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.expirationDate', { defaultValue: 'Expiration Date' })}
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.expirationDate || ''}
+                    disabled={isReadOnly}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
+                    }
+                    className={inputClassName}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.notes || ''}
+                    disabled={isReadOnly}
+                    placeholder={t('form:placeholderNotes', {
+                      defaultValue: 'Optional notes...',
+                    })}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    className={`${inputClassName} resize-none`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:supplierQuotes.status', { defaultValue: 'Status' })}
+                  </label>
+                  <CustomSelect
+                    options={statusOptions}
+                    value={formData.status || 'draft'}
+                    onChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        status: value as SupplierQuote['status'],
+                      }))
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
                 </h4>
                 {!isReadOnly && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        items: [
-                          ...(prev.items || []),
-                          {
-                            id: `tmp-${Date.now()}`,
-                            quoteId: editingQuote?.id || '',
-                            productId: '',
-                            productName: '',
-                            quantity: 1,
-                            unitPrice: 0,
-                            discount: 0,
-                            note: '',
-                          },
-                        ],
-                      }))
-                    }
-                    className="text-sm font-bold text-praetor"
+                    onClick={addItem}
+                    className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1"
                   >
-                    <i className="fa-solid fa-plus mr-1"></i>
-                    {t('sales:supplierQuotes.addItem')}
+                    <i className="fa-solid fa-plus"></i>
+                    {t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
                   </button>
                 )}
               </div>
-              {(formData.items || []).map((item, index) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-12 gap-2 items-start bg-slate-50 p-3 rounded-xl"
-                >
-                  <div className="col-span-12 md:col-span-4">
-                    <CustomSelect
-                      options={activeProducts.map((product) => ({
-                        id: product.id,
-                        name: product.name,
-                      }))}
-                      value={item.productId}
-                      onChange={(value) => updateItem(index, 'productId', value as string)}
-                      searchable={true}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <ValidatedNumberInput
-                      value={item.quantity}
-                      onValueChange={(value) =>
-                        updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                      }
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <ValidatedNumberInput
-                      value={item.unitPrice}
-                      onValueChange={(value) =>
-                        updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                      }
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <ValidatedNumberInput
-                      value={item.discount || 0}
-                      onValueChange={(value) =>
-                        updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                      }
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <input
-                      type="text"
-                      value={item.note || ''}
-                      disabled={isReadOnly}
-                      onChange={(event) => updateItem(index, 'note', event.target.value)}
-                      className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                    />
+              {errors.items && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+              )}
+
+              {formData.items && formData.items.length > 0 && (
+                <div className="px-3 mb-1">
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {formData.items && formData.items.length > 0 ? (
+                <div className="space-y-3">
+                  {formData.items.map((item, index) => (
+                    <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
+                      <div className="grid grid-cols-12 gap-3 items-center">
+                        <div className="col-span-12 md:col-span-4">
+                          <CustomSelect
+                            options={activeProducts.map((product) => ({
+                              id: product.id,
+                              name: product.name,
+                            }))}
+                            value={item.productId}
+                            onChange={(value) => updateItem(index, 'productId', value as string)}
+                            placeholder={t('sales:supplierQuotes.selectProduct', {
+                              defaultValue: 'Select product',
+                            })}
+                            searchable={true}
+                            disabled={isReadOnly}
+                            buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <ValidatedNumberInput
+                            value={item.quantity}
+                            onValueChange={(value) =>
+                              updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                            }
+                            disabled={isReadOnly}
+                            className={`${itemInputClassName} text-center`}
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <ValidatedNumberInput
+                            value={item.unitPrice}
+                            onValueChange={(value) =>
+                              updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                            }
+                            disabled={isReadOnly}
+                            className={`${itemInputClassName} text-center`}
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <ValidatedNumberInput
+                            value={item.discount || 0}
+                            onValueChange={(value) =>
+                              updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                            }
+                            disabled={isReadOnly}
+                            className={`${itemInputClassName} text-center`}
+                          />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                          <input
+                            type="text"
+                            value={item.note || ''}
+                            disabled={isReadOnly}
+                            onChange={(event) => updateItem(index, 'note', event.target.value)}
+                            placeholder={t('form:placeholderNotes', {
+                              defaultValue: 'Optional notes...',
+                            })}
+                            className={itemInputClassName}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  {t('sales:supplierQuotes.noItemsAdded', {
+                    defaultValue: 'No items added yet',
+                  })}
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:supplierQuotes.discount')}
-                </label>
-                <ValidatedNumberInput
-                  value={formData.discount || 0}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, discount: value === '' ? 0 : Number(value) }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:supplierQuotes.status')}
-                </label>
-                <CustomSelect
-                  options={statusOptions}
-                  value={formData.status || 'draft'}
-                  onChange={(value) =>
-                    setFormData((prev) => ({ ...prev, status: value as SupplierQuote['status'] }))
-                  }
-                  searchable={false}
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div className="flex items-end justify-end text-right">
-                <div>
-                  <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    {t('sales:supplierQuotes.total')}
-                  </div>
-                  <div className="text-2xl font-black text-praetor">
-                    {calculateTotals(
-                      formData.items || [],
-                      Number(formData.discount || 0),
-                      products,
-                    ).toFixed(2)}{' '}
-                    {currency}
-                  </div>
+
+            {formData.items && formData.items.length > 0 && (
+              <div className="mt-4 flex flex-col items-end space-y-2 px-3">
+                <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
+                  <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
+                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}:
+                  </span>
+                  <span className="text-3xl font-black text-praetor">
+                    {totalAmount.toFixed(2)}{' '}
+                    <span className="text-lg text-slate-400 font-bold">{currency}</span>
+                  </span>
                 </div>
               </div>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('sales:supplierQuotes.notes')}
-              </label>
-              <textarea
-                rows={3}
-                value={formData.notes || ''}
-                disabled={isReadOnly}
-                onChange={(event) =>
-                  setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                }
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-              />
-            </div>
-            <div className="flex justify-between border-t border-slate-100 pt-4">
+            )}
+
+            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
+                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('common.cancel')}
+                {t('common.cancel', { defaultValue: 'Cancel' })}
               </button>
               {!isReadOnly && (
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold"
+                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                 >
-                  {editingQuote ? t('common.update') : t('common.save')}
+                  {editingQuote
+                    ? t('common.update', { defaultValue: 'Update' })
+                    : t('common.save', { defaultValue: 'Save' })}
                 </button>
               )}
             </div>
@@ -480,184 +757,70 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       </Modal>
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">
-            {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
-          </h3>
-          <p className="text-sm text-slate-500">{quoteToDelete?.quoteCode}</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              onClick={async () => {
-                if (!quoteToDelete) return;
-                await onDeleteQuote(quoteToDelete.id);
-                setIsDeleteConfirmOpen(false);
-                setQuoteToDelete(null);
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold"
-            >
-              {t('common.yesDelete')}
-            </button>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {quoteToDelete?.quoteCode}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common.cancel', { defaultValue: 'Cancel' })}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!quoteToDelete) return;
+                  await onDeleteQuote(quoteToDelete.id);
+                  setIsDeleteConfirmOpen(false);
+                  setQuoteToDelete(null);
+                }}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('common.delete', { defaultValue: 'Delete' })}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">
-            {t('sales:supplierQuotes.title', { defaultValue: 'Supplier Quotes' })}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {t('sales:supplierQuotes.subtitle', {
-              defaultValue: 'Quotes that can be converted into supplier offers.',
-            })}
-          </p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">
+              {t('sales:supplierQuotes.title', { defaultValue: 'Supplier Quotes' })}
+            </h2>
+            <p className="text-slate-500 text-sm">
+              {t('sales:supplierQuotes.subtitle', {
+                defaultValue: 'Quotes that can be converted into supplier offers.',
+              })}
+            </p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i>
+            {t('sales:supplierQuotes.addQuote', { defaultValue: 'Add quote' })}
+          </button>
         </div>
-        <button
-          onClick={openAddModal}
-          className="px-4 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold"
-        >
-          <i className="fa-solid fa-plus mr-2"></i>
-          {t('sales:supplierQuotes.addQuote', { defaultValue: 'Add quote' })}
-        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder={t('common.search')}
-          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm"
-        />
-        <CustomSelect
-          options={[
-            { id: 'all', name: t('common.all', { defaultValue: 'All' }) },
-            ...statusOptions,
-          ]}
-          value={filterStatus}
-          onChange={(value) => setFilterStatus(value as string)}
-          searchable={false}
-          buttonClassName="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700"
-        />
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:supplierQuotes.supplier')}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:supplierQuotes.quoteCode')}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:supplierQuotes.status')}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:supplierQuotes.total')}
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('common.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredQuotes.map((quote) => (
-              <tr key={quote.id} className="hover:bg-slate-50/70">
-                <td className="px-4 py-4">
-                  <div className="font-bold text-slate-800">{quote.supplierName}</div>
-                  <div className="text-xs text-slate-400">
-                    {quote.linkedOfferId
-                      ? `${t('sales:supplierQuotes.linkedOffer', { defaultValue: 'Linked to offer' })} ${quote.linkedOfferId}`
-                      : new Date(quote.expirationDate).toLocaleDateString()}
-                  </div>
-                </td>
-                <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
-                  {quote.quoteCode || quote.purchaseOrderNumber}
-                </td>
-                <td className="px-4 py-4">
-                  <StatusBadge
-                    type={quote.status as StatusType}
-                    label={
-                      statusOptions.find((option) => option.id === quote.status)?.name ||
-                      quote.status
-                    }
-                  />
-                </td>
-                <td className="px-4 py-4 text-sm font-bold text-slate-700">
-                  {calculateTotals(quote.items, quote.discount, products).toFixed(2)} {currency}
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => openEditModal(quote)}
-                      className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                      title={t('common.edit')}
-                    >
-                      <i className="fa-solid fa-pen-to-square"></i>
-                    </button>
-                    {quote.status === 'draft' && !quote.linkedOfferId && (
-                      <button
-                        onClick={() => onUpdateQuote(quote.id, { status: 'sent' })}
-                        className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                        title={t('sales:supplierQuotes.markSent')}
-                      >
-                        <i className="fa-solid fa-paper-plane"></i>
-                      </button>
-                    )}
-                    {quote.status === 'sent' && !quote.linkedOfferId && (
-                      <>
-                        <button
-                          onClick={() => onUpdateQuote(quote.id, { status: 'accepted' })}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                          title={t('sales:supplierQuotes.markAccepted')}
-                        >
-                          <i className="fa-solid fa-check"></i>
-                        </button>
-                        <button
-                          onClick={() => onUpdateQuote(quote.id, { status: 'denied' })}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                          title={t('sales:supplierQuotes.markDenied')}
-                        >
-                          <i className="fa-solid fa-xmark"></i>
-                        </button>
-                      </>
-                    )}
-                    {quote.status === 'accepted' && !quote.linkedOfferId && onCreateOffer && (
-                      <button
-                        onClick={() => onCreateOffer(quote)}
-                        className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                        title={t('sales:supplierQuotes.createOffer')}
-                      >
-                        <i className="fa-solid fa-file-signature"></i>
-                      </button>
-                    )}
-                    {quote.status === 'draft' && !quote.linkedOfferId && (
-                      <button
-                        onClick={() => {
-                          setQuoteToDelete(quote);
-                          setIsDeleteConfirmOpen(true);
-                        }}
-                        className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                        title={t('common.delete')}
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StandardTable<SupplierQuote>
+        title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
+        data={quotes}
+        columns={columns}
+        defaultRowsPerPage={5}
+      />
     </div>
   );
 };
