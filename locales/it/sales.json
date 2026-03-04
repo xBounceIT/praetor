@@ -171,6 +171,7 @@
   "supplierQuotes": {
     "title": "Preventivi Fornitori",
     "subtitle": "Preventivi convertibili in offerte fornitore.",
+    "activeQuotes": "Preventivi Attivi",
     "editQuote": "Preventivo Fornitore",
     "newQuote": "Nuovo Preventivo Fornitore",
     "addQuote": "Aggiungi preventivo",
@@ -185,6 +186,7 @@
     "status": "Stato",
     "total": "Totale",
     "notes": "Note",
+    "actionsColumn": "Azioni",
     "deleteTitle": "Eliminare preventivo fornitore?",
     "statusDraft": "Bozza",
     "statusSent": "Inviato",
@@ -199,6 +201,7 @@
   "supplierOffers": {
     "title": "Offerte Fornitori",
     "subtitle": "Offerte create dai preventivi fornitori.",
+    "activeOffers": "Offerte Attive",
     "editOffer": "Offerta Fornitore",
     "sourceQuote": "Preventivo di origine: {{quoteId}}",
     "viewQuote": "Vedi preventivo",
@@ -211,6 +214,7 @@
     "status": "Stato",
     "total": "Totale",
     "notes": "Note",
+    "actionsColumn": "Azioni",
     "deleteTitle": "Eliminare offerta fornitore?",
     "statusDraft": "Bozza",
     "statusSent": "Inviata",

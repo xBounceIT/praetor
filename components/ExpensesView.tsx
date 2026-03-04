@@ -247,7 +247,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('expenses.vendor')} ({t('common.optional')})
+                  {t('expenses.vendor')} ({t('common:common.optional')})
                 </label>
                 <input
                   type="text"
@@ -292,14 +292,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
               >
-                {t('common.buttons.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               {!isReadOnly && (
                 <button
                   type="submit"
                   className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
                 >
-                  {t('common.buttons.save')}
+                  {t('common:buttons.save')}
                 </button>
               )}
             </div>
@@ -320,13 +320,13 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
               onClick={() => setIsDeleteConfirmOpen(false)}
               className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl"
             >
-              {t('common.buttons.cancel')}
+              {t('common:buttons.cancel')}
             </button>
             <button
               onClick={handleDelete}
               className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
             >
-              {t('common.buttons.delete')}
+              {t('common:buttons.delete')}
             </button>
           </div>
         </div>

@@ -335,13 +335,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="px-6 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
               >
-                {t('common.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
                 className="px-6 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold"
               >
-                {t('common.update')}
+                {t('common:buttons.update')}
               </button>
             </div>
           </form>
@@ -361,7 +361,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               onClick={() => setIsDeleteConfirmOpen(false)}
               className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
             >
-              {t('common.cancel')}
+              {t('common:buttons.cancel')}
             </button>
             <button
               onClick={async () => {
@@ -372,7 +372,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               }}
               className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold"
             >
-              {t('common.yesDelete')}
+              {t('common:buttons.delete')}
             </button>
           </div>
         </div>
@@ -394,12 +394,12 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           type="text"
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder={t('common.search')}
+          placeholder={t('common:labels.searchPlaceholder')}
           className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm"
         />
         <CustomSelect
           options={[
-            { id: 'all', name: t('common.all', { defaultValue: 'All' }) },
+            { id: 'all', name: t('common:common.all', { defaultValue: 'All' }) },
             ...statusOptions,
           ]}
           value={filterStatus}
@@ -426,7 +426,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 {t('accounting:supplierInvoices.total')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('common.actions')}
+                {t('accounting:supplierInvoices.actionsColumn', { defaultValue: 'Actions' })}
               </th>
             </tr>
           </thead>
@@ -463,7 +463,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     <button
                       onClick={() => openEditModal(invoice)}
                       className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                      title={t('common.edit')}
+                      title={t('common:buttons.edit')}
                     >
                       <i className="fa-solid fa-pen-to-square"></i>
                     </button>
@@ -473,7 +473,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                         setIsDeleteConfirmOpen(true);
                       }}
                       className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                      title={t('common.delete')}
+                      title={t('common:buttons.delete')}
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>

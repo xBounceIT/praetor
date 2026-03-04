@@ -1042,7 +1042,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('crm:internalListing.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
@@ -1079,13 +1079,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 onClick={() => setIsDeleteConfirmOpen(false)}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('crm:internalListing.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('crm:externalListing.yesDelete')}
+                {t('common:buttons.delete')}
               </button>
             </div>
           </div>

@@ -283,7 +283,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
 
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                {t('admin.ldap.bindDnLabel')} {t('common.common.optional', '(Optional)')}
+                {t('admin.ldap.bindDnLabel')} {t('common:common.optional', '(Optional)')}
               </label>
               <input
                 type="text"

@@ -201,7 +201,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         ),
       },
       {
-        header: t('common.actions', { defaultValue: 'Actions' }),
+        header: t('sales:supplierOffers.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
         align: 'right',
         disableSorting: true,
@@ -223,7 +223,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 )}
               </Tooltip>
             )}
-            <Tooltip label={t('common.edit', { defaultValue: 'Edit' })}>
+            <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
               {() => (
                 <button
                   onClick={(event) => {
@@ -313,7 +313,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
               </Tooltip>
             )}
             {row.status === 'draft' && (
-              <Tooltip label={t('common.delete', { defaultValue: 'Delete' })}>
+              <Tooltip label={t('common:buttons.delete', { defaultValue: 'Delete' })}>
                 {() => (
                   <button
                     onClick={(event) => {
@@ -695,14 +695,14 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('common.cancel', { defaultValue: 'Cancel' })}
+                {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
               </button>
               {!isReadOnly && (
                 <button
                   type="submit"
                   className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                 >
-                  {t('common.update', { defaultValue: 'Update' })}
+                  {t('common:buttons.update', { defaultValue: 'Update' })}
                 </button>
               )}
             </div>
@@ -729,7 +729,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 onClick={() => setIsDeleteConfirmOpen(false)}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
-                {t('common.cancel', { defaultValue: 'Cancel' })}
+                {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 onClick={async () => {
@@ -740,7 +740,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 }}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
-                {t('common.delete', { defaultValue: 'Delete' })}
+                {t('common:buttons.delete', { defaultValue: 'Delete' })}
               </button>
             </div>
           </div>

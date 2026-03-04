@@ -171,6 +171,7 @@
   "supplierQuotes": {
     "title": "Supplier Quotes",
     "subtitle": "Quotes that can be converted into supplier offers.",
+    "activeQuotes": "Active Quotes",
     "editQuote": "Supplier Quote",
     "newQuote": "New Supplier Quote",
     "addQuote": "Add quote",
@@ -185,6 +186,7 @@
     "status": "Status",
     "total": "Total",
     "notes": "Notes",
+    "actionsColumn": "Actions",
     "deleteTitle": "Delete supplier quote?",
     "statusDraft": "Draft",
     "statusSent": "Sent",
@@ -199,6 +201,7 @@
   "supplierOffers": {
     "title": "Supplier Offers",
     "subtitle": "Offers created from supplier quotes.",
+    "activeOffers": "Active Offers",
     "editOffer": "Supplier Offer",
     "sourceQuote": "Source quote: {{quoteId}}",
     "viewQuote": "View quote",
@@ -211,6 +214,7 @@
     "status": "Status",
     "total": "Total",
     "notes": "Notes",
+    "actionsColumn": "Actions",
     "deleteTitle": "Delete supplier offer?",
     "statusDraft": "Draft",
     "statusSent": "Sent",
