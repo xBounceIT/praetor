@@ -36,7 +36,6 @@ export interface ClientsOrdersViewProps {
   clients: Client[];
   products: Product[];
   specialBids: SpecialBid[];
-  onAddClientsOrder: (orderData: Partial<ClientsOrder>) => void;
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => void;
   onDeleteClientsOrder: (id: string) => void;
   onViewQuote?: (quoteId: string) => void;
@@ -60,7 +59,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   clients,
   products,
   specialBids,
-  onAddClientsOrder,
   onUpdateClientsOrder,
   onDeleteClientsOrder,
   onViewQuote,
@@ -84,21 +82,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     notes: '',
   });
 
-  const openAddModal = () => {
-    setEditingOrder(null);
-    setFormData({
-      clientId: '',
-      clientName: '',
-      items: [],
-      paymentTerms: 'immediate',
-      discount: 0,
-      status: 'draft',
-      notes: '',
-    });
-    setErrors({});
-    setIsModalOpen(true);
-  };
-
   const openEditModal = useCallback((order: ClientsOrder) => {
     setEditingOrder(order);
     setFormData({
@@ -117,6 +100,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingOrder) return;
 
     const newErrors: Record<string, string> = {};
 
@@ -161,11 +145,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       items: itemsWithSnapshots,
     };
 
-    if (editingOrder) {
-      onUpdateClientsOrder(editingOrder.id, payload);
-    } else {
-      onAddClientsOrder(payload);
-    }
+    onUpdateClientsOrder(editingOrder.id, payload);
     setIsModalOpen(false);
   };
 
@@ -609,17 +589,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Add/Edit Modal */}
+      {/* Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingOrder ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+                <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
               </div>
-              {editingOrder
-                ? t('accounting:clientsOrders.editOrder')
-                : t('accounting:clientsOrders.addOrder')}
+              {isReadOnly ? t('common:buttons.view') : t('accounting:clientsOrders.editOrder')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -1048,9 +1026,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 type="submit"
                 className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
               >
-                {editingOrder
-                  ? t('accounting:clientsOrders.updateOrder')
-                  : t('accounting:clientsOrders.addOrder')}
+                {t('accounting:clientsOrders.updateOrder')}
               </button>
             </div>
           </form>
@@ -1100,12 +1076,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
             </h2>
             <p className="text-slate-500 text-sm">{t('accounting:clientsOrders.subtitle')}</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> {t('accounting:clientsOrders.createNewOrder')}
-          </button>
         </div>
       </div>
 

@@ -1986,15 +1986,6 @@ const App: React.FC = () => {
     }
   };
 
-  const addClientsOrder = async (orderData: Partial<ClientsOrder>) => {
-    try {
-      const order = await api.clientsOrders.create(orderData);
-      setClientsOrders([...clientsOrders, order]);
-    } catch (err) {
-      console.error('Failed to add order:', err);
-    }
-  };
-
   const handleUpdateClientsOrder = async (id: string, updates: Partial<ClientsOrder>) => {
     try {
       const updated = await api.clientsOrders.update(id, updates);
@@ -3039,7 +3030,6 @@ const App: React.FC = () => {
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
-                  onAddClientsOrder={addClientsOrder}
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}

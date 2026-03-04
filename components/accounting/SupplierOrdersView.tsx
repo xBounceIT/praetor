@@ -111,8 +111,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const [orderToDelete, setOrderToDelete] = useState<SupplierSaleOrder | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [formData, setFormData] = useState<Partial<SupplierSaleOrder>>({
     linkedOfferId: '',
     linkedQuoteId: '',
@@ -126,19 +124,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   });
 
   const isReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const normalizedTerm = searchTerm.trim().toLowerCase();
-      const matchesSearch =
-        normalizedTerm === '' ||
-        order.supplierName.toLowerCase().includes(normalizedTerm) ||
-        order.linkedOfferId.toLowerCase().includes(normalizedTerm) ||
-        order.linkedQuoteId?.toLowerCase().includes(normalizedTerm);
-      const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [orders, searchTerm, filterStatus]);
 
   const openEditModal = useCallback((order: SupplierSaleOrder) => {
     setEditingOrder(order);
@@ -822,7 +807,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
       <StandardTable<SupplierSaleOrder>
         title={t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
-        data={filteredOrders}
+        data={orders}
         columns={columns}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
@@ -832,31 +817,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             : 'hover:bg-slate-50/50'
         }
         onRowClick={(row: SupplierSaleOrder) => openEditModal(row)}
-        headerExtras={
-          <>
-            <div className="relative">
-              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-300"></i>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={t('common:labels.searchPlaceholder')}
-                className="w-56 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs font-semibold outline-none focus:ring-2 focus:ring-praetor"
-              />
-            </div>
-            <CustomSelect
-              options={[
-                { id: 'all', name: t('common:common.all', { defaultValue: 'All' }) },
-                ...statusOptions,
-              ]}
-              value={filterStatus}
-              onChange={(value) => setFilterStatus(value as string)}
-              searchable={false}
-              className="w-40"
-              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
-            />
-          </>
-        }
       />
     </div>
   );

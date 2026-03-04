@@ -76,8 +76,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   const [invoiceToDelete, setInvoiceToDelete] = useState<SupplierInvoice | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [formData, setFormData] = useState<Partial<SupplierInvoice>>({
     linkedSaleId: '',
     supplierId: '',
@@ -93,19 +91,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     notes: '',
     items: [],
   });
-
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const normalizedTerm = searchTerm.trim().toLowerCase();
-      const matchesSearch =
-        normalizedTerm === '' ||
-        invoice.supplierName.toLowerCase().includes(normalizedTerm) ||
-        invoice.invoiceNumber.toLowerCase().includes(normalizedTerm) ||
-        invoice.linkedExpenseId?.toLowerCase().includes(normalizedTerm);
-      const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [filterStatus, invoices, searchTerm]);
 
   const openEditModal = useCallback((invoice: SupplierInvoice) => {
     setEditingInvoice(invoice);
@@ -683,7 +668,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
       <StandardTable<SupplierInvoice>
         title={t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
-        data={filteredInvoices}
+        data={invoices}
         columns={columns}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
@@ -693,31 +678,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             : 'hover:bg-slate-50/50'
         }
         onRowClick={(row: SupplierInvoice) => openEditModal(row)}
-        headerExtras={
-          <>
-            <div className="relative">
-              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-300"></i>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={t('common:labels.searchPlaceholder')}
-                className="w-56 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs font-semibold outline-none focus:ring-2 focus:ring-praetor"
-              />
-            </div>
-            <CustomSelect
-              options={[
-                { id: 'all', name: t('common:common.all', { defaultValue: 'All' }) },
-                ...statusOptions,
-              ]}
-              value={filterStatus}
-              onChange={(value) => setFilterStatus(value as string)}
-              searchable={false}
-              className="w-40"
-              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
-            />
-          </>
-        }
       />
     </div>
   );
