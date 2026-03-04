@@ -60,6 +60,15 @@ docker compose up -d --build
 ```
 
 The compose setup defaults backend `TRUST_PROXY=1` for the bundled Caddy -> API hop.
+Set `DEMO_SEEDING=true` in `.env` when you want the stack to provision the canonical demo users and demo business data.
+That refresh flow is intended for demo and test stacks, owns the canonical demo namespace, and supports reused Docker volumes.
+
+To rerun the same refresh manually against an existing backend database:
+
+```bash
+cd server
+bun run seed:demo
+```
 
 ### Customer Compose (pulls prebuilt images)
 
@@ -90,9 +99,9 @@ The workflow runs on `v*` git tags and can also be run manually.
 ## Usage Guide
 
 - **Login**:
-  - Default Admin: `admin` / `password`
-  - Default Manager: `manager` / `password`
-  - Default User: `user` / `password`
+  - Bootstrap Admin: `admin` / `password`
+  - Demo Manager: `manager` / `password` when `DEMO_SEEDING=true`
+  - Demo User: `user` / `password` when `DEMO_SEEDING=true`
   
 - **Tracking Time**: Navigate to the "Time Tracker" view and log time entries.
 

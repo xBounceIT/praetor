@@ -1,4 +1,8 @@
--- Seed data for Praetor
+-- Seed data for Praetor demo mode.
+-- The canonical demo refresh is orchestrated by server/db/demoSeed.ts.
+-- DEMO_SEEDING=true provisions the demo users and demo business data by first cleaning the
+-- canonical demo namespace and any demo business-key collisions, then reapplying this file.
+-- This flow is intended for demo/test environments and supports reused Docker volumes.
 
 -- Default users (password is 'password' for all, hashed with bcrypt cost 10)
 -- To generate: require('bcrypt').hashSync('password', 10)
@@ -43,8 +47,8 @@ ON CONFLICT (user_id) DO NOTHING;
 -- Refreshable demo dataset.
 -- Demo records intentionally use dm_* ids and DM-* business codes so reseeding restores the
 -- curated showcase rows in place without deleting non-demo records that reference demo entities.
--- NOTE: No explicit transaction wrapper — the app layer executes each statement independently
--- so that a single table failure does not roll back the entire seed.
+-- The app-layer orchestrator executes these statements in a controlled refresh workflow after
+-- cleanup, verification, manager assignment, and cache invalidation steps are prepared.
 
 INSERT INTO clients (
     id,

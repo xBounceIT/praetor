@@ -94,6 +94,13 @@ const getCurrencySymbol = (currency: string) => {
   }
 };
 
+type ModuleLoadErrors = Partial<Record<string, string[]>>;
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Unknown error';
+};
+
 const getModuleFromView = (view: View | '404'): string | null => {
   if (view === '404') return null;
   if (view.startsWith('timesheets/')) return 'timesheets';
@@ -600,6 +607,7 @@ const App: React.FC = () => {
     language: 'auto',
   });
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
+  const [moduleLoadErrors, setModuleLoadErrors] = useState<ModuleLoadErrors>({});
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
   const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
   const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
@@ -948,7 +956,58 @@ const App: React.FC = () => {
       setHasLoadedRoles(true);
     };
 
+    const loadDatasets = async (
+      moduleName: string,
+      requests: Array<{
+        dataset: string;
+        enabled: boolean;
+        load: () => Promise<unknown>;
+        apply: (data: unknown) => void;
+      }>,
+    ) => {
+      const activeRequests = requests.filter((request) => request.enabled);
+      if (activeRequests.length === 0) return [] as string[];
+
+      const results = await Promise.allSettled(activeRequests.map((request) => request.load()));
+      const failures: string[] = [];
+
+      results.forEach((result, index) => {
+        const request = activeRequests[index];
+        if (result.status === 'fulfilled') {
+          request.apply(result.value);
+          return;
+        }
+
+        failures.push(request.dataset);
+        console.error(
+          `Failed to load ${moduleName} dataset "${request.dataset}": ${getErrorMessage(result.reason)}`,
+          result.reason,
+        );
+      });
+
+      return failures;
+    };
+
+    const loadOptionalDataset = async (
+      moduleName: string,
+      dataset: string,
+      load: () => Promise<void>,
+      failures: string[],
+    ) => {
+      try {
+        await load();
+      } catch (err) {
+        failures.push(dataset);
+        console.error(
+          `Failed to load ${moduleName} dataset "${dataset}": ${getErrorMessage(err)}`,
+          err,
+        );
+      }
+    };
+
     const loadModuleData = async () => {
+      let failedDatasets: string[] = [];
+
       try {
         const permissions = currentUser.permissions || [];
         const canViewTimesheets = hasAnyPermission(permissions, [
@@ -1163,29 +1222,62 @@ const App: React.FC = () => {
         switch (module) {
           case 'timesheets': {
             if (!canViewTimesheets) return;
-            const [entriesData, clientsData, projectsData, tasksData, usersData] =
-              await Promise.all([
-                api.entries.list(),
-                canListClients ? api.clients.list() : Promise.resolve([]),
-                canListProjects ? api.projects.list() : Promise.resolve([]),
-                canListTasks ? api.tasks.list() : Promise.resolve([]),
-                canListUsers ? api.users.list() : Promise.resolve([]),
-              ]);
-            setEntries(entriesData);
-            setClients(clientsData);
-            setProjects(projectsData);
-            setProjectTasks(tasksData);
-            setUsers(usersData);
-            await loadGeneralSettings();
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'entries',
+                enabled: true,
+                load: () => api.entries.list(),
+                apply: (data) => setEntries(data as TimeEntry[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'projects',
+                enabled: canListProjects,
+                load: () => api.projects.list(),
+                apply: (data) => setProjects(data as Project[]),
+              },
+              {
+                dataset: 'tasks',
+                enabled: canListTasks,
+                load: () => api.tasks.list(),
+                apply: (data) => setProjectTasks(data as ProjectTask[]),
+              },
+              {
+                dataset: 'users',
+                enabled: canListUsers,
+                load: () => api.users.list(),
+                apply: (data) => setUsers(data as User[]),
+              },
+            ]);
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'hr': {
             if (!canViewHr) return;
-            const [usersData] = await Promise.all([
-              canListUsers ? api.users.list() : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'users',
+                enabled: canListUsers,
+                load: () => api.users.list(),
+                apply: (data) => setUsers(data as User[]),
+              },
             ]);
-            setUsers(usersData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'administration': {
@@ -1195,189 +1287,367 @@ const App: React.FC = () => {
             const shouldLoadWorkUnits = canViewWorkUnits;
             const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
 
-            const [usersData, clientsData, projectsData, tasksData, workUnitsData] =
-              await Promise.all([
-                shouldLoadUsers && canListUsers ? api.users.list() : Promise.resolve([]),
-                shouldLoadAssignments && canListClients ? api.clients.list() : Promise.resolve([]),
-                shouldLoadAssignments && canListProjects
-                  ? api.projects.list()
-                  : Promise.resolve([]),
-                shouldLoadAssignments && canListTasks ? api.tasks.list() : Promise.resolve([]),
-                shouldLoadWorkUnits && canListWorkUnits
-                  ? api.workUnits.list()
-                  : Promise.resolve([]),
-              ]);
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'users',
+                enabled: shouldLoadUsers && canListUsers,
+                load: () => api.users.list(),
+                apply: (data) => setUsers(data as User[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: shouldLoadAssignments && canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'projects',
+                enabled: shouldLoadAssignments && canListProjects,
+                load: () => api.projects.list(),
+                apply: (data) => setProjects(data as Project[]),
+              },
+              {
+                dataset: 'tasks',
+                enabled: shouldLoadAssignments && canListTasks,
+                load: () => api.tasks.list(),
+                apply: (data) => setProjectTasks(data as ProjectTask[]),
+              },
+              {
+                dataset: 'work units',
+                enabled: shouldLoadWorkUnits && canListWorkUnits,
+                load: () => api.workUnits.list(),
+                apply: (data) => setWorkUnits(data as WorkUnit[]),
+              },
+            ]);
 
-            if (shouldLoadUsers) setUsers(usersData);
-            if (shouldLoadAssignments) {
-              setClients(clientsData);
-              setProjects(projectsData);
-              setProjectTasks(tasksData);
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
+            if (shouldLoadRoles) {
+              await loadOptionalDataset(module, 'roles', loadRoles, failedDatasets);
             }
-            if (shouldLoadWorkUnits) setWorkUnits(workUnitsData);
-
-            await loadGeneralSettings();
-            if (shouldLoadRoles) await loadRoles();
-            if (canViewAuthentication) await loadLdapConfig();
-            if (canViewEmail) await loadEmailConfig();
+            if (canViewAuthentication) {
+              await loadOptionalDataset(module, 'authentication', loadLdapConfig, failedDatasets);
+            }
+            if (canViewEmail) {
+              await loadOptionalDataset(module, 'email settings', loadEmailConfig, failedDatasets);
+            }
             break;
           }
           case 'crm': {
             if (!canViewCrm) return;
-            const [clientsData, suppliersData] = await Promise.all([
-              canViewCrmClients && canListClients ? api.clients.list() : Promise.resolve([]),
-              canViewCrmSuppliers && canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'clients',
+                enabled: canViewCrmClients && canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'suppliers',
+                enabled: canViewCrmSuppliers && canListSuppliers,
+                load: () => api.suppliers.list(),
+                apply: (data) => setSuppliers(data as Supplier[]),
+              },
             ]);
-            if (canViewCrmClients) setClients(clientsData);
-            if (canViewCrmSuppliers) setSuppliers(suppliersData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'sales': {
             if (!canViewSales) return;
-            const [
-              quotesData,
-              clientOffersData,
-              supplierQuotesData,
-              supplierOffersData,
-              clientsData,
-              suppliersData,
-              productsData,
-              specialBidsData,
-            ] = await Promise.all([
-              canListQuotes ? api.quotes.list() : Promise.resolve([]),
-              canListClientOffers ? api.clientOffers.list() : Promise.resolve([]),
-              canListSupplierQuotes ? api.supplierQuotes.list() : Promise.resolve([]),
-              canListSupplierOffers ? api.supplierOffers.list() : Promise.resolve([]),
-              canListClients ? api.clients.list() : Promise.resolve([]),
-              canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
-              canListProducts ? api.products.list() : Promise.resolve([]),
-              canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'quotes',
+                enabled: canListQuotes,
+                load: () => api.quotes.list(),
+                apply: (data) => setQuotes(data as Quote[]),
+              },
+              {
+                dataset: 'client offers',
+                enabled: canListClientOffers,
+                load: () => api.clientOffers.list(),
+                apply: (data) => setClientOffers(data as ClientOffer[]),
+              },
+              {
+                dataset: 'supplier quotes',
+                enabled: canListSupplierQuotes,
+                load: () => api.supplierQuotes.list(),
+                apply: (data) => setSupplierQuotes(data as SupplierQuote[]),
+              },
+              {
+                dataset: 'supplier offers',
+                enabled: canListSupplierOffers,
+                load: () => api.supplierOffers.list(),
+                apply: (data) => setSupplierOffers(data as SupplierOffer[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'suppliers',
+                enabled: canListSuppliers,
+                load: () => api.suppliers.list(),
+                apply: (data) => setSuppliers(data as Supplier[]),
+              },
+              {
+                dataset: 'products',
+                enabled: canListProducts,
+                load: () => api.products.list(),
+                apply: (data) => setProducts(data as Product[]),
+              },
+              {
+                dataset: 'special bids',
+                enabled: canListSpecialBids,
+                load: () => api.specialBids.list(),
+                apply: (data) => setSpecialBids(data as SpecialBid[]),
+              },
             ]);
-            if (canListQuotes) setQuotes(quotesData);
-            if (canListClientOffers) setClientOffers(clientOffersData);
-            if (canListSupplierQuotes) setSupplierQuotes(supplierQuotesData);
-            if (canListSupplierOffers) setSupplierOffers(supplierOffersData);
-            if (canListClients) setClients(clientsData);
-            if (canListSuppliers) setSuppliers(suppliersData);
-            if (canListProducts) setProducts(productsData);
-            if (canListSpecialBids) setSpecialBids(specialBidsData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'accounting': {
             if (!canViewAccounting) return;
-            const [
-              ordersData,
-              invoicesData,
-              supplierOrdersData,
-              supplierInvoicesData,
-              clientsData,
-              suppliersData,
-              productsData,
-              specialBidsData,
-            ] = await Promise.all([
-              canListOrders ? api.clientsOrders.list() : Promise.resolve([]),
-              canListInvoices ? api.invoices.list() : Promise.resolve([]),
-              canListSupplierOrders ? api.supplierOrders.list() : Promise.resolve([]),
-              canListSupplierInvoices ? api.supplierInvoices.list() : Promise.resolve([]),
-              canListClients ? api.clients.list() : Promise.resolve([]),
-              canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
-              canListProducts ? api.products.list() : Promise.resolve([]),
-              canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'client orders',
+                enabled: canListOrders,
+                load: () => api.clientsOrders.list(),
+                apply: (data) => setClientsOrders(data as ClientsOrder[]),
+              },
+              {
+                dataset: 'invoices',
+                enabled: canListInvoices,
+                load: () => api.invoices.list(),
+                apply: (data) => setInvoices(data as Invoice[]),
+              },
+              {
+                dataset: 'supplier orders',
+                enabled: canListSupplierOrders,
+                load: () => api.supplierOrders.list(),
+                apply: (data) => setSupplierOrders(data as SupplierSaleOrder[]),
+              },
+              {
+                dataset: 'supplier invoices',
+                enabled: canListSupplierInvoices,
+                load: () => api.supplierInvoices.list(),
+                apply: (data) => setSupplierInvoices(data as SupplierInvoice[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'suppliers',
+                enabled: canListSuppliers,
+                load: () => api.suppliers.list(),
+                apply: (data) => setSuppliers(data as Supplier[]),
+              },
+              {
+                dataset: 'products',
+                enabled: canListProducts,
+                load: () => api.products.list(),
+                apply: (data) => setProducts(data as Product[]),
+              },
+              {
+                dataset: 'special bids',
+                enabled: canListSpecialBids,
+                load: () => api.specialBids.list(),
+                apply: (data) => setSpecialBids(data as SpecialBid[]),
+              },
             ]);
-            if (canListOrders) setClientsOrders(ordersData);
-            if (canListInvoices) setInvoices(invoicesData);
-            if (canListSupplierOrders) setSupplierOrders(supplierOrdersData);
-            if (canListSupplierInvoices) setSupplierInvoices(supplierInvoicesData);
-            if (canListClients) setClients(clientsData);
-            if (canListSuppliers) setSuppliers(suppliersData);
-            if (canListProducts) setProducts(productsData);
-            if (canListSpecialBids) setSpecialBids(specialBidsData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'catalog': {
             if (!canViewCatalog) return;
-            const [productsData, specialBidsData, clientsData, suppliersData] = await Promise.all([
-              canListProducts ? api.products.list() : Promise.resolve([]),
-              canListSpecialBids ? api.specialBids.list() : Promise.resolve([]),
-              canViewCatalogSpecialBids && canListClients
-                ? api.clients.list()
-                : Promise.resolve([]),
-              canViewCatalogExternal && canListSuppliers
-                ? api.suppliers.list()
-                : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'products',
+                enabled:
+                  canListProducts &&
+                  (canViewCatalogInternal || canViewCatalogExternal || canViewCatalogSpecialBids),
+                load: () => api.products.list(),
+                apply: (data) => setProducts(data as Product[]),
+              },
+              {
+                dataset: 'special bids',
+                enabled: canListSpecialBids && canViewCatalogSpecialBids,
+                load: () => api.specialBids.list(),
+                apply: (data) => setSpecialBids(data as SpecialBid[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: canViewCatalogSpecialBids && canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'suppliers',
+                enabled: canViewCatalogExternal && canListSuppliers,
+                load: () => api.suppliers.list(),
+                apply: (data) => setSuppliers(data as Supplier[]),
+              },
             ]);
-            if (
-              canListProducts &&
-              (canViewCatalogInternal || canViewCatalogExternal || canViewCatalogSpecialBids)
-            )
-              setProducts(productsData);
-            if (canListSpecialBids && canViewCatalogSpecialBids) setSpecialBids(specialBidsData);
-            if (canViewCatalogSpecialBids && canListClients) setClients(clientsData);
-            if (canViewCatalogExternal && canListSuppliers) setSuppliers(suppliersData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'finances': {
             if (!canViewFinances) return;
-            const [paymentsData, expensesData, clientsData] = await Promise.all([
-              canListPayments ? api.payments.list() : Promise.resolve([]),
-              canListExpenses ? api.expenses.list() : Promise.resolve([]),
-              canListClients ? api.clients.list() : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'payments',
+                enabled: canListPayments,
+                load: () => api.payments.list(),
+                apply: (data) => setPayments(data as Payment[]),
+              },
+              {
+                dataset: 'expenses',
+                enabled: canListExpenses,
+                load: () => api.expenses.list(),
+                apply: (data) => setExpenses(data as Expense[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
             ]);
-            if (canListPayments) setPayments(paymentsData);
-            if (canListExpenses) setExpenses(expensesData);
-            if (canListClients) setClients(clientsData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'projects': {
             if (!canViewProjects) return;
-            const [projectsData, tasksData, clientsData, usersData, workUnitsData] =
-              await Promise.all([
-                canListProjects ? api.projects.list() : Promise.resolve([]),
-                canListTasks ? api.tasks.list() : Promise.resolve([]),
-                canListClients ? api.clients.list() : Promise.resolve([]),
-                canListUsers ? api.users.list() : Promise.resolve([]),
-                canListWorkUnits ? api.workUnits.list() : Promise.resolve([]),
-              ]);
-            if (canListProjects) setProjects(projectsData);
-            if (canListTasks) setProjectTasks(tasksData);
-            if (canListClients) setClients(clientsData);
-            if (canListUsers) setUsers(usersData);
-            if (canListWorkUnits) setWorkUnits(workUnitsData);
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'projects',
+                enabled: canListProjects,
+                load: () => api.projects.list(),
+                apply: (data) => setProjects(data as Project[]),
+              },
+              {
+                dataset: 'tasks',
+                enabled: canListTasks,
+                load: () => api.tasks.list(),
+                apply: (data) => setProjectTasks(data as ProjectTask[]),
+              },
+              {
+                dataset: 'clients',
+                enabled: canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'users',
+                enabled: canListUsers,
+                load: () => api.users.list(),
+                apply: (data) => setUsers(data as User[]),
+              },
+              {
+                dataset: 'work units',
+                enabled: canListWorkUnits,
+                load: () => api.workUnits.list(),
+                apply: (data) => setWorkUnits(data as WorkUnit[]),
+              },
+            ]);
             break;
           }
           case 'suppliers': {
             if (!canViewSuppliersModule) return;
-            const [suppliersData, supplierQuotesData, productsData] = await Promise.all([
-              canListSuppliers ? api.suppliers.list() : Promise.resolve([]),
-              canListSupplierQuotes ? api.supplierQuotes.list() : Promise.resolve([]),
-              canListProducts ? api.products.list() : Promise.resolve([]),
+            failedDatasets = await loadDatasets(module, [
+              {
+                dataset: 'suppliers',
+                enabled: canListSuppliers,
+                load: () => api.suppliers.list(),
+                apply: (data) => setSuppliers(data as Supplier[]),
+              },
+              {
+                dataset: 'supplier quotes',
+                enabled: canListSupplierQuotes,
+                load: () => api.supplierQuotes.list(),
+                apply: (data) => setSupplierQuotes(data as SupplierQuote[]),
+              },
+              {
+                dataset: 'products',
+                enabled: canListProducts,
+                load: () => api.products.list(),
+                apply: (data) => setProducts(data as Product[]),
+              },
             ]);
-            if (canListSuppliers) setSuppliers(suppliersData);
-            if (canListSupplierQuotes) setSupplierQuotes(supplierQuotesData);
-            if (canListProducts) setProducts(productsData);
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
           case 'reports': {
             // Reports pages fetch their own data as needed, but they still depend on global settings
             // (e.g. AI Reporting enablement).
-            await loadGeneralSettings();
+            await loadOptionalDataset(
+              module,
+              'general settings',
+              loadGeneralSettings,
+              failedDatasets,
+            );
             break;
           }
         }
+      } catch (err) {
+        console.error('Failed to load module data:', err);
+        failedDatasets.push('module data');
+      } finally {
+        const uniqueFailures = Array.from(new Set(failedDatasets));
+
+        setModuleLoadErrors((prev) => {
+          const next = { ...prev };
+          if (uniqueFailures.length > 0) {
+            next[module] = uniqueFailures;
+          } else {
+            delete next[module];
+          }
+          return next;
+        });
 
         setLoadedModules((prev) => {
           const next = new Set(prev);
           next.add(module);
           return next;
         });
-      } catch (err) {
-        console.error('Failed to load module data:', err);
       }
     };
 
@@ -2575,6 +2845,7 @@ const App: React.FC = () => {
       setAuthToken(token);
     }
     setLoadedModules(new Set());
+    setModuleLoadErrors({});
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
     setHasLoadedEmailConfig(false);
@@ -2618,6 +2889,7 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setViewingUserId('');
     setLoadedModules(new Set());
+    setModuleLoadErrors({});
     setHasLoadedGeneralSettings(false);
     setHasLoadedLdapConfig(false);
     setHasLoadedEmailConfig(false);
@@ -2649,6 +2921,7 @@ const App: React.FC = () => {
     try {
       // Clear potentially-privileged data to avoid stale UI after dropping permissions.
       setLoadedModules(new Set());
+      setModuleLoadErrors({});
       setHasLoadedGeneralSettings(false);
       setHasLoadedLdapConfig(false);
       setHasLoadedEmailConfig(false);
@@ -2819,6 +3092,13 @@ const App: React.FC = () => {
     }
   };
 
+  const activeModule = activeView === '404' ? null : getModuleFromView(activeView);
+  const activeModuleLoadFailures = activeModule ? (moduleLoadErrors[activeModule] ?? []) : [];
+  const reportsSettingsFailed =
+    activeView === 'reports/ai-reporting' &&
+    !hasLoadedGeneralSettings &&
+    activeModuleLoadFailures.includes('general settings');
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -2879,6 +3159,16 @@ const App: React.FC = () => {
           <NotFound onReturn={() => setActiveView('timesheets/tracker')} />
         ) : (
           <>
+            {activeModuleLoadFailures.length > 0 && (
+              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <i className="fa-solid fa-triangle-exclamation mt-0.5 text-amber-500" />
+                  <p className="font-medium">
+                    Failed to load: {activeModuleLoadFailures.join(', ')}.
+                  </p>
+                </div>
+              </div>
+            )}
             {activeView === 'timesheets/tracker' && (
               <TrackerView
                 entries={entries.filter((e) => e.userId === viewingUserId)}
@@ -3277,12 +3567,23 @@ const App: React.FC = () => {
             )}
             {activeView === 'reports/ai-reporting' &&
               (!hasLoadedGeneralSettings ? (
-                <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
-                  <div className="text-center">
-                    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
-                    <p className="text-slate-600 font-medium">Loading...</p>
+                reportsSettingsFailed ? (
+                  <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
+                    <div className="text-center">
+                      <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
+                      <p className="text-slate-700 font-medium">
+                        AI reporting settings failed to load.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
+                    <div className="text-center">
+                      <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
+                      <p className="text-slate-600 font-medium">Loading...</p>
+                    </div>
+                  </div>
+                )
               ) : (
                 <AiReportingView
                   currentUserId={currentUser.id}
