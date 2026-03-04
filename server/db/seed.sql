@@ -41,65 +41,9 @@ INSERT INTO settings (user_id, full_name, email) VALUES
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Refreshable demo dataset.
--- Demo records intentionally use dm_* ids and DM-* business codes so reseeding can refresh only
--- the curated showcase data without touching user-entered records.
+-- Demo records intentionally use dm_* ids and DM-* business codes so reseeding restores the
+-- curated showcase rows in place without deleting non-demo records that reference demo entities.
 BEGIN;
-
-DELETE FROM notifications
-WHERE id LIKE 'dm_%';
-
-DELETE FROM expenses
-WHERE id LIKE 'dm_%'
-   OR supplier_invoice_id LIKE 'dm_%';
-
-DELETE FROM payments
-WHERE id LIKE 'dm_%';
-
-DELETE FROM supplier_invoices
-WHERE id LIKE 'dm_%'
-   OR invoice_number LIKE 'DM-%';
-
-DELETE FROM supplier_sales
-WHERE id LIKE 'dm_%';
-
-DELETE FROM supplier_offers
-WHERE id LIKE 'dm_%'
-   OR offer_code LIKE 'DM-%';
-
-DELETE FROM supplier_quotes
-WHERE id LIKE 'dm_%'
-   OR quote_code LIKE 'DM-%'
-   OR purchase_order_number LIKE 'DM-%';
-
-DELETE FROM invoices
-WHERE id LIKE 'dm_%'
-   OR invoice_number LIKE 'DM-%';
-
-DELETE FROM sales
-WHERE id LIKE 'dm_%';
-
-DELETE FROM customer_offers
-WHERE id LIKE 'dm_%'
-   OR offer_code LIKE 'DM-%';
-
-DELETE FROM quotes
-WHERE id LIKE 'dm_%'
-   OR quote_code LIKE 'DM-%';
-
-DELETE FROM special_bids
-WHERE id LIKE 'dm_%';
-
-DELETE FROM projects
-WHERE id LIKE 'dm_%';
-
-DELETE FROM products
-WHERE id LIKE 'dm_%';
-
-DELETE FROM clients
-WHERE id LIKE 'dm_%';
-
-DELETE FROM suppliers
-WHERE id LIKE 'dm_%';
 
 INSERT INTO clients (
     id,
@@ -220,7 +164,25 @@ INSERT INTO clients (
         '11..50',
         'IT10000000005',
         '2...5'
-    );
+    )
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    is_disabled = EXCLUDED.is_disabled,
+    created_at = EXCLUDED.created_at,
+    type = EXCLUDED.type,
+    contact_name = EXCLUDED.contact_name,
+    client_code = EXCLUDED.client_code,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    address = EXCLUDED.address,
+    description = EXCLUDED.description,
+    ateco_code = EXCLUDED.ateco_code,
+    website = EXCLUDED.website,
+    sector = EXCLUDED.sector,
+    number_of_employees = EXCLUDED.number_of_employees,
+    revenue = EXCLUDED.revenue,
+    fiscal_code = EXCLUDED.fiscal_code,
+    office_count_range = EXCLUDED.office_count_range;
 
 INSERT INTO suppliers (
     id,
@@ -311,7 +273,20 @@ INSERT INTO suppliers (
         '90gg',
         'Disabled supplier record kept only for inactive-state coverage.',
         CURRENT_TIMESTAMP - INTERVAL '120 days'
-    );
+    )
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    is_disabled = EXCLUDED.is_disabled,
+    supplier_code = EXCLUDED.supplier_code,
+    contact_name = EXCLUDED.contact_name,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    address = EXCLUDED.address,
+    vat_number = EXCLUDED.vat_number,
+    tax_code = EXCLUDED.tax_code,
+    payment_terms = EXCLUDED.payment_terms,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at;
 
 INSERT INTO products (
     id,
@@ -472,7 +447,21 @@ INSERT INTO products (
         'dm_sup_05',
         TRUE,
         CURRENT_TIMESTAMP - INTERVAL '155 days'
-    );
+    )
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    product_code = EXCLUDED.product_code,
+    costo = EXCLUDED.costo,
+    mol_percentage = EXCLUDED.mol_percentage,
+    cost_unit = EXCLUDED.cost_unit,
+    category = EXCLUDED.category,
+    subcategory = EXCLUDED.subcategory,
+    tax_rate = EXCLUDED.tax_rate,
+    type = EXCLUDED.type,
+    description = EXCLUDED.description,
+    supplier_id = EXCLUDED.supplier_id,
+    is_disabled = EXCLUDED.is_disabled,
+    created_at = EXCLUDED.created_at;
 
 INSERT INTO special_bids (
     id,
@@ -525,7 +514,18 @@ INSERT INTO special_bids (
         CURRENT_DATE + INTERVAL '75 days',
         CURRENT_TIMESTAMP - INTERVAL '15 days',
         CURRENT_TIMESTAMP - INTERVAL '2 days'
-    );
+    )
+ON CONFLICT (id) DO UPDATE SET
+    client_id = EXCLUDED.client_id,
+    client_name = EXCLUDED.client_name,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    unit_price = EXCLUDED.unit_price,
+    mol_percentage = EXCLUDED.mol_percentage,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO quotes (
     id,
@@ -549,7 +549,18 @@ INSERT INTO quotes (
     ('dm_cq_07', 'DM-Q-2607', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '20 days', 'Accepted quote linked to an accepted offer that already generated an order.', CURRENT_TIMESTAMP - INTERVAL '66 days', CURRENT_TIMESTAMP - INTERVAL '61 days'),
     ('dm_cq_08', 'DM-Q-2608', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '58 days', CURRENT_TIMESTAMP - INTERVAL '54 days'),
     ('dm_cq_09', 'DM-Q-2609', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 5.00, 'denied', CURRENT_DATE + INTERVAL '10 days', 'Rejected customer quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '36 days', CURRENT_TIMESTAMP - INTERVAL '34 days'),
-    ('dm_cq_10', 'DM-Q-2610', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '5 days', 'Expired quote to exercise historical and expired state handling.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days');
+    ('dm_cq_10', 'DM-Q-2610', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '5 days', 'Expired quote to exercise historical and expired state handling.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
+ON CONFLICT (id) DO UPDATE SET
+    quote_code = EXCLUDED.quote_code,
+    client_id = EXCLUDED.client_id,
+    client_name = EXCLUDED.client_name,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    status = EXCLUDED.status,
+    expiration_date = EXCLUDED.expiration_date,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO quote_items (
     id,
@@ -600,7 +611,21 @@ FROM (
         ('dm_cqi_14', 'dm_cq_10', 'dm_prd_08', NULL::varchar(50), 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote')
 ) AS v(id, quote_id, product_id, special_bid_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
-LEFT JOIN special_bids sb ON sb.id = v.special_bid_id;
+LEFT JOIN special_bids sb ON sb.id = v.special_bid_id
+ON CONFLICT (id) DO UPDATE SET
+    quote_id = EXCLUDED.quote_id,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    special_bid_id = EXCLUDED.special_bid_id,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    product_cost = EXCLUDED.product_cost,
+    product_tax_rate = EXCLUDED.product_tax_rate,
+    product_mol_percentage = EXCLUDED.product_mol_percentage,
+    special_bid_unit_price = EXCLUDED.special_bid_unit_price,
+    special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
+    discount = EXCLUDED.discount,
+    note = EXCLUDED.note;
 
 INSERT INTO customer_offers (
     id,
@@ -620,7 +645,19 @@ INSERT INTO customer_offers (
     ('dm_co_02', 'DM-OFF-2602', 'dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
     ('dm_co_03', 'DM-OFF-2603', 'dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer intentionally left without an order.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
     ('dm_co_04', 'DM-OFF-2604', 'dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
-    ('dm_co_05', 'DM-OFF-2605', 'dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days');
+    ('dm_co_05', 'DM-OFF-2605', 'dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
+ON CONFLICT (id) DO UPDATE SET
+    offer_code = EXCLUDED.offer_code,
+    linked_quote_id = EXCLUDED.linked_quote_id,
+    client_id = EXCLUDED.client_id,
+    client_name = EXCLUDED.client_name,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    status = EXCLUDED.status,
+    expiration_date = EXCLUDED.expiration_date,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO customer_offer_items (
     id,
@@ -664,7 +701,21 @@ FROM (
         ('dm_coi_07', 'dm_co_05', 'dm_prd_04', NULL::varchar(50), 2.00, 1090.00, 0.00, 'Denied training offer')
 ) AS v(id, offer_id, product_id, special_bid_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
-LEFT JOIN special_bids sb ON sb.id = v.special_bid_id;
+LEFT JOIN special_bids sb ON sb.id = v.special_bid_id
+ON CONFLICT (id) DO UPDATE SET
+    offer_id = EXCLUDED.offer_id,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    special_bid_id = EXCLUDED.special_bid_id,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    product_cost = EXCLUDED.product_cost,
+    product_tax_rate = EXCLUDED.product_tax_rate,
+    product_mol_percentage = EXCLUDED.product_mol_percentage,
+    special_bid_unit_price = EXCLUDED.special_bid_unit_price,
+    special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
+    discount = EXCLUDED.discount,
+    note = EXCLUDED.note;
 
 INSERT INTO sales (
     id,
@@ -683,7 +734,18 @@ INSERT INTO sales (
     ('dm_so_02', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'sent', 'Linked order generated from an accepted offer and now pending confirmation.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
     ('dm_so_03', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
     ('dm_so_04', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 5.00, 'confirmed', 'Confirmed order already invoiced and mirrored into demo projects.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
-    ('dm_so_05', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days');
+    ('dm_so_05', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
+ON CONFLICT (id) DO UPDATE SET
+    linked_quote_id = EXCLUDED.linked_quote_id,
+    linked_offer_id = EXCLUDED.linked_offer_id,
+    client_id = EXCLUDED.client_id,
+    client_name = EXCLUDED.client_name,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    status = EXCLUDED.status,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO sale_items (
     id,
@@ -728,7 +790,21 @@ FROM (
         ('dm_soi_08', 'dm_so_05', 'dm_prd_05', NULL::varchar(50), 3.00, 1159.00, 0.00, 'Denied hardware order')
 ) AS v(id, sale_id, product_id, special_bid_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
-LEFT JOIN special_bids sb ON sb.id = v.special_bid_id;
+LEFT JOIN special_bids sb ON sb.id = v.special_bid_id
+ON CONFLICT (id) DO UPDATE SET
+    sale_id = EXCLUDED.sale_id,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    special_bid_id = EXCLUDED.special_bid_id,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    product_cost = EXCLUDED.product_cost,
+    product_tax_rate = EXCLUDED.product_tax_rate,
+    product_mol_percentage = EXCLUDED.product_mol_percentage,
+    special_bid_unit_price = EXCLUDED.special_bid_unit_price,
+    special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
+    discount = EXCLUDED.discount,
+    note = EXCLUDED.note;
 
 INSERT INTO invoices (
     id,
@@ -751,7 +827,22 @@ INSERT INTO invoices (
     ('dm_inv_02', NULL, 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', 'DM-INV-2602', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE + INTERVAL '5 days', 'sent', 1795.00, 394.90, 2189.90, 600.00, 'Partially paid invoice with remaining balance.', CURRENT_TIMESTAMP - INTERVAL '30 days', CURRENT_TIMESTAMP - INTERVAL '5 days'),
     ('dm_inv_03', 'dm_so_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'DM-INV-2603', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 1386.72, 7689.97, 7689.97, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
     ('dm_inv_04', NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'DM-INV-2604', CURRENT_DATE - INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', 'overdue', 10020.00, 2204.40, 12224.40, 0.00, 'Outstanding overdue invoice for collections reporting.', CURRENT_TIMESTAMP - INTERVAL '45 days', CURRENT_TIMESTAMP - INTERVAL '14 days'),
-    ('dm_inv_05', NULL, 'dm_cli_04', 'Giulia Ferri', 'DM-INV-2605', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 352.00, 1952.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days');
+    ('dm_inv_05', NULL, 'dm_cli_04', 'Giulia Ferri', 'DM-INV-2605', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 352.00, 1952.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days')
+ON CONFLICT (id) DO UPDATE SET
+    linked_sale_id = EXCLUDED.linked_sale_id,
+    client_id = EXCLUDED.client_id,
+    client_name = EXCLUDED.client_name,
+    invoice_number = EXCLUDED.invoice_number,
+    issue_date = EXCLUDED.issue_date,
+    due_date = EXCLUDED.due_date,
+    status = EXCLUDED.status,
+    subtotal = EXCLUDED.subtotal,
+    tax_amount = EXCLUDED.tax_amount,
+    total = EXCLUDED.total,
+    amount_paid = EXCLUDED.amount_paid,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO invoice_items (
     id,
@@ -768,7 +859,15 @@ INSERT INTO invoice_items (
     ('dm_inv_item_03', 'dm_inv_03', 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 22.00, 5.00),
     ('dm_inv_item_04', 'dm_inv_03', 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 22.00, 5.00),
     ('dm_inv_item_05', 'dm_inv_04', 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 22.00, 0.00),
-    ('dm_inv_item_06', 'dm_inv_05', 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 22.00, 0.00);
+    ('dm_inv_item_06', 'dm_inv_05', 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 22.00, 0.00)
+ON CONFLICT (id) DO UPDATE SET
+    invoice_id = EXCLUDED.invoice_id,
+    product_id = EXCLUDED.product_id,
+    description = EXCLUDED.description,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    tax_rate = EXCLUDED.tax_rate,
+    discount = EXCLUDED.discount;
 
 INSERT INTO payments (
     id,
@@ -783,7 +882,16 @@ INSERT INTO payments (
 ) VALUES
     ('dm_pay_01', 'dm_inv_03', 'dm_cli_01', 4000.00, CURRENT_DATE - INTERVAL '7 days', 'bank_transfer', 'DM-PAY-2601', 'First installment for fully paid invoice.', CURRENT_TIMESTAMP - INTERVAL '7 days'),
     ('dm_pay_02', 'dm_inv_03', 'dm_cli_01', 3689.97, CURRENT_DATE - INTERVAL '2 days', 'credit_card', 'DM-PAY-2602', 'Closing payment for the invoiced confirmed order.', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_pay_03', 'dm_inv_02', 'dm_cli_03', 600.00, CURRENT_DATE - INTERVAL '5 days', 'cash', 'DM-PAY-2603', 'Partial payment leaving the invoice in sent status.', CURRENT_TIMESTAMP - INTERVAL '5 days');
+    ('dm_pay_03', 'dm_inv_02', 'dm_cli_03', 600.00, CURRENT_DATE - INTERVAL '5 days', 'cash', 'DM-PAY-2603', 'Partial payment leaving the invoice in sent status.', CURRENT_TIMESTAMP - INTERVAL '5 days')
+ON CONFLICT (id) DO UPDATE SET
+    invoice_id = EXCLUDED.invoice_id,
+    client_id = EXCLUDED.client_id,
+    amount = EXCLUDED.amount,
+    payment_date = EXCLUDED.payment_date,
+    payment_method = EXCLUDED.payment_method,
+    reference = EXCLUDED.reference,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at;
 
 INSERT INTO supplier_quotes (
     id,
@@ -808,7 +916,23 @@ INSERT INTO supplier_quotes (
     ('dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', 'DM-SQ-2607', 'DM-SQ-2607', '30gg', 2.00, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted supplier quote linked to an order already in progress.', CURRENT_TIMESTAMP - INTERVAL '70 days', CURRENT_TIMESTAMP - INTERVAL '66 days'),
     ('dm_sq_08', 'dm_sup_01', 'TechSource Distribution', 'DM-SQ-2608', 'DM-SQ-2608', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted supplier quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '60 days', CURRENT_TIMESTAMP - INTERVAL '57 days'),
     ('dm_sq_09', 'dm_sup_02', 'CloudSeat Licensing', 'DM-SQ-2609', 'DM-SQ-2609', '45gg', 0.00, 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '39 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
-    ('dm_sq_10', 'dm_sup_04', 'PrintLogistics Hub', 'DM-SQ-2610', 'DM-SQ-2610', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '6 days', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days');
+    ('dm_sq_10', 'dm_sup_04', 'PrintLogistics Hub', 'DM-SQ-2610', 'DM-SQ-2610', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '6 days', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days'),
+    ('dm_sq_11', 'dm_sup_01', 'TechSource Distribution', 'DM-SQ-2611', 'DM-SQ-2611', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '14 days', 'Accepted supplier quote linked to a draft order for editable procurement flow.', CURRENT_TIMESTAMP - INTERVAL '52 days', CURRENT_TIMESTAMP - INTERVAL '48 days'),
+    ('dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', 'DM-SQ-2612', 'DM-SQ-2612', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '11 days', 'Accepted supplier quote linked to a confirmed licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
+    ('dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', 'DM-SQ-2613', 'DM-SQ-2613', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '8 days', 'Accepted supplier quote linked to a confirmed order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
+    ('dm_sq_14', 'dm_sup_01', 'TechSource Distribution', 'DM-SQ-2614', 'DM-SQ-2614', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '6 days', 'Accepted supplier quote linked to a denied supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
+ON CONFLICT (id) DO UPDATE SET
+    supplier_id = EXCLUDED.supplier_id,
+    supplier_name = EXCLUDED.supplier_name,
+    purchase_order_number = EXCLUDED.purchase_order_number,
+    quote_code = EXCLUDED.quote_code,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    status = EXCLUDED.status,
+    expiration_date = EXCLUDED.expiration_date,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO supplier_quote_items (
     id,
@@ -840,9 +964,22 @@ FROM (
         ('dm_sqi_07', 'dm_sq_07', 'dm_prd_08', 200.00, 118.00, 2.00, 'Accepted quote feeding an order already in progress'),
         ('dm_sqi_08', 'dm_sq_08', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted quote feeding a denied offer'),
         ('dm_sqi_09', 'dm_sq_09', 'dm_prd_06', 40.00, 183.00, 0.00, 'Denied supplier licensing quote'),
-        ('dm_sqi_10', 'dm_sq_10', 'dm_prd_08', 150.00, 119.00, 0.00, 'Expired print procurement request')
+        ('dm_sqi_10', 'dm_sq_10', 'dm_prd_08', 150.00, 119.00, 0.00, 'Expired print procurement request'),
+        ('dm_sqi_11', 'dm_sq_11', 'dm_prd_05', 4.00, 960.00, 0.00, 'Accepted quote feeding the editable draft procurement order'),
+        ('dm_sqi_12', 'dm_sq_12', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted quote feeding the confirmed licensing order'),
+        ('dm_sqi_13', 'dm_sq_13', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted quote feeding the invoiced security order'),
+        ('dm_sqi_14', 'dm_sq_13', 'dm_prd_08', 40.00, 118.00, 0.00, 'Accepted quote feeding the invoiced print materials order'),
+        ('dm_sqi_15', 'dm_sq_14', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted quote feeding the denied supplier order')
 ) AS v(id, quote_id, product_id, quantity, unit_price, discount, note)
-JOIN products p ON p.id = v.product_id;
+JOIN products p ON p.id = v.product_id
+ON CONFLICT (id) DO UPDATE SET
+    quote_id = EXCLUDED.quote_id,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    discount = EXCLUDED.discount,
+    note = EXCLUDED.note;
 
 INSERT INTO supplier_offers (
     id,
@@ -862,7 +999,23 @@ INSERT INTO supplier_offers (
     ('dm_sfo_02', 'DM-SOF-2602', 'dm_sq_05', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.50, 'sent', CURRENT_DATE + INTERVAL '18 days', 'Sent supplier offer awaiting confirmation.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
     ('dm_sfo_03', 'DM-SOF-2603', 'dm_sq_06', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '15 days', 'Accepted supplier offer intentionally left without an order.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
     ('dm_sfo_04', 'DM-SOF-2604', 'dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted supplier offer already converted into a supplier order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
-    ('dm_sfo_05', 'DM-SOF-2605', 'dm_sq_08', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier offer for historical coverage.', CURRENT_TIMESTAMP - INTERVAL '44 days', CURRENT_TIMESTAMP - INTERVAL '42 days');
+    ('dm_sfo_05', 'DM-SOF-2605', 'dm_sq_08', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier offer for historical coverage.', CURRENT_TIMESTAMP - INTERVAL '44 days', CURRENT_TIMESTAMP - INTERVAL '42 days'),
+    ('dm_sfo_06', 'DM-SOF-2606', 'dm_sq_11', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '13 days', 'Accepted supplier offer already converted into an editable draft order.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '42 days'),
+    ('dm_sfo_07', 'DM-SOF-2607', 'dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '10 days', 'Accepted supplier offer already converted into a confirmed licensing order.', CURRENT_TIMESTAMP - INTERVAL '35 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
+    ('dm_sfo_08', 'DM-SOF-2608', 'dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '7 days', 'Accepted supplier offer already converted into a confirmed invoiced order.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days'),
+    ('dm_sfo_09', 'DM-SOF-2609', 'dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '5 days', 'Accepted supplier offer already converted into a denied supplier order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '15 days')
+ON CONFLICT (id) DO UPDATE SET
+    offer_code = EXCLUDED.offer_code,
+    linked_quote_id = EXCLUDED.linked_quote_id,
+    supplier_id = EXCLUDED.supplier_id,
+    supplier_name = EXCLUDED.supplier_name,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    status = EXCLUDED.status,
+    expiration_date = EXCLUDED.expiration_date,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO supplier_offer_items (
     id,
@@ -891,9 +1044,23 @@ FROM (
         ('dm_sfoi_02', 'dm_sfo_02', 'dm_prd_06', 80.00, 182.00, 0.00, 'Sent licensing offer'),
         ('dm_sfoi_03', 'dm_sfo_03', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security offer without order'),
         ('dm_sfoi_04', 'dm_sfo_04', 'dm_prd_08', 200.00, 118.00, 2.00, 'Accepted print offer already linked to an order'),
-        ('dm_sfoi_05', 'dm_sfo_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Denied hardware offer')
+        ('dm_sfoi_05', 'dm_sfo_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Denied hardware offer'),
+        ('dm_sfoi_06', 'dm_sfo_06', 'dm_prd_05', 4.00, 960.00, 0.00, 'Accepted hardware offer already linked to a draft order'),
+        ('dm_sfoi_07', 'dm_sfo_07', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted licensing offer already linked to a confirmed order'),
+        ('dm_sfoi_08', 'dm_sfo_08', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security offer already linked to an invoiced order'),
+        ('dm_sfoi_09', 'dm_sfo_08', 'dm_prd_08', 40.00, 118.00, 0.00, 'Accepted print materials offer already linked to an invoiced order'),
+        ('dm_sfoi_10', 'dm_sfo_09', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted hardware offer already linked to a denied order')
 ) AS v(id, offer_id, product_id, quantity, unit_price, discount, note)
-JOIN products p ON p.id = v.product_id;
+JOIN products p ON p.id = v.product_id
+ON CONFLICT (id) DO UPDATE SET
+    offer_id = EXCLUDED.offer_id,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    product_tax_rate = EXCLUDED.product_tax_rate,
+    discount = EXCLUDED.discount,
+    note = EXCLUDED.note;
 
 INSERT INTO supplier_sales (
     id,
@@ -908,11 +1075,22 @@ INSERT INTO supplier_sales (
     created_at,
     updated_at
 ) VALUES
-    ('dm_ss_01', NULL, NULL, 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable manual supplier order.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
+    ('dm_ss_01', 'dm_sq_11', 'dm_sfo_06', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware offer.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
     ('dm_ss_02', 'dm_sq_07', 'dm_sfo_04', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
-    ('dm_ss_03', NULL, NULL, 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'confirmed', 'Confirmed supplier order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_ss_04', NULL, NULL, 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order already invoiced and mirrored into expenses.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_ss_05', NULL, NULL, 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', 'Denied supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days');
+    ('dm_ss_03', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted security offer and already invoiced and mirrored into expenses.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_ss_05', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', 'Denied supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
+ON CONFLICT (id) DO UPDATE SET
+    linked_quote_id = EXCLUDED.linked_quote_id,
+    linked_offer_id = EXCLUDED.linked_offer_id,
+    supplier_id = EXCLUDED.supplier_id,
+    supplier_name = EXCLUDED.supplier_name,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    status = EXCLUDED.status,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO supplier_sale_items (
     id,
@@ -944,7 +1122,16 @@ FROM (
         ('dm_ssi_05', 'dm_ss_04', 'dm_prd_08', 40.00, 118.00, 0.00, 'Confirmed print materials order'),
         ('dm_ssi_06', 'dm_ss_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Denied supplier hardware order')
 ) AS v(id, sale_id, product_id, quantity, unit_price, discount, note)
-JOIN products p ON p.id = v.product_id;
+JOIN products p ON p.id = v.product_id
+ON CONFLICT (id) DO UPDATE SET
+    sale_id = EXCLUDED.sale_id,
+    product_id = EXCLUDED.product_id,
+    product_name = EXCLUDED.product_name,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    product_tax_rate = EXCLUDED.product_tax_rate,
+    discount = EXCLUDED.discount,
+    note = EXCLUDED.note;
 
 INSERT INTO supplier_invoices (
     id,
@@ -967,7 +1154,22 @@ INSERT INTO supplier_invoices (
     ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', 'DM-SINV-2602', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 3203.20, 17763.20, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
     ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', 'DM-SINV-2603', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 1348.60, 7478.60, 7478.60, 'Paid supplier invoice linked to a confirmed order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
     ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', 'DM-SINV-2604', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 5192.00, 28792.00, 0.00, 'Overdue supplier invoice mirrored as an expense.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
-    ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', 'DM-SINV-2605', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 211.20, 1171.20, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days');
+    ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', 'DM-SINV-2605', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 211.20, 1171.20, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
+ON CONFLICT (id) DO UPDATE SET
+    linked_sale_id = EXCLUDED.linked_sale_id,
+    supplier_id = EXCLUDED.supplier_id,
+    supplier_name = EXCLUDED.supplier_name,
+    invoice_number = EXCLUDED.invoice_number,
+    issue_date = EXCLUDED.issue_date,
+    due_date = EXCLUDED.due_date,
+    status = EXCLUDED.status,
+    subtotal = EXCLUDED.subtotal,
+    tax_amount = EXCLUDED.tax_amount,
+    total = EXCLUDED.total,
+    amount_paid = EXCLUDED.amount_paid,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO supplier_invoice_items (
     id,
@@ -984,7 +1186,15 @@ INSERT INTO supplier_invoice_items (
     ('dm_sinv_item_03', 'dm_sinv_03', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 22.00, 0.00),
     ('dm_sinv_item_04', 'dm_sinv_03', 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 22.00, 0.00),
     ('dm_sinv_item_05', 'dm_sinv_04', 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 22.00, 0.00),
-    ('dm_sinv_item_06', 'dm_sinv_05', 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 22.00, 0.00);
+    ('dm_sinv_item_06', 'dm_sinv_05', 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 22.00, 0.00)
+ON CONFLICT (id) DO UPDATE SET
+    invoice_id = EXCLUDED.invoice_id,
+    product_id = EXCLUDED.product_id,
+    description = EXCLUDED.description,
+    quantity = EXCLUDED.quantity,
+    unit_price = EXCLUDED.unit_price,
+    tax_rate = EXCLUDED.tax_rate,
+    discount = EXCLUDED.discount;
 
 INSERT INTO expenses (
     id,
@@ -1005,7 +1215,18 @@ INSERT INTO expenses (
     ('dm_exp_si_04', 'Supplier invoice DM-SINV-2604', 28792.00, CURRENT_DATE - INTERVAL '48 days', 'other', 'PrintLogistics Hub', 'DM-SINV-2604', 'supplier_invoice', 'dm_sinv_04', 'Mirrored from overdue supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '48 days'),
     ('dm_exp_si_05', 'Supplier invoice DM-SINV-2605', 1171.20, CURRENT_DATE - INTERVAL '11 days', 'other', 'TechSource Distribution', 'DM-SINV-2605', 'supplier_invoice', 'dm_sinv_05', 'Mirrored from cancelled supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '11 days'),
     ('dm_exp_m_01', 'Demo travel for customer workshop', 820.00, CURRENT_DATE - INTERVAL '12 days', 'travel', 'Trenitalia Business', NULL, 'manual', NULL, 'Manual expense used for editable finance coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days'),
-    ('dm_exp_m_02', 'Demo software monitoring renewal', 1299.00, CURRENT_DATE - INTERVAL '4 days', 'software', 'Observa Cloud', 'OBS-RENEW-2026', 'manual', NULL, 'Manual expense kept editable in the UI.', CURRENT_TIMESTAMP - INTERVAL '4 days');
+    ('dm_exp_m_02', 'Demo software monitoring renewal', 1299.00, CURRENT_DATE - INTERVAL '4 days', 'software', 'Observa Cloud', 'OBS-RENEW-2026', 'manual', NULL, 'Manual expense kept editable in the UI.', CURRENT_TIMESTAMP - INTERVAL '4 days')
+ON CONFLICT (id) DO UPDATE SET
+    description = EXCLUDED.description,
+    amount = EXCLUDED.amount,
+    expense_date = EXCLUDED.expense_date,
+    category = EXCLUDED.category,
+    vendor = EXCLUDED.vendor,
+    receipt_reference = EXCLUDED.receipt_reference,
+    source_type = EXCLUDED.source_type,
+    supplier_invoice_id = EXCLUDED.supplier_invoice_id,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at;
 
 INSERT INTO projects (
     id,
@@ -1033,7 +1254,14 @@ INSERT INTO projects (
         'Deployment wave for phase one',
         FALSE,
         CURRENT_TIMESTAMP - INTERVAL '18 days'
-    );
+    )
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    client_id = EXCLUDED.client_id,
+    color = EXCLUDED.color,
+    description = EXCLUDED.description,
+    is_disabled = EXCLUDED.is_disabled,
+    created_at = EXCLUDED.created_at;
 
 INSERT INTO notifications (
     id,
@@ -1084,6 +1312,14 @@ INSERT INTO notifications (
         ),
         TRUE,
         CURRENT_TIMESTAMP - INTERVAL '16 days'
-    );
+    )
+ON CONFLICT (id) DO UPDATE SET
+    user_id = EXCLUDED.user_id,
+    type = EXCLUDED.type,
+    title = EXCLUDED.title,
+    message = EXCLUDED.message,
+    data = EXCLUDED.data,
+    is_read = EXCLUDED.is_read,
+    created_at = EXCLUDED.created_at;
 
 COMMIT;
