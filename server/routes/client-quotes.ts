@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalDateString,
@@ -382,13 +383,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      config: {
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
+      },
       onRequest: [requirePermission('sales.client_quotes.view')],
       schema: {
         tags: ['client-quotes'],
         summary: 'List client quotes',
         response: {
           200: { type: 'array', items: quoteSchema },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

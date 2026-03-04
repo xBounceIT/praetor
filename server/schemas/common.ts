@@ -31,3 +31,8 @@ export const standardErrorResponses = {
   404: errorResponseSchema,
   409: errorResponseSchema,
 } as const;
+
+export const standardRateLimitedErrorResponses = {
+  429: rateLimitErrorResponseSchema,
+  ...standardErrorResponses,
+} as const;

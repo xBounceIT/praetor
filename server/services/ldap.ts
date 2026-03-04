@@ -29,7 +29,7 @@ interface LdapClient {
   unbind: (callback: (err?: Error) => void) => void;
   search: (
     base: string,
-    options: { scope: string; filter: string; attributes?: string[] },
+    options: { scope: string; filter: unknown; attributes?: string[] },
     callback: (err: Error | null, res: LdapSearchResult) => void,
   ) => void;
 }
@@ -48,6 +48,15 @@ interface LdapSearchEntry {
   objectName: string;
   object: Record<string, unknown>;
 }
+
+const escapeLdapFilterValue = (value: string) =>
+  value
+    .replace(/\\/g, '\\5c')
+    .replace(/\*/g, '\\2a')
+    .replace(/\(/g, '\\28')
+    .replace(/\)/g, '\\29')
+    .split('\0')
+    .join('\\00');
 
 class LDAPService {
   config: LdapConfig | null;
@@ -156,10 +165,12 @@ class LDAPService {
     if (!config) {
       return null;
     }
-    const filter = config.user_filter.replace('{0}', username);
+    const filter = ldap.parseFilter(
+      config.user_filter.replace('{0}', escapeLdapFilterValue(username)),
+    );
     const searchOptions = {
       scope: 'sub',
-      filter: filter,
+      filter,
     };
 
     return new Promise((resolve, reject) => {

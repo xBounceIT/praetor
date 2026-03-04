@@ -1,7 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
-import { messageResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import {
+  messageResponseSchema,
+  standardErrorResponses,
+  standardRateLimitedErrorResponses,
+} from '../schemas/common.ts';
 import {
   bumpNamespaceVersion,
   cacheGetSetJson,
@@ -10,6 +14,7 @@ import {
   TTL_ENTRIES_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   isWeekendDate,
@@ -119,6 +124,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      config: {
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
+      },
       onRequest: [authenticateToken, requirePermission('timesheets.tracker.view')],
       schema: {
         tags: ['entries'],
@@ -126,7 +134,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         querystring: entriesListQuerySchema,
         response: {
           200: { type: 'array', items: entrySchema },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -548,6 +556,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/',
     {
+      config: {
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
+      },
       onRequest: [
         authenticateToken,
         requireAnyPermission('timesheets.tracker.delete', 'timesheets.recurring.delete'),
@@ -558,7 +569,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         querystring: entriesBulkDeleteQuerySchema,
         response: {
           200: messageResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

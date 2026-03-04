@@ -1,7 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses, successResponseSchema } from '../schemas/common.ts';
+import {
+  standardErrorResponses,
+  standardRateLimitedErrorResponses,
+  successResponseSchema,
+} from '../schemas/common.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const idParamSchema = {
@@ -44,13 +49,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      config: {
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
+      },
       onRequest: [requirePermission('notifications.view')],
       schema: {
         tags: ['notifications'],
         summary: 'Fetch notifications',
         response: {
           200: notificationsResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

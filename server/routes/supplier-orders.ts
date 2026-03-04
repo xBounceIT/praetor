@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { rateLimitErrorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
@@ -181,10 +182,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       config: {
-        rateLimit: {
-          max: 120,
-          timeWindow: '1 minute',
-        },
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
       },
       onRequest: [requirePermission('accounting.supplier_orders.view')],
       schema: {
@@ -192,8 +190,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'List supplier sale orders',
         response: {
           200: { type: 'array', items: orderSchema },
-          429: rateLimitErrorResponseSchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

@@ -3,8 +3,9 @@ import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, generateToken } from '../middleware/auth.ts';
-import { errorResponseSchema, standardErrorResponses } from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
+import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const authUserSchema = {
@@ -99,6 +100,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/login',
     {
+      config: {
+        rateLimit: LOGIN_RATE_LIMIT,
+      },
       schema: {
         tags: ['auth'],
         summary: 'Login',
@@ -106,8 +110,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         security: [],
         response: {
           200: loginResponseSchema,
-          400: errorResponseSchema,
-          401: errorResponseSchema,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

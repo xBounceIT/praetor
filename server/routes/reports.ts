@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query as dbQuery } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   bumpNamespaceVersion,
   cacheGetSetJson,
@@ -12,6 +12,8 @@ import {
   TTL_ENTRIES_SECONDS,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
 type AiProvider = 'gemini' | 'openrouter';
@@ -71,12 +73,6 @@ const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
     };
   }
   return { provider: 'gemini' as const, apiKey: cfg.geminiApiKey, modelId: cfg.geminiModelId };
-};
-
-const normalizeGeminiModelPath = (modelId: string) => {
-  const trimmed = modelId.trim();
-  if (trimmed.startsWith('models/') || trimmed.startsWith('tunedModels/')) return trimmed;
-  return `models/${trimmed}`;
 };
 
 type AiTextResult = { text: string; thoughtContent?: string };
@@ -254,8 +250,15 @@ const buildSessionTitlePrompt = (firstUserMessage: string, language: UiLanguage)
 };
 
 const geminiGenerateText = async (apiKey: string, modelId: string, prompt: string) => {
-  const path = normalizeGeminiModelPath(modelId);
-  const url = `https://generativelanguage.googleapis.com/v1beta/${path}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const modelPathResult = normalizeGeminiModelPath(modelId);
+  if (!modelPathResult.ok) {
+    throw new Error(modelPathResult.message);
+  }
+  const url = new URL(
+    `/v1beta/${modelPathResult.value}:generateContent`,
+    'https://generativelanguage.googleapis.com',
+  );
+  url.searchParams.set('key', apiKey);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -298,8 +301,16 @@ const geminiGenerateTextStream = async (
   callbacks: AiStreamCallbacks = {},
   signal?: AbortSignal,
 ) => {
-  const path = normalizeGeminiModelPath(modelId);
-  const url = `https://generativelanguage.googleapis.com/v1beta/${path}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  const modelPathResult = normalizeGeminiModelPath(modelId);
+  if (!modelPathResult.ok) {
+    throw new Error(modelPathResult.message);
+  }
+  const url = new URL(
+    `/v1beta/${modelPathResult.value}:streamGenerateContent`,
+    'https://generativelanguage.googleapis.com',
+  );
+  url.searchParams.set('alt', 'sse');
+  url.searchParams.set('key', apiKey);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2920,13 +2931,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/ai-reporting/sessions',
     {
+      config: {
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
+      },
       onRequest: [requirePermission('reports.ai_reporting.view')],
       schema: {
         tags: ['reports'],
         summary: 'List AI Reporting chat sessions for the current user',
         response: {
           200: { type: 'array', items: sessionSummarySchema },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

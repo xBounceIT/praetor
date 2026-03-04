@@ -157,7 +157,7 @@ class EmailService {
         to,
         subject,
         html,
-        text: text || html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+        text: text || 'This email contains HTML content. Open it in an HTML-capable email client.',
       });
 
       return {
@@ -182,6 +182,14 @@ class EmailService {
     messageId?: string;
   }> {
     const subject = 'Praetor Email Configuration Test';
+    const text = [
+      'Praetor Email Configuration Test',
+      '',
+      'This is a test email from your Praetor installation.',
+      "If you're receiving this email, your SMTP configuration is working correctly.",
+      '',
+      `Sent from Praetor at ${new Date().toISOString()}`,
+    ].join('\n');
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #334155;">Email Configuration Test</h2>
@@ -194,7 +202,7 @@ class EmailService {
       </div>
     `;
 
-    return this.sendEmail(recipientEmail, subject, html);
+    return this.sendEmail(recipientEmail, subject, html, text);
   }
 }
 

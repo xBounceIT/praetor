@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
-import { standardErrorResponses } from '../schemas/common.ts';
+import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   bumpNamespaceVersion,
   cacheGetSetJson,
@@ -9,6 +9,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   parseBoolean,
@@ -90,6 +91,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
+      config: {
+        rateLimit: STANDARD_ROUTE_RATE_LIMIT,
+      },
       onRequest: [
         requireAnyPermission(
           'catalog.internal_listing.view',
@@ -107,7 +111,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'List products',
         response: {
           200: { type: 'array', items: productSchema },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
