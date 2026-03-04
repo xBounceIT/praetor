@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "bun run dist/index.js",
-    "dev": "bun --watch index.ts"
+    "dev": "bun --watch index.ts",
+    "seed:demo": "bun run scripts/seed-demo.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

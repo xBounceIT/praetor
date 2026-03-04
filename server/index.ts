@@ -1,14 +1,11 @@
-import bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
 import buildApp from './app.ts';
-import pool, { query } from './db/index.ts';
+import { DEFAULT_ADMIN_PASSWORD, ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
+import { runDemoSeedRefresh } from './db/demoSeed.ts';
+import { query } from './db/index.ts';
 import { closeRedis } from './services/redis.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
-const ADMIN_USERNAME = 'admin';
-const DEFAULT_ADMIN_USER_ID = 'u1';
-const DEFAULT_ADMIN_PASSWORD = 'password';
 const DEFAULT_JWT_SECRET = 'praetor-secret-key-change-in-production';
 const DEFAULT_ENCRYPTION_KEY = 'praetor-encryption-key-change-in-production';
 const logger = createChildLogger({ module: 'startup' });
@@ -40,46 +37,6 @@ const warnInsecureRuntimeDefaults = () => {
   for (const warning of warnings) {
     logger.warn({ warning }, 'Security warning');
   }
-};
-
-const ensureBootstrapAdmin = async () => {
-  const existingAdmin = await query('SELECT id FROM users WHERE username = $1 LIMIT 1', [
-    ADMIN_USERNAME,
-  ]);
-
-  let adminId: string;
-  if (existingAdmin.rows.length > 0) {
-    adminId = existingAdmin.rows[0].id as string;
-    logger.info('Bootstrap admin already exists. Skipping admin creation');
-  } else {
-    const defaultIdCheck = await query('SELECT 1 FROM users WHERE id = $1 LIMIT 1', [
-      DEFAULT_ADMIN_USER_ID,
-    ]);
-    adminId = defaultIdCheck.rows.length === 0 ? DEFAULT_ADMIN_USER_ID : randomUUID();
-
-    const rawPassword = process.env.ADMIN_DEFAULT_PASSWORD?.trim();
-    const adminPassword =
-      rawPassword && rawPassword.length > 0 ? rawPassword : DEFAULT_ADMIN_PASSWORD;
-    const passwordHash = await bcrypt.hash(adminPassword, 12);
-
-    await query(
-      `INSERT INTO users (id, name, username, password_hash, role, avatar_initials)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [adminId, 'Admin User', ADMIN_USERNAME, passwordHash, 'admin', 'AD'],
-    );
-    logger.info(
-      {
-        passwordSource:
-          rawPassword && rawPassword.length > 0 ? 'ADMIN_DEFAULT_PASSWORD' : 'fallback',
-      },
-      'Bootstrap admin created',
-    );
-  }
-
-  await query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
-    adminId,
-    'admin',
-  ]);
 };
 
 const shutdown = async (signal: string) => {
@@ -163,43 +120,9 @@ try {
     await ensureBootstrapAdmin();
 
     // Run demo seed.sql only when explicitly enabled.
-    const seedPath = path.join(__dirname, 'db', 'seed.sql');
     const isDemoSeedingEnabled = parseBooleanEnv(process.env.DEMO_SEEDING);
-    if (isDemoSeedingEnabled && fs.existsSync(seedPath)) {
-      const seedSql = fs.readFileSync(seedPath, 'utf8');
-      const statements = seedSql
-        .split(/;\s*\n/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0 && /\S/m.test(s.replace(/--.*$/gm, '')));
-
-      let succeeded = 0;
-      let failed = 0;
-      const failedTables: string[] = [];
-      const client = await pool.connect();
-      try {
-        for (const stmt of statements) {
-          try {
-            await client.query(stmt);
-            succeeded++;
-          } catch (err) {
-            failed++;
-            const tableMatch = stmt.match(/INSERT\s+INTO\s+(\S+)/i);
-            const table = tableMatch ? tableMatch[1] : 'unknown';
-            failedTables.push(table);
-            logger.warn({ err: serializeError(err), table }, 'Seed statement failed');
-          }
-        }
-      } finally {
-        client.release();
-      }
-
-      if (failed === 0) {
-        logger.info({ statements: succeeded }, 'Demo seed data applied successfully');
-      } else {
-        logger.warn({ succeeded, failed, failedTables }, 'Demo seed data applied with errors');
-      }
-    } else if (isDemoSeedingEnabled) {
-      logger.warn({ seedPath }, 'Demo seeding requested but seed file not found');
+    if (isDemoSeedingEnabled) {
+      await runDemoSeedRefresh({ source: 'startup' });
     } else {
       logger.info('Demo seeding disabled (set DEMO_SEEDING=true to enable)');
     }
@@ -278,14 +201,16 @@ try {
     }
 
     // Run migration to assign all items to manager users
-    try {
-      const { migrate: assignItemsToManagers } = await import('./db/assign_items_to_managers.ts');
-      await assignItemsToManagers();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'assign_items_to_managers' },
-        'Migration failed',
-      );
+    if (!isDemoSeedingEnabled) {
+      try {
+        const { migrate: assignItemsToManagers } = await import('./db/assign_items_to_managers.ts');
+        await assignItemsToManagers();
+      } catch (err) {
+        logger.error(
+          { err: serializeError(err), migration: 'assign_items_to_managers' },
+          'Migration failed',
+        );
+      }
     }
 
     // Run migration to update currency precision
