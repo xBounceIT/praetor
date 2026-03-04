@@ -170,7 +170,7 @@ try {
       const statements = seedSql
         .split(/;\s*\n/)
         .map((s) => s.trim())
-        .filter((s) => s.length > 0 && !s.startsWith('--'));
+        .filter((s) => s.length > 0 && /\S/m.test(s.replace(/--.*$/gm, '')));
 
       let succeeded = 0;
       let failed = 0;
