@@ -1,11 +1,13 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientOffer, ClientOfferItem, Product, SpecialBid } from '../../types';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
@@ -29,20 +31,44 @@ const calcProductSalePrice = (cost: number, molPercentage: number) => {
 
 const calculateTotals = (items: ClientOfferItem[], globalDiscount: number) => {
   let subtotal = 0;
-  let totalTax = 0;
+  let totalCost = 0;
+  const taxGroups: Record<number, number> = {};
 
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
+
     subtotal += lineNet;
-    totalTax += lineNet * (1 - globalDiscount / 100) * (Number(item.productTaxRate ?? 0) / 100);
+
+    const taxRate = Number(item.productTaxRate ?? 0);
+    const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+    const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+    taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
+
+    const cost = item.specialBidId
+      ? Number(item.specialBidUnitPrice ?? 0)
+      : Number(item.productCost ?? 0);
+    totalCost += item.quantity * cost;
   });
 
   const discountAmount = subtotal * (globalDiscount / 100);
-  const total = subtotal - discountAmount + totalTax;
+  const taxableAmount = subtotal - discountAmount;
+  const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+  const total = taxableAmount + totalTax;
+  const margin = taxableAmount - totalCost;
+  const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
 
-  return { subtotal, discountAmount, totalTax, total };
+  return {
+    subtotal,
+    taxableAmount,
+    discountAmount,
+    totalTax,
+    total,
+    margin,
+    marginPercentage,
+    taxGroups,
+  };
 };
 
 export interface ClientOffersViewProps {
@@ -74,7 +100,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
-  const statusOptions = useMemo(
+  const STATUS_OPTIONS = useMemo(
     () => [
       { id: 'draft', name: t('sales:clientOffers.statusDraft', { defaultValue: 'Draft' }) },
       { id: 'sent', name: t('sales:clientOffers.statusSent', { defaultValue: 'Sent' }) },
@@ -103,8 +129,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const [editingOffer, setEditingOffer] = useState<ClientOffer | null>(null);
   const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchTerm, _setSearchTerm] = useState('');
+  const [filterStatus, _setFilterStatus] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -134,7 +160,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     });
   }, [offers, searchTerm, filterStatus]);
 
-  const openEditModal = (offer: ClientOffer) => {
+  const openEditModal = useCallback((offer: ClientOffer) => {
     setEditingOffer(offer);
     setFormData({
       ...offer,
@@ -142,7 +168,193 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     });
     setErrors({});
     setIsModalOpen(true);
-  };
+  }, []);
+
+  const getStatusLabel = useCallback(
+    (status: string) => {
+      const option = STATUS_OPTIONS.find((o) => o.id === status);
+      return option ? option.name : status;
+    },
+    [STATUS_OPTIONS],
+  );
+
+  // Column definitions for StandardTable
+  const columns = useMemo<Column<ClientOffer>[]>(
+    () => [
+      {
+        header: t('sales:clientOffers.clientColumn', { defaultValue: 'Client' }),
+        accessorKey: 'clientName',
+        cell: ({ row }) => {
+          return <div className="font-bold text-slate-800">{row.clientName}</div>;
+        },
+      },
+      {
+        header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
+        accessorKey: 'offerCode',
+        cell: ({ row }) => (
+          <div className="font-mono text-sm font-bold text-slate-500">{row.offerCode}</div>
+        ),
+      },
+      {
+        header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),
+        id: 'total',
+        accessorFn: (row) => calculateTotals(row.items, row.discount).total,
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const { total } = calculateTotals(row.items, row.discount);
+          return (
+            <span className="text-sm font-bold text-slate-700">
+              {total.toFixed(2)} {currency}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:clientOffers.statusColumn', { defaultValue: 'Status' }),
+        accessorKey: 'status',
+        cell: ({ row }) => {
+          return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
+        },
+      },
+      {
+        header: t('sales:clientOffers.actionsColumn', { defaultValue: 'Actions' }),
+        id: 'actions',
+        align: 'right',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) => {
+          const hasOrder = offerIdsWithOrders.has(row.id);
+
+          return (
+            <div className="flex justify-end gap-2">
+              {onViewQuote && (
+                <Tooltip label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewQuote(row.linkedQuoteId);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+              <Tooltip label={t('common.edit')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditModal(row);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-pen-to-square"></i>
+                  </button>
+                )}
+              </Tooltip>
+              {row.status === 'draft' && (
+                <Tooltip label={t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateOffer(row.id, { status: 'sent' });
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                    >
+                      <i className="fa-solid fa-paper-plane"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+              {row.status === 'sent' && (
+                <>
+                  <Tooltip
+                    label={t('sales:clientOffers.markAccepted', {
+                      defaultValue: 'Mark as accepted',
+                    })}
+                  >
+                    {() => (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateOffer(row.id, { status: 'accepted' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                      >
+                        <i className="fa-solid fa-check"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  <Tooltip
+                    label={t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
+                  >
+                    {() => (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateOffer(row.id, { status: 'denied' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                </>
+              )}
+              {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
+                <Tooltip
+                  label={t('sales:clientOffers.createOrder', { defaultValue: 'Create sale order' })}
+                >
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCreateClientsOrder(row);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-cart-plus"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+              {row.status === 'draft' && (
+                <Tooltip label={t('common.delete')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOfferToDelete(row);
+                        setIsDeleteConfirmOpen(true);
+                      }}
+                      className="p-2 text-slate-400 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [
+      t,
+      currency,
+      getStatusLabel,
+      onViewQuote,
+      onUpdateOffer,
+      onCreateClientsOrder,
+      offerIdsWithOrders,
+      openEditModal,
+    ],
+  );
 
   const openAddModal = () => {
     setEditingOffer(null);
@@ -276,22 +488,27 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
-          <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800">
-              {editingOffer
-                ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
-                : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {isReadOnly
+                ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
+                : editingOffer
+                  ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
+                  : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100"
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
             >
-              <i className="fa-solid fa-xmark"></i>
+              <i className="fa-solid fa-xmark text-lg"></i>
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[85vh] overflow-y-auto">
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
             {editingOffer?.linkedQuoteId && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 flex items-center justify-between gap-3">
                 <span>
@@ -313,251 +530,384 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
             )}
 
             {isReadOnly && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-                {t('sales:clientOffers.readOnlyStatus', {
-                  defaultValue:
-                    'Non-draft offers are read-only. Change status from the list actions.',
-                })}
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+                <span className="text-amber-700 text-xs font-bold">
+                  {t('sales:clientOffers.readOnlyStatus', {
+                    defaultValue:
+                      'Non-draft offers are read-only. Change status from the list actions.',
+                  })}
+                </span>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:clientOffers.client', { defaultValue: 'Client' })}
-                </label>
-                <CustomSelect
-                  options={activeClients.map((client) => ({ id: client.id, name: client.name }))}
-                  value={formData.clientId || ''}
-                  onChange={(value) => handleClientChange(value as string)}
-                  searchable={true}
-                  disabled={isReadOnly}
-                />
-                {errors.clientId && <p className="text-red-500 text-xs mt-1">{errors.clientId}</p>}
+            {/* Client Selection */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('sales:clientOffers.clientInformation', { defaultValue: 'Client Information' })}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:clientOffers.client', { defaultValue: 'Client' })}
+                  </label>
+                  <CustomSelect
+                    options={activeClients.map((client) => ({ id: client.id, name: client.name }))}
+                    value={formData.clientId || ''}
+                    onChange={(value) => handleClientChange(value as string)}
+                    placeholder={t('sales:clientOffers.selectAClient', {
+                      defaultValue: 'Select a client',
+                    })}
+                    searchable={true}
+                    disabled={isReadOnly}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                  />
+                  {errors.clientId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.offerCode || ''}
+                    disabled={isReadOnly}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, offerCode: event.target.value }))
+                    }
+                    placeholder="O0000"
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border ${errors.offerCode ? 'border-red-300' : 'border-slate-200'} rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                  />
+                  {errors.offerCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.offerCode}</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
-                </label>
-                <input
-                  type="text"
-                  value={formData.offerCode || ''}
-                  disabled={isReadOnly}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, offerCode: event.target.value }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-                {errors.offerCode && (
-                  <p className="text-red-500 text-xs mt-1">{errors.offerCode}</p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:clientOffers.paymentTerms', { defaultValue: 'Payment terms' })}
-                </label>
-                <CustomSelect
-                  options={paymentTermsOptions}
-                  value={formData.paymentTerms || 'immediate'}
-                  onChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      paymentTerms: value as ClientOffer['paymentTerms'],
-                    }))
-                  }
-                  searchable={false}
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:clientOffers.expirationDate', { defaultValue: 'Expiration date' })}
-                </label>
-                <input
-                  type="date"
-                  value={formData.expirationDate || ''}
-                  disabled={isReadOnly}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:clientOffers.paymentTerms', { defaultValue: 'Payment terms' })}
+                  </label>
+                  <CustomSelect
+                    options={paymentTermsOptions}
+                    value={formData.paymentTerms || 'immediate'}
+                    onChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        paymentTerms: value as ClientOffer['paymentTerms'],
+                      }))
+                    }
+                    searchable={false}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:clientOffers.globalDiscount', { defaultValue: 'Global Discount %' })}
+                  </label>
+                  <ValidatedNumberInput
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={formData.discount || 0}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        discount: value === '' ? 0 : Number(value),
+                      }))
+                    }
+                    disabled={isReadOnly}
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:clientOffers.expirationDate', { defaultValue: 'Expiration date' })}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.expirationDate || ''}
+                    disabled={isReadOnly}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
+                    }
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div className="col-span-full space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.notes || ''}
+                    disabled={isReadOnly}
+                    placeholder={t('sales:clientOffers.additionalNotesPlaceholder', {
+                      defaultValue: 'Additional notes...',
+                    })}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-widest text-praetor">
+            {/* Products */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientOffers.items', { defaultValue: 'Items' })}
                 </h4>
-                {!isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={addItem}
-                    className="text-sm font-bold text-praetor hover:text-slate-700"
-                  >
-                    <i className="fa-solid fa-plus mr-1"></i>
-                    {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={addItem}
+                  disabled={isReadOnly}
+                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fa-solid fa-plus"></i>{' '}
+                  {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
+                </button>
               </div>
+              {errors.items && (
+                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+              )}
 
-              {errors.items && <p className="text-red-500 text-xs">{errors.items}</p>}
+              {formData.items && formData.items.length > 0 && (
+                <div className="flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 grid grid-cols-12 gap-3">
+                    <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      {t('sales:clientOffers.product', { defaultValue: 'Product' })}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:clientOffers.unitPrice', { defaultValue: 'Unit Price' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:clientOffers.discount', { defaultValue: 'Discount %' })}
+                    </div>
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:clientOffers.taxRate', { defaultValue: 'Tax %' })}
+                    </div>
+                  </div>
+                  <div className="w-10 shrink-0"></div>
+                </div>
+              )}
 
-              <div className="space-y-3">
-                {(formData.items || []).map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-12 gap-2 items-start bg-slate-50 p-3 rounded-xl"
-                  >
-                    <div className="col-span-12 md:col-span-4">
-                      <CustomSelect
-                        options={activeProducts.map((product) => ({
-                          id: product.id,
-                          name: product.name,
-                        }))}
-                        value={item.productId}
-                        onChange={(value) => updateItem(index, 'productId', value as string)}
-                        searchable={true}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-2">
-                      <ValidatedNumberInput
-                        value={item.quantity}
-                        onValueChange={(value) =>
-                          updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                        }
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-2">
-                      <ValidatedNumberInput
-                        value={item.unitPrice}
-                        onValueChange={(value) =>
-                          updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                        }
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-2">
-                      <ValidatedNumberInput
-                        value={item.discount || 0}
-                        onValueChange={(value) =>
-                          updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                        }
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                    <div className="col-span-5 md:col-span-1">
-                      <ValidatedNumberInput
-                        value={item.productTaxRate || 0}
-                        onValueChange={(value) =>
-                          updateItem(index, 'productTaxRate', value === '' ? 0 : Number(value))
-                        }
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                    <div className="col-span-7 md:col-span-1 flex justify-end">
-                      {!isReadOnly && (
+              {formData.items && formData.items.length > 0 ? (
+                <div className="space-y-3">
+                  {formData.items.map((item, index) => (
+                    <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
+                      <div className="flex gap-3 items-center">
+                        <div className="flex-1 grid grid-cols-12 gap-3 items-center">
+                          <div className="col-span-4">
+                            <CustomSelect
+                              options={activeProducts.map((product) => ({
+                                id: product.id,
+                                name: product.name,
+                              }))}
+                              value={item.productId}
+                              onChange={(value) => updateItem(index, 'productId', value as string)}
+                              placeholder={t('sales:clientOffers.selectProduct', {
+                                defaultValue: 'Select product',
+                              })}
+                              searchable={true}
+                              disabled={isReadOnly}
+                              buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                            />
+                          </div>
+                          <div className="col-span-1">
+                            <ValidatedNumberInput
+                              step="0.01"
+                              min="0"
+                              required
+                              placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                              value={item.quantity}
+                              onValueChange={(value) => {
+                                const parsed = parseFloat(value);
+                                updateItem(
+                                  index,
+                                  'quantity',
+                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                );
+                              }}
+                              disabled={isReadOnly}
+                              className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <ValidatedNumberInput
+                              step="0.01"
+                              min="0"
+                              value={item.unitPrice}
+                              onValueChange={(value) =>
+                                updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                              }
+                              disabled={isReadOnly}
+                              className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <ValidatedNumberInput
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={item.discount || 0}
+                              onValueChange={(value) =>
+                                updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                              }
+                              disabled={isReadOnly}
+                              className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <ValidatedNumberInput
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={item.productTaxRate || 0}
+                              onValueChange={(value) =>
+                                updateItem(
+                                  index,
+                                  'productTaxRate',
+                                  value === '' ? 0 : Number(value),
+                                )
+                              }
+                              disabled={isReadOnly}
+                              className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
                         <button
                           type="button"
                           onClick={() => removeItem(index)}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
+                          disabled={isReadOnly}
+                          className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <i className="fa-solid fa-trash-can"></i>
                         </button>
-                      )}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder={t('form:placeholderNotes', { defaultValue: 'Notes...' })}
+                          value={item.note || ''}
+                          onChange={(event) => updateItem(index, 'note', event.target.value)}
+                          disabled={isReadOnly}
+                          className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                      </div>
                     </div>
-                    <div className="col-span-12">
-                      <input
-                        type="text"
-                        value={item.note || ''}
-                        disabled={isReadOnly}
-                        placeholder={t('sales:clientOffers.note', { defaultValue: 'Note' })}
-                        onChange={(event) => updateItem(index, 'note', event.target.value)}
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  {t('sales:clientOffers.noItemsAdded', { defaultValue: 'No items added yet' })}
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:clientOffers.discount', { defaultValue: 'Discount %' })}
-                </label>
-                <ValidatedNumberInput
-                  value={formData.discount || 0}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, discount: value === '' ? 0 : Number(value) }))
-                  }
-                  className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('sales:clientOffers.status', { defaultValue: 'Status' })}
-                </label>
-                <CustomSelect
-                  options={statusOptions}
-                  value={formData.status || 'draft'}
-                  onChange={(value) =>
-                    setFormData((prev) => ({ ...prev, status: value as ClientOffer['status'] }))
-                  }
-                  searchable={false}
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div className="flex items-end justify-end">
+            {/* Totals Section */}
+            {formData.items && formData.items.length > 0 && (
+              <div className="mt-4 flex flex-col items-end space-y-2 px-3">
                 {(() => {
-                  const totals = calculateTotals(
-                    formData.items || [],
-                    Number(formData.discount || 0),
-                  );
+                  const discountValue = Number.isNaN(formData.discount ?? 0)
+                    ? 0
+                    : (formData.discount ?? 0);
+                  const {
+                    taxableAmount,
+                    discountAmount,
+                    total,
+                    margin,
+                    marginPercentage,
+                    taxGroups,
+                  } = calculateTotals(formData.items, discountValue);
                   return (
-                    <div className="text-right">
-                      <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                        {t('sales:clientOffers.total', { defaultValue: 'Total' })}
+                    <>
+                      {/* Taxable Amount */}
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-bold text-slate-500">
+                          {t('sales:clientOffers.taxableAmount', {
+                            defaultValue: 'Taxable Amount',
+                          })}
+                          :
+                        </span>
+                        <span className="text-sm font-black text-slate-800">
+                          {taxableAmount.toFixed(2)} {currency}
+                        </span>
                       </div>
-                      <div className="text-2xl font-black text-praetor">
-                        {totals.total.toFixed(2)} {currency}
+
+                      {/* Discount */}
+                      {discountValue > 0 && (
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('sales:clientOffers.discountAmount', { defaultValue: 'Discount' })} (
+                            {discountValue}%):
+                          </span>
+                          <span className="text-sm font-black text-amber-600">
+                            -{discountAmount.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Tax */}
+                      {Object.entries(taxGroups).map(([rate, amount]) => (
+                        <div key={rate} className="flex items-center gap-4">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('sales:clientOffers.tax', { defaultValue: 'Tax', rate })}:
+                          </span>
+                          <span className="text-sm font-black text-slate-800">
+                            {amount.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                      ))}
+
+                      {/* Margin */}
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-bold text-emerald-600">
+                          {t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (
+                          {(marginPercentage || 0).toFixed(1)}%):
+                        </span>
+                        <span className="text-sm font-black text-emerald-600">
+                          {margin.toFixed(2)} {currency}
+                        </span>
                       </div>
-                    </div>
+
+                      {/* Total */}
+                      <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
+                        <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
+                          {t('sales:clientOffers.total', { defaultValue: 'Total' })}:
+                        </span>
+                        <span className="text-3xl font-black text-praetor">
+                          {total.toFixed(2)}{' '}
+                          <span className="text-lg text-slate-400 font-bold">{currency}</span>
+                        </span>
+                      </div>
+                    </>
                   );
                 })()}
               </div>
-            </div>
+            )}
 
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
-              </label>
-              <textarea
-                rows={3}
-                value={formData.notes || ''}
-                disabled={isReadOnly}
-                onChange={(event) =>
-                  setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                }
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-              />
-            </div>
-
-            <div className="flex justify-between items-center border-t border-slate-100 pt-4">
+            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
-                {t('common.cancel')}
+                {t('common:buttons.cancel')}
               </button>
               {!isReadOnly && (
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold hover:bg-slate-700"
+                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
                 >
                   {editingOffer ? t('common.update') : t('common.save')}
                 </button>
@@ -568,201 +918,74 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       </Modal>
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden p-6 space-y-4">
-          <h3 className="text-lg font-black text-slate-800">
-            {t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
-          </h3>
-          <p className="text-sm text-slate-500">{offerToDelete?.offerCode}</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setIsDeleteConfirmOpen(false)}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              onClick={async () => {
-                if (!offerToDelete) return;
-                await onDeleteOffer(offerToDelete.id);
-                setIsDeleteConfirmOpen(false);
-                setOfferToDelete(null);
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold"
-            >
-              {t('common.yesDelete')}
-            </button>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {offerToDelete?.offerCode}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!offerToDelete) return;
+                  await onDeleteOffer(offerToDelete.id);
+                  setIsDeleteConfirmOpen(false);
+                  setOfferToDelete(null);
+                }}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('common:buttons.delete')}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">
-            {t('sales:clientOffers.title', { defaultValue: 'Client Offers' })}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {t('sales:clientOffers.subtitle', {
-              defaultValue: 'Offers created from customer quotes.',
-            })}
-          </p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">
+              {t('sales:clientOffers.title', { defaultValue: 'Client Offers' })}
+            </h2>
+            <p className="text-slate-500 text-sm">
+              {t('sales:clientOffers.subtitle', {
+                defaultValue: 'Offers created from customer quotes.',
+              })}
+            </p>
+          </div>
+          {onAddOffer && (
+            <button
+              onClick={openAddModal}
+              className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+            >
+              <i className="fa-solid fa-plus"></i>
+              {t('sales:clientOffers.addOffer', { defaultValue: 'Add offer' })}
+            </button>
+          )}
         </div>
-        {onAddOffer && (
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2.5 rounded-xl bg-praetor text-white text-sm font-bold"
-          >
-            <i className="fa-solid fa-plus mr-2"></i>
-            {t('sales:clientOffers.addOffer', { defaultValue: 'Add offer' })}
-          </button>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder={t('common.search')}
-          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm"
-        />
-        <CustomSelect
-          options={[
-            { id: 'all', name: t('common.all', { defaultValue: 'All' }) },
-            ...statusOptions,
-          ]}
-          value={filterStatus}
-          onChange={(value) => setFilterStatus(value as string)}
-          searchable={false}
-          buttonClassName="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700"
-        />
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:clientOffers.client', { defaultValue: 'Client' })}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:clientOffers.status', { defaultValue: 'Status' })}
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('sales:clientOffers.total', { defaultValue: 'Total' })}
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-slate-400">
-                {t('common.actions')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredOffers.map((offer) => {
-              const totals = calculateTotals(offer.items, offer.discount);
-              const hasOrder = offerIdsWithOrders.has(offer.id);
-              return (
-                <tr key={offer.id} className="hover:bg-slate-50/70">
-                  <td className="px-4 py-4">
-                    <div className="font-bold text-slate-800">{offer.clientName}</div>
-                    <div className="text-xs text-slate-400">{offer.linkedQuoteId}</div>
-                  </td>
-                  <td className="px-4 py-4 font-mono text-sm font-bold text-slate-600">
-                    {offer.offerCode}
-                  </td>
-                  <td className="px-4 py-4">
-                    <StatusBadge
-                      type={offer.status as StatusType}
-                      label={
-                        statusOptions.find((option) => option.id === offer.status)?.name ||
-                        offer.status
-                      }
-                    />
-                  </td>
-                  <td className="px-4 py-4 text-sm font-bold text-slate-700">
-                    {totals.total.toFixed(2)} {currency}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex justify-end gap-2">
-                      {onViewQuote && (
-                        <button
-                          onClick={() => onViewQuote(offer.linkedQuoteId)}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                          title={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
-                        >
-                          <i className="fa-solid fa-link"></i>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openEditModal(offer)}
-                        className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                        title={t('common.edit')}
-                      >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                      </button>
-                      {offer.status === 'draft' && (
-                        <button
-                          onClick={() => onUpdateOffer(offer.id, { status: 'sent' })}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                          title={t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}
-                        >
-                          <i className="fa-solid fa-paper-plane"></i>
-                        </button>
-                      )}
-                      {offer.status === 'sent' && (
-                        <>
-                          <button
-                            onClick={() => onUpdateOffer(offer.id, { status: 'accepted' })}
-                            className="w-10 h-10 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                            title={t('sales:clientOffers.markAccepted', {
-                              defaultValue: 'Mark as accepted',
-                            })}
-                          >
-                            <i className="fa-solid fa-check"></i>
-                          </button>
-                          <button
-                            onClick={() => onUpdateOffer(offer.id, { status: 'denied' })}
-                            className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            title={t('sales:clientOffers.markDenied', {
-                              defaultValue: 'Mark as denied',
-                            })}
-                          >
-                            <i className="fa-solid fa-xmark"></i>
-                          </button>
-                        </>
-                      )}
-                      {offer.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
-                        <button
-                          onClick={() => onCreateClientsOrder(offer)}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-praetor hover:bg-slate-100"
-                          title={t('sales:clientOffers.createOrder', {
-                            defaultValue: 'Create sale order',
-                          })}
-                        >
-                          <i className="fa-solid fa-cart-plus"></i>
-                        </button>
-                      )}
-                      {offer.status === 'draft' && (
-                        <button
-                          onClick={() => {
-                            setOfferToDelete(offer);
-                            setIsDeleteConfirmOpen(true);
-                          }}
-                          className="w-10 h-10 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50"
-                          title={t('common.delete')}
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <StandardTable<ClientOffer>
+        title={t('sales:clientOffers.activeOffers', { defaultValue: 'Active Offers' })}
+        data={filteredOffers}
+        columns={columns}
+        defaultRowsPerPage={5}
+        onRowClick={(row) => openEditModal(row)}
+        rowClassName={() => 'cursor-pointer hover:bg-slate-50/50'}
+      />
     </div>
   );
 };
