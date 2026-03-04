@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import buildApp from './app.ts';
-import { query } from './db/index.ts';
+import pool, { query } from './db/index.ts';
 import { closeRedis } from './services/redis.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 
@@ -167,8 +167,37 @@ try {
     const isDemoSeedingEnabled = parseBooleanEnv(process.env.DEMO_SEEDING);
     if (isDemoSeedingEnabled && fs.existsSync(seedPath)) {
       const seedSql = fs.readFileSync(seedPath, 'utf8');
-      await query(seedSql);
-      logger.info('Demo seed data applied');
+      const statements = seedSql
+        .split(/;\s*\n/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && !s.startsWith('--'));
+
+      let succeeded = 0;
+      let failed = 0;
+      const failedTables: string[] = [];
+      const client = await pool.connect();
+      try {
+        for (const stmt of statements) {
+          try {
+            await client.query(stmt);
+            succeeded++;
+          } catch (err) {
+            failed++;
+            const tableMatch = stmt.match(/INSERT\s+INTO\s+(\S+)/i);
+            const table = tableMatch ? tableMatch[1] : 'unknown';
+            failedTables.push(table);
+            logger.warn({ err: serializeError(err), table }, 'Seed statement failed');
+          }
+        }
+      } finally {
+        client.release();
+      }
+
+      if (failed === 0) {
+        logger.info({ statements: succeeded }, 'Demo seed data applied successfully');
+      } else {
+        logger.warn({ succeeded, failed, failedTables }, 'Demo seed data applied with errors');
+      }
     } else if (isDemoSeedingEnabled) {
       logger.warn({ seedPath }, 'Demo seeding requested but seed file not found');
     } else {
