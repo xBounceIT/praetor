@@ -218,6 +218,74 @@ const normalizeItems = (items: OfferItemInput[], reply: FastifyReply) => {
   return normalizedItems;
 };
 
+const toFiniteNumber = (value: unknown, fieldName: string) => {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) {
+    throw new TypeError(`Invalid numeric value for ${fieldName}`);
+  }
+  return parsedValue;
+};
+
+const toNullableFiniteNumber = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) return null;
+  return toFiniteNumber(value, fieldName);
+};
+
+const toNullableString = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  return String(value);
+};
+
+const toDateOnlyString = (value: Date) => value.toISOString().slice(0, 10);
+
+const toNullableDateOnlyString = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) return null;
+  if (value instanceof Date) return toDateOnlyString(value);
+  if (typeof value === 'string') return value;
+  throw new TypeError(`Invalid date value for ${fieldName}`);
+};
+
+const normalizeOfferItemRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  offerId: String(row.offerId),
+  productId: toNullableString(row.productId),
+  productName: String(row.productName),
+  specialBidId: toNullableString(row.specialBidId),
+  quantity: toFiniteNumber(row.quantity, 'offerItem.quantity'),
+  unitPrice: toFiniteNumber(row.unitPrice, 'offerItem.unitPrice'),
+  productCost: toFiniteNumber(row.productCost, 'offerItem.productCost'),
+  productTaxRate: toFiniteNumber(row.productTaxRate, 'offerItem.productTaxRate'),
+  productMolPercentage: toNullableFiniteNumber(
+    row.productMolPercentage,
+    'offerItem.productMolPercentage',
+  ),
+  specialBidUnitPrice: toNullableFiniteNumber(
+    row.specialBidUnitPrice,
+    'offerItem.specialBidUnitPrice',
+  ),
+  specialBidMolPercentage: toNullableFiniteNumber(
+    row.specialBidMolPercentage,
+    'offerItem.specialBidMolPercentage',
+  ),
+  note: toNullableString(row.note),
+  discount: toFiniteNumber(row.discount, 'offerItem.discount'),
+});
+
+const normalizeOfferRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  offerCode: String(row.offerCode),
+  linkedQuoteId: String(row.linkedQuoteId),
+  clientId: String(row.clientId),
+  clientName: String(row.clientName),
+  paymentTerms: toNullableString(row.paymentTerms),
+  discount: toFiniteNumber(row.discount, 'offer.discount'),
+  status: String(row.status),
+  expirationDate: toNullableDateOnlyString(row.expirationDate, 'offer.expirationDate'),
+  notes: toNullableString(row.notes),
+  createdAt: toFiniteNumber(row.createdAt, 'offer.createdAt'),
+  updatedAt: toFiniteNumber(row.updatedAt, 'offer.updatedAt'),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -276,15 +344,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          ORDER BY created_at ASC`,
       );
 
-      const itemsByOffer: Record<string, unknown[]> = {};
-      itemsResult.rows.forEach((item: { offerId: string }) => {
+      const normalizedOfferItems = itemsResult.rows.map((item) =>
+        normalizeOfferItemRow(item as Record<string, unknown>),
+      );
+      const normalizedOffers = offersResult.rows.map((offer) =>
+        normalizeOfferRow(offer as Record<string, unknown>),
+      );
+
+      const itemsByOffer: Record<string, ReturnType<typeof normalizeOfferItemRow>[]> = {};
+      normalizedOfferItems.forEach((item) => {
         if (!itemsByOffer[item.offerId]) {
           itemsByOffer[item.offerId] = [];
         }
         itemsByOffer[item.offerId].push(item);
       });
 
-      return offersResult.rows.map((offer: { id: string }) => ({
+      return normalizedOffers.map((offer) => ({
         ...offer,
         items: itemsByOffer[offer.id] || [],
       }));
@@ -409,7 +484,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      const createdItems: unknown[] = [];
+      const createdItems: ReturnType<typeof normalizeOfferItemRow>[] = [];
       for (const item of normalizedItems) {
         const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
         const itemResult = await query(
@@ -448,11 +523,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.note,
           ],
         );
-        createdItems.push(itemResult.rows[0]);
+        createdItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
       }
 
       return reply.code(201).send({
-        ...createdOfferResult.rows[0],
+        ...normalizeOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
         items: createdItems,
       });
     },
@@ -644,7 +719,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
 
-      let updatedItems: unknown[] = [];
+      let updatedItems: ReturnType<typeof normalizeOfferItemRow>[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
@@ -690,7 +765,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.note,
             ],
           );
-          updatedItems.push(itemResult.rows[0]);
+          updatedItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
         }
       } else {
         const itemsResult = await query(
@@ -713,11 +788,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            WHERE offer_id = $1`,
           [idResult.value],
         );
-        updatedItems = itemsResult.rows;
+        updatedItems = itemsResult.rows.map((item) =>
+          normalizeOfferItemRow(item as Record<string, unknown>),
+        );
       }
 
       return {
-        ...updatedOfferResult.rows[0],
+        ...normalizeOfferRow(updatedOfferResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
       };
     },
