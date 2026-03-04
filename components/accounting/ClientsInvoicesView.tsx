@@ -36,7 +36,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   onDeleteInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common']);
+  const { t } = useTranslation(['accounting', 'sales', 'common']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -124,7 +124,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     if (!formData.dueDate)
       newErrors.dueDate = t('accounting:clientsInvoices.dueDate') + ' is required';
     if (!formData.items || formData.items.length === 0)
-      newErrors.items = t('crm:quotes.errors.itemsRequired');
+      newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -669,7 +669,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
             <div className="pt-6">
               <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('accounting:clientsInvoices.notes')}
+                {t('common:labels.notes')}
               </label>
               <textarea
                 rows={2}

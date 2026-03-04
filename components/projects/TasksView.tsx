@@ -597,7 +597,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                 options={projectSelectOptions}
                 value={projectId}
                 onChange={(val) => setProjectId(val as string)}
-                placeholder={t('projects.selectProject')}
+                placeholder={t('common:labels.selectOption')}
                 searchable={true}
                 buttonClassName="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-praetor shadow-sm"
               />

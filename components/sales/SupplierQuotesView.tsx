@@ -382,17 +382,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const nextErrors: Record<string, string> = {};
     if (!formData.supplierId) {
-      nextErrors.supplierId = t('crm:quotes.errors.clientRequired', {
+      nextErrors.supplierId = t('sales:supplierQuotes.errors.supplierRequired', {
         defaultValue: 'Supplier is required',
       });
     }
     if (!formData.quoteCode?.trim()) {
-      nextErrors.quoteCode = t('crm:quotes.errors.quoteCodeRequired', {
+      nextErrors.quoteCode = t('sales:supplierQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
     }
     if (!formData.items || formData.items.length === 0) {
-      nextErrors.items = t('crm:quotes.errors.itemsRequired', {
+      nextErrors.items = t('sales:supplierQuotes.errors.itemsRequired', {
         defaultValue: 'At least one item is required',
       });
     }

@@ -19,10 +19,13 @@
     "deleteChatTitle": "Delete chat",
     "deleteChatConfirm": "This will remove \"{{name}}\" from your chat history.",
     "goToBottom": "Go to bottom",
+    "copyTable": "Copy table",
     "loadOlder": "Load older messages",
     "loadingOlder": "Loading older messages...",
     "error": "Something went wrong.",
     "thoughtLabel": "Thought process",
+    "previousVersion": "Previous version",
+    "nextVersion": "Next version",
     "stop": "Stop",
     "retry": "Retry"
   }

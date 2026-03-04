@@ -26,8 +26,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, logoutReason, onClearLogoutReaso
     setError('');
 
     const newErrors: Record<string, string> = {};
-    if (!username.trim()) newErrors.username = t('validation.usernameRequired');
-    if (!password.trim()) newErrors.password = t('validation.passwordRequired');
+    if (!username.trim()) newErrors.username = t('common:validation.usernameRequired');
+    if (!password.trim()) newErrors.password = t('common:validation.passwordRequired');
 
     if (Object.keys(newErrors).length > 0) {
       setFieldErrors(newErrors);

@@ -95,7 +95,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onCreateInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common', 'crm']);
+  const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
@@ -482,7 +482,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             <div className="space-y-4">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('crm:quotes.productsServices')}
+                {t('sales:supplierOffers.items')}
               </h4>
 
               {formData.items && formData.items.length > 0 ? (
@@ -497,10 +497,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         <div className="mb-4 flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                              {t('crm:quotes.productsServices')}
+                              {t('sales:supplierOffers.items')}
                             </div>
                             <div className="text-sm font-bold text-slate-700">
-                              {item.productName || t('crm:quotes.selectProduct')}
+                              {item.productName || t('sales:supplierOffers.selectProduct')}
                             </div>
                           </div>
                           <div className="text-left sm:text-right">
@@ -516,7 +516,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
                           <div className="space-y-1.5 md:col-span-4">
                             <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:quotes.productsServices')}
+                              {t('sales:supplierOffers.product')}
                             </label>
                             <CustomSelect
                               options={activeProducts.map((product) => ({
@@ -533,7 +533,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
                           <div className="space-y-1.5 md:col-span-2">
                             <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:quotes.qty')}
+                              {t('sales:supplierOffers.qty')}
                             </label>
                             <ValidatedNumberInput
                               value={item.quantity}
@@ -603,7 +603,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('crm:quotes.noProductsAdded')}
+                  {t('sales:supplierOffers.noItemsAdded')}
                 </div>
               )}
             </div>
@@ -681,7 +681,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   <div className="flex h-full flex-col justify-center space-y-3">
                     <div className="flex items-center justify-between px-2">
                       <span className="text-sm font-bold text-slate-500">
-                        {t('crm:quotes.taxableAmount')}:
+                        {t('accounting:clientsInvoices.subtotal')}:
                       </span>
                       <span className="text-sm font-black text-slate-800">
                         {totals.subtotal.toFixed(2)} {currency}
@@ -690,7 +690,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     {Number(formData.discount || 0) > 0 && (
                       <div className="flex items-center justify-between px-2">
                         <span className="text-sm font-bold text-slate-500">
-                          {t('crm:quotes.discountAmount', {
+                          {t('sales:clientQuotes.discountAmount', {
                             discount: Number(formData.discount || 0),
                           })}
                           :
@@ -722,7 +722,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
                   <div className="flex flex-col items-center justify-center rounded-2xl border border-blue-100/40 bg-blue-50/50 p-6 text-center">
                     <span className="mb-2 text-xs font-black uppercase tracking-widest text-blue-600">
-                      {t('crm:quotes.totalLabel')}
+                      {t('accounting:supplierOrders.total')}
                     </span>
                     <div className="text-2xl font-black leading-none text-blue-700">
                       {totals.total.toFixed(2)} {currency}
