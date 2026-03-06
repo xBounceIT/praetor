@@ -239,6 +239,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
         id: 'quoteCode',
         accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => (
           <div className="font-mono text-sm font-bold text-slate-500">
             {row.quoteCode || row.purchaseOrderNumber}
@@ -249,6 +251,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
         accessorFn: (row) => calculateTotals(row.items, row.discount, products),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => (
           <span className="text-sm font-bold text-slate-700">
@@ -259,6 +263,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.status', { defaultValue: 'Status' }),
         accessorKey: 'status',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => (
           <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
         ),
@@ -267,6 +273,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         header: t('sales:supplierQuotes.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
         align: 'right',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => (

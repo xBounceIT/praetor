@@ -232,6 +232,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         header: t('accounting:supplierOrders.total'),
         id: 'orderTotal',
         accessorFn: (row: SupplierSaleOrder) => calculateTotals(row.items, row.discount).total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const { total } = calculateTotals(row.items, row.discount);
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
@@ -248,6 +250,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         header: t('accounting:supplierOrders.paymentTerms'),
         id: 'paymentTerms',
         accessorFn: (row: SupplierSaleOrder) => getPaymentTermsLabel(row.paymentTerms, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
 
@@ -264,6 +268,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         header: t('accounting:supplierOrders.status'),
         id: 'orderStatus',
         accessorFn: (row: SupplierSaleOrder) => getOrderStatusLabel(row.status, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => (
           <div
             className={row.status === 'confirmed' || row.status === 'denied' ? 'opacity-60' : ''}
@@ -278,6 +284,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       {
         header: t('accounting:supplierOrders.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,

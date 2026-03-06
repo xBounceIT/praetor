@@ -632,6 +632,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.quoteCodeColumn'),
         accessorKey: 'quoteCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => (
           <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
         ),
@@ -640,6 +642,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         header: t('sales:clientQuotes.totalColumn'),
         id: 'total',
         accessorFn: (row) => calculateQuoteTotals(row.items, row.discount).total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const { total } = calculateQuoteTotals(row.items, row.discount);
@@ -654,6 +658,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.paymentTermsColumn'),
         accessorKey: 'paymentTerms',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
@@ -670,6 +676,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.expirationColumn'),
         accessorKey: 'expirationDate',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const history = isHistoryRow(row);
@@ -692,6 +700,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.statusColumn'),
         accessorKey: 'status',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const history = isHistoryRow(row);
@@ -709,6 +719,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         header: t('sales:clientQuotes.actionsColumn'),
         id: 'actions',
         align: 'right',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
