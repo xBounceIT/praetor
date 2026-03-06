@@ -429,7 +429,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const { total } = calculateTotals(row.items, row.discount);
           return (
             <span
-              className={`text-sm font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-700'}`}
+              className={`text-sm font-bold whitespace-nowrap ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-700'}`}
             >
               {total.toFixed(2)} {currency}
             </span>
@@ -840,7 +840,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('crm:internalListing.cost')}
                             </div>
-                            <div className="text-xs font-bold text-slate-600">
+                            <div className="text-xs font-bold text-slate-600 whitespace-nowrap">
                               {cost.toFixed(2)} {currency}
                             </div>
                             {selectedBid && (
@@ -861,7 +861,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.marginLabel')}
                             </div>
-                            <div className="text-xs font-bold text-emerald-600">
+                            <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
                               {margin.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -870,7 +870,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               {t('crm:internalListing.salePrice')}
                             </div>
                             <div
-                              className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                              className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                             >
                               {salePrice.toFixed(2)} {currency}
                             </div>
@@ -937,7 +937,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               />
                             </div>
                             <div className="col-span-1 flex flex-col items-center justify-center">
-                              <span className="text-xs font-bold text-slate-600">
+                              <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
                                 {cost.toFixed(2)} {currency}
                               </span>
                               {selectedBid && (
@@ -952,13 +952,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span className="text-xs font-bold text-emerald-600">
+                              <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">
                                 {margin.toFixed(2)} {currency}
                               </span>
                             </div>
                             <div className="col-span-2 flex items-center justify-center">
                               <span
-                                className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                               >
                                 {salePrice.toFixed(2)} {currency}
                               </span>
@@ -1085,7 +1085,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           <span className="text-sm font-bold text-slate-500">
                             {t('sales:clientQuotes.taxableAmount')}:
                           </span>
-                          <span className="text-sm font-black text-slate-800">
+                          <span className="text-sm font-black text-slate-800 whitespace-nowrap">
                             {subtotal.toFixed(2)} {currency}
                           </span>
                         </div>
@@ -1098,7 +1098,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               })}
                               :
                             </span>
-                            <span className="text-sm font-black text-amber-600">
+                            <span className="text-sm font-black text-amber-600 whitespace-nowrap">
                               -{discountAmount.toFixed(2)} {currency}
                             </span>
                           </div>
@@ -1109,7 +1109,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             <span className="text-sm font-bold text-slate-500">
                               {t('sales:clientQuotes.ivaTax', { rate })}:
                             </span>
-                            <span className="text-sm font-black text-slate-800">
+                            <span className="text-sm font-black text-slate-800 whitespace-nowrap">
                               {amount.toFixed(2)} {currency}
                             </span>
                           </div>
@@ -1121,7 +1121,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
                           {t('sales:clientQuotes.totalLabel')}:
                         </span>
-                        <span className="text-4xl font-black text-praetor leading-none">
+                        <span className="inline-flex items-baseline whitespace-nowrap text-4xl font-black text-praetor leading-none">
                           {total.toFixed(2)}
                           <span className="text-xl ml-1 opacity-60 text-slate-400">{currency}</span>
                         </span>
@@ -1133,7 +1133,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           {t('sales:clientQuotes.marginLabel')}:
                         </span>
                         <div className="text-center">
-                          <div className="text-2xl font-black text-emerald-700 leading-none mb-1">
+                          <div className="text-2xl font-black text-emerald-700 leading-none mb-1 whitespace-nowrap">
                             {margin.toFixed(2)} {currency}
                           </div>
                           <div className="text-xs font-black text-emerald-500 opacity-60">
