@@ -708,8 +708,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 grid grid-cols-12 gap-3">
+                <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('accounting:clientsOrders.specialBidLabel')}
                     </div>
@@ -755,10 +755,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     const margin = salePrice - cost;
 
                     return (
-                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl">
-                        <div className="flex gap-3 items-center">
-                          <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-3">
+                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-3">
+                        <div className="lg:hidden flex items-start gap-3">
+                          <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="min-w-0">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('accounting:clientsOrders.specialBidLabel')}
+                              </div>
                               <CustomSelect
                                 options={[
                                   { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
@@ -779,10 +782,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 displayValue={getBidDisplayValue(item.specialBidId)}
                                 searchable={true}
                                 disabled={isReadOnly}
+                                className="min-w-0"
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="col-span-3">
+                            <div className="min-w-0">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('sales:clientQuotes.productsServices')}
+                              </div>
                               <CustomSelect
                                 options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
                                 value={item.productId}
@@ -792,6 +799,121 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
                                 disabled={isReadOnly}
+                                className="min-w-0"
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeProductRow(index)}
+                            disabled={isReadOnly}
+                            className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 lg:hidden">
+                          <div>
+                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:clientQuotes.qty')}
+                            </div>
+                            <ValidatedNumberInput
+                              step="0.01"
+                              min="0"
+                              required
+                              placeholder="Qty"
+                              value={item.quantity}
+                              onValueChange={(value) => {
+                                const parsed = parseFloat(value);
+                                updateProductRow(
+                                  index,
+                                  'quantity',
+                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                );
+                              }}
+                              disabled={isReadOnly}
+                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                            />
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('crm:internalListing.cost')}
+                            </div>
+                            <div className="text-xs font-bold text-slate-600">
+                              {cost.toFixed(2)} {currency}
+                            </div>
+                            {selectedBid && (
+                              <div className="text-[8px] font-black text-praetor uppercase tracking-wider">
+                                Bid
+                              </div>
+                            )}
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('crm:internalListing.molPercentage')}
+                            </div>
+                            <div className="text-xs font-bold text-slate-600">
+                              {molPercentage.toFixed(1)}%
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:clientQuotes.marginLabel')}
+                            </div>
+                            <div className="text-xs font-bold text-emerald-600">
+                              {margin.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                          <div className="col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1 md:col-span-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('crm:internalListing.salePrice')}
+                            </div>
+                            <div
+                              className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                            >
+                              {salePrice.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="hidden lg:flex gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-3 min-w-0">
+                              <CustomSelect
+                                options={[
+                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
+                                  ...clientSpecialBids.map((b) => ({
+                                    id: b.id,
+                                    name: `${b.clientName} · ${b.productName}`,
+                                  })),
+                                ]}
+                                value={item.specialBidId || 'none'}
+                                onChange={(val) =>
+                                  updateProductRow(
+                                    index,
+                                    'specialBidId',
+                                    val === 'none' ? '' : (val as string),
+                                  )
+                                }
+                                placeholder={t('sales:clientQuotes.selectBid')}
+                                displayValue={getBidDisplayValue(item.specialBidId)}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                className="min-w-0"
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-3 min-w-0">
+                              <CustomSelect
+                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                                value={item.productId}
+                                onChange={(val) =>
+                                  updateProductRow(index, 'productId', val as string)
+                                }
+                                placeholder={t('sales:clientQuotes.selectProduct')}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                className="min-w-0"
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
                             </div>
