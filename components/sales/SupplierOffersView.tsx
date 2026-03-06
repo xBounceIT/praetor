@@ -179,6 +179,8 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       {
         header: t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' }),
         accessorKey: 'offerCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => (
           <div className="font-mono text-sm font-bold text-slate-500">{row.offerCode}</div>
         ),
@@ -187,6 +189,8 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         header: t('sales:supplierOffers.total', { defaultValue: 'Total' }),
         id: 'total',
         accessorFn: (row) => calculateTotals(row.items, row.discount).total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => (
           <span className="text-sm font-bold text-slate-700">
@@ -197,6 +201,8 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       {
         header: t('sales:supplierOffers.status', { defaultValue: 'Status' }),
         accessorKey: 'status',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => (
           <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
         ),
@@ -205,6 +211,8 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         header: t('sales:supplierOffers.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
         align: 'right',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => (

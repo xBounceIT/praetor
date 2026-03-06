@@ -198,6 +198,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         header: t('accounting:supplierInvoices.invoiceNumber'),
         id: 'invoiceNumber',
         accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierInvoice }) => (
           <span className="font-mono text-sm font-bold text-slate-600">{row.invoiceNumber}</span>
         ),
@@ -206,6 +208,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         header: t('accounting:supplierInvoices.total'),
         id: 'invoiceTotal',
         accessorFn: (row: SupplierInvoice) => Number(row.total),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierInvoice }) => {
           const isMuted = row.status === 'paid' || row.status === 'cancelled';
 
@@ -221,6 +225,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         header: t('accounting:supplierInvoices.status'),
         id: 'invoiceStatus',
         accessorFn: (row: SupplierInvoice) => getStatusLabel(row.status, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: SupplierInvoice }) => (
           <div className={row.status === 'paid' || row.status === 'cancelled' ? 'opacity-60' : ''}>
             <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status, t)} />
@@ -230,6 +236,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       {
         header: t('accounting:supplierInvoices.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,

@@ -308,7 +308,7 @@ const StandardTable = <T extends object>({
 
       <div className={tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'}>
         {columns && data ? (
-          <table className="w-full text-left border-collapse">
+          <table className="w-max min-w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
                 {columns.map((col, colIdx) => {

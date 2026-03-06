@@ -423,6 +423,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const { total } = calculateTotals(row.items, row.discount);
           return total;
         },
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: ClientsOrder }) => {
           const { total } = calculateTotals(row.items, row.discount);
           return (
@@ -439,6 +441,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         header: t('accounting:clientsOrders.paymentTermsColumn'),
         accessorFn: (row: ClientsOrder) =>
           row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
             className={`text-sm font-semibold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-600'}`}
@@ -450,6 +454,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {
         header: t('accounting:clientsOrders.statusColumn'),
         accessorFn: (row: ClientsOrder) => getOrderStatusLabel(row.status, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <div
             className={row.status === 'confirmed' || row.status === 'denied' ? 'opacity-60' : ''}
@@ -464,6 +470,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {
         header: t('accounting:clientsOrders.actionsColumn'),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,
