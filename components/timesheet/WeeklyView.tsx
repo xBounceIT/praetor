@@ -441,19 +441,19 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       {/* Grid */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-200">
+          <table className="w-full min-w-max text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-44">
                   {t('weekly.client')}
                 </th>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-48">
                   {t('weekly.project')}
                 </th>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-36">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-52">
                   {t('weekly.task')}
                 </th>
-                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-32">
+                <th className="px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-tighter w-40">
                   {t('weekly.location')}
                 </th>
                 {weekDays.map((day) => (
@@ -492,7 +492,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   className="group hover:bg-slate-50/30 transition-all duration-500"
                 >
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-32">
+                    <div className="flex flex-col gap-1 w-44">
                       <CustomSelect
                         options={clients.map((c) => ({ id: c.id, name: c.name }))}
                         value={row.clientId}
@@ -509,7 +509,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-32">
+                    <div className="flex flex-col gap-1 w-48">
                       <CustomSelect
                         options={projects
                           .filter((p) => p.clientId === row.clientId)
@@ -531,7 +531,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-36">
+                    <div className="flex flex-col gap-1 w-52">
                       <CustomSelect
                         options={projectTasks
                           .filter((t) => t.projectId === row.projectId)
@@ -557,7 +557,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 w-32">
+                    <div className="flex flex-col gap-1 w-40">
                       <CustomSelect
                         options={[
                           { id: 'office', name: t('weekly.locationTypes.office') },
