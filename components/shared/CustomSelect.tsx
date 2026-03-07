@@ -179,7 +179,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   };
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative min-w-0 ${className}`} ref={containerRef}>
       {label && (
         <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
           {label}
@@ -208,7 +208,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             onClose?.();
           }
         }}
-        className={`w-full flex items-center justify-between rounded-xl focus:ring-2 focus:ring-praetor outline-none text-left transition-all
+        className={`w-full min-w-0 flex items-center justify-between rounded-xl focus:ring-2 focus:ring-praetor outline-none text-left transition-all
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-300'}
           ${isOpen ? 'ring-2 ring-praetor border-praetor' : ''}
           bg-slate-50 border border-slate-200 px-3
@@ -235,10 +235,14 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               ))}
             </div>
           ) : (
-            <Tooltip label={tooltipLabel} disabled={!tooltipLabel}>
+            <Tooltip
+              label={tooltipLabel}
+              disabled={!tooltipLabel}
+              wrapperClassName="w-full min-w-0"
+            >
               {() => (
                 <span
-                  className={`truncate block ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
+                  className={`block w-full truncate ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
                 >
                   {buttonLabel}
                 </span>
