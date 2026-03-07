@@ -30,7 +30,10 @@
       "suppliers_all": "Fornitori (Tutti)"
     },
     "sales": {
-      "client_quotes": "Preventivi Clienti"
+      "client_quotes": "Preventivi Clienti",
+      "client_offers": "Offerte Clienti",
+      "supplier_quotes": "Preventivi Fornitori",
+      "supplier_offers": "Offerte Fornitori"
     },
     "catalog": {
       "internal_listing": "Listino Interno",
@@ -39,7 +42,9 @@
     },
     "accounting": {
       "clients_orders": "Ordini Clienti",
-      "clients_invoices": "Fatture Clienti"
+      "clients_invoices": "Fatture Clienti",
+      "supplier_orders": "Ordini Fornitori",
+      "supplier_invoices": "Fatture Fornitori"
     },
     "finances": {
       "payments": "Pagamenti",
@@ -56,7 +61,8 @@
     },
     "hr": {
       "internal": "Interni",
-      "external": "Esterni"
+      "external": "Esterni",
+      "costs": "Costi"
     },
     "reports": {
       "ai_reporting": "Reportistica IA"
