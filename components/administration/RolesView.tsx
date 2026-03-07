@@ -3,11 +3,13 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Role } from '../../types';
 import {
+  ALWAYS_GRANTED_MODULES,
   buildPermission,
   formatPermissionLabel,
   hasPermission,
   PERMISSION_DEFINITIONS,
   type PermissionAction,
+  ROLE_EDITOR_EXCLUDED_MODULES,
 } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import Modal from '../shared/Modal';
@@ -46,9 +48,6 @@ const MODULE_ICONS: Record<string, string> = {
   notifications: 'fa-bell',
 };
 
-const ALWAYS_GRANTED_MODULES = ['docs', 'settings', 'notifications'];
-const ADMINISTRATION_MODULE = 'administration';
-const ROLE_EDITOR_EXCLUDED_MODULES = [...ALWAYS_GRANTED_MODULES, ADMINISTRATION_MODULE];
 const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
   ALWAYS_GRANTED_MODULES.includes(def.module),
 ).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));

@@ -17,6 +17,10 @@ export type PermissionDefinition = {
 };
 
 const getModuleId = (resource: string) => resource.split('.')[0];
+const ADMINISTRATION_MODULE = 'administration';
+
+export const ALWAYS_GRANTED_MODULES: string[] = ['docs', 'settings', 'notifications'];
+export const ROLE_EDITOR_EXCLUDED_MODULES = [...ALWAYS_GRANTED_MODULES, ADMINISTRATION_MODULE];
 
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets

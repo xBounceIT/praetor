@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "i18n:check": "node scripts/check-i18n-keys.mjs",
+    "i18n:check": "bun scripts/check-i18n-keys.mjs",
     "lint": "bun run i18n:check && biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

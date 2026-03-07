@@ -1,8 +1,9 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { PERMISSION_DEFINITIONS, ROLE_EDITOR_EXCLUDED_MODULES } from '../utils/permissions.ts';
 
 const ROOT_DIR = process.cwd();
 const SUPPORTED_LANGUAGES = ['en', 'it'];
@@ -161,10 +162,41 @@ const validateTranslations = (files, namespacesByLanguage) => {
   return errors;
 };
 
+const validateRoleEditorPermissionTranslations = (namespacesByLanguage) => {
+  const errors = [];
+  const roleEditorPermissionKeys = PERMISSION_DEFINITIONS.filter(
+    (definition) => !ROLE_EDITOR_EXCLUDED_MODULES.includes(definition.module),
+  ).map((definition) => `permissions.${definition.id}`);
+
+  for (const translationKey of roleEditorPermissionKeys) {
+    const missingLanguages = [];
+
+    for (const language of SUPPORTED_LANGUAGES) {
+      const administrationKeys = namespacesByLanguage.get(language)?.get('administration');
+      if (!administrationKeys?.has(translationKey)) {
+        missingLanguages.push(language);
+      }
+    }
+
+    if (missingLanguages.length > 0) {
+      errors.push({
+        kind: 'role-editor-permission',
+        key: `administration:${translationKey}`,
+        missingLanguages,
+      });
+    }
+  }
+
+  return errors;
+};
+
 const main = () => {
   const namespacesByLanguage = loadLocaleNamespaces();
   const files = collectSourceFiles(ROOT_DIR);
-  const errors = validateTranslations(files, namespacesByLanguage);
+  const errors = [
+    ...validateTranslations(files, namespacesByLanguage),
+    ...validateRoleEditorPermissionTranslations(namespacesByLanguage),
+  ];
 
   if (errors.length === 0) {
     console.log('i18n check passed: no missing translation keys.');
@@ -172,17 +204,24 @@ const main = () => {
   }
 
   errors.sort((left, right) => {
-    if (left.filePath !== right.filePath) {
-      return left.filePath.localeCompare(right.filePath);
+    if ((left.filePath ?? '') !== (right.filePath ?? '')) {
+      return (left.filePath ?? '').localeCompare(right.filePath ?? '');
     }
-    if (left.line !== right.line) {
-      return left.line - right.line;
+    if ((left.line ?? 0) !== (right.line ?? 0)) {
+      return (left.line ?? 0) - (right.line ?? 0);
     }
     return left.key.localeCompare(right.key);
   });
 
   console.error(`i18n check failed: ${errors.length} missing translation reference(s).`);
   for (const error of errors) {
+    if (error.kind === 'role-editor-permission') {
+      console.error(
+        `- role-editor permissions -> ${error.key} missing [${error.missingLanguages.join(', ')}]`,
+      );
+      continue;
+    }
+
     const relativePath = path.relative(ROOT_DIR, error.filePath);
     console.error(
       `- ${relativePath}:${error.line} -> ${error.key} missing [${error.missingLanguages.join(', ')}]`,
