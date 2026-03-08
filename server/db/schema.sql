@@ -1098,13 +1098,31 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     id VARCHAR(50) PRIMARY KEY,
     invoice_id VARCHAR(50) NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE SET NULL,
+    special_bid_id VARCHAR(50),
     description VARCHAR(255) NOT NULL,
+    unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit',
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
     tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
+ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit';
+
+UPDATE invoice_items ii
+SET unit_of_measure = COALESCE(p.cost_unit, 'unit')
+FROM products p
+WHERE ii.product_id = p.id
+  AND (ii.unit_of_measure IS NULL OR ii.unit_of_measure = '' OR ii.unit_of_measure = 'unit');
+
+UPDATE invoice_items
+SET unit_of_measure = 'unit'
+WHERE unit_of_measure IS NULL OR unit_of_measure = '';
+
+ALTER TABLE invoice_items ALTER COLUMN unit_of_measure SET DEFAULT 'unit';
+ALTER TABLE invoice_items ALTER COLUMN unit_of_measure SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
 
