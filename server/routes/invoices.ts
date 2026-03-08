@@ -187,44 +187,69 @@ const validateAndNormalizeItems = async (
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
     const productIdResult = optionalNonEmptyString(item.productId, `items[${i}].productId`);
-    if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
+    if (!productIdResult.ok) {
+      badRequest(reply, productIdResult.message);
+      return null;
+    }
 
     const specialBidIdResult = optionalNonEmptyString(
       item.specialBidId,
       `items[${i}].specialBidId`,
     );
-    if (!specialBidIdResult.ok) return badRequest(reply, specialBidIdResult.message);
+    if (!specialBidIdResult.ok) {
+      badRequest(reply, specialBidIdResult.message);
+      return null;
+    }
 
     const descriptionResult = requireNonEmptyString(item.description, `items[${i}].description`);
-    if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
+    if (!descriptionResult.ok) {
+      badRequest(reply, descriptionResult.message);
+      return null;
+    }
 
     const unitOfMeasureResult = validateEnum(
       item.unitOfMeasure,
       [...UNIT_OF_MEASURE_VALUES],
       `items[${i}].unitOfMeasure`,
     );
-    if (!unitOfMeasureResult.ok) return badRequest(reply, unitOfMeasureResult.message);
+    if (!unitOfMeasureResult.ok) {
+      badRequest(reply, unitOfMeasureResult.message);
+      return null;
+    }
 
     const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
-    if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
+    if (!quantityResult.ok) {
+      badRequest(reply, quantityResult.message);
+      return null;
+    }
 
     const unitPriceResult = parseLocalizedNonNegativeNumber(
       item.unitPrice,
       `items[${i}].unitPrice`,
     );
-    if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+    if (!unitPriceResult.ok) {
+      badRequest(reply, unitPriceResult.message);
+      return null;
+    }
 
     const taxRateResult = parseLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
-    if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+    if (!taxRateResult.ok) {
+      badRequest(reply, taxRateResult.message);
+      return null;
+    }
 
     const discountResult = optionalLocalizedNonNegativeNumber(
       item.discount,
       `items[${i}].discount`,
     );
-    if (!discountResult.ok) return badRequest(reply, discountResult.message);
+    if (!discountResult.ok) {
+      badRequest(reply, discountResult.message);
+      return null;
+    }
 
     if (specialBidIdResult.value && !productIdResult.value) {
-      return badRequest(reply, `items[${i}].productId is required when specialBidId is provided`);
+      badRequest(reply, `items[${i}].productId is required when specialBidId is provided`);
+      return null;
     }
 
     if (specialBidIdResult.value) {
@@ -236,15 +261,18 @@ const validateAndNormalizeItems = async (
       );
 
       if (bidResult.rows.length === 0) {
-        return badRequest(reply, `items[${i}].specialBidId is invalid`);
+        badRequest(reply, `items[${i}].specialBidId is invalid`);
+        return null;
       }
 
       const bid = bidResult.rows[0] as { productId: string; clientId: string };
       if (bid.productId !== productIdResult.value) {
-        return badRequest(reply, `items[${i}].specialBidId does not match productId`);
+        badRequest(reply, `items[${i}].specialBidId does not match productId`);
+        return null;
       }
       if (effectiveClientId && bid.clientId !== effectiveClientId) {
-        return badRequest(reply, `items[${i}].specialBidId does not match clientId`);
+        badRequest(reply, `items[${i}].specialBidId does not match clientId`);
+        return null;
       }
     }
 
@@ -429,7 +457,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
       const normalizedItems = await validateAndNormalizeItems(items, reply, clientIdResult.value);
-      if (!Array.isArray(normalizedItems)) return normalizedItems;
+      if (!normalizedItems) return;
 
       const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
       if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
@@ -713,7 +741,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? clientIdValue
             : existingClientId || '';
         const normalizedItems = await validateAndNormalizeItems(items, reply, effectiveClientId);
-        if (!Array.isArray(normalizedItems)) return normalizedItems;
+        if (!normalizedItems) return;
         // Delete existing items
         await query('DELETE FROM invoice_items WHERE invoice_id = $1', [idResult.value]);
 
