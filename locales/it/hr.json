@@ -151,6 +151,7 @@
     "addEmployee": "Aggiungi Collaboratore",
     "editEmployee": "Modifica Collaboratore",
     "name": "Nome",
+    "type": "Tipo",
     "costPerHour": "Costo Per Ora",
     "status": "Stato",
     "actions": "Azioni",

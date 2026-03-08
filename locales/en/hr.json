@@ -151,6 +151,7 @@
     "addEmployee": "Add Contractor",
     "editEmployee": "Edit Contractor",
     "name": "Name",
+    "type": "Type",
     "costPerHour": "Cost Per Hour",
     "status": "Status",
     "actions": "Actions",

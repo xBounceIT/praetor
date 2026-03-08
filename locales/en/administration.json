@@ -30,7 +30,10 @@
       "suppliers_all": "Suppliers (All)"
     },
     "sales": {
-      "client_quotes": "Client Quotes"
+      "client_quotes": "Client Quotes",
+      "client_offers": "Client Offers",
+      "supplier_quotes": "Supplier Quotes",
+      "supplier_offers": "Supplier Offers"
     },
     "catalog": {
       "internal_listing": "Internal Listing",
@@ -39,7 +42,9 @@
     },
     "accounting": {
       "clients_orders": "Client Orders",
-      "clients_invoices": "Client Invoices"
+      "clients_invoices": "Client Invoices",
+      "supplier_orders": "Supplier Orders",
+      "supplier_invoices": "Supplier Invoices"
     },
     "projects": {
       "manage": "Projects",
@@ -52,7 +57,8 @@
     },
     "hr": {
       "internal": "Internal",
-      "external": "External"
+      "external": "External",
+      "costs": "Costs"
     },
     "reports": {
       "ai_reporting": "AI Reporting"

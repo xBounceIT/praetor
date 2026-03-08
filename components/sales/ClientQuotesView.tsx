@@ -632,6 +632,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.quoteCodeColumn'),
         accessorKey: 'quoteCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => (
           <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
         ),
@@ -640,12 +642,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         header: t('sales:clientQuotes.totalColumn'),
         id: 'total',
         accessorFn: (row) => calculateQuoteTotals(row.items, row.discount).total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const { total } = calculateQuoteTotals(row.items, row.discount);
           const history = isHistoryRow(row);
           return (
-            <span className={`text-sm font-bold ${history ? 'text-slate-400' : 'text-slate-700'}`}>
+            <span
+              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+            >
               {total.toFixed(2)} {currency}
             </span>
           );
@@ -654,6 +660,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.paymentTermsColumn'),
         accessorKey: 'paymentTerms',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
@@ -670,6 +678,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.expirationColumn'),
         accessorKey: 'expirationDate',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const history = isHistoryRow(row);
@@ -692,6 +702,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {
         header: t('sales:clientQuotes.statusColumn'),
         accessorKey: 'status',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const history = isHistoryRow(row);
@@ -709,6 +721,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         header: t('sales:clientQuotes.actionsColumn'),
         id: 'actions',
         align: 'right',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
@@ -1096,8 +1110,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 grid grid-cols-12 gap-3">
+                <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('crm:externalListing.title')}
                     </div>
@@ -1146,10 +1160,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
                     return (
-                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
-                        <div className="flex gap-3 items-center">
-                          <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-3">
+                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-3">
+                        <div className="lg:hidden flex items-start gap-3">
+                          <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="min-w-0">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('crm:externalListing.title')}
+                              </div>
                               <CustomSelect
                                 options={[
                                   { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
@@ -1170,10 +1187,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 displayValue={getBidDisplayValue(item.specialBidId)}
                                 searchable={true}
                                 disabled={isReadOnly}
+                                className="min-w-0"
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="col-span-3">
+                            <div className="min-w-0">
+                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                {t('sales:clientQuotes.productsServices')}
+                              </div>
                               <CustomSelect
                                 options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
                                 value={item.productId}
@@ -1183,6 +1204,121 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
                                 disabled={isReadOnly}
+                                className="min-w-0"
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeProductRow(index)}
+                            disabled={isReadOnly}
+                            className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 lg:hidden">
+                          <div>
+                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:clientQuotes.qty')}
+                            </div>
+                            <ValidatedNumberInput
+                              step="0.01"
+                              min="0"
+                              required
+                              placeholder={t('sales:clientQuotes.qty')}
+                              value={item.quantity}
+                              onValueChange={(value) => {
+                                const parsed = parseFloat(value);
+                                updateProductRow(
+                                  index,
+                                  'quantity',
+                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                );
+                              }}
+                              disabled={isReadOnly}
+                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('crm:internalListing.cost')}
+                            </div>
+                            {selectedBid && (
+                              <span className="inline-flex px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
+                                {t('sales:clientQuotes.bidBadge')}
+                              </span>
+                            )}
+                            <div className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                              {lineCost.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              MOL (%)
+                            </div>
+                            <div className="text-xs font-bold text-slate-600">
+                              {molPercentage.toFixed(1)}%
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:clientQuotes.marginLabel')}
+                            </div>
+                            <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
+                              {lineMargin.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1 col-span-2 md:col-span-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('crm:internalListing.salePrice')}
+                            </div>
+                            <div
+                              className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                            >
+                              {lineSalePrice.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="hidden lg:flex gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-3 min-w-0">
+                              <CustomSelect
+                                options={[
+                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
+                                  ...clientSpecialBids.map((b) => ({
+                                    id: b.id,
+                                    name: `${b.clientName} · ${b.productName}`,
+                                  })),
+                                ]}
+                                value={item.specialBidId || 'none'}
+                                onChange={(val) =>
+                                  updateProductRow(
+                                    index,
+                                    'specialBidId',
+                                    val === 'none' ? '' : (val as string),
+                                  )
+                                }
+                                placeholder={t('sales:clientQuotes.selectBid')}
+                                displayValue={getBidDisplayValue(item.specialBidId)}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                className="min-w-0"
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-3 min-w-0">
+                              <CustomSelect
+                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
+                                value={item.productId}
+                                onChange={(val) =>
+                                  updateProductRow(index, 'productId', val as string)
+                                }
+                                placeholder={t('sales:clientQuotes.selectProduct')}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                className="min-w-0"
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
                             </div>
@@ -1211,7 +1347,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <span className="text-xs font-bold text-slate-600">
+                              <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
                                 {lineCost.toFixed(2)} {currency}
                               </span>
                             </div>
@@ -1221,13 +1357,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span className="text-xs font-bold text-emerald-600">
+                              <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">
                                 {lineMargin.toFixed(2)} {currency}
                               </span>
                             </div>
                             <div className="col-span-2 flex items-center justify-center">
                               <span
-                                className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                               >
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
@@ -1283,7 +1419,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         <span className="text-sm font-bold text-slate-500">
                           {t('sales:clientQuotes.taxableAmount')}:
                         </span>
-                        <span className="text-sm font-black text-slate-800">
+                        <span className="text-sm font-black text-slate-800 whitespace-nowrap">
                           {subtotal.toFixed(2)} {currency}
                         </span>
                       </div>
@@ -1295,7 +1431,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
                             {discountValue}%):
                           </span>
-                          <span className="text-sm font-black text-amber-600">
+                          <span className="text-sm font-black text-amber-600 whitespace-nowrap">
                             -{discountAmount.toFixed(2)} {currency}
                           </span>
                         </div>
@@ -1307,7 +1443,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           <span className="text-sm font-bold text-slate-500">
                             {t('sales:clientQuotes.ivaTax', { rate })}:
                           </span>
-                          <span className="text-sm font-black text-slate-800">
+                          <span className="text-sm font-black text-slate-800 whitespace-nowrap">
                             {amount.toFixed(2)} {currency}
                           </span>
                         </div>
@@ -1319,7 +1455,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           {t('sales:clientQuotes.marginLabel')} (
                           {(marginPercentage || 0).toFixed(1)}%):
                         </span>
-                        <span className="text-sm font-black text-emerald-600">
+                        <span className="text-sm font-black text-emerald-600 whitespace-nowrap">
                           {margin.toFixed(2)} {currency}
                         </span>
                       </div>
@@ -1329,7 +1465,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
                           {t('sales:clientQuotes.totalLabel')}:
                         </span>
-                        <span className="text-3xl font-black text-praetor">
+                        <span className="inline-flex items-baseline whitespace-nowrap text-3xl font-black text-praetor">
                           {total.toFixed(2)}{' '}
                           <span className="text-lg text-slate-400 font-bold">{currency}</span>
                         </span>
