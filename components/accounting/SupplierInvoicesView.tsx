@@ -498,6 +498,20 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               )}
             </div>
 
+            <div className="space-y-1.5">
+              <label className="ml-1 text-xs font-bold text-slate-500">
+                {t('accounting:supplierInvoices.notes')}
+              </label>
+              <textarea
+                rows={3}
+                value={formData.notes || ''}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                }
+                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
+              />
+            </div>
+
             <div className="space-y-4">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
@@ -534,20 +548,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       }))
                     }
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.notes')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.notes || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                    }
-                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
                   />
                 </div>
               </div>

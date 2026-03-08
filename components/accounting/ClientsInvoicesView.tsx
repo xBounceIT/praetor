@@ -930,6 +930,19 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               </div>
             </div>
 
+            <div className="pt-6">
+              <label className="ml-1 text-xs font-bold text-slate-500">
+                {t('accounting:clientsInvoices.notes')}
+              </label>
+              <textarea
+                rows={2}
+                value={formData.notes || ''}
+                onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+              />
+            </div>
+
             <div className="flex flex-col justify-end gap-8 border-t border-slate-100 pt-6 md:flex-row">
               <div className="w-full space-y-3 md:w-1/3">
                 <div className="flex justify-between">
@@ -975,19 +988,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   </span>
                 </div>
               </div>
-            </div>
-
-            <div className="pt-6">
-              <label className="ml-1 text-xs font-bold text-slate-500">
-                {t('accounting:clientsInvoices.notes')}
-              </label>
-              <textarea
-                rows={2}
-                value={formData.notes || ''}
-                onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
-                placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
-              />
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
