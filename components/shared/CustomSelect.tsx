@@ -208,7 +208,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             onClose?.();
           }
         }}
-        className={`w-full flex items-center justify-between rounded-xl focus:ring-2 focus:ring-praetor outline-none text-left transition-all
+        className={`w-full flex items-center justify-between rounded-xl focus:ring-2 focus:ring-praetor outline-none text-left transition-all overflow-hidden
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-300'}
           ${isOpen ? 'ring-2 ring-praetor border-praetor' : ''}
           bg-slate-50 border border-slate-200 px-3
