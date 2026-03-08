@@ -772,7 +772,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       </div>
 
       <StandardTable<SupplierOffer>
-        title={t('sales:supplierOffers.activeOffers', { defaultValue: 'Active Offers' })}
+        title={t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })}
         data={offers}
         columns={columns}
         defaultRowsPerPage={5}

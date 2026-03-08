@@ -992,7 +992,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       </div>
 
       <StandardTable<ClientOffer>
-        title={t('sales:clientOffers.activeOffers', { defaultValue: 'Active Offers' })}
+        title={t('sales:clientOffers.activeOffers', { defaultValue: 'Customers Offers' })}
         data={filteredOffers}
         columns={columns}
         defaultRowsPerPage={5}

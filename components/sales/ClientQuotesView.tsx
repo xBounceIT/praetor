@@ -26,6 +26,7 @@ export interface ClientQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
   onCreateOffer?: (quote: Quote) => void;
+  onViewOffer?: (offerId: string) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
@@ -46,6 +47,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
+  onViewOffer,
   quoteIdsWithOffers,
   quoteOfferStatuses,
   currency,
@@ -783,6 +785,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </button>
                 )}
               </Tooltip>
+              {row.linkedOfferId && onViewOffer && (
+                <Tooltip label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewOffer(row.linkedOfferId!);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
               {row.status === 'accepted' && onCreateOffer && (
                 <Tooltip label={createOfferTitle}>
                   {() => (
@@ -924,6 +941,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       calculateQuoteTotals,
       getStatusLabel,
       onCreateOffer,
+      onViewOffer,
       onUpdateQuote,
       confirmDelete,
       openEditModal,

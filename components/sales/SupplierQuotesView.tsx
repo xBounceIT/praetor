@@ -2,11 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
-import {
-  formatDateOnlyForLocale,
-  getLocalDateString,
-  normalizeDateOnlyString,
-} from '../../utils/date';
+import { getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -55,6 +51,7 @@ export interface SupplierQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
+  onViewOffer?: (offerId: string) => void;
   currency: string;
 }
 
@@ -66,6 +63,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
+  onViewOffer,
   currency,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
@@ -229,20 +227,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
         accessorKey: 'supplierName',
-        cell: ({ row }) => (
-          <div>
-            <div className="font-bold text-slate-800">{row.supplierName}</div>
-            <div className="text-xs text-slate-400">
-              {row.linkedOfferId
-                ? `${t('sales:supplierQuotes.linkedOffer', {
-                    defaultValue: 'Linked to offer',
-                  })} ${row.linkedOfferId}`
-                : row.expirationDate
-                  ? formatDateOnlyForLocale(row.expirationDate)
-                  : ''}
-            </div>
-          </div>
-        ),
+        cell: ({ row }) => <div className="font-bold text-slate-800">{row.supplierName}</div>,
       },
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
@@ -276,6 +261,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex justify-end gap-2">
+            {row.linkedOfferId && onViewOffer && (
+              <Tooltip label={t('sales:supplierQuotes.viewOffer', { defaultValue: 'View offer' })}>
+                {() => (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onViewOffer(row.linkedOfferId!);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-link"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
             <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
               {() => (
                 <button
@@ -379,7 +379,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         ),
       },
     ],
-    [currency, getStatusLabel, onCreateOffer, onUpdateQuote, openEditModal, products, t],
+    [
+      currency,
+      getStatusLabel,
+      onCreateOffer,
+      onUpdateQuote,
+      onViewOffer,
+      openEditModal,
+      products,
+      t,
+    ],
   );
 
   const handleSubmit = async (event: React.FormEvent) => {
