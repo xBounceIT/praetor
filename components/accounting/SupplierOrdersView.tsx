@@ -292,7 +292,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             <div className="flex justify-end gap-2">
               <Tooltip
                 label={
-                  isDraft ? t('accounting:supplierOrders.editOrder') : t('common:buttons.view')
+                  isDraft
+                    ? t('accounting:supplierOrders.editOrder')
+                    : t('accounting:supplierOrders.viewOrder')
                 }
               >
                 {() => (

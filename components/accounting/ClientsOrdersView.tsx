@@ -491,7 +491,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               label={
                 row.status === 'draft'
                   ? t('accounting:clientsOrders.editOrder')
-                  : t('sales:clientQuotes.viewQuote')
+                  : t('accounting:clientsOrders.viewOrder')
               }
             >
               {() => (
