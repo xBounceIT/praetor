@@ -36,7 +36,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   onDeleteInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common']);
+  const { t } = useTranslation(['accounting', 'sales', 'common']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -124,7 +124,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     if (!formData.dueDate)
       newErrors.dueDate = t('accounting:clientsInvoices.dueDate') + ' is required';
     if (!formData.items || formData.items.length === 0)
-      newErrors.items = t('crm:quotes.errors.itemsRequired');
+      newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -268,6 +268,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('accounting:clientsInvoices.invoiceNumber'),
         accessorFn: (row: Invoice) => row.invoiceNumber,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
         ),
@@ -282,6 +284,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('common:labels.date'),
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.issueDate),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
@@ -289,6 +293,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('accounting:clientsInvoices.dueDate'),
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.dueDate),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
         ),
@@ -296,6 +302,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('common:labels.amount'),
         accessorFn: (row: Invoice) => row.total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-700">
             {(row.total ?? 0).toFixed(2)} {currency}
@@ -306,6 +314,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('accounting:clientsInvoices.balance'),
         accessorFn: (row: Invoice) => row.total - row.amountPaid,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => {
           const balance = row.total - row.amountPaid;
           return (
@@ -320,6 +330,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         header: t('accounting:clientsInvoices.status'),
         accessorFn: (row: Invoice) =>
           statusOptions.find((opt) => opt.id === row.status)?.name || row.status,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: Invoice }) => (
           <StatusBadge
             type={row.status as StatusType}
@@ -330,6 +342,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('common:common.more'),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,
@@ -669,7 +683,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
             <div className="pt-6">
               <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('accounting:clientsInvoices.notes')}
+                {t('common:labels.notes')}
               </label>
               <textarea
                 rows={2}
