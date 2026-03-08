@@ -13,6 +13,7 @@ import {
   parseLocalizedNonNegativeNumber,
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
+  validateEnum,
 } from '../utils/validation.ts';
 
 interface DatabaseError extends Error {
@@ -20,6 +21,8 @@ interface DatabaseError extends Error {
   constraint?: string;
   detail?: string;
 }
+
+const UNIT_OF_MEASURE_VALUES = ['unit', 'hours'] as const;
 
 const idParamSchema = {
   type: 'object',
@@ -35,13 +38,24 @@ const invoiceItemSchema = {
     id: { type: 'string' },
     invoiceId: { type: 'string' },
     productId: { type: ['string', 'null'] },
+    specialBidId: { type: ['string', 'null'] },
     description: { type: 'string' },
+    unitOfMeasure: { type: 'string', enum: [...UNIT_OF_MEASURE_VALUES] },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     taxRate: { type: 'number' },
     discount: { type: 'number' },
   },
-  required: ['id', 'invoiceId', 'description', 'quantity', 'unitPrice', 'taxRate', 'discount'],
+  required: [
+    'id',
+    'invoiceId',
+    'description',
+    'unitOfMeasure',
+    'quantity',
+    'unitPrice',
+    'taxRate',
+    'discount',
+  ],
 } as const;
 
 const invoiceSchema = {
@@ -86,13 +100,15 @@ const invoiceItemBodySchema = {
   type: 'object',
   properties: {
     productId: { type: 'string' },
+    specialBidId: { type: ['string', 'null'] },
     description: { type: 'string' },
+    unitOfMeasure: { type: 'string', enum: [...UNIT_OF_MEASURE_VALUES] },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     taxRate: { type: 'number' },
     discount: { type: 'number' },
   },
-  required: ['description', 'quantity', 'unitPrice', 'taxRate'],
+  required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice', 'taxRate'],
 } as const;
 
 const invoiceCreateBodySchema = {
@@ -143,11 +159,110 @@ const toRequiredDateOnly = (value: unknown, fieldName: string) => {
 
 const formatInvoiceItem = (item: Record<string, unknown>) => ({
   ...item,
+  specialBidId:
+    item.specialBidId === undefined || item.specialBidId === null
+      ? null
+      : String(item.specialBidId),
+  unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
   quantity: parseFloat(String(item.quantity ?? 0)),
   unitPrice: parseFloat(String(item.unitPrice ?? 0)),
   taxRate: parseFloat(String(item.taxRate ?? 0)),
   discount: parseFloat(String(item.discount ?? 0)),
 });
+
+const getInvoiceClientId = async (invoiceId: string) => {
+  const result = await query(`SELECT client_id as "clientId" FROM invoices WHERE id = $1`, [
+    invoiceId,
+  ]);
+  return (result.rows[0]?.clientId as string | undefined) ?? null;
+};
+
+const validateAndNormalizeItems = async (
+  items: unknown[],
+  reply: FastifyReply,
+  effectiveClientId: string,
+) => {
+  const normalizedItems = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] as Record<string, unknown>;
+    const productIdResult = optionalNonEmptyString(item.productId, `items[${i}].productId`);
+    if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
+
+    const specialBidIdResult = optionalNonEmptyString(
+      item.specialBidId,
+      `items[${i}].specialBidId`,
+    );
+    if (!specialBidIdResult.ok) return badRequest(reply, specialBidIdResult.message);
+
+    const descriptionResult = requireNonEmptyString(item.description, `items[${i}].description`);
+    if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
+
+    const unitOfMeasureResult = validateEnum(
+      item.unitOfMeasure,
+      [...UNIT_OF_MEASURE_VALUES],
+      `items[${i}].unitOfMeasure`,
+    );
+    if (!unitOfMeasureResult.ok) return badRequest(reply, unitOfMeasureResult.message);
+
+    const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
+    if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
+
+    const unitPriceResult = parseLocalizedNonNegativeNumber(
+      item.unitPrice,
+      `items[${i}].unitPrice`,
+    );
+    if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
+
+    const taxRateResult = parseLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
+    if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
+
+    const discountResult = optionalLocalizedNonNegativeNumber(
+      item.discount,
+      `items[${i}].discount`,
+    );
+    if (!discountResult.ok) return badRequest(reply, discountResult.message);
+
+    if (specialBidIdResult.value && !productIdResult.value) {
+      return badRequest(reply, `items[${i}].productId is required when specialBidId is provided`);
+    }
+
+    if (specialBidIdResult.value) {
+      const bidResult = await query(
+        `SELECT product_id as "productId", client_id as "clientId"
+         FROM special_bids
+         WHERE id = $1`,
+        [specialBidIdResult.value],
+      );
+
+      if (bidResult.rows.length === 0) {
+        return badRequest(reply, `items[${i}].specialBidId is invalid`);
+      }
+
+      const bid = bidResult.rows[0] as { productId: string; clientId: string };
+      if (bid.productId !== productIdResult.value) {
+        return badRequest(reply, `items[${i}].specialBidId does not match productId`);
+      }
+      if (effectiveClientId && bid.clientId !== effectiveClientId) {
+        return badRequest(reply, `items[${i}].specialBidId does not match clientId`);
+      }
+    }
+
+    normalizedItems.push({
+      ...item,
+      productId: productIdResult.value,
+      specialBidId: specialBidIdResult.value,
+      description: descriptionResult.value,
+      unitOfMeasure: unitOfMeasureResult.value,
+      quantity: quantityResult.value,
+      unitPrice: unitPriceResult.value,
+      taxRate: taxRateResult.value,
+      discount: discountResult.value || 0,
+    });
+  }
+
+  return normalizedItems;
+};
 
 const formatInvoiceResponse = (
   invoice: Record<string, unknown>,
@@ -213,7 +328,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 id,
                 invoice_id as "invoiceId",
                 product_id as "productId",
+                special_bid_id as "specialBidId",
                 description,
+                unit_of_measure as "unitOfMeasure",
                 quantity,
                 unit_price as "unitPrice",
                 tax_rate as "taxRate",
@@ -311,38 +428,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
-
-      const normalizedItems = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const descriptionResult = requireNonEmptyString(
-          item.description,
-          `items[${i}].description`,
-        );
-        if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
-        const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
-        if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-        const unitPriceResult = parseLocalizedNonNegativeNumber(
-          item.unitPrice,
-          `items[${i}].unitPrice`,
-        );
-        if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-        const taxRateResult = parseLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
-        if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-        const discountResult = optionalLocalizedNonNegativeNumber(
-          item.discount,
-          `items[${i}].discount`,
-        );
-        if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        normalizedItems.push({
-          ...item,
-          description: descriptionResult.value,
-          quantity: quantityResult.value,
-          unitPrice: unitPriceResult.value,
-          taxRate: taxRateResult.value,
-          discount: discountResult.value || 0,
-        });
-      }
+      const normalizedItems = await validateAndNormalizeItems(items, reply, clientIdResult.value);
+      if (!Array.isArray(normalizedItems)) return normalizedItems;
 
       const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
       if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
@@ -404,14 +491,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const itemResult = await query(
           `INSERT INTO invoice_items (
-                        id, invoice_id, product_id, description, quantity, unit_price, tax_rate, discount
+                        id, invoice_id, product_id, special_bid_id, description, unit_of_measure, quantity, unit_price, tax_rate, discount
                     ) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
                     RETURNING 
                         id,
                         invoice_id as "invoiceId",
                         product_id as "productId",
+                        special_bid_id as "specialBidId",
                         description,
+                        unit_of_measure as "unitOfMeasure",
                         quantity,
                         unit_price as "unitPrice",
                         tax_rate as "taxRate",
@@ -420,7 +509,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             itemId,
             invoiceId,
             item.productId || null,
+            item.specialBidId || null,
             item.description,
+            item.unitOfMeasure,
             item.quantity,
             item.unitPrice,
             item.taxRate,
@@ -484,6 +575,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const existingClientId = items ? await getInvoiceClientId(idResult.value) : null;
+      if (items && !existingClientId) {
+        return reply.code(404).send({ error: 'Invoice not found' });
+      }
 
       let clientIdValue = clientId;
       if (clientId !== undefined) {
@@ -612,43 +708,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        const normalizedItems = [];
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          const descriptionResult = requireNonEmptyString(
-            item.description,
-            `items[${i}].description`,
-          );
-          if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
-          const quantityResult = parseLocalizedPositiveNumber(
-            item.quantity,
-            `items[${i}].quantity`,
-          );
-          if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-          const unitPriceResult = parseLocalizedNonNegativeNumber(
-            item.unitPrice,
-            `items[${i}].unitPrice`,
-          );
-          if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-          const taxRateResult = parseLocalizedNonNegativeNumber(
-            item.taxRate,
-            `items[${i}].taxRate`,
-          );
-          if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-          const discountResult = optionalLocalizedNonNegativeNumber(
-            item.discount,
-            `items[${i}].discount`,
-          );
-          if (!discountResult.ok) return badRequest(reply, discountResult.message);
-          normalizedItems.push({
-            ...item,
-            description: descriptionResult.value,
-            quantity: quantityResult.value,
-            unitPrice: unitPriceResult.value,
-            taxRate: taxRateResult.value,
-            discount: discountResult.value || 0,
-          });
-        }
+        const effectiveClientId =
+          typeof clientIdValue === 'string' && clientIdValue.trim().length > 0
+            ? clientIdValue
+            : existingClientId || '';
+        const normalizedItems = await validateAndNormalizeItems(items, reply, effectiveClientId);
+        if (!Array.isArray(normalizedItems)) return normalizedItems;
         // Delete existing items
         await query('DELETE FROM invoice_items WHERE invoice_id = $1', [idResult.value]);
 
@@ -657,14 +722,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
           const itemResult = await query(
             `INSERT INTO invoice_items (
-                            id, invoice_id, product_id, description, quantity, unit_price, tax_rate, discount
+                            id, invoice_id, product_id, special_bid_id, description, unit_of_measure, quantity, unit_price, tax_rate, discount
                         ) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
                         RETURNING 
                             id,
                             invoice_id as "invoiceId",
                             product_id as "productId",
+                            special_bid_id as "specialBidId",
                             description,
+                            unit_of_measure as "unitOfMeasure",
                             quantity,
                             unit_price as "unitPrice",
                             tax_rate as "taxRate",
@@ -673,7 +740,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               itemId,
               idResult.value,
               item.productId || null,
+              item.specialBidId || null,
               item.description,
+              item.unitOfMeasure,
               item.quantity,
               item.unitPrice,
               item.taxRate,
@@ -689,7 +758,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         id,
                         invoice_id as "invoiceId",
                         product_id as "productId",
+                        special_bid_id as "specialBidId",
                         description,
+                        unit_of_measure as "unitOfMeasure",
                         quantity,
                         unit_price as "unitPrice",
                         tax_rate as "taxRate",

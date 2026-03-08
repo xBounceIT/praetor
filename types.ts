@@ -428,7 +428,9 @@ export interface InvoiceItem {
   id: string;
   invoiceId: string;
   productId?: string;
+  specialBidId?: string;
   description: string;
+  unitOfMeasure: 'unit' | 'hours';
   quantity: number;
   unitPrice: number;
   taxRate: number;

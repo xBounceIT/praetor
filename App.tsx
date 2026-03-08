@@ -3194,6 +3194,7 @@ const App: React.FC = () => {
                   invoices={invoices}
                   clients={clients}
                   products={products}
+                  specialBids={specialBids}
                   clientsOrders={clientsOrders}
                   onAddInvoice={addInvoice}
                   onUpdateInvoice={handleUpdateInvoice}

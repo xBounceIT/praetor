@@ -169,6 +169,8 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
 
 export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   ...item,
+  specialBidId: item.specialBidId ?? undefined,
+  unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
   taxRate: Number(item.taxRate || 0),
