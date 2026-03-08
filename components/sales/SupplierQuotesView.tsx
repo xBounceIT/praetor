@@ -2,11 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
-import {
-  formatDateOnlyForLocale,
-  getLocalDateString,
-  normalizeDateOnlyString,
-} from '../../utils/date';
+import { getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -55,6 +51,7 @@ export interface SupplierQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
+  onViewOffer?: (offerId: string) => void;
   currency: string;
 }
 
@@ -66,6 +63,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
+  onViewOffer,
   currency,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
@@ -118,12 +116,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   );
 
   const inputClassName =
-    'w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl ' +
-    'focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 ' +
-    'disabled:cursor-not-allowed';
+    'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
   const itemInputClassName =
-    'w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 ' +
-    'focus:ring-praetor outline-none disabled:opacity-50 disabled:cursor-not-allowed';
+    'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
 
   const openAddModal = useCallback(() => {
     setEditingQuote(null);
@@ -218,34 +213,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
-        header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
-        accessorKey: 'supplierName',
-        cell: ({ row }) => (
-          <div>
-            <div className="font-bold text-slate-800">{row.supplierName}</div>
-            <div className="text-xs text-slate-400">
-              {row.linkedOfferId
-                ? `${t('sales:supplierQuotes.linkedOffer', {
-                    defaultValue: 'Linked to offer',
-                  })} ${row.linkedOfferId}`
-                : row.expirationDate
-                  ? formatDateOnlyForLocale(row.expirationDate)
-                  : ''}
-            </div>
-          </div>
-        ),
-      },
-      {
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
         id: 'quoteCode',
         accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">
+          <span className="font-bold text-slate-700">
             {row.quoteCode || row.purchaseOrderNumber}
-          </div>
+          </span>
         ),
+      },
+      {
+        header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
+        accessorKey: 'supplierName',
+        cell: ({ row }) => <div className="font-bold text-slate-800">{row.supplierName}</div>,
       },
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
@@ -279,6 +261,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex justify-end gap-2">
+            {row.linkedOfferId && onViewOffer && (
+              <Tooltip label={t('sales:supplierQuotes.viewOffer', { defaultValue: 'View offer' })}>
+                {() => (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onViewOffer(row.linkedOfferId!);
+                    }}
+                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                  >
+                    <i className="fa-solid fa-link"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
             <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
               {() => (
                 <button
@@ -382,7 +379,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         ),
       },
     ],
-    [currency, getStatusLabel, onCreateOffer, onUpdateQuote, openEditModal, products, t],
+    [
+      currency,
+      getStatusLabel,
+      onCreateOffer,
+      onUpdateQuote,
+      onViewOffer,
+      openEditModal,
+      products,
+      t,
+    ],
   );
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -434,7 +440,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -458,7 +464,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -528,7 +534,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:supplierQuotes.quoteDetails', { defaultValue: 'Quote Details' })}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' })}
@@ -574,23 +580,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
                     }
                     className={inputClassName}
-                  />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.notes || ''}
-                    disabled={isReadOnly}
-                    placeholder={t('form:placeholderNotes', {
-                      defaultValue: 'Optional notes...',
-                    })}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                    }
-                    className={`${inputClassName} resize-none`}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -659,7 +648,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
                   {formData.items.map((item, index) => (
-                    <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-2">
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2"
+                    >
                       <div className="grid grid-cols-12 gap-3 items-center">
                         <div className="col-span-12 md:col-span-4">
                           <CustomSelect
@@ -732,32 +724,54 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
             </div>
 
-            {formData.items && formData.items.length > 0 && (
-              <div className="mt-4 flex flex-col items-end space-y-2 px-3">
-                <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
-                  <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
-                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}:
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes || ''}
+                  disabled={isReadOnly}
+                  placeholder={t('form:placeholderNotes', {
+                    defaultValue: 'Optional notes...',
+                  })}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                />
+              </div>
+
+              <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                </h4>
+                <div className="flex justify-between border-t border-slate-200 pt-3">
+                  <span className="text-lg font-black text-slate-800">
+                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                   </span>
-                  <span className="text-3xl font-black text-praetor">
-                    {totalAmount.toFixed(2)}{' '}
-                    <span className="text-lg text-slate-400 font-bold">{currency}</span>
+                  <span className="text-lg font-black text-praetor">
+                    {totalAmount.toFixed(2)} {currency}
                   </span>
                 </div>
               </div>
-            )}
+            </div>
 
-            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
               >
                 {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
               </button>
               {!isReadOnly && (
                 <button
                   type="submit"
-                  className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                  className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700"
                 >
                   {editingQuote
                     ? t('common:buttons.update', { defaultValue: 'Update' })
@@ -770,38 +784,32 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       </Modal>
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {quoteToDelete?.quoteCode}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button
-                onClick={async () => {
-                  if (!quoteToDelete) return;
-                  await onDeleteQuote(quoteToDelete.id);
-                  setIsDeleteConfirmOpen(false);
-                  setQuoteToDelete(null);
-                }}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete', { defaultValue: 'Delete' })}
-              </button>
-            </div>
+        <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+          </div>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
+          </h3>
+          <p className="text-sm text-slate-500">{quoteToDelete?.quoteCode}</p>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+            >
+              {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
+            </button>
+            <button
+              onClick={async () => {
+                if (!quoteToDelete) return;
+                await onDeleteQuote(quoteToDelete.id);
+                setIsDeleteConfirmOpen(false);
+                setQuoteToDelete(null);
+              }}
+              className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700"
+            >
+              {t('common:buttons.delete', { defaultValue: 'Delete' })}
+            </button>
           </div>
         </div>
       </Modal>

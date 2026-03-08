@@ -664,7 +664,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Insert quote items
         const createdItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
         for (const item of resolvedItems) {
-          const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -1032,7 +1032,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Insert new items
         for (const item of normalizedItems) {
-          const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)

@@ -138,7 +138,9 @@
   "supplierInvoices": {
     "title": "Supplier Invoices",
     "subtitle": "Invoices created from supplier orders.",
+    "addInvoice": "Add Supplier Invoice",
     "editInvoice": "Edit Invoice",
+    "selectSupplier": "Select a supplier",
     "supplier": "Supplier",
     "invoiceNumber": "Invoice Number",
     "issueDate": "Issue Date",
