@@ -110,7 +110,7 @@
   "supplierOrders": {
     "title": "Ordini Fornitori",
     "subtitle": "Ordini creati dalle offerte fornitori.",
-    "editOrder": "Ordine Fornitore",
+    "editOrder": "Modifica Ordine",
     "readOnlyStatus": "Gli ordini non in bozza sono in sola lettura. Cambia lo stato dalle azioni nella lista.",
     "supplier": "Fornitore",
     "linkedOffer": "Offerta Collegata",
@@ -134,7 +134,7 @@
   "supplierInvoices": {
     "title": "Fatture Fornitori",
     "subtitle": "Fatture create dagli ordini fornitori.",
-    "editInvoice": "Fattura Fornitore",
+    "editInvoice": "Modifica Fattura",
     "supplier": "Fornitore",
     "invoiceNumber": "Numero Fattura",
     "issueDate": "Data Emissione",

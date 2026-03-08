@@ -110,7 +110,7 @@
   "supplierOrders": {
     "title": "Supplier Orders",
     "subtitle": "Orders created from supplier offers.",
-    "editOrder": "Supplier Order",
+    "editOrder": "Edit Order",
     "readOnlyStatus": "Non-draft orders are read-only. Change status from the list actions.",
     "supplier": "Supplier",
     "linkedOffer": "Linked Offer",
@@ -134,7 +134,7 @@
   "supplierInvoices": {
     "title": "Supplier Invoices",
     "subtitle": "Invoices created from supplier orders.",
-    "editInvoice": "Supplier Invoice",
+    "editInvoice": "Edit Invoice",
     "supplier": "Supplier",
     "invoiceNumber": "Invoice Number",
     "issueDate": "Issue Date",
