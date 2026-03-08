@@ -778,6 +778,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               displayValue={getBidDisplayValue(item.specialBidId)}
                               searchable={true}
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              className="overflow-hidden w-full"
                             />
                           </div>
                           <div className="space-y-1 md:col-span-2 min-w-0">
@@ -799,6 +800,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               placeholder={t('accounting:clientsInvoices.selectProductPlaceholder')}
                               searchable={true}
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              className="overflow-hidden w-full"
                             />
                           </div>
                           <div className="space-y-1 md:col-span-1">

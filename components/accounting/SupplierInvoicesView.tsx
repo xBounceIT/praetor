@@ -408,6 +408,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                 }
                                 searchable={true}
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                className="overflow-hidden w-full"
                               />
                             </div>
 
