@@ -393,24 +393,27 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const columns = useMemo(
     () => [
       {
+        header: t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' }),
+        id: 'orderNumber',
+        accessorFn: (row: ClientsOrder) => row.id,
+        cell: ({ row }: { row: ClientsOrder }) => (
+          <span className="font-bold text-slate-700">{row.id}</span>
+        ),
+      },
+      {
         header: t('accounting:clientsOrders.clientColumn'),
         accessorFn: (row: ClientsOrder) => row.clientName,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-              <i className="fa-solid fa-cart-shopping"></i>
+          <div>
+            <div
+              className={`font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-800'}`}
+            >
+              {row.clientName}
             </div>
-            <div>
-              <div
-                className={`font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-800'}`}
-              >
-                {row.clientName}
-              </div>
-              <div
-                className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
-              >
-                {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
-              </div>
+            <div
+              className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
+            >
+              {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
             </div>
           </div>
         ),

@@ -199,6 +199,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const columns = useMemo(
     () => [
       {
+        header: t('accounting:supplierOrders.orderNumber', { defaultValue: 'Order Number' }),
+        id: 'orderNumber',
+        accessorFn: (row: SupplierSaleOrder) => row.id,
+        cell: ({ row }: { row: SupplierSaleOrder }) => (
+          <span className="font-bold text-slate-700">{row.id}</span>
+        ),
+      },
+      {
         header: t('accounting:supplierOrders.supplier'),
         id: 'supplierName',
         accessorFn: (row: SupplierSaleOrder) => row.supplierName,
