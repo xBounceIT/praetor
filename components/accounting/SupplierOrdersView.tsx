@@ -206,23 +206,18 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
 
           return (
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor text-sm">
-                <i className="fa-solid fa-truck-field"></i>
+            <div>
+              <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
+                {row.supplierName}
               </div>
-              <div>
-                <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
-                  {row.supplierName}
-                </div>
-                <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  {row.linkedOfferId}
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  {row.linkedQuoteId ||
-                    t('accounting:supplierOrders.noQuoteLink', {
-                      defaultValue: 'No quote link',
-                    })}
-                </div>
+              <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
+                {row.linkedOfferId}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {row.linkedQuoteId ||
+                  t('accounting:supplierOrders.noQuoteLink', {
+                    defaultValue: 'No quote link',
+                  })}
               </div>
             </div>
           );
