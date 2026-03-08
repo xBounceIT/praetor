@@ -287,7 +287,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('sales/supplier-offers') && (
               <NavItem
-                icon="fa-file-signature"
+                icon="fa-file-contract"
                 label={t('routes.supplierOffers')}
                 active={activeView === 'sales/supplier-offers'}
                 isCollapsed={isCollapsed}
@@ -328,7 +328,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('accounting/supplier-orders') && (
               <NavItem
-                icon="fa-cart-shopping"
+                icon="fa-cart-flatbed"
                 label={t('routes.supplierOrders')}
                 active={activeView === 'accounting/supplier-orders'}
                 isCollapsed={isCollapsed}
@@ -340,7 +340,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('accounting/supplier-invoices') && (
               <NavItem
-                icon="fa-file-invoice-dollar"
+                icon="fa-file-circle-check"
                 label={t('routes.supplierInvoices')}
                 active={activeView === 'accounting/supplier-invoices'}
                 isCollapsed={isCollapsed}
