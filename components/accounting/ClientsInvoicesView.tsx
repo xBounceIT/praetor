@@ -219,12 +219,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       subtotal += lineNet;
 
       const taxRate = Number(item.taxRate || 0);
-      const taxAmount = lineNet * (taxRate / 100);
+      const taxAmount = roundToTwoDecimals(lineNet * (taxRate / 100));
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
     });
 
-    const totalTax = Object.values(taxGroups).reduce((sum, value) => sum + value, 0);
-    const total = subtotal + totalTax;
+    const totalTax = roundToTwoDecimals(
+      Object.values(taxGroups).reduce((sum, value) => sum + value, 0),
+    );
+    const total = roundToTwoDecimals(subtotal + totalTax);
 
     return { subtotal, totalTax, total, taxGroups };
   }, []);
@@ -476,9 +478,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('accounting:clientsInvoices.balance'),
         id: 'balance',
-        accessorFn: (row: Invoice) => row.total - row.amountPaid,
+        accessorFn: (row: Invoice) => roundToTwoDecimals(row.total - row.amountPaid),
         cell: ({ row }: { row: Invoice }) => {
-          const balance = row.total - row.amountPaid;
+          const balance = roundToTwoDecimals(row.total - row.amountPaid);
           return (
             <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
               {balance.toFixed(2)} {currency}
@@ -968,7 +970,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     {t('accounting:clientsInvoices.balanceDue')}
                   </span>
                   <span className="font-bold text-red-500">
-                    {(total - Number(formData.amountPaid || 0)).toFixed(2)} {currency}
+                    {roundToTwoDecimals(total - Number(formData.amountPaid || 0)).toFixed(2)}{' '}
+                    {currency}
                   </span>
                 </div>
               </div>

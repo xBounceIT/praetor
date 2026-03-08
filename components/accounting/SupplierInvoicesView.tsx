@@ -169,7 +169,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   );
 
   const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
-  const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
+  const balanceDue = roundToTwoDecimals(Number(totals.total) - Number(formData.amountPaid || 0));
   const totalDiscount = useMemo(
     () =>
       (formData.items || []).reduce((sum, item) => {
