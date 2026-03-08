@@ -722,14 +722,17 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 md:grid">
-                  <div className="col-span-3">{t('accounting:clientsInvoices.specialBid')}</div>
-                  <div className="col-span-3">{t('common:labels.product')}</div>
-                  <div className="col-span-1">{t('common:labels.quantity')}</div>
-                  <div className="col-span-1">{t('common:labels.price')} ({currency})</div>
-                  <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
-                  <div className="col-span-1">{t('common:labels.discount')}%</div>
-                  <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
+                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="col-span-3 ml-1">{t('accounting:clientsInvoices.specialBid')}</div>
+                    <div className="col-span-3">{t('common:labels.product')}</div>
+                    <div className="col-span-1">{t('common:labels.quantity')}</div>
+                    <div className="col-span-1">{t('common:labels.price')} ({currency})</div>
+                    <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
+                    <div className="col-span-1">{t('common:labels.discount')}%</div>
+                    <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
+                  </div>
+                  <div className="w-8 shrink-0"></div>
                 </div>
               )}
 

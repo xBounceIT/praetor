@@ -361,6 +361,20 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 {t('accounting:clientsInvoices.items')}
               </h4>
 
+              {(formData.items || []).length > 0 && (
+                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
+                    <div className="col-span-3">{t('accounting:clientsInvoices.descriptionPlaceholder')}</div>
+                    <div className="col-span-1">{t('common:labels.quantity')}</div>
+                    <div className="col-span-1">{t('crm:internalListing.salePrice')} ({currency})</div>
+                    <div className="col-span-1">{t('accounting:clientsInvoices.vat')}</div>
+                    <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
+                    <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
+                  </div>
+                </div>
+              )}
+
               {(formData.items || []).length > 0 ? (
                 <div className="space-y-3">
                   {formData.items?.map((item, index) => {
@@ -369,108 +383,99 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     const lineTotal = lineSubtotal - lineDiscount;
 
                     return (
-                      <div key={item.id} className="rounded-xl bg-slate-50 p-4">
-                        <div className="mb-4 flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                              {t('accounting:clientsInvoices.items')}
+                      <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="flex items-start gap-2">
+                          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
+                            <div className="space-y-1 md:col-span-3">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:quotes.productsServices')}
+                              </label>
+                              <CustomSelect
+                                options={activeProducts.map((product) => ({
+                                  id: product.id,
+                                  name: product.name,
+                                }))}
+                                value={item.productId || ''}
+                                onChange={(value) => updateItem(index, 'productId', value as string)}
+                                searchable={true}
+                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              />
                             </div>
-                            <div className="text-sm font-bold text-slate-700">
-                              {item.description ||
-                                t('accounting:clientsInvoices.descriptionPlaceholder')}
+
+                            <div className="space-y-1 md:col-span-3">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                              </label>
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(event) =>
+                                  updateItem(index, 'description', event.target.value)
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
                             </div>
-                          </div>
-                          <div className="text-left sm:text-right">
-                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                              {t('accounting:supplierInvoices.total')}
+
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:quotes.qty')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.quantity}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
                             </div>
-                            <div className="text-lg font-black text-praetor">
-                              {lineTotal.toFixed(2)} {currency}
+
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:internalListing.salePrice')} ({currency})
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.unitPrice}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
                             </div>
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-                          <div className="space-y-1.5 md:col-span-3">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:quotes.productsServices')}
-                            </label>
-                            <CustomSelect
-                              options={activeProducts.map((product) => ({
-                                id: product.id,
-                                name: product.name,
-                              }))}
-                              value={item.productId || ''}
-                              onChange={(value) => updateItem(index, 'productId', value as string)}
-                              searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('accounting:clientsInvoices.vat')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.taxRate}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
+                            </div>
 
-                          <div className="space-y-1.5 md:col-span-3">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('accounting:clientsInvoices.descriptionPlaceholder')}
-                            </label>
-                            <input
-                              type="text"
-                              value={item.description}
-                              onChange={(event) =>
-                                updateItem(index, 'description', event.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
-                          </div>
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('accounting:supplierOrders.discount')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.discount || 0}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
+                            </div>
 
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:quotes.qty')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.quantity}
-                              onValueChange={(value) =>
-                                updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:internalListing.salePrice')} ({currency})
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.unitPrice}
-                              onValueChange={(value) =>
-                                updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('accounting:clientsInvoices.vat')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.taxRate}
-                              onValueChange={(value) =>
-                                updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('accounting:supplierOrders.discount')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.discount || 0}
-                              onValueChange={(value) =>
-                                updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
+                            <div className="space-y-1 md:col-span-2">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('common:labels.total')}
+                              </label>
+                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
+                                {lineTotal.toFixed(2)} {currency}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
