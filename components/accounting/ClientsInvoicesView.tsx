@@ -751,7 +751,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     >
                       <div className="flex items-start gap-2">
                         <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                          <div className="space-y-1 md:col-span-2">
+                          <div className="space-y-1 md:col-span-2 min-w-0">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('accounting:clientsInvoices.specialBid')}
                             </label>
@@ -780,7 +780,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-2">
+                          <div className="space-y-1 md:col-span-2 min-w-0">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.product')}
                             </label>

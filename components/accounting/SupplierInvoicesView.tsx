@@ -393,7 +393,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       >
                         <div className="flex items-start gap-2">
                           <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                            <div className="space-y-1 md:col-span-2">
+                            <div className="space-y-1 md:col-span-2 min-w-0">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('crm:quotes.productsServices')}
                               </label>
