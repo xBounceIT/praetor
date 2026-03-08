@@ -26,6 +26,8 @@
     "statusExpired": "Scaduto",
     "statusAccepted": "Accettato",
     "statusDenied": "Rifiutato",
+    "statusDraft": "Bozza",
+    "statusSent": "Inviato",
     "noQuotes": "Nessun preventivo trovato",
     "createFirst": "Crea il tuo primo preventivo",
     "quoteSaved": "Preventivo salvato con successo",
