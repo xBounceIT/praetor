@@ -412,7 +412,7 @@ const StandardTable = <T extends object>({
                       return (
                         <td
                           key={getColId(col)}
-                          className={`px-6 py-5 ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.className || ''}`}
+                          className={`px-6 py-5 whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
