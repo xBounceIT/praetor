@@ -154,22 +154,25 @@ const Layout: React.FC<LayoutProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
+  const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(new Set());
   const [prevActiveModuleId, setPrevActiveModuleId] = useState<string | null>(null);
 
   // Sync expanded module with active module activeModule changes
   if (activeModule.id !== prevActiveModuleId) {
     setPrevActiveModuleId(activeModule.id);
-    setExpandedModuleId(activeModule.id);
+    setExpandedModuleIds((prev) => new Set(prev).add(activeModule.id));
   }
 
   const handleModuleSwitch = (module: Module) => {
-    if (expandedModuleId === module.id) {
-      // Toggle collapse if clicking the already expanded module
-      setExpandedModuleId(null);
-    } else {
-      setExpandedModuleId(module.id);
-    }
+    setExpandedModuleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(module.id)) {
+        next.delete(module.id);
+      } else {
+        next.add(module.id);
+      }
+      return next;
+    });
   };
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -693,7 +696,7 @@ const Layout: React.FC<LayoutProps> = ({
                           {module.name}
                         </span>
                         <i
-                          className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${expandedModuleId === module.id ? 'rotate-180' : ''}`}
+                          className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${expandedModuleIds.has(module.id) ? 'rotate-180' : ''}`}
                         ></i>
                       </>
                     )}
@@ -705,7 +708,7 @@ const Layout: React.FC<LayoutProps> = ({
               {!isCollapsed && (
                 <div
                   className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
-                    expandedModuleId === module.id ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                    expandedModuleIds.has(module.id) ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
                   }`}
                 >
                   <div className="overflow-hidden min-h-0">
