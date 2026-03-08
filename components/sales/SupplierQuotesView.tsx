@@ -525,7 +525,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:supplierQuotes.quoteDetails', { defaultValue: 'Quote Details' })}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' })}

@@ -1070,20 +1070,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
-
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('sales:clientQuotes.notesLabel')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
-                    disabled={isReadOnly}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
               </div>
             </div>
 
@@ -1400,82 +1386,92 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               )}
             </div>
 
-            {/* Totals Section - Right Aligned */}
-            {formData.items && formData.items.length > 0 && (
-              <div className="mt-4 flex flex-col items-end space-y-2 px-3">
-                {(() => {
-                  const discountValue = Number.isNaN(formData.discount ?? 0)
-                    ? 0
-                    : (formData.discount ?? 0);
-                  const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
-                    calculateTotals(formData.items, discountValue);
-                  return (
-                    <>
-                      {errors.total && (
-                        <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
-                      )}
-
-                      {/* Imponibile */}
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-bold text-slate-500">
-                          {t('sales:clientQuotes.taxableAmount')}:
-                        </span>
-                        <span className="text-sm font-black text-slate-800 whitespace-nowrap">
-                          {subtotal.toFixed(2)} {currency}
-                        </span>
-                      </div>
-
-                      {/* Sconto */}
-                      {discountValue > 0 && (
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
-                            {discountValue}%):
-                          </span>
-                          <span className="text-sm font-black text-amber-600 whitespace-nowrap">
-                            -{discountAmount.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* IVA */}
-                      {Object.entries(taxGroups).map(([rate, amount]) => (
-                        <div key={rate} className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.ivaTax', { rate })}:
-                          </span>
-                          <span className="text-sm font-black text-slate-800 whitespace-nowrap">
-                            {amount.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                      ))}
-
-                      {/* Margin */}
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-bold text-emerald-600">
-                          {t('sales:clientQuotes.marginLabel')} (
-                          {(marginPercentage || 0).toFixed(1)}%):
-                        </span>
-                        <span className="text-sm font-black text-emerald-600 whitespace-nowrap">
-                          {margin.toFixed(2)} {currency}
-                        </span>
-                      </div>
-
-                      {/* Total */}
-                      <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
-                        <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
-                          {t('sales:clientQuotes.totalLabel')}:
-                        </span>
-                        <span className="inline-flex items-baseline whitespace-nowrap text-3xl font-black text-praetor">
-                          {total.toFixed(2)}{' '}
-                          <span className="text-lg text-slate-400 font-bold">{currency}</span>
-                        </span>
-                      </div>
-                    </>
-                  );
-                })()}
+            {/* Notes & Cost Summary */}
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:clientQuotes.notesLabel')}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
+                  disabled={isReadOnly}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                />
               </div>
-            )}
+
+              <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:clientQuotes.totalLabel')}
+                </h4>
+                {formData.items &&
+                  formData.items.length > 0 &&
+                  (() => {
+                    const discountValue = Number.isNaN(formData.discount ?? 0)
+                      ? 0
+                      : (formData.discount ?? 0);
+                    const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
+                      calculateTotals(formData.items, discountValue);
+                    return (
+                      <>
+                        {errors.total && (
+                          <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('sales:clientQuotes.taxableAmount')}
+                          </span>
+                          <span className="text-sm font-bold text-slate-700">
+                            {subtotal.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                        {discountValue > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
+                              {discountValue}%)
+                            </span>
+                            <span className="text-sm font-bold text-amber-600">
+                              -{discountAmount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        )}
+                        {Object.entries(taxGroups).map(([rate, amount]) => (
+                          <div key={rate} className="flex justify-between text-xs">
+                            <span className="font-semibold text-slate-500">
+                              {t('sales:clientQuotes.ivaTax', { rate })}
+                            </span>
+                            <span className="font-semibold text-slate-700">
+                              {amount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between">
+                          <span className="text-sm font-bold text-emerald-600">
+                            {t('sales:clientQuotes.marginLabel')} (
+                            {(marginPercentage || 0).toFixed(1)}%)
+                          </span>
+                          <span className="text-sm font-bold text-emerald-600">
+                            {margin.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t border-slate-200 pt-3">
+                          <span className="text-lg font-black text-slate-800">
+                            {t('sales:clientQuotes.totalLabel')}
+                          </span>
+                          <span className="text-lg font-black text-praetor">
+                            {total.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+              </div>
+            </div>
 
             <div className="flex justify-end gap-3 pt-4">
               <button
