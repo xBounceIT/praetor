@@ -2,7 +2,12 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierInvoice, SupplierInvoiceItem } from '../../types';
-import { addDaysToDateOnly, getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
+import {
+  addDaysToDateOnly,
+  formatDateOnlyForLocale,
+  getLocalDateString,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -178,6 +183,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   const columns = useMemo(
     () => [
       {
+        header: t('accounting:supplierInvoices.invoiceNumber'),
+        id: 'invoiceNumber',
+        accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
+        ),
+      },
+      {
         header: t('accounting:supplierInvoices.supplier'),
         id: 'supplierName',
         accessorFn: (row: SupplierInvoice) => row.supplierName,
@@ -199,23 +212,52 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         },
       },
       {
-        header: t('accounting:supplierInvoices.invoiceNumber'),
-        id: 'invoiceNumber',
-        accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
+        header: t('common:labels.date'),
+        id: 'issueDate',
+        accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.issueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-mono text-sm font-bold text-slate-600">{row.invoiceNumber}</span>
+          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
       },
       {
-        header: t('accounting:supplierInvoices.total'),
+        header: t('accounting:clientsInvoices.dueDate'),
+        id: 'dueDate',
+        accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.dueDate),
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+        ),
+      },
+      {
+        header: t('common:labels.amount'),
         id: 'invoiceTotal',
         accessorFn: (row: SupplierInvoice) => Number(row.total),
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-bold text-slate-700">
+            {Number(row.total).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (value: unknown) => Number(value).toFixed(2),
+      },
+      {
+        header: t('accounting:clientsInvoices.amountPaid'),
+        id: 'amountPaid',
+        accessorFn: (row: SupplierInvoice) => Number(row.amountPaid),
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-bold text-emerald-600">
+            {(Number(row.amountPaid) ?? 0).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (value: unknown) => Number(value).toFixed(2),
+      },
+      {
+        header: t('accounting:clientsInvoices.balance'),
+        id: 'balance',
+        accessorFn: (row: SupplierInvoice) => Number(row.total) - Number(row.amountPaid || 0),
         cell: ({ row }: { row: SupplierInvoice }) => {
-          const isMuted = row.status === 'paid' || row.status === 'cancelled';
-
+          const balance = Number(row.total) - Number(row.amountPaid || 0);
           return (
-            <span className={`text-sm font-bold ${isMuted ? 'text-slate-400' : 'text-slate-700'}`}>
-              {Number(row.total).toFixed(2)} {currency}
+            <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {balance.toFixed(2)} {currency}
             </span>
           );
         },
@@ -232,7 +274,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('accounting:supplierInvoices.actionsColumn', { defaultValue: 'Actions' }),
+        header: t('common:common.more'),
         id: 'actions',
         disableSorting: true,
         disableFiltering: true,
