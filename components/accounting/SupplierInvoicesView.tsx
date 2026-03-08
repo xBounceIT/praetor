@@ -165,6 +165,15 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
   const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
   const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
+  const totalDiscount = useMemo(
+    () =>
+      (formData.items || []).reduce((sum, item) => {
+        const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+        return sum + (lineSubtotal * Number(item.discount ?? 0)) / 100;
+      }, 0),
+    [formData.items],
+  );
+  const grossSubtotal = totals.subtotal + totalDiscount;
 
   const columns = useMemo(
     () => [
@@ -562,9 +571,19 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                         {t('accounting:clientsInvoices.subtotal')}
                       </span>
                       <span className="text-sm font-black text-slate-800">
-                        {totals.subtotal.toFixed(2)} {currency}
+                        {grossSubtotal.toFixed(2)} {currency}
                       </span>
                     </div>
+                    {totalDiscount > 0 && (
+                      <div className="flex items-center justify-between px-2">
+                        <span className="text-sm font-bold text-slate-500">
+                          {t('accounting:clientsInvoices.totalDiscount')}
+                        </span>
+                        <span className="text-sm font-black text-amber-600">
+                          -{totalDiscount.toFixed(2)} {currency}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between px-2">
                       <span className="text-sm font-bold text-slate-500">
                         {t('accounting:clientsInvoices.vat')}

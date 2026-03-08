@@ -54,6 +54,7 @@
     "items": "Voci",
     "addItem": "Aggiungi Voce",
     "subtotal": "Imponibile",
+    "totalDiscount": "Sconto Totale",
     "tax": "IVA",
     "vat": "IVA",
     "total": "Totale",

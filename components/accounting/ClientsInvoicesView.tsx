@@ -461,6 +461,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   };
 
   const { subtotal, total, taxGroups } = calculateTotals(formData.items || []);
+  const totalDiscount = (formData.items || []).reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice * (Number(item.discount || 0) / 100),
+    0,
+  );
+  const grossSubtotal = subtotal + totalDiscount;
 
   const columns = useMemo(
     () => [
@@ -950,9 +955,19 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     {t('accounting:clientsInvoices.subtotal')}
                   </span>
                   <span className="text-sm font-bold text-slate-700">
-                    {subtotal.toFixed(2)} {currency}
+                    {grossSubtotal.toFixed(2)} {currency}
                   </span>
                 </div>
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.totalDiscount')}
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{totalDiscount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                )}
                 {Object.entries(taxGroups).map(([rate, amount]) => (
                   <div key={rate} className="flex justify-between text-xs">
                     <span className="font-semibold text-slate-500">

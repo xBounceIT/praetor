@@ -54,6 +54,7 @@
     "items": "Items",
     "addItem": "Add Item",
     "subtotal": "Subtotal",
+    "totalDiscount": "Total Discount",
     "tax": "Tax",
     "vat": "VAT",
     "total": "Total",
