@@ -39,7 +39,7 @@
     "readOnlyBecauseOffer": "This quote is read-only because an offer was created from it.",
     "linkedSales": "Linked Sales",
     "deleteConfirm": "Are you sure you want to delete this quote? This action cannot be undone.",
-    "activeQuotes": "Active Quotes",
+    "activeQuotes": "Customer quotes",
     "historyQuotes": "History",
     "createNewQuote": "Create New Quote",
     "noSpecialBid": "No Special Bid",

@@ -618,6 +618,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const columns = useMemo<Column<Quote>[]>(
     () => [
       {
+        header: t('sales:clientQuotes.quoteCodeColumn'),
+        accessorKey: 'quoteCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        cell: ({ row }) => (
+          <span className="font-bold text-slate-700">{row.quoteCode}</span>
+        ),
+      },
+      {
         header: t('sales:clientQuotes.clientColumn'),
         accessorKey: 'clientName',
         cell: ({ row }) => {
@@ -628,15 +637,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
           );
         },
-      },
-      {
-        header: t('sales:clientQuotes.quoteCodeColumn'),
-        accessorKey: 'quoteCode',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
-        ),
       },
       {
         header: t('sales:clientQuotes.totalColumn'),

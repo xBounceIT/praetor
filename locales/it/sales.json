@@ -39,7 +39,7 @@
     "readOnlyBecauseOffer": "Questo preventivo è in sola lettura perché è stata creata un'offerta da esso.",
     "linkedSales": "Vendite Collegate",
     "deleteConfirm": "Sei sicuro di voler eliminare questo preventivo? Questa azione non può essere annullata.",
-    "activeQuotes": "Preventivi Attivi",
+    "activeQuotes": "Preventivi cliente",
     "historyQuotes": "Storico",
     "createNewQuote": "Crea Nuovo Preventivo",
     "noSpecialBid": "Nessuna Offerta Speciale",
