@@ -275,13 +275,19 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
             <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
-                <i className="fa-solid fa-pen-to-square"></i>
+                <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
-              {t('accounting:supplierInvoices.editInvoice', { defaultValue: 'Supplier Invoice' })}
+              {editingInvoice
+                ? t('accounting:supplierInvoices.editInvoice', {
+                    defaultValue: 'Edit Supplier Invoice',
+                  })
+                : t('accounting:supplierInvoices.addInvoice', {
+                    defaultValue: 'Add Supplier Invoice',
+                  })}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -291,84 +297,104 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8 overflow-y-auto p-8">
-            <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsInvoices.invoiceDetails')}
-              </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.supplier')}
-                  </label>
-                  <CustomSelect
-                    options={activeSuppliers.map((supplier) => ({
-                      id: supplier.id,
-                      name: supplier.name,
-                    }))}
-                    value={formData.supplierId || ''}
-                    onChange={(value) => {
-                      const supplier = suppliers.find((item) => item.id === value);
-                      setFormData((prev) => ({
-                        ...prev,
-                        supplierId: value as string,
-                        supplierName: supplier?.name || '',
-                      }));
-                    }}
-                    searchable={true}
-                  />
-                </div>
+          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
+                  {t('accounting:supplierInvoices.invoiceNumber')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.invoiceNumber || ''}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                  placeholder="INV-XXXX"
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.invoiceNumber')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.invoiceNumber || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
+                  {t('accounting:supplierInvoices.issueDate')}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.issueDate || ''}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.issueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.issueDate || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
+                  {t('accounting:supplierInvoices.dueDate')}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.dueDate || ''}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                />
+              </div>
+            </div>
 
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.dueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.dueDate || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
-                </div>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
+                  {t('accounting:supplierInvoices.supplier')}
+                </label>
+                <CustomSelect
+                  options={activeSuppliers.map((supplier) => ({
+                    id: supplier.id,
+                    name: supplier.name,
+                  }))}
+                  value={formData.supplierId || ''}
+                  onChange={(value) => {
+                    const supplier = suppliers.find((item) => item.id === value);
+                    setFormData((prev) => ({
+                      ...prev,
+                      supplierId: value as string,
+                      supplierName: supplier?.name || '',
+                    }));
+                  }}
+                  searchable={true}
+                  placeholder={t('accounting:supplierInvoices.selectSupplier')}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="ml-1 text-xs font-bold text-slate-500">
+                  {t('accounting:supplierInvoices.status')}
+                </label>
+                <CustomSelect
+                  options={statusOptions}
+                  value={formData.status || 'draft'}
+                  onChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      status: value as SupplierInvoice['status'],
+                    }))
+                  }
+                  searchable={false}
+                />
               </div>
             </div>
 
             <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsInvoices.items')}
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.items')}
+                </h4>
+              </div>
 
               {(formData.items || []).length > 0 && (
                 <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
@@ -507,141 +533,101 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="pt-6">
               <label className="ml-1 text-xs font-bold text-slate-500">
                 {t('accounting:supplierInvoices.notes')}
               </label>
               <textarea
-                rows={3}
+                rows={2}
                 value={formData.notes || ''}
                 onChange={(event) =>
                   setFormData((prev) => ({ ...prev, notes: event.target.value }))
                 }
-                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
               />
             </div>
 
-            <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:supplierInvoices.status')}
-              </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.status')}
-                  </label>
-                  <CustomSelect
-                    options={statusOptions}
-                    value={formData.status || 'draft'}
-                    onChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        status: value as SupplierInvoice['status'],
-                      }))
-                    }
-                    searchable={false}
-                  />
+            <div className="flex flex-col justify-end gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-3 md:w-1/3">
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.subtotal')}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {grossSubtotal.toFixed(2)} {currency}
+                  </span>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.totalDiscount')}
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{totalDiscount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.vat')}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {totals.taxAmount.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-3">
+                  <span className="text-lg font-black text-slate-800">
+                    {t('accounting:supplierInvoices.total')}
+                  </span>
+                  <span className="text-lg font-black text-praetor">
+                    {totals.total.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-slate-500">
                     {t('accounting:supplierInvoices.amountPaid')}
-                  </label>
-                  <ValidatedNumberInput
-                    value={formData.amountPaid || 0}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        amountPaid: value === '' ? 0 : Number(value),
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
-                  />
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <ValidatedNumberInput
+                      value={formData.amountPaid || 0}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          amountPaid: value === '' ? 0 : Number(value),
+                        }))
+                      }
+                      className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600"
+                    />
+                    <span className="text-xs font-bold text-slate-400">{currency}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.balanceDue')}
+                  </span>
+                  <span
+                    className={`font-bold ${balanceDue > 0 ? 'text-red-500' : 'text-emerald-600'}`}
+                  >
+                    {balanceDue.toFixed(2)} {currency}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {(formData.items || []).length > 0 && (
-              <div className="border-t border-slate-100 pt-8">
-                <div className="grid grid-cols-1 items-stretch gap-8 md:grid-cols-3">
-                  <div className="flex h-full flex-col justify-center space-y-3">
-                    <div className="flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:clientsInvoices.subtotal')}
-                      </span>
-                      <span className="text-sm font-black text-slate-800">
-                        {grossSubtotal.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                    {totalDiscount > 0 && (
-                      <div className="flex items-center justify-between px-2">
-                        <span className="text-sm font-bold text-slate-500">
-                          {t('accounting:clientsInvoices.totalDiscount')}
-                        </span>
-                        <span className="text-sm font-black text-amber-600">
-                          -{totalDiscount.toFixed(2)} {currency}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:clientsInvoices.vat')}
-                      </span>
-                      <span className="text-sm font-black text-slate-800">
-                        {totals.taxAmount.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:supplierInvoices.amountPaid')}
-                      </span>
-                      <span className="text-sm font-black text-emerald-600">
-                        {Number(formData.amountPaid || 0).toFixed(2)} {currency}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-100/50 bg-slate-50/50 py-4">
-                    <span className="mb-1 text-xs font-black uppercase tracking-widest text-slate-400">
-                      {t('accounting:supplierInvoices.total')}
-                    </span>
-                    <span className="text-4xl font-black leading-none text-praetor">
-                      {totals.total.toFixed(2)}
-                      <span className="ml-1 text-xl text-slate-400 opacity-60">{currency}</span>
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-100/40 bg-emerald-50/50 p-6 text-center">
-                    <span className="mb-2 text-xs font-black uppercase tracking-widest text-emerald-600">
-                      {t('accounting:clientsInvoices.balanceDue')}
-                    </span>
-                    <div className="text-2xl font-black leading-none text-emerald-700">
-                      {balanceDue.toFixed(2)} {currency}
-                    </div>
-                    <div className="mt-2 text-xs font-black text-emerald-500 opacity-70">
-                      {t('accounting:clientsOrders.itemsCount', {
-                        count: (formData.items || []).length,
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between border-t border-slate-100 pt-8">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl border border-slate-200 px-8 py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
+                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-praetor px-10 py-3 text-sm font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
               >
-                {t('common:buttons.update')}
+                {editingInvoice ? t('common:buttons.update') : t('common:buttons.save')}
               </button>
             </div>
           </form>
