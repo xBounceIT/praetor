@@ -3,11 +3,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientsOrder, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
-import { roundToTwoDecimals } from '../../utils/numbers';
+import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ClientsInvoicesViewProps {
@@ -26,6 +27,12 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
   return costo / (1 - molPercentage / 100);
 };
 
+const getSettlementStatus = (invoice: Invoice, amountPaid: number): Invoice['status'] => {
+  if (amountPaid >= invoice.total) return 'paid';
+  if (invoice.status === 'paid') return 'sent';
+  return invoice.status;
+};
+
 const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   invoices,
   clients,
@@ -40,7 +47,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [invoiceToAdjust, setInvoiceToAdjust] = useState<Invoice | null>(null);
+  const [settlementAmountPaid, setSettlementAmountPaid] = useState(0);
+  const [settlementError, setSettlementError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const statusOptions = useMemo(
@@ -164,12 +175,52 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     setIsDeleteConfirmOpen(true);
   }, []);
 
+  const openSettlementModal = useCallback((invoice: Invoice) => {
+    setInvoiceToAdjust(invoice);
+    setSettlementAmountPaid(roundToTwoDecimals(Number(invoice.amountPaid ?? 0)));
+    setSettlementError('');
+    setIsSettlementModalOpen(true);
+  }, []);
+
+  const closeSettlementModal = useCallback(() => {
+    setIsSettlementModalOpen(false);
+    setInvoiceToAdjust(null);
+    setSettlementError('');
+  }, []);
+
   const handleDelete = () => {
     if (invoiceToDelete) {
       onDeleteInvoice(invoiceToDelete.id);
       setIsDeleteConfirmOpen(false);
       setInvoiceToDelete(null);
     }
+  };
+
+  const handleSettlementSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!invoiceToAdjust) return;
+
+    const invoiceTotal = roundToTwoDecimals(Number(invoiceToAdjust.total ?? 0));
+    const nextAmountPaid = roundToTwoDecimals(Number(settlementAmountPaid ?? 0));
+
+    if (!Number.isFinite(nextAmountPaid) || nextAmountPaid < 0) {
+      setSettlementError(t('accounting:clientsInvoices.amountPaidInvalid'));
+      return;
+    }
+
+    if (nextAmountPaid > invoiceTotal) {
+      setSettlementError(t('accounting:clientsInvoices.amountPaidExceedsTotal'));
+      return;
+    }
+
+    await Promise.resolve(
+      onUpdateInvoice(invoiceToAdjust.id, {
+        amountPaid: nextAmountPaid,
+        status: getSettlementStatus(invoiceToAdjust, nextAmountPaid),
+      }),
+    );
+
+    closeSettlementModal();
   };
 
   const handleClientChange = (clientId: string) => {
@@ -304,6 +355,16 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         filterFormat: (val: unknown) => (val as number).toFixed(2),
       },
       {
+        header: t('accounting:clientsInvoices.amountPaid'),
+        accessorFn: (row: Invoice) => row.amountPaid,
+        cell: ({ row }: { row: Invoice }) => (
+          <span className="font-bold text-emerald-600">
+            {(row.amountPaid ?? 0).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (val: unknown) => (val as number).toFixed(2),
+      },
+      {
         header: t('accounting:clientsInvoices.balance'),
         accessorFn: (row: Invoice) => row.total - row.amountPaid,
         cell: ({ row }: { row: Invoice }) => {
@@ -335,30 +396,59 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         align: 'right' as const,
         cell: ({ row }: { row: Invoice }) => (
           <div className="flex justify-end gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditModal(row);
-              }}
-              className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-            >
-              <i className="fa-solid fa-pen-to-square"></i>
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                confirmDelete(row);
-              }}
-              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-            >
-              <i className="fa-solid fa-trash-can"></i>
-            </button>
+            <Tooltip label={t('common:buttons.edit')}>
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditModal(row);
+                  }}
+                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
+              )}
+            </Tooltip>
+            {row.status !== 'cancelled' && (
+              <Tooltip label={t('accounting:clientsInvoices.adjustPaid')}>
+                {() => (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openSettlementModal(row);
+                    }}
+                    className="rounded-lg p-2 text-slate-400 transition-all hover:bg-emerald-50 hover:text-emerald-600"
+                  >
+                    <i className="fa-solid fa-money-bill-wave"></i>
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            <Tooltip label={t('common:buttons.delete')}>
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    confirmDelete(row);
+                  }}
+                  className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
+                >
+                  <i className="fa-solid fa-trash-can"></i>
+                </button>
+              )}
+            </Tooltip>
           </div>
         ),
       },
     ],
-    [currency, statusOptions, t, confirmDelete, openEditModal],
+    [currency, statusOptions, t, confirmDelete, openEditModal, openSettlementModal],
   );
+
+  const settlementBalance = invoiceToAdjust
+    ? roundToTwoDecimals(Number(invoiceToAdjust.total ?? 0) - Number(settlementAmountPaid ?? 0))
+    : 0;
+  const settlementStatusLabel =
+    invoiceToAdjust && statusOptions.find((option) => option.id === invoiceToAdjust.status)?.name;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -691,6 +781,120 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               <button
                 type="submit"
                 className="px-8 py-3 bg-praetor text-white font-bold rounded-xl hover:bg-slate-700 shadow-lg shadow-slate-200"
+              >
+                {t('common:buttons.save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isSettlementModalOpen} onClose={closeSettlementModal}>
+        <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
+            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <i className="fa-solid fa-money-bill-wave"></i>
+              </div>
+              {t('accounting:clientsInvoices.adjustPaidTitle')}
+            </h3>
+            <button
+              onClick={closeSettlementModal}
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSettlementSubmit} className="space-y-6 p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-slate-800">
+                {invoiceToAdjust?.invoiceNumber} - {invoiceToAdjust?.clientName}
+              </p>
+              <p className="text-sm text-slate-500">
+                {t('accounting:clientsInvoices.settlementSummary')}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
+              <div>
+                <div className="text-xs font-black uppercase tracking-wider text-slate-400">
+                  {t('accounting:clientsInvoices.total')}
+                </div>
+                <div className="mt-1 text-lg font-black text-praetor">
+                  {Number(invoiceToAdjust?.total ?? 0).toFixed(2)} {currency}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-black uppercase tracking-wider text-slate-400">
+                  {t('accounting:clientsInvoices.currentStatus')}
+                </div>
+                <div className="mt-2">
+                  <StatusBadge
+                    type={(invoiceToAdjust?.status || 'draft') as StatusType}
+                    label={settlementStatusLabel || invoiceToAdjust?.status || 'draft'}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="ml-1 text-xs font-bold text-slate-500">
+                {t('accounting:clientsInvoices.amountPaid')}
+              </label>
+              <ValidatedNumberInput
+                min="0"
+                step="0.01"
+                value={settlementAmountPaid}
+                onValueChange={(value) => {
+                  setSettlementError('');
+                  setSettlementAmountPaid(parseNumberInputValue(value, 0) ?? 0);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+              />
+              {settlementError && (
+                <p className="ml-1 text-[10px] font-bold text-red-500">{settlementError}</p>
+              )}
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-bold text-slate-500">
+                  {t('accounting:clientsInvoices.amountPaid')}
+                </span>
+                <span className="font-black text-emerald-600">
+                  {Number(settlementAmountPaid || 0).toFixed(2)} {currency}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-bold text-slate-500">
+                  {t('accounting:clientsInvoices.balanceDue')}
+                </span>
+                <span
+                  className={`font-black ${
+                    settlementBalance > 0 ? 'text-red-500' : 'text-emerald-600'
+                  }`}
+                >
+                  {settlementBalance.toFixed(2)} {currency}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs font-semibold leading-5 text-slate-500">
+              {t('accounting:clientsInvoices.settlementStatusHint')}
+            </p>
+
+            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={closeSettlementModal}
+                className="rounded-xl px-6 py-3 font-bold text-slate-500 transition-colors hover:bg-slate-50"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="rounded-xl bg-emerald-600 px-8 py-3 font-bold text-white transition-colors hover:bg-emerald-700"
               >
                 {t('common:buttons.save')}
               </button>
