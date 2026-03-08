@@ -102,6 +102,7 @@
     "dueDateRequired": "Due date is required",
     "itemsRequired": "At least one item is required",
     "notes": "Notes",
+    "costSummary": "Cost Summary",
     "deleteTitle": "Delete invoice?",
     "deleteMessage": "Are you sure you want to delete invoice {{invoiceNumber}}? This action cannot be undone.",
     "notesPlaceholder": "Additional notes..."

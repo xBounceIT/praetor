@@ -298,93 +298,101 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:supplierInvoices.invoiceNumber')}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.invoiceNumber || ''}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
-                  placeholder="INV-XXXX"
-                />
-              </div>
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                {t('accounting:clientsInvoices.invoiceDetails')}
+              </h4>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.invoiceNumber')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.invoiceNumber || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                      placeholder="INV-XXXX"
+                    />
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:supplierInvoices.issueDate')}
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.issueDate || ''}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                />
-              </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.issueDate')}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.issueDate || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    />
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:supplierInvoices.dueDate')}
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.dueDate || ''}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                />
-              </div>
-            </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.dueDate')}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.dueDate || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:supplierInvoices.supplier')}
-                </label>
-                <CustomSelect
-                  options={activeSuppliers.map((supplier) => ({
-                    id: supplier.id,
-                    name: supplier.name,
-                  }))}
-                  value={formData.supplierId || ''}
-                  onChange={(value) => {
-                    const supplier = suppliers.find((item) => item.id === value);
-                    setFormData((prev) => ({
-                      ...prev,
-                      supplierId: value as string,
-                      supplierName: supplier?.name || '',
-                    }));
-                  }}
-                  searchable={true}
-                  placeholder={t('accounting:supplierInvoices.selectSupplier')}
-                />
-              </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.supplier')}
+                    </label>
+                    <CustomSelect
+                      options={activeSuppliers.map((supplier) => ({
+                        id: supplier.id,
+                        name: supplier.name,
+                      }))}
+                      value={formData.supplierId || ''}
+                      onChange={(value) => {
+                        const supplier = suppliers.find((item) => item.id === value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          supplierId: value as string,
+                          supplierName: supplier?.name || '',
+                        }));
+                      }}
+                      searchable={true}
+                      placeholder={t('accounting:supplierInvoices.selectSupplier')}
+                    />
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:supplierInvoices.status')}
-                </label>
-                <CustomSelect
-                  options={statusOptions}
-                  value={formData.status || 'draft'}
-                  onChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      status: value as SupplierInvoice['status'],
-                    }))
-                  }
-                  searchable={false}
-                />
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.status')}
+                    </label>
+                    <CustomSelect
+                      options={statusOptions}
+                      value={formData.status || 'draft'}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          status: value as SupplierInvoice['status'],
+                        }))
+                      }
+                      searchable={false}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -533,10 +541,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               )}
             </div>
 
-            <div className="pt-6">
-              <label className="ml-1 text-xs font-bold text-slate-500">
+            <div className="space-y-4 pt-6">
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:supplierInvoices.notes')}
-              </label>
+              </h4>
               <textarea
                 rows={2}
                 value={formData.notes || ''}
@@ -550,6 +559,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
             <div className="flex flex-col justify-end gap-8 border-t border-slate-100 pt-6 md:flex-row">
               <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.costSummary')}
+                </h4>
                 <div className="flex justify-between">
                   <span className="text-sm font-bold text-slate-500">
                     {t('accounting:clientsInvoices.subtotal')}

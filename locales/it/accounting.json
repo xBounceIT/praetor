@@ -102,6 +102,7 @@
     "dueDateRequired": "La data scadenza è obbligatoria",
     "itemsRequired": "Almeno una voce è obbligatoria",
     "notes": "Note",
+    "costSummary": "Riepilogo Costi",
     "deleteTitle": "Eliminare fattura?",
     "deleteMessage": "Sei sicuro di voler eliminare la fattura {{invoiceNumber}}? Questa azione non può essere annullata.",
     "notesPlaceholder": "Note aggiuntive..."
