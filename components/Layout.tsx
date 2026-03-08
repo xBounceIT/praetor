@@ -165,19 +165,9 @@ const Layout: React.FC<LayoutProps> = ({
 
   const handleModuleSwitch = (module: Module) => {
     if (expandedModuleId === module.id) {
-      // Toggle collapse if clicking the already expanded module
       setExpandedModuleId(null);
     } else {
-      // Expand and navigate if clicking a different module
       setExpandedModuleId(module.id);
-
-      // Navigate to default route if we're not already in this module
-      // This ensures that expanding a module also shows its content if we were elsewhere
-      if (activeModule.id !== module.id) {
-        const routes = moduleRoutes[module.id] || [];
-        const defaultRoute = routes.find((route) => canAccessView(route)) || routes[0];
-        if (defaultRoute) onViewChange(defaultRoute);
-      }
     }
   };
 
