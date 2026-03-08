@@ -65,7 +65,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onViewQuote,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'sales', 'crm', 'common']);
+  const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientsOrder | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -380,12 +380,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     : activeSpecialBids;
 
   const getBidDisplayValue = (bidId?: string) => {
-    if (!bidId) return t('sales:clientQuotes.noSpecialBidOption');
+    if (!bidId) return t('sales:clientQuotes.noSpecialBid');
     const bid =
       activeSpecialBids.find((b) => b.id === bidId) || specialBids.find((b) => b.id === bidId);
-    return bid
-      ? `${bid.clientName} · ${bid.productName}`
-      : t('sales:clientQuotes.noSpecialBidOption');
+    return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
   };
 
   const isLinkedQuote = Boolean(formData.linkedQuoteId);
@@ -395,24 +393,27 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const columns = useMemo(
     () => [
       {
+        header: t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' }),
+        id: 'orderNumber',
+        accessorFn: (row: ClientsOrder) => row.orderNumber || row.id,
+        cell: ({ row }: { row: ClientsOrder }) => (
+          <span className="font-bold text-slate-700">{row.orderNumber || row.id}</span>
+        ),
+      },
+      {
         header: t('accounting:clientsOrders.clientColumn'),
         accessorFn: (row: ClientsOrder) => row.clientName,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-100 text-praetor rounded-xl flex items-center justify-center text-sm">
-              <i className="fa-solid fa-cart-shopping"></i>
+          <div>
+            <div
+              className={`font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-800'}`}
+            >
+              {row.clientName}
             </div>
-            <div>
-              <div
-                className={`font-bold ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-800'}`}
-              >
-                {row.clientName}
-              </div>
-              <div
-                className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
-              >
-                {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
-              </div>
+            <div
+              className={`text-[10px] font-black uppercase tracking-wider ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-400'}`}
+            >
+              {t('accounting:clientsOrders.itemsCount', { count: row.items.length })}
             </div>
           </div>
         ),
@@ -468,7 +469,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
       {
-        header: t('accounting:clientsOrders.actionsColumn'),
+        header: t('common:common.more'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
@@ -498,7 +499,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               label={
                 row.status === 'draft'
                   ? t('accounting:clientsOrders.editOrder')
-                  : t('sales:clientQuotes.viewQuote')
+                  : t('accounting:clientsOrders.viewOrder')
               }
             >
               {() => (
@@ -599,23 +600,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
+            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
                 <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
               </div>
               {isReadOnly ? t('common:buttons.view') : t('accounting:clientsOrders.editOrder')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
             >
               <i className="fa-solid fa-xmark text-lg"></i>
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
             {editingOrder && editingOrder.status !== 'draft' && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -662,77 +663,129 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               </div>
             )}
 
-            {/* Client Selection */}
+            {/* Order Details */}
             <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('sales:clientQuotes.clientInformation')}
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                {t('accounting:clientsOrders.orderDetails')}
               </h4>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('accounting:clientsOrders.client')}
-                </label>
-                <CustomSelect
-                  options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                  value={formData.clientId || ''}
-                  onChange={(val) => handleClientChange(val as string)}
-                  placeholder={t('sales:clientQuotes.selectAClient')}
-                  searchable={true}
-                  disabled={isReadOnly}
-                  className={errors.clientId ? 'border-red-300' : ''}
-                />
-                {errors.clientId && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                )}
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsOrders.client')}
+                    </label>
+                    <CustomSelect
+                      options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+                      value={formData.clientId || ''}
+                      onChange={(val) => handleClientChange(val as string)}
+                      placeholder={t('sales:clientQuotes.selectAClient')}
+                      searchable={true}
+                      disabled={isReadOnly}
+                      className={errors.clientId ? 'border-red-300' : ''}
+                    />
+                    {errors.clientId && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsOrders.paymentTerms')}
+                    </label>
+                    <CustomSelect
+                      options={getPaymentTermsOptions(t)}
+                      value={formData.paymentTerms || 'immediate'}
+                      onChange={(val) =>
+                        setFormData({
+                          ...formData,
+                          paymentTerms: val as ClientsOrder['paymentTerms'],
+                        })
+                      }
+                      searchable={false}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsOrders.status')}
+                    </label>
+                    <CustomSelect
+                      options={getStatusOptions(t)}
+                      value={formData.status || 'pending'}
+                      onChange={(val) =>
+                        setFormData({ ...formData, status: val as ClientsOrder['status'] })
+                      }
+                      searchable={false}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('sales:clientQuotes.globalDiscount')}
+                    </label>
+                    <div
+                      className={`flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all focus-within:ring-2 focus-within:ring-praetor ${isLinkedQuote ? 'opacity-50' : ''}`}
+                    >
+                      <div className="flex w-12 self-stretch items-center justify-center border-r border-slate-200 bg-slate-100/30 text-xs font-bold text-slate-400">
+                        %
+                      </div>
+                      <ValidatedNumberInput
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={formData.discount}
+                        onValueChange={(value) => {
+                          const parsed = parseNumberInputValue(value);
+                          setFormData({ ...formData, discount: parsed });
+                        }}
+                        disabled={isReadOnly}
+                        className="flex-1 bg-transparent px-4 py-2.5 text-sm font-semibold outline-none disabled:bg-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Products */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+              <div className="flex items-center justify-between">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.productsServices')}
                 </h4>
                 <button
                   type="button"
                   onClick={addProductRow}
                   disabled={isReadOnly}
-                  className="text-xs font-bold text-praetor hover:text-slate-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
                 </button>
               </div>
               {errors.items && (
-                <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+                <p className="ml-1 -mt-2 text-[10px] font-bold text-red-500">{errors.items}</p>
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="col-span-2 ml-1">
                       {t('accounting:clientsOrders.specialBidLabel')}
                     </div>
-                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      {t('sales:clientQuotes.productsServices')}
-                    </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:clientQuotes.qty')}
-                    </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:internalListing.cost')}
-                    </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-3">{t('sales:clientQuotes.productsServices')}</div>
+                    <div className="col-span-1 text-center">{t('sales:clientQuotes.qty')}</div>
+                    <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
+                    <div className="col-span-1 text-center">
                       {t('crm:internalListing.molPercentage')}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-1 text-center">
                       {t('sales:clientQuotes.marginLabel')}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-3 pr-2 text-right">
                       {t('crm:internalListing.salePrice')}
                     </div>
                   </div>
-                  <div className="w-10 flex-shrink-0"></div>
+                  <div className="w-8 shrink-0"></div>
                 </div>
               )}
 
@@ -755,16 +808,19 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     const margin = salePrice - cost;
 
                     return (
-                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-3">
-                        <div className="lg:hidden flex items-start gap-3">
-                          <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      <div
+                        key={item.id}
+                        className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
+                            <div className="space-y-1 md:col-span-2 min-w-0">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('accounting:clientsOrders.specialBidLabel')}
-                              </div>
+                              </label>
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
+                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBid') },
                                   ...clientSpecialBids.map((b) => ({
                                     id: b.id,
                                     name: `${b.clientName} · ${b.productName}`,
@@ -782,14 +838,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 displayValue={getBidDisplayValue(item.specialBidId)}
                                 searchable={true}
                                 disabled={isReadOnly}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-                            <div className="min-w-0">
-                              <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <div className="space-y-1 md:col-span-3 min-w-0">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('sales:clientQuotes.productsServices')}
-                              </div>
+                              </label>
                               <CustomSelect
                                 options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
                                 value={item.productId}
@@ -799,125 +854,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
                                 disabled={isReadOnly}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeProductRow(index)}
-                            disabled={isReadOnly}
-                            className="mt-5 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 lg:hidden">
-                          <div>
-                            <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('sales:clientQuotes.qty')}
-                            </div>
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              required
-                              placeholder="Qty"
-                              value={item.quantity}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateProductRow(
-                                  index,
-                                  'quantity',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              disabled={isReadOnly}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
-                            />
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('crm:internalListing.cost')}
-                            </div>
-                            <div className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                              {cost.toFixed(2)} {currency}
-                            </div>
-                            {selectedBid && (
-                              <div className="text-[8px] font-black text-praetor uppercase tracking-wider">
-                                Bid
-                              </div>
-                            )}
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('crm:internalListing.molPercentage')}
-                            </div>
-                            <div className="text-xs font-bold text-slate-600">
-                              {molPercentage.toFixed(1)}%
-                            </div>
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('sales:clientQuotes.marginLabel')}
-                            </div>
-                            <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
-                              {margin.toFixed(2)} {currency}
-                            </div>
-                          </div>
-                          <div className="col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1 md:col-span-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('crm:internalListing.salePrice')}
-                            </div>
-                            <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
-                            >
-                              {salePrice.toFixed(2)} {currency}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="hidden lg:flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-3 min-w-0">
-                              <CustomSelect
-                                options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
-                                  ...clientSpecialBids.map((b) => ({
-                                    id: b.id,
-                                    name: `${b.clientName} · ${b.productName}`,
-                                  })),
-                                ]}
-                                value={item.specialBidId || 'none'}
-                                onChange={(val) =>
-                                  updateProductRow(
-                                    index,
-                                    'specialBidId',
-                                    val === 'none' ? '' : (val as string),
-                                  )
-                                }
-                                placeholder={t('sales:clientQuotes.selectBid')}
-                                displayValue={getBidDisplayValue(item.specialBidId)}
-                                searchable={true}
-                                disabled={isReadOnly}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                              />
-                            </div>
-                            <div className="col-span-3 min-w-0">
-                              <CustomSelect
-                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                value={item.productId}
-                                onChange={(val) =>
-                                  updateProductRow(index, 'productId', val as string)
-                                }
-                                placeholder={t('sales:clientQuotes.selectProduct')}
-                                searchable={true}
-                                disabled={isReadOnly}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                              />
-                            </div>
-                            <div className="col-span-1">
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('sales:clientQuotes.qty')}
+                              </label>
                               <ValidatedNumberInput
                                 step="0.01"
                                 min="0"
@@ -933,42 +876,56 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   );
                                 }}
                                 disabled={isReadOnly}
-                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:bg-slate-50 disabled:text-slate-400"
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-slate-50 disabled:text-slate-400"
                               />
                             </div>
-                            <div className="col-span-1 flex flex-col items-center justify-center">
-                              <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                            <div className="flex flex-col items-center justify-center space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:internalListing.cost')}
+                              </label>
+                              <span className="text-xs font-bold text-slate-600">
                                 {cost.toFixed(2)} {currency}
                               </span>
                               {selectedBid && (
-                                <div className="text-[8px] font-black text-praetor uppercase tracking-wider">
+                                <div className="text-[8px] font-black uppercase tracking-wider text-praetor">
                                   Bid
                                 </div>
                               )}
                             </div>
-                            <div className="col-span-1 flex items-center justify-center">
+                            <div className="flex items-center justify-center space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:internalListing.molPercentage')}
+                              </label>
                               <span className="text-xs font-bold text-slate-600">
                                 {molPercentage.toFixed(1)}%
                               </span>
                             </div>
-                            <div className="col-span-1 flex items-center justify-center">
-                              <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">
+                            <div className="flex items-center justify-center space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('sales:clientQuotes.marginLabel')}
+                              </label>
+                              <span className="text-xs font-bold text-emerald-600">
                                 {margin.toFixed(2)} {currency}
                               </span>
                             </div>
-                            <div className="col-span-2 flex items-center justify-center">
-                              <span
-                                className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
-                              >
-                                {salePrice.toFixed(2)} {currency}
-                              </span>
+                            <div className="space-y-1 md:col-span-3">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:internalListing.salePrice')}
+                              </label>
+                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                                <span
+                                  className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                >
+                                  {salePrice.toFixed(2)} {currency}
+                                </span>
+                              </div>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeProductRow(index)}
                             disabled={isReadOnly}
-                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <i className="fa-solid fa-trash-can"></i>
                           </button>
@@ -978,186 +935,102 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   })}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-400 text-sm">
+                <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
                   {t('sales:clientQuotes.noProductsAdded')}
                 </div>
               )}
             </div>
 
-            {/* Order Details */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsOrders.orderDetails')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('accounting:clientsOrders.paymentTerms')}
-                  </label>
-                  <CustomSelect
-                    options={getPaymentTermsOptions(t)}
-                    value={formData.paymentTerms || 'immediate'}
-                    onChange={(val) =>
-                      setFormData({
-                        ...formData,
-                        paymentTerms: val as ClientsOrder['paymentTerms'],
-                      })
-                    }
-                    searchable={false}
-                    disabled={isReadOnly}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('sales:clientQuotes.globalDiscount')}
-                  </label>
-                  <div
-                    className={`flex items-center rounded-xl focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden bg-slate-50 border border-slate-200 ${isLinkedQuote ? 'opacity-50' : ''}`}
-                  >
-                    <div className="w-12 self-stretch flex items-center justify-center text-slate-400 text-xs font-bold border-r border-slate-200 bg-slate-100/30">
-                      %
-                    </div>
-                    <ValidatedNumberInput
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.discount}
-                      onValueChange={(value) => {
-                        const parsed = parseNumberInputValue(value);
-                        setFormData({ ...formData, discount: parsed });
-                      }}
-                      disabled={isReadOnly}
-                      className="flex-1 px-4 py-2.5 bg-transparent outline-none text-sm font-semibold disabled:bg-transparent"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('accounting:clientsOrders.statusColumn')}
-                  </label>
-                  <CustomSelect
-                    options={getStatusOptions(t)}
-                    value={formData.status || 'pending'}
-                    onChange={(val) =>
-                      setFormData({ ...formData, status: val as ClientsOrder['status'] })
-                    }
-                    searchable={false}
-                  />
-                </div>
-
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('accounting:clientsOrders.notes')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
-                    disabled={isReadOnly}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:bg-slate-50 disabled:text-slate-400"
-                  />
-                </div>
+            {/* Notes & Cost Summary */}
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsOrders.notes')}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
+                  disabled={isReadOnly}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                />
               </div>
-            </div>
 
-            {/* Totals Section */}
-            {formData.items && formData.items.length > 0 && (
-              <div className="pt-8 border-t border-slate-100">
+              <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.costSummary')}
+                </h4>
                 {(() => {
-                  const {
-                    subtotal,
-                    discountAmount,
-
-                    total,
-                    margin,
-                    marginPercentage,
-                    taxGroups,
-                  } = calculateTotals(formData.items, formData.discount || 0);
+                  const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
+                    calculateTotals(formData.items || [], formData.discount || 0);
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-                      {/* Left Column: Detailed Breakdown */}
-                      <div className="flex flex-col justify-center space-y-3 h-full">
-                        <div className="flex justify-between items-center px-2">
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-sm font-bold text-slate-500">
+                          {t('sales:clientQuotes.taxableAmount')}
+                        </span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {subtotal.toFixed(2)} {currency}
+                        </span>
+                      </div>
+                      {formData.discount !== undefined && formData.discount > 0 && (
+                        <div className="flex justify-between">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.taxableAmount')}:
+                            {t('sales:clientQuotes.discountAmount', {
+                              discount: formData.discount,
+                            })}
                           </span>
-                          <span className="text-sm font-black text-slate-800 whitespace-nowrap">
-                            {subtotal.toFixed(2)} {currency}
+                          <span className="text-sm font-bold text-amber-600">
+                            -{discountAmount.toFixed(2)} {currency}
                           </span>
                         </div>
-
-                        {formData.discount !== undefined && formData.discount > 0 && (
-                          <div className="flex justify-between items-center px-2">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('sales:clientQuotes.discountAmount', {
-                                discount: formData.discount,
-                              })}
-                              :
-                            </span>
-                            <span className="text-sm font-black text-amber-600 whitespace-nowrap">
-                              -{discountAmount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        )}
-
-                        {Object.entries(taxGroups).map(([rate, amount]) => (
-                          <div key={rate} className="flex justify-between items-center px-2">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('sales:clientQuotes.ivaTax', { rate })}:
-                            </span>
-                            <span className="text-sm font-black text-slate-800 whitespace-nowrap">
-                              {amount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Middle Column: Final Total */}
-                      <div className="flex flex-col items-center justify-center py-4 bg-slate-50/50 rounded-2xl border border-slate-100/50">
-                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                          {t('sales:clientQuotes.totalLabel')}:
-                        </span>
-                        <span className="inline-flex items-baseline whitespace-nowrap text-4xl font-black text-praetor leading-none">
-                          {total.toFixed(2)}
-                          <span className="text-xl ml-1 opacity-60 text-slate-400">{currency}</span>
-                        </span>
-                      </div>
-
-                      {/* Right Column: Margin */}
-                      <div className="bg-emerald-50/40 rounded-2xl p-6 flex flex-col items-center justify-center border border-emerald-100/30">
-                        <span className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
-                          {t('sales:clientQuotes.marginLabel')}:
-                        </span>
-                        <div className="text-center">
-                          <div className="text-2xl font-black text-emerald-700 leading-none mb-1 whitespace-nowrap">
-                            {margin.toFixed(2)} {currency}
-                          </div>
-                          <div className="text-xs font-black text-emerald-500 opacity-60">
-                            ({marginPercentage.toFixed(1)}%)
-                          </div>
+                      )}
+                      {Object.entries(taxGroups).map(([rate, amount]) => (
+                        <div key={rate} className="flex justify-between text-xs">
+                          <span className="font-semibold text-slate-500">
+                            {t('sales:clientQuotes.ivaTax', { rate })}
+                          </span>
+                          <span className="font-semibold text-slate-700">
+                            {amount.toFixed(2)} {currency}
+                          </span>
                         </div>
+                      ))}
+                      <div className="flex justify-between border-t border-slate-200 pt-3">
+                        <span className="text-lg font-black text-slate-800">
+                          {t('sales:clientQuotes.totalLabel')}
+                        </span>
+                        <span className="text-lg font-black text-praetor">
+                          {total.toFixed(2)} {currency}
+                        </span>
                       </div>
-                    </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="font-bold text-slate-500">
+                          {t('sales:clientQuotes.marginLabel')}
+                        </span>
+                        <span className="font-bold text-emerald-600">
+                          {margin.toFixed(2)} {currency} ({marginPercentage.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </>
                   );
                 })()}
               </div>
-            )}
+            </div>
 
-            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700"
               >
                 {t('accounting:clientsOrders.updateOrder')}
               </button>
@@ -1168,46 +1041,42 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('accounting:clientsOrders.deleteOrderTitle')}
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('accounting:clientsOrders.deleteOrderConfirm', {
-                  clientName: orderToDelete?.clientName,
-                })}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
+        <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+          </div>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('accounting:clientsOrders.deleteOrderTitle')}
+          </h3>
+          <p className="text-sm text-slate-500">
+            {t('accounting:clientsOrders.deleteOrderConfirm', {
+              clientName: orderToDelete?.clientName,
+            })}
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+            >
+              {t('common:buttons.cancel')}
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700"
+            >
+              {t('common:buttons.delete')}
+            </button>
           </div>
         </div>
       </Modal>
 
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-2xl font-black text-slate-800">
               {t('accounting:clientsOrders.title')}
             </h2>
-            <p className="text-slate-500 text-sm">{t('accounting:clientsOrders.subtitle')}</p>
+            <p className="text-sm text-slate-500">{t('accounting:clientsOrders.subtitle')}</p>
           </div>
         </div>
       </div>

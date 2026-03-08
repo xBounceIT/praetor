@@ -2,7 +2,12 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierInvoice, SupplierInvoiceItem } from '../../types';
-import { addDaysToDateOnly, getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
+import {
+  addDaysToDateOnly,
+  formatDateOnlyForLocale,
+  getLocalDateString,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -164,10 +169,27 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   );
 
   const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
-  const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
+  const balanceDue = roundToTwoDecimals(Number(totals.total) - Number(formData.amountPaid || 0));
+  const totalDiscount = useMemo(
+    () =>
+      (formData.items || []).reduce((sum, item) => {
+        const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+        return sum + (lineSubtotal * Number(item.discount ?? 0)) / 100;
+      }, 0),
+    [formData.items],
+  );
+  const grossSubtotal = totals.subtotal + totalDiscount;
 
   const columns = useMemo(
     () => [
+      {
+        header: t('accounting:supplierInvoices.invoiceNumber'),
+        id: 'invoiceNumber',
+        accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
+        ),
+      },
       {
         header: t('accounting:supplierInvoices.supplier'),
         id: 'supplierName',
@@ -176,41 +198,59 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           const isMuted = row.status === 'paid' || row.status === 'cancelled';
 
           return (
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor text-sm">
-                <i className="fa-solid fa-file-invoice-dollar"></i>
-              </div>
-              <div>
-                <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
-                  {row.supplierName}
-                </div>
-              </div>
-            </div>
+            <span className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
+              {row.supplierName}
+            </span>
           );
         },
       },
       {
-        header: t('accounting:supplierInvoices.invoiceNumber'),
-        id: 'invoiceNumber',
-        accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
+        header: t('common:labels.date'),
+        id: 'issueDate',
+        accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.issueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-mono text-sm font-bold text-slate-600">{row.invoiceNumber}</span>
+          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
       },
       {
-        header: t('accounting:supplierInvoices.total'),
+        header: t('accounting:clientsInvoices.dueDate'),
+        id: 'dueDate',
+        accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.dueDate),
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+        ),
+      },
+      {
+        header: t('common:labels.amount'),
         id: 'invoiceTotal',
         accessorFn: (row: SupplierInvoice) => Number(row.total),
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-bold text-slate-700">
+            {Number(row.total).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (value: unknown) => Number(value).toFixed(2),
+      },
+      {
+        header: t('accounting:clientsInvoices.amountPaid'),
+        id: 'amountPaid',
+        accessorFn: (row: SupplierInvoice) => Number(row.amountPaid),
+        cell: ({ row }: { row: SupplierInvoice }) => (
+          <span className="font-bold text-emerald-600">
+            {(Number(row.amountPaid) ?? 0).toFixed(2)} {currency}
+          </span>
+        ),
+        filterFormat: (value: unknown) => Number(value).toFixed(2),
+      },
+      {
+        header: t('accounting:clientsInvoices.balance'),
+        id: 'balance',
+        accessorFn: (row: SupplierInvoice) => Number(row.total) - Number(row.amountPaid || 0),
         cell: ({ row }: { row: SupplierInvoice }) => {
-          const isMuted = row.status === 'paid' || row.status === 'cancelled';
-
+          const balance = Number(row.total) - Number(row.amountPaid || 0);
           return (
-            <span className={`text-sm font-bold ${isMuted ? 'text-slate-400' : 'text-slate-700'}`}>
-              {Number(row.total).toFixed(2)} {currency}
+            <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {balance.toFixed(2)} {currency}
             </span>
           );
         },
@@ -229,7 +269,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('accounting:supplierInvoices.actionsColumn', { defaultValue: 'Actions' }),
+        header: t('common:common.more'),
         id: 'actions',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
@@ -274,13 +314,19 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
             <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
-                <i className="fa-solid fa-pen-to-square"></i>
+                <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
-              {t('accounting:supplierInvoices.editInvoice', { defaultValue: 'Supplier Invoice' })}
+              {editingInvoice
+                ? t('accounting:supplierInvoices.editInvoice', {
+                    defaultValue: 'Edit Supplier Invoice',
+                  })
+                : t('accounting:supplierInvoices.addInvoice', {
+                    defaultValue: 'Add Supplier Invoice',
+                  })}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -290,84 +336,130 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
             <div className="space-y-4">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                 {t('accounting:clientsInvoices.invoiceDetails')}
               </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.supplier')}
-                  </label>
-                  <CustomSelect
-                    options={activeSuppliers.map((supplier) => ({
-                      id: supplier.id,
-                      name: supplier.name,
-                    }))}
-                    value={formData.supplierId || ''}
-                    onChange={(value) => {
-                      const supplier = suppliers.find((item) => item.id === value);
-                      setFormData((prev) => ({
-                        ...prev,
-                        supplierId: value as string,
-                        supplierName: supplier?.name || '',
-                      }));
-                    }}
-                    searchable={true}
-                  />
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.invoiceNumber')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.invoiceNumber || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                      placeholder="INV-XXXX"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.issueDate')}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.issueDate || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.dueDate')}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.dueDate || ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.invoiceNumber')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.invoiceNumber || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
-                </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.supplier')}
+                    </label>
+                    <CustomSelect
+                      options={activeSuppliers.map((supplier) => ({
+                        id: supplier.id,
+                        name: supplier.name,
+                      }))}
+                      value={formData.supplierId || ''}
+                      onChange={(value) => {
+                        const supplier = suppliers.find((item) => item.id === value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          supplierId: value as string,
+                          supplierName: supplier?.name || '',
+                        }));
+                      }}
+                      searchable={true}
+                      placeholder={t('accounting:supplierInvoices.selectSupplier')}
+                    />
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.issueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.issueDate || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.dueDate')}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.dueDate || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:supplierInvoices.status')}
+                    </label>
+                    <CustomSelect
+                      options={statusOptions}
+                      value={formData.status || 'draft'}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          status: value as SupplierInvoice['status'],
+                        }))
+                      }
+                      searchable={false}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:clientsInvoices.items')}
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.items')}
+                </h4>
+              </div>
+
+              {(formData.items || []).length > 0 && (
+                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
+                    <div className="col-span-3">
+                      {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                    </div>
+                    <div className="col-span-1">{t('common:labels.quantity')}</div>
+                    <div className="col-span-2">
+                      {t('crm:internalListing.salePrice')} ({currency})
+                    </div>
+                    <div className="col-span-1">{t('accounting:clientsInvoices.vat')}</div>
+                    <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
+                    <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
+                  </div>
+                </div>
+              )}
 
               {(formData.items || []).length > 0 ? (
                 <div className="space-y-3">
@@ -377,108 +469,104 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     const lineTotal = lineSubtotal - lineDiscount;
 
                     return (
-                      <div key={item.id} className="rounded-xl bg-slate-50 p-4">
-                        <div className="mb-4 flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                              {t('accounting:clientsInvoices.items')}
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
+                            <div className="space-y-1 md:col-span-2 min-w-0">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:quotes.productsServices')}
+                              </label>
+                              <CustomSelect
+                                options={activeProducts.map((product) => ({
+                                  id: product.id,
+                                  name: product.name,
+                                }))}
+                                value={item.productId || ''}
+                                onChange={(value) =>
+                                  updateItem(index, 'productId', value as string)
+                                }
+                                searchable={true}
+                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              />
                             </div>
-                            <div className="text-sm font-bold text-slate-700">
-                              {item.description ||
-                                t('accounting:clientsInvoices.descriptionPlaceholder')}
+
+                            <div className="space-y-1 md:col-span-3">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                              </label>
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(event) =>
+                                  updateItem(index, 'description', event.target.value)
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
                             </div>
-                          </div>
-                          <div className="text-left sm:text-right">
-                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">
-                              {t('accounting:supplierInvoices.total')}
+
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:quotes.qty')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.quantity}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
                             </div>
-                            <div className="text-lg font-black text-praetor">
-                              {lineTotal.toFixed(2)} {currency}
+
+                            <div className="space-y-1 md:col-span-2">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('crm:internalListing.salePrice')} ({currency})
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.unitPrice}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
                             </div>
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-                          <div className="space-y-1.5 md:col-span-3">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('sales:supplierOffers.product')}
-                            </label>
-                            <CustomSelect
-                              options={activeProducts.map((product) => ({
-                                id: product.id,
-                                name: product.name,
-                              }))}
-                              value={item.productId || ''}
-                              onChange={(value) => updateItem(index, 'productId', value as string)}
-                              searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('accounting:clientsInvoices.vat')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.taxRate}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
+                            </div>
 
-                          <div className="space-y-1.5 md:col-span-3">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('accounting:clientsInvoices.descriptionPlaceholder')}
-                            </label>
-                            <input
-                              type="text"
-                              value={item.description}
-                              onChange={(event) =>
-                                updateItem(index, 'description', event.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
-                          </div>
+                            <div className="space-y-1 md:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('accounting:supplierOrders.discount')}
+                              </label>
+                              <ValidatedNumberInput
+                                value={item.discount || 0}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
+                            </div>
 
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('sales:supplierOffers.qty')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.quantity}
-                              onValueChange={(value) =>
-                                updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:internalListing.salePrice')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.unitPrice}
-                              onValueChange={(value) =>
-                                updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('accounting:clientsInvoices.vat')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.taxRate}
-                              onValueChange={(value) =>
-                                updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('accounting:supplierOrders.discount')}
-                            </label>
-                            <ValidatedNumberInput
-                              value={item.discount || 0}
-                              onValueChange={(value) =>
-                                updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
+                            <div className="space-y-1 md:col-span-2">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
+                                {t('common:labels.total')}
+                              </label>
+                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
+                                {lineTotal.toFixed(2)} {currency}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -492,131 +580,106 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               )}
             </div>
 
-            <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:supplierInvoices.status')}
-              </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.status')}
-                  </label>
-                  <CustomSelect
-                    options={statusOptions}
-                    value={formData.status || 'draft'}
-                    onChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        status: value as SupplierInvoice['status'],
-                      }))
-                    }
-                    searchable={false}
-                  />
-                </div>
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:supplierInvoices.notes')}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes || ''}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                  placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
+              <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.costSummary')}
+                </h4>
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.subtotal')}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {grossSubtotal.toFixed(2)} {currency}
+                  </span>
+                </div>
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.totalDiscount')}
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{totalDiscount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.vat')}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {totals.taxAmount.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-3">
+                  <span className="text-lg font-black text-slate-800">
+                    {t('accounting:supplierInvoices.total')}
+                  </span>
+                  <span className="text-lg font-black text-praetor">
+                    {totals.total.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-slate-500">
                     {t('accounting:supplierInvoices.amountPaid')}
-                  </label>
-                  <ValidatedNumberInput
-                    value={formData.amountPaid || 0}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        amountPaid: value === '' ? 0 : Number(value),
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
-                  />
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <ValidatedNumberInput
+                      value={formData.amountPaid || 0}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          amountPaid: value === '' ? 0 : Number(value),
+                        }))
+                      }
+                      className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600"
+                    />
+                    <span className="text-xs font-bold text-slate-400">{currency}</span>
+                  </div>
                 </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierInvoices.notes')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.notes || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                    }
-                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-praetor"
-                  />
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-slate-500">
+                    {t('accounting:clientsInvoices.balanceDue')}
+                  </span>
+                  <span
+                    className={`font-bold ${balanceDue > 0 ? 'text-red-500' : 'text-emerald-600'}`}
+                  >
+                    {balanceDue.toFixed(2)} {currency}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {(formData.items || []).length > 0 && (
-              <div className="border-t border-slate-100 pt-8">
-                <div className="grid grid-cols-1 items-stretch gap-8 md:grid-cols-3">
-                  <div className="flex h-full flex-col justify-center space-y-3">
-                    <div className="flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:clientsInvoices.subtotal')}
-                      </span>
-                      <span className="text-sm font-black text-slate-800">
-                        {totals.subtotal.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:clientsInvoices.vat')}
-                      </span>
-                      <span className="text-sm font-black text-slate-800">
-                        {totals.taxAmount.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:supplierInvoices.amountPaid')}
-                      </span>
-                      <span className="text-sm font-black text-emerald-600">
-                        {Number(formData.amountPaid || 0).toFixed(2)} {currency}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-100/50 bg-slate-50/50 py-4">
-                    <span className="mb-1 text-xs font-black uppercase tracking-widest text-slate-400">
-                      {t('accounting:supplierInvoices.total')}
-                    </span>
-                    <span className="text-4xl font-black leading-none text-praetor">
-                      {totals.total.toFixed(2)}
-                      <span className="ml-1 text-xl text-slate-400 opacity-60">{currency}</span>
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-100/40 bg-emerald-50/50 p-6 text-center">
-                    <span className="mb-2 text-xs font-black uppercase tracking-widest text-emerald-600">
-                      {t('accounting:clientsInvoices.balanceDue')}
-                    </span>
-                    <div className="text-2xl font-black leading-none text-emerald-700">
-                      {balanceDue.toFixed(2)} {currency}
-                    </div>
-                    <div className="mt-2 text-xs font-black text-emerald-500 opacity-70">
-                      {t('accounting:clientsOrders.itemsCount', {
-                        count: (formData.items || []).length,
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between border-t border-slate-100 pt-8">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl border border-slate-200 px-8 py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50"
+                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-praetor px-10 py-3 text-sm font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
               >
-                {t('common:buttons.update')}
+                {editingInvoice ? t('common:buttons.update') : t('common:buttons.save')}
               </button>
             </div>
           </form>

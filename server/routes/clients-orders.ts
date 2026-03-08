@@ -76,6 +76,7 @@ const clientOrderSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    orderNumber: { type: ['string', 'null'] },
     linkedQuoteId: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
@@ -194,8 +195,21 @@ const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
   discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
 });
 
+const generateClientOrderNumber = async () => {
+  const year = new Date().getFullYear();
+  const result = await query(
+    `SELECT COALESCE(MAX(CAST(split_part(order_number, '-', 3) AS INTEGER)), 0) as "maxSequence"
+     FROM sales
+     WHERE order_number ~ $1`,
+    [`^ORD-${year}-[0-9]+$`],
+  );
+  const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
+  return `ORD-${year}-${String(nextSequence).padStart(4, '0')}`;
+};
+
 const normalizeClientOrderRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
+  orderNumber: toNullableString(row.orderNumber),
   linkedQuoteId: toNullableString(row.linkedQuoteId),
   linkedOfferId: toNullableString(row.linkedOfferId),
   clientId: String(row.clientId),
@@ -235,6 +249,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const clients_ordersResult = await query(
         `SELECT
                 id,
+                order_number as "orderNumber",
                 linked_quote_id as "linkedQuoteId",
                 linked_offer_id as "linkedOfferId",
                 client_id as "clientId",
@@ -429,14 +444,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const orderId = 's-' + Date.now();
+      const orderNumber = await generateClientOrderNumber();
 
       let orderResult: Awaited<ReturnType<typeof query>>;
       try {
         orderResult = await query(
-          `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO sales (id, order_number, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                RETURNING
                   id,
+                  order_number as "orderNumber",
                   linked_quote_id as "linkedQuoteId",
                   linked_offer_id as "linkedOfferId",
                   client_id as "clientId",
@@ -449,6 +466,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
             orderId,
+            orderNumber,
             linkedQuoteIdValue,
             linkedOfferIdResult.value || null,
             clientIdResult.value,
@@ -890,6 +908,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                WHERE id = $9
                RETURNING
                   id,
+                  order_number as "orderNumber",
                   linked_quote_id as "linkedQuoteId",
                   linked_offer_id as "linkedOfferId",
                   client_id as "clientId",

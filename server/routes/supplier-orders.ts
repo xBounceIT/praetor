@@ -46,6 +46,7 @@ const orderSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    orderNumber: { type: ['string', 'null'] },
     linkedQuoteId: { type: ['string', 'null'] },
     linkedOfferId: { type: 'string' },
     supplierId: { type: 'string' },
@@ -175,6 +176,18 @@ const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) =>
   return normalizedItems;
 };
 
+const generateSupplierOrderNumber = async () => {
+  const year = new Date().getFullYear();
+  const result = await query(
+    `SELECT COALESCE(MAX(CAST(split_part(order_number, '-', 3) AS INTEGER)), 0) as "maxSequence"
+     FROM supplier_sales
+     WHERE order_number ~ $1`,
+    [`^SORD-${year}-[0-9]+$`],
+  );
+  const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
+  return `SORD-${year}-${String(nextSequence).padStart(4, '0')}`;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -198,6 +211,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const ordersResult = await query(
         `SELECT
             id,
+            order_number as "orderNumber",
             linked_quote_id as "linkedQuoteId",
             linked_offer_id as "linkedOfferId",
             supplier_id as "supplierId",
@@ -324,14 +338,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!normalizedItems) return;
 
       const orderId = 'ss-' + Date.now();
+      const orderNumber = await generateSupplierOrderNumber();
       let createdOrderResult: Awaited<ReturnType<typeof query>>;
       try {
         createdOrderResult = await query(
           `INSERT INTO supplier_sales
-            (id, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (id, order_number, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            RETURNING
               id,
+              order_number as "orderNumber",
               linked_quote_id as "linkedQuoteId",
               linked_offer_id as "linkedOfferId",
               supplier_id as "supplierId",
@@ -344,6 +360,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
             orderId,
+            orderNumber,
             offerResult.rows[0].linkedQuoteId || null,
             linkedOfferIdResult.value,
             supplierIdResult.value,
@@ -520,6 +537,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          WHERE id = $7
          RETURNING
             id,
+            order_number as "orderNumber",
             linked_quote_id as "linkedQuoteId",
             linked_offer_id as "linkedOfferId",
             supplier_id as "supplierId",

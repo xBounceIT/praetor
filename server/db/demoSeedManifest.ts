@@ -94,11 +94,11 @@ export const DEMO_CUSTOMER_OFFERS = [
 ] as const;
 
 export const DEMO_SALES = [
-  { id: 'dm_so_01', linkedOfferId: null },
-  { id: 'dm_so_02', linkedOfferId: 'dm_co_04' },
-  { id: 'dm_so_03', linkedOfferId: null },
-  { id: 'dm_so_04', linkedOfferId: null },
-  { id: 'dm_so_05', linkedOfferId: null },
+  { id: 'dm_so_01', orderNumber: 'ORD-2026-0001', linkedOfferId: null },
+  { id: 'dm_so_02', orderNumber: 'ORD-2026-0002', linkedOfferId: 'dm_co_04' },
+  { id: 'dm_so_03', orderNumber: 'ORD-2026-0003', linkedOfferId: null },
+  { id: 'dm_so_04', orderNumber: 'ORD-2026-0004', linkedOfferId: null },
+  { id: 'dm_so_05', orderNumber: 'ORD-2026-0005', linkedOfferId: null },
 ] as const;
 
 export const DEMO_INVOICES = [
@@ -139,11 +139,11 @@ export const DEMO_SUPPLIER_OFFERS = [
 ] as const;
 
 export const DEMO_SUPPLIER_SALES = [
-  { id: 'dm_ss_01', linkedOfferId: 'dm_sfo_06' },
-  { id: 'dm_ss_02', linkedOfferId: 'dm_sfo_04' },
-  { id: 'dm_ss_03', linkedOfferId: 'dm_sfo_07' },
-  { id: 'dm_ss_04', linkedOfferId: 'dm_sfo_08' },
-  { id: 'dm_ss_05', linkedOfferId: 'dm_sfo_09' },
+  { id: 'dm_ss_01', orderNumber: 'SORD-2026-0001', linkedOfferId: 'dm_sfo_06' },
+  { id: 'dm_ss_02', orderNumber: 'SORD-2026-0002', linkedOfferId: 'dm_sfo_04' },
+  { id: 'dm_ss_03', orderNumber: 'SORD-2026-0003', linkedOfferId: 'dm_sfo_07' },
+  { id: 'dm_ss_04', orderNumber: 'SORD-2026-0004', linkedOfferId: 'dm_sfo_08' },
+  { id: 'dm_ss_05', orderNumber: 'SORD-2026-0005', linkedOfferId: 'dm_sfo_09' },
 ] as const;
 
 export const DEMO_SUPPLIER_INVOICES = [

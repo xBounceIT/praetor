@@ -724,6 +724,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO sales (
     id,
+    order_number,
     linked_quote_id,
     linked_offer_id,
     client_id,
@@ -735,11 +736,11 @@ INSERT INTO sales (
     created_at,
     updated_at
 ) VALUES
-    ('dm_so_01', NULL, NULL, 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'draft', 'Editable manual sale order used for direct accounting workflow.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '41 days'),
-    ('dm_so_02', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'sent', 'Linked order generated from an accepted offer and now pending confirmation.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
-    ('dm_so_03', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_so_04', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 5.00, 'confirmed', 'Confirmed order already invoiced and mirrored into demo projects.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
-    ('dm_so_05', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
+    ('dm_so_01', 'ORD-2026-0001', NULL, NULL, 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'draft', 'Editable manual sale order used for direct accounting workflow.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '41 days'),
+    ('dm_so_02', 'ORD-2026-0002', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'sent', 'Linked order generated from an accepted offer and now pending confirmation.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
+    ('dm_so_03', 'ORD-2026-0003', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    ('dm_so_04', 'ORD-2026-0004', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 5.00, 'confirmed', 'Confirmed order already invoiced and mirrored into demo projects.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
+    ('dm_so_05', 'ORD-2026-0005', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     linked_offer_id = EXCLUDED.linked_offer_id,
@@ -1045,6 +1046,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO supplier_sales (
     id,
+    order_number,
     linked_quote_id,
     linked_offer_id,
     supplier_id,
@@ -1056,11 +1058,11 @@ INSERT INTO supplier_sales (
     created_at,
     updated_at
 ) VALUES
-    ('dm_ss_01', 'dm_sq_11', 'dm_sfo_06', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware offer.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
-    ('dm_ss_02', 'dm_sq_07', 'dm_sfo_04', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
-    ('dm_ss_03', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted security offer and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_ss_05', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', 'Denied supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
+    ('dm_ss_01', 'SORD-2026-0001', 'dm_sq_11', 'dm_sfo_06', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware offer.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
+    ('dm_ss_02', 'SORD-2026-0002', 'dm_sq_07', 'dm_sfo_04', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
+    ('dm_ss_03', 'SORD-2026-0003', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    ('dm_ss_04', 'SORD-2026-0004', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted security offer and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_ss_05', 'SORD-2026-0005', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', 'Denied supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     linked_offer_id = EXCLUDED.linked_offer_id,

@@ -8,7 +8,7 @@ import {
   getLocalDateString,
   isDateOnlyWithinInclusiveRange,
 } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -33,12 +33,6 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
   return costo / (1 - molPercentage / 100);
 };
 
-const getSettlementStatus = (invoice: Invoice, amountPaid: number): Invoice['status'] => {
-  if (amountPaid >= invoice.total) return 'paid';
-  if (invoice.status === 'paid') return 'sent';
-  return invoice.status;
-};
-
 const getLineTotal = (item: InvoiceItem) =>
   item.quantity * item.unitPrice * (1 - Number(item.discount || 0) / 100);
 
@@ -61,11 +55,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
-  const [invoiceToAdjust, setInvoiceToAdjust] = useState<Invoice | null>(null);
-  const [settlementAmountPaid, setSettlementAmountPaid] = useState(0);
-  const [settlementError, setSettlementError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const statusOptions = useMemo(
@@ -229,22 +219,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       subtotal += lineNet;
 
       const taxRate = Number(item.taxRate || 0);
-      const taxAmount = lineNet * (taxRate / 100);
+      const taxAmount = roundToTwoDecimals(lineNet * (taxRate / 100));
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
     });
 
-    const totalTax = Object.values(taxGroups).reduce((sum, value) => sum + value, 0);
-    const total = subtotal + totalTax;
-    if (!formData.clientId)
-      newErrors.clientId = t('accounting:clientsInvoices.client') + ' is required';
-    if (!formData.invoiceNumber)
-      newErrors.invoiceNumber = t('accounting:clientsInvoices.invoiceNumber') + ' is required';
-    if (!formData.issueDate)
-      newErrors.issueDate = t('accounting:clientsInvoices.issueDate') + ' is required';
-    if (!formData.dueDate)
-      newErrors.dueDate = t('accounting:clientsInvoices.dueDate') + ' is required';
-    if (!formData.items || formData.items.length === 0)
-      newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
+    const totalTax = roundToTwoDecimals(
+      Object.values(taxGroups).reduce((sum, value) => sum + value, 0),
+    );
+    const total = roundToTwoDecimals(subtotal + totalTax);
 
     return { subtotal, totalTax, total, taxGroups };
   }, []);
@@ -430,52 +412,18 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     }
   };
 
-  const openSettlementModal = useCallback((invoice: Invoice) => {
-    setInvoiceToAdjust(invoice);
-    setSettlementAmountPaid(roundToTwoDecimals(Number(invoice.amountPaid ?? 0)));
-    setSettlementError('');
-    setIsSettlementModalOpen(true);
-  }, []);
-
-  const closeSettlementModal = useCallback(() => {
-    setIsSettlementModalOpen(false);
-    setInvoiceToAdjust(null);
-    setSettlementError('');
-  }, []);
-
-  const handleSettlementSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!invoiceToAdjust) return;
-
-    const invoiceTotal = roundToTwoDecimals(Number(invoiceToAdjust.total ?? 0));
-    const nextAmountPaid = roundToTwoDecimals(Number(settlementAmountPaid ?? 0));
-
-    if (!Number.isFinite(nextAmountPaid) || nextAmountPaid < 0) {
-      setSettlementError(t('accounting:clientsInvoices.amountPaidInvalid'));
-      return;
-    }
-
-    if (nextAmountPaid > invoiceTotal) {
-      setSettlementError(t('accounting:clientsInvoices.amountPaidExceedsTotal'));
-      return;
-    }
-
-    await Promise.resolve(
-      onUpdateInvoice(invoiceToAdjust.id, {
-        amountPaid: nextAmountPaid,
-        status: getSettlementStatus(invoiceToAdjust, nextAmountPaid),
-      }),
-    );
-
-    closeSettlementModal();
-  };
-
   const { subtotal, total, taxGroups } = calculateTotals(formData.items || []);
+  const totalDiscount = (formData.items || []).reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice * (Number(item.discount || 0) / 100),
+    0,
+  );
+  const grossSubtotal = subtotal + totalDiscount;
 
   const columns = useMemo(
     () => [
       {
         header: t('accounting:clientsInvoices.invoiceNumber'),
+        id: 'invoiceNumber',
         accessorFn: (row: Invoice) => row.invoiceNumber,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
@@ -485,6 +433,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.client'),
+        id: 'clientName',
         accessorFn: (row: Invoice) => row.clientName,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-800">{row.clientName}</span>
@@ -492,6 +441,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('common:labels.date'),
+        id: 'issueDate',
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.issueDate),
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
@@ -501,6 +451,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.dueDate'),
+        id: 'dueDate',
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.dueDate),
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
@@ -510,6 +461,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('common:labels.amount'),
+        id: 'invoiceTotal',
         accessorFn: (row: Invoice) => row.total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
@@ -522,6 +474,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.amountPaid'),
+        id: 'amountPaid',
         accessorFn: (row: Invoice) => row.amountPaid,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-emerald-600">
@@ -532,11 +485,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.balance'),
-        accessorFn: (row: Invoice) => row.total - row.amountPaid,
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
+        id: 'balance',
+        accessorFn: (row: Invoice) => roundToTwoDecimals(row.total - row.amountPaid),
         cell: ({ row }: { row: Invoice }) => {
-          const balance = row.total - row.amountPaid;
+          const balance = roundToTwoDecimals(row.total - row.amountPaid);
           return (
             <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
               {balance.toFixed(2)} {currency}
@@ -547,6 +499,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.status'),
+        id: 'invoiceStatus',
         accessorFn: (row: Invoice) =>
           statusOptions.find((opt) => opt.id === row.status)?.name || row.status,
         className: 'whitespace-nowrap',
@@ -581,21 +534,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                 </button>
               )}
             </Tooltip>
-            {row.status !== 'cancelled' && (
-              <Tooltip label={t('accounting:clientsInvoices.adjustPaid')}>
-                {() => (
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openSettlementModal(row);
-                    }}
-                    className="rounded-lg p-2 text-slate-400 transition-all hover:bg-emerald-50 hover:text-emerald-600"
-                  >
-                    <i className="fa-solid fa-money-bill-wave"></i>
-                  </button>
-                )}
-              </Tooltip>
-            )}
             <Tooltip label={t('common:buttons.delete')}>
               {() => (
                 <button
@@ -613,14 +551,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         ),
       },
     ],
-    [currency, statusOptions, t, confirmDelete, openEditModal, openSettlementModal],
+    [currency, statusOptions, t, confirmDelete, openEditModal],
   );
-
-  const settlementBalance = invoiceToAdjust
-    ? roundToTwoDecimals(Number(invoiceToAdjust.total ?? 0) - Number(settlementAmountPaid ?? 0))
-    : 0;
-  const settlementStatusLabel =
-    invoiceToAdjust && statusOptions.find((option) => option.id === invoiceToAdjust.status)?.name;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -644,86 +576,103 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.invoiceNumber')}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.invoiceNumber}
-                  onChange={(event) =>
-                    setFormData({ ...formData, invoiceNumber: event.target.value })
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
-                  placeholder="INV-YYYY-XXXX"
-                />
-                {errors.invoiceNumber && (
-                  <p className="ml-1 text-[10px] font-bold text-red-500">{errors.invoiceNumber}</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.issueDate')}
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.issueDate}
-                  onChange={(event) => setFormData({ ...formData, issueDate: event.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                />
-                {errors.issueDate && (
-                  <p className="ml-1 text-[10px] font-bold text-red-500">{errors.issueDate}</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.dueDate')}
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.dueDate}
-                  onChange={(event) => setFormData({ ...formData, dueDate: event.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
-                />
-                {errors.dueDate && (
-                  <p className="ml-1 text-[10px] font-bold text-red-500">{errors.dueDate}</p>
-                )}
-              </div>
-            </div>
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                {t('accounting:clientsInvoices.invoiceDetails')}
+              </h4>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.invoiceNumber')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.invoiceNumber}
+                      onChange={(event) =>
+                        setFormData({ ...formData, invoiceNumber: event.target.value })
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
+                      placeholder="INV-YYYY-XXXX"
+                    />
+                    {errors.invoiceNumber && (
+                      <p className="ml-1 text-[10px] font-bold text-red-500">
+                        {errors.invoiceNumber}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.issueDate')}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.issueDate}
+                      onChange={(event) =>
+                        setFormData({ ...formData, issueDate: event.target.value })
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    />
+                    {errors.issueDate && (
+                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.issueDate}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.dueDate')}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.dueDate}
+                      onChange={(event) =>
+                        setFormData({ ...formData, dueDate: event.target.value })
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor"
+                    />
+                    {errors.dueDate && (
+                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.dueDate}</p>
+                    )}
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.client')}
-                </label>
-                <CustomSelect
-                  options={activeClients.map((client) => ({ id: client.id, name: client.name }))}
-                  value={formData.clientId || ''}
-                  onChange={(value) => handleClientChange(value as string)}
-                  placeholder={t('accounting:clientsInvoices.allClients')}
-                  searchable={true}
-                  className={errors.clientId ? 'border-red-300' : ''}
-                />
-                {errors.clientId && (
-                  <p className="ml-1 text-[10px] font-bold text-red-500">{errors.clientId}</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <label className="ml-1 text-xs font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.status')}
-                </label>
-                <CustomSelect
-                  options={statusOptions}
-                  value={formData.status || 'draft'}
-                  onChange={(value) =>
-                    setFormData({ ...formData, status: value as Invoice['status'] })
-                  }
-                  searchable={false}
-                />
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.client')}
+                    </label>
+                    <CustomSelect
+                      options={activeClients.map((client) => ({
+                        id: client.id,
+                        name: client.name,
+                      }))}
+                      value={formData.clientId || ''}
+                      onChange={(value) => handleClientChange(value as string)}
+                      placeholder={t('accounting:clientsInvoices.allClients')}
+                      searchable={true}
+                      className={errors.clientId ? 'border-red-300' : ''}
+                    />
+                    {errors.clientId && (
+                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.clientId}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="ml-1 text-xs font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.status')}
+                    </label>
+                    <CustomSelect
+                      options={statusOptions}
+                      value={formData.status || 'draft'}
+                      onChange={(value) =>
+                        setFormData({ ...formData, status: value as Invoice['status'] })
+                      }
+                      searchable={false}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -746,22 +695,27 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 md:grid">
-                  <div className="col-span-3">{t('accounting:clientsInvoices.specialBid')}</div>
-                  <div className="col-span-3">{t('common:labels.product')}</div>
-                  <div className="col-span-1">{t('common:labels.quantity')}</div>
-                  <div className="col-span-1">{t('accounting:clientsInvoices.unitOfMeasure')}</div>
-                  <div className="col-span-1">{t('common:labels.price')}</div>
-                  <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
-                  <div className="col-span-1">{t('common:labels.discount')}%</div>
-                  <div className="col-span-1 pr-2 text-right">{t('common:labels.total')}</div>
+                <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
+                  <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="col-span-2 ml-1">
+                      {t('accounting:clientsInvoices.specialBid')}
+                    </div>
+                    <div className="col-span-2">{t('common:labels.product')}</div>
+                    <div className="col-span-1">{t('common:labels.quantity')}</div>
+                    <div className="col-span-2">
+                      {t('common:labels.price')} ({currency})
+                    </div>
+                    <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
+                    <div className="col-span-1">{t('common:labels.discount')}%</div>
+                    <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
+                  </div>
+                  <div className="w-8 shrink-0"></div>
                 </div>
               )}
 
               <div className="space-y-3">
                 {formData.items?.map((item, index) => {
                   const lineTotal = getLineTotal(item);
-                  const isProductLinked = Boolean(item.productId);
 
                   return (
                     <div
@@ -770,7 +724,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     >
                       <div className="flex items-start gap-2">
                         <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                          <div className="space-y-1 md:col-span-3">
+                          <div className="space-y-1 md:col-span-2 min-w-0">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('accounting:clientsInvoices.specialBid')}
                             </label>
@@ -799,7 +753,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-3">
+                          <div className="space-y-1 md:col-span-2 min-w-0">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.product')}
                             </label>
@@ -824,45 +778,31 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.quantity')}
                             </label>
-                            <ValidatedNumberInput
-                              min="0"
-                              step="0.01"
-                              required
-                              value={item.quantity}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateItemRow(
-                                  index,
-                                  'quantity',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                min="0"
+                                step="0.01"
+                                required
+                                value={item.quantity}
+                                onValueChange={(value) => {
+                                  const parsed = parseFloat(value);
+                                  updateItemRow(
+                                    index,
+                                    'quantity',
+                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                  );
+                                }}
+                                className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
+                              <span className="shrink-0 text-xs font-semibold text-slate-400">
+                                {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
+                                  ?.name || t('accounting:clientsInvoices.unit')}
+                              </span>
+                            </div>
                           </div>
-                          <div className="space-y-1 md:col-span-1">
+                          <div className="space-y-1 md:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                              {t('accounting:clientsInvoices.unitOfMeasure')}
-                            </label>
-                            <CustomSelect
-                              options={unitOptions}
-                              value={item.unitOfMeasure || 'unit'}
-                              onChange={(value) =>
-                                updateItemRow(
-                                  index,
-                                  'unitOfMeasure',
-                                  value as InvoiceItem['unitOfMeasure'],
-                                )
-                              }
-                              placeholder={t('accounting:clientsInvoices.selectUnitOfMeasure')}
-                              searchable={false}
-                              disabled={isProductLinked}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1 md:col-span-1">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                              {t('common:labels.price')}
+                              {t('common:labels.price')} ({currency})
                             </label>
                             <ValidatedNumberInput
                               min="0"
@@ -918,11 +858,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-1">
+                          <div className="space-y-1 md:col-span-3">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.total')}
                             </label>
-                            <div className="flex min-h-[42px] items-center justify-end rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
+                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
                               {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>
@@ -963,16 +903,44 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col justify-end gap-8 border-t border-slate-100 pt-6 md:flex-row">
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.notes')}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes || ''}
+                  onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                  placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+                />
+              </div>
+
               <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:clientsInvoices.costSummary')}
+                </h4>
                 <div className="flex justify-between">
                   <span className="text-sm font-bold text-slate-500">
                     {t('accounting:clientsInvoices.subtotal')}
                   </span>
                   <span className="text-sm font-bold text-slate-700">
-                    {subtotal.toFixed(2)} {currency}
+                    {grossSubtotal.toFixed(2)} {currency}
                   </span>
                 </div>
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('accounting:clientsInvoices.totalDiscount')}
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{totalDiscount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                )}
                 {Object.entries(taxGroups).map(([rate, amount]) => (
                   <div key={rate} className="flex justify-between text-xs">
                     <span className="font-semibold text-slate-500">
@@ -995,32 +963,30 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   <span className="font-bold text-slate-500">
                     {t('accounting:clientsInvoices.amountPaid')}
                   </span>
-                  <span className="font-bold text-emerald-600">
-                    {Number(formData.amountPaid ?? 0).toFixed(2)} {currency}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <ValidatedNumberInput
+                      value={formData.amountPaid || 0}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          amountPaid: value === '' ? 0 : Number(value),
+                        }))
+                      }
+                      className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600"
+                    />
+                    <span className="text-xs font-bold text-slate-400">{currency}</span>
+                  </div>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="font-bold text-slate-500">
                     {t('accounting:clientsInvoices.balanceDue')}
                   </span>
                   <span className="font-bold text-red-500">
-                    {(total - Number(formData.amountPaid || 0)).toFixed(2)} {currency}
+                    {roundToTwoDecimals(total - Number(formData.amountPaid || 0)).toFixed(2)}{' '}
+                    {currency}
                   </span>
                 </div>
               </div>
-            </div>
-
-            <div className="pt-6">
-              <label className="ml-1 text-xs font-bold text-slate-500">
-                {t('accounting:clientsInvoices.notes')}
-              </label>
-              <textarea
-                rows={2}
-                value={formData.notes || ''}
-                onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
-                placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
-              />
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
@@ -1034,120 +1000,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               <button
                 type="submit"
                 className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700"
-              >
-                {t('common:buttons.save')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isSettlementModalOpen} onClose={closeSettlementModal}>
-        <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6">
-            <h3 className="flex items-center gap-3 text-xl font-black text-slate-800">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <i className="fa-solid fa-money-bill-wave"></i>
-              </div>
-              {t('accounting:clientsInvoices.adjustPaidTitle')}
-            </h3>
-            <button
-              onClick={closeSettlementModal}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
-
-          <form onSubmit={handleSettlementSubmit} className="space-y-6 p-6">
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-slate-800">
-                {invoiceToAdjust?.invoiceNumber} - {invoiceToAdjust?.clientName}
-              </p>
-              <p className="text-sm text-slate-500">
-                {t('accounting:clientsInvoices.settlementSummary')}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
-              <div>
-                <div className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  {t('accounting:clientsInvoices.total')}
-                </div>
-                <div className="mt-1 text-lg font-black text-praetor">
-                  {Number(invoiceToAdjust?.total ?? 0).toFixed(2)} {currency}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  {t('accounting:clientsInvoices.currentStatus')}
-                </div>
-                <div className="mt-2">
-                  <StatusBadge
-                    type={(invoiceToAdjust?.status || 'draft') as StatusType}
-                    label={settlementStatusLabel || invoiceToAdjust?.status || 'draft'}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ml-1 text-xs font-bold text-slate-500">
-                {t('accounting:clientsInvoices.amountPaid')}
-              </label>
-              <ValidatedNumberInput
-                min="0"
-                step="0.01"
-                value={settlementAmountPaid}
-                onValueChange={(value) => {
-                  setSettlementError('');
-                  setSettlementAmountPaid(parseNumberInputValue(value, 0) ?? 0);
-                }}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
-              />
-              {settlementError && (
-                <p className="ml-1 text-[10px] font-bold text-red-500">{settlementError}</p>
-              )}
-            </div>
-
-            <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.amountPaid')}
-                </span>
-                <span className="font-black text-emerald-600">
-                  {Number(settlementAmountPaid || 0).toFixed(2)} {currency}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-bold text-slate-500">
-                  {t('accounting:clientsInvoices.balanceDue')}
-                </span>
-                <span
-                  className={`font-black ${
-                    settlementBalance > 0 ? 'text-red-500' : 'text-emerald-600'
-                  }`}
-                >
-                  {settlementBalance.toFixed(2)} {currency}
-                </span>
-              </div>
-            </div>
-
-            <p className="text-xs font-semibold leading-5 text-slate-500">
-              {t('accounting:clientsInvoices.settlementStatusHint')}
-            </p>
-
-            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
-              <button
-                type="button"
-                onClick={closeSettlementModal}
-                className="rounded-xl px-6 py-3 font-bold text-slate-500 transition-colors hover:bg-slate-50"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="rounded-xl bg-emerald-600 px-8 py-3 font-bold text-white transition-colors hover:bg-emerald-700"
               >
                 {t('common:buttons.save')}
               </button>
