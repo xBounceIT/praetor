@@ -32,6 +32,7 @@
     "quoteDeleted": "Quote deleted",
     "convertToSale": "Convert to Sale",
     "convertToOffer": "Convert to Offer",
+    "viewOffer": "View offer",
     "convertConfirm": "Convert this quote to a sale?",
     "readOnlyStatus": "{{status}} quotes are read-only",
     "readOnlyBecauseOffer": "This quote is read-only because an offer was created from it.",
@@ -211,6 +212,7 @@
     "markAccepted": "Mark as accepted",
     "markDenied": "Mark as denied",
     "createOffer": "Create offer",
+    "viewOffer": "View offer",
     "linkedOffer": "Linked to offer",
     "errors": {
       "supplierRequired": "Supplier is required",

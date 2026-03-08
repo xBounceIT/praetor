@@ -32,6 +32,7 @@
     "quoteDeleted": "Preventivo eliminato",
     "convertToSale": "Converti in Vendita",
     "convertToOffer": "Converti in Offerta",
+    "viewOffer": "Visualizza offerta",
     "convertConfirm": "Convertire questo preventivo in una vendita?",
     "readOnlyStatus": "I preventivi in stato {{status}} sono in sola lettura",
     "readOnlyBecauseOffer": "Questo preventivo è in sola lettura perché è stata creata un'offerta da esso.",
@@ -211,6 +212,7 @@
     "markAccepted": "Segna come accettato",
     "markDenied": "Segna come rifiutato",
     "createOffer": "Crea offerta",
+    "viewOffer": "Visualizza offerta",
     "linkedOffer": "Collegato all'offerta",
     "errors": {
       "supplierRequired": "Il fornitore è obbligatorio",
