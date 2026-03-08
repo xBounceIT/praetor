@@ -541,23 +541,23 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               )}
             </div>
 
-            <div className="space-y-4 pt-6">
-              <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
-                <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:supplierInvoices.notes')}
-              </h4>
-              <textarea
-                rows={2}
-                value={formData.notes || ''}
-                onChange={(event) =>
-                  setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
-                placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
-              />
-            </div>
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('accounting:supplierInvoices.notes')}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes || ''}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                  placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+                />
+              </div>
 
-            <div className="flex flex-col justify-end gap-8 border-t border-slate-100 pt-6 md:flex-row">
               <div className="w-full space-y-3 md:w-1/3">
                 <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
