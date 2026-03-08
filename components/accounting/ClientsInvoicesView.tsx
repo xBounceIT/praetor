@@ -471,6 +471,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     () => [
       {
         header: t('accounting:clientsInvoices.invoiceNumber'),
+        id: 'invoiceNumber',
         accessorFn: (row: Invoice) => row.invoiceNumber,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
@@ -478,6 +479,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.client'),
+        id: 'clientName',
         accessorFn: (row: Invoice) => row.clientName,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-800">{row.clientName}</span>
@@ -485,6 +487,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('common:labels.date'),
+        id: 'issueDate',
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.issueDate),
         cell: ({ row }: { row: Invoice }) => (
           <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
@@ -492,6 +495,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.dueDate'),
+        id: 'dueDate',
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.dueDate),
         cell: ({ row }: { row: Invoice }) => (
           <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
@@ -499,6 +503,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('common:labels.amount'),
+        id: 'invoiceTotal',
         accessorFn: (row: Invoice) => row.total,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-700">
@@ -509,6 +514,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.amountPaid'),
+        id: 'amountPaid',
         accessorFn: (row: Invoice) => row.amountPaid,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-emerald-600">
@@ -519,6 +525,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.balance'),
+        id: 'balance',
         accessorFn: (row: Invoice) => row.total - row.amountPaid,
         cell: ({ row }: { row: Invoice }) => {
           const balance = row.total - row.amountPaid;
@@ -532,6 +539,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       },
       {
         header: t('accounting:clientsInvoices.status'),
+        id: 'invoiceStatus',
         accessorFn: (row: Invoice) =>
           statusOptions.find((option) => option.id === row.status)?.name || row.status,
         cell: ({ row }: { row: Invoice }) => (

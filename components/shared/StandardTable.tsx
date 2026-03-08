@@ -121,7 +121,8 @@ const StandardTable = <T extends object>({
   }, []);
 
   const getColId = useCallback(
-    (col: Column<T>) => col.id || String(col.accessorKey) || col.header,
+    (col: Column<T>) =>
+      col.id || (col.accessorKey ? String(col.accessorKey) : undefined) || col.header,
     [],
   );
 
