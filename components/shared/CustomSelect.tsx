@@ -235,7 +235,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               ))}
             </div>
           ) : (
-            <Tooltip label={tooltipLabel} disabled={!tooltipLabel}>
+            <Tooltip
+              label={tooltipLabel}
+              disabled={!tooltipLabel}
+              wrapperClassName="min-w-0 w-full"
+            >
               {() => (
                 <span
                   className={`truncate block ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
