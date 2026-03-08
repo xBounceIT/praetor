@@ -374,9 +374,6 @@ export type View =
   | 'accounting/clients-invoices'
   | 'accounting/supplier-orders'
   | 'accounting/supplier-invoices'
-  // Finances module
-  | 'finances/payments'
-  | 'finances/expenses'
   // HR module (Deprecated/Moved)
   // | 'hr/workforce'
   // | 'hr/work-units'
@@ -456,33 +453,6 @@ export interface Invoice {
   items: InvoiceItem[];
   createdAt: number;
   updatedAt: number;
-}
-
-export interface Payment {
-  id: string;
-  invoiceId?: string;
-  clientId: string;
-  clientName?: string;
-  amount: number;
-  paymentDate: string;
-  paymentMethod: 'cash' | 'bank_transfer' | 'credit_card' | 'check' | 'other';
-  reference?: string;
-  notes?: string;
-  createdAt: number;
-}
-
-export interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  expenseDate: string;
-  category: 'travel' | 'office_supplies' | 'software' | 'marketing' | 'utilities' | 'other';
-  vendor?: string;
-  receiptReference?: string;
-  notes?: string;
-  sourceType?: 'manual' | 'supplier_invoice';
-  linkedSupplierInvoiceId?: string;
-  createdAt: number;
 }
 
 export interface Supplier {
@@ -644,7 +614,6 @@ export interface SupplierInvoice {
   amountPaid: number;
   notes?: string;
   items: SupplierInvoiceItem[];
-  linkedExpenseId?: string;
   createdAt: number;
   updatedAt: number;
 }

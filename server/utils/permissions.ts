@@ -45,10 +45,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'accounting.supplier_orders', actions: CRUD },
   { id: 'accounting.supplier_invoices', actions: CRUD },
 
-  // Finances
-  { id: 'finances.payments', actions: CRUD },
-  { id: 'finances.expenses', actions: CRUD },
-
   // Projects
   { id: 'projects.manage', actions: CRUD },
   { id: 'projects.manage_all', actions: VIEW_ONLY, isScope: true },
@@ -133,8 +129,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('accounting.clients_invoices', CRUD),
     ...buildPermissions('accounting.supplier_orders', CRUD),
     ...buildPermissions('accounting.supplier_invoices', CRUD),
-    ...buildPermissions('finances.payments', CRUD),
-    ...buildPermissions('finances.expenses', CRUD),
     ...buildPermissions('projects.manage', CRUD),
     buildPermission('projects.manage_all', 'view'),
     ...buildPermissions('projects.tasks', CRUD),

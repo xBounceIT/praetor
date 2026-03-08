@@ -60,6 +60,13 @@
     "balanceDue": "Balance Due",
     "balance": "Balance",
     "amountPaid": "Amount Paid",
+    "adjustPaid": "Adjust Paid",
+    "adjustPaidTitle": "Adjust Amount Paid",
+    "currentStatus": "Current Status",
+    "settlementSummary": "Update the settled amount without editing invoice lines.",
+    "settlementStatusHint": "Saving the full total marks the invoice as paid. Lowering a paid invoice below the total sets it back to sent.",
+    "amountPaidInvalid": "Enter a valid paid amount.",
+    "amountPaidExceedsTotal": "Amount paid cannot exceed the invoice total.",
     "status": "Status",
     "statusDraft": "Draft",
     "statusSent": "Sent",
@@ -120,8 +127,6 @@
     "total": "Total",
     "notes": "Notes",
     "actionsColumn": "Actions",
-    "deleteTitle": "Delete supplier invoice?",
-    "linkedExpense": "Linked expense",
-    "noLinkedExpense": "No linked expense"
+    "deleteTitle": "Delete supplier invoice?"
   }
 }

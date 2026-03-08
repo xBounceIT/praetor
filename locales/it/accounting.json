@@ -60,6 +60,13 @@
     "balanceDue": "Saldo Dovuto",
     "balance": "Saldo",
     "amountPaid": "Importo Pagato",
+    "adjustPaid": "Regola Pagato",
+    "adjustPaidTitle": "Regola Importo Pagato",
+    "currentStatus": "Stato Attuale",
+    "settlementSummary": "Aggiorna l'importo incassato senza modificare le righe della fattura.",
+    "settlementStatusHint": "Salvando l'intero importo la fattura viene segnata come pagata. Se riduci una fattura pagata sotto il totale, lo stato torna a inviata.",
+    "amountPaidInvalid": "Inserisci un importo pagato valido.",
+    "amountPaidExceedsTotal": "L'importo pagato non puo' superare il totale della fattura.",
     "status": "Stato",
     "statusDraft": "Bozza",
     "statusSent": "Inviata",
@@ -120,8 +127,6 @@
     "total": "Totale",
     "notes": "Note",
     "actionsColumn": "Azioni",
-    "deleteTitle": "Eliminare fattura fornitore?",
-    "linkedExpense": "Spesa collegata",
-    "noLinkedExpense": "Nessuna spesa collegata"
+    "deleteTitle": "Eliminare fattura fornitore?"
   }
 }

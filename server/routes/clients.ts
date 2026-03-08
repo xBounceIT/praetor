@@ -246,8 +246,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'catalog.special_bids.view',
           'catalog.internal_listing.view',
           'catalog.external_listing.view',
-          'finances.payments.view',
-          'finances.expenses.view',
           'sales.supplier_quotes.view',
           'administration.user_management.view',
           'administration.user_management.update',

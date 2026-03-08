@@ -14,13 +14,11 @@ export type { LoginResponse, Settings } from './api/contracts';
 export { emailApi } from './api/email';
 export { employeesApi } from './api/employees';
 export { entriesApi } from './api/entries';
-export { expensesApi } from './api/expenses';
 export { generalSettingsApi } from './api/generalSettings';
 export { invoicesApi } from './api/invoices';
 export { ldapApi } from './api/ldap';
 export { logsApi } from './api/logs';
 export { notificationsApi } from './api/notifications';
-export { paymentsApi } from './api/payments';
 export { productsApi } from './api/products';
 export { projectsApi } from './api/projects';
 export { reportsApi } from './api/reports';
@@ -46,13 +44,11 @@ import { clientsOrdersApi } from './api/clientsOrders';
 import { emailApi } from './api/email';
 import { employeesApi } from './api/employees';
 import { entriesApi } from './api/entries';
-import { expensesApi } from './api/expenses';
 import { generalSettingsApi } from './api/generalSettings';
 import { invoicesApi } from './api/invoices';
 import { ldapApi } from './api/ldap';
 import { logsApi } from './api/logs';
 import { notificationsApi } from './api/notifications';
-import { paymentsApi } from './api/payments';
 import { productsApi } from './api/products';
 import { projectsApi } from './api/projects';
 import { reportsApi } from './api/reports';
@@ -83,8 +79,6 @@ export default {
   clientOffers: clientOffersApi,
   clientsOrders: clientsOrdersApi,
   invoices: invoicesApi,
-  payments: paymentsApi,
-  expenses: expensesApi,
   suppliers: suppliersApi,
   supplierQuotes: supplierQuotesApi,
   supplierOffers: supplierOffersApi,

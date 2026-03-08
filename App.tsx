@@ -17,13 +17,11 @@ import InternalListingView from './components/catalog/InternalListingView';
 import SpecialBidsView from './components/catalog/SpecialBidsView';
 import ApiDocsView from './components/docs/ApiDocsView';
 import FrontendDocsView from './components/docs/FrontendDocsView';
-import ExpensesView from './components/ExpensesView';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import NotFound from './components/NotFound';
-import PaymentsView from './components/PaymentsView';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
@@ -48,12 +46,10 @@ import type {
   ClientOffer,
   ClientsOrder,
   EmailConfig,
-  Expense,
   GeneralSettings as IGeneralSettings,
   Invoice,
   LdapConfig,
   Notification,
-  Payment,
   Product,
   Project,
   ProjectTask,
@@ -115,7 +111,6 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('hr/')) return 'hr';
   if (view.startsWith('projects/')) return 'projects';
   if (view.startsWith('accounting/')) return 'accounting';
-  if (view.startsWith('finances/')) return 'finances';
   if (view.startsWith('suppliers/')) return 'suppliers';
   if (view.startsWith('reports/')) return 'reports';
   if (view.startsWith('administration/')) return 'administration';
@@ -573,8 +568,6 @@ const App: React.FC = () => {
   const [clientOffers, setClientOffers] = useState<ClientOffer[]>([]);
   const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuote[]>([]);
   const [supplierOffers, setSupplierOffers] = useState<SupplierOffer[]>([]);
@@ -669,9 +662,6 @@ const App: React.FC = () => {
       'catalog/internal-listing',
       'catalog/external-listing',
       'catalog/special-bids',
-      // Finances module
-      'finances/payments',
-      'finances/expenses',
       'projects/manage',
       'projects/tasks',
       'hr/internal',
@@ -722,9 +712,6 @@ const App: React.FC = () => {
       'catalog/internal-listing',
       'catalog/external-listing',
       'catalog/special-bids',
-      // Finances module
-      'finances/payments',
-      'finances/expenses',
       'projects/manage',
       'projects/tasks',
       'hr/internal',
@@ -784,22 +771,6 @@ const App: React.FC = () => {
     });
     return ids;
   }, [supplierInvoices]);
-
-  const canViewExpenses = hasPermission(
-    currentUser?.permissions,
-    buildPermission('finances.expenses', 'view'),
-  );
-
-  const refreshExpensesIfAllowed = useCallback(async () => {
-    if (!canViewExpenses) return;
-
-    try {
-      const expensesData = await api.expenses.list();
-      setExpenses(expensesData);
-    } catch (err) {
-      console.error('Failed to refresh expenses after supplier invoice change:', err);
-    }
-  }, [canViewExpenses]);
 
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
@@ -1057,10 +1028,6 @@ const App: React.FC = () => {
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
-        const canViewFinances = hasAnyPermission(permissions, [
-          buildPermission('finances.payments', 'view'),
-          buildPermission('finances.expenses', 'view'),
-        ]);
         const canViewProjects = hasAnyPermission(permissions, [
           buildPermission('projects.manage', 'view'),
           buildPermission('projects.tasks', 'view'),
@@ -1084,8 +1051,6 @@ const App: React.FC = () => {
           buildPermission('catalog.special_bids', 'view'),
           buildPermission('catalog.internal_listing', 'view'),
           buildPermission('catalog.external_listing', 'view'),
-          buildPermission('finances.payments', 'view'),
-          buildPermission('finances.expenses', 'view'),
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
         ]);
@@ -1166,14 +1131,6 @@ const App: React.FC = () => {
         const canListSupplierInvoices = hasPermission(
           permissions,
           buildPermission('accounting.supplier_invoices', 'view'),
-        );
-        const canListPayments = hasPermission(
-          permissions,
-          buildPermission('finances.payments', 'view'),
-        );
-        const canListExpenses = hasPermission(
-          permissions,
-          buildPermission('finances.expenses', 'view'),
         );
         const canListWorkUnits = hasAnyPermission(permissions, [
           buildPermission('administration.work_units', 'view'),
@@ -1514,36 +1471,6 @@ const App: React.FC = () => {
                 enabled: canViewCatalogExternal && canListSuppliers,
                 load: () => api.suppliers.list(),
                 apply: (data) => setSuppliers(data as Supplier[]),
-              },
-            ]);
-            await loadOptionalDataset(
-              module,
-              'general settings',
-              loadGeneralSettings,
-              failedDatasets,
-            );
-            break;
-          }
-          case 'finances': {
-            if (!canViewFinances) return;
-            failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'payments',
-                enabled: canListPayments,
-                load: () => api.payments.list(),
-                apply: (data) => setPayments(data as Payment[]),
-              },
-              {
-                dataset: 'expenses',
-                enabled: canListExpenses,
-                load: () => api.expenses.list(),
-                apply: (data) => setExpenses(data as Expense[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
               },
             ]);
             await loadOptionalDataset(
@@ -2354,78 +2281,6 @@ const App: React.FC = () => {
     }
   };
 
-  const addPayment = async (paymentData: Partial<Payment>) => {
-    try {
-      const payment = await api.payments.create(paymentData);
-      setPayments([...payments, payment]);
-
-      // Update linked invoice if necessary (locally) - API handles backend logic
-      if (payment.invoiceId) {
-        const invoice = await api.invoices
-          .list()
-          .then((list) => list.find((i) => i.id === payment.invoiceId));
-        if (invoice) {
-          setInvoices((prev) => prev.map((p) => (p.id === invoice.id ? invoice : p)));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to add payment:', err);
-    }
-  };
-
-  const handleUpdatePayment = async (id: string, updates: Partial<Payment>) => {
-    try {
-      const updated = await api.payments.update(id, updates);
-      setPayments(payments.map((p) => (p.id === id ? updated : p)));
-
-      // Refresh invoices as balance might change
-      const invoicesList = await api.invoices.list();
-      setInvoices(invoicesList);
-    } catch (err) {
-      console.error('Failed to update payment:', err);
-    }
-  };
-
-  const handleDeletePayment = async (id: string) => {
-    try {
-      await api.payments.delete(id);
-      setPayments(payments.filter((p) => p.id !== id));
-
-      // Refresh invoices as balance might change
-      const invoicesList = await api.invoices.list();
-      setInvoices(invoicesList);
-    } catch (err) {
-      console.error('Failed to delete payment:', err);
-    }
-  };
-
-  const addExpense = async (expenseData: Partial<Expense>) => {
-    try {
-      const expense = await api.expenses.create(expenseData);
-      setExpenses([...expenses, expense]);
-    } catch (err) {
-      console.error('Failed to add expense:', err);
-    }
-  };
-
-  const handleUpdateExpense = async (id: string, updates: Partial<Expense>) => {
-    try {
-      const updated = await api.expenses.update(id, updates);
-      setExpenses(expenses.map((e) => (e.id === id ? updated : e)));
-    } catch (err) {
-      console.error('Failed to update expense:', err);
-    }
-  };
-
-  const handleDeleteExpense = async (id: string) => {
-    try {
-      await api.expenses.delete(id);
-      setExpenses(expenses.filter((e) => e.id !== id));
-    } catch (err) {
-      console.error('Failed to delete expense:', err);
-    }
-  };
-
   const addSupplier = async (supplierData: Partial<Supplier>) => {
     try {
       const supplier = await api.suppliers.create(supplierData);
@@ -2591,7 +2446,6 @@ const App: React.FC = () => {
     try {
       const updated = await api.supplierInvoices.update(id, updates);
       setSupplierInvoices((prev) => prev.map((invoice) => (invoice.id === id ? updated : invoice)));
-      await refreshExpensesIfAllowed();
     } catch (err) {
       console.error('Failed to update supplier invoice:', err);
       throw err;
@@ -2602,7 +2456,6 @@ const App: React.FC = () => {
     try {
       await api.supplierInvoices.delete(id);
       setSupplierInvoices((prev) => prev.filter((invoice) => invoice.id !== id));
-      await refreshExpensesIfAllowed();
     } catch (err) {
       console.error('Failed to delete supplier invoice:', err);
       throw err;
@@ -2650,7 +2503,6 @@ const App: React.FC = () => {
         items,
       });
       setSupplierInvoices((prev) => [invoice, ...prev]);
-      await refreshExpensesIfAllowed();
       setActiveView('accounting/supplier-invoices');
     } catch (err) {
       console.error('Failed to create supplier invoice from order:', err);
@@ -2912,8 +2764,6 @@ const App: React.FC = () => {
     setClientOffers([]);
     setClientsOrders([]);
     setInvoices([]);
-    setPayments([]);
-    setExpenses([]);
     setSuppliers([]);
     setSupplierQuotes([]);
     setSupplierOffers([]);
@@ -2944,8 +2794,6 @@ const App: React.FC = () => {
       setClientOffers([]);
       setClientsOrders([]);
       setInvoices([]);
-      setPayments([]);
-      setExpenses([]);
       setSuppliers([]);
       setSupplierQuotes([]);
       setSupplierOffers([]);
@@ -3382,30 +3230,6 @@ const App: React.FC = () => {
                   products={products}
                   onUpdateInvoice={handleUpdateSupplierInvoice}
                   onDeleteInvoice={handleDeleteSupplierInvoice}
-                  currency={generalSettings.currency}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['finances/payments']) &&
-              activeView === 'finances/payments' && (
-                <PaymentsView
-                  payments={payments}
-                  clients={clients}
-                  invoices={invoices}
-                  onAddPayment={addPayment}
-                  onUpdatePayment={handleUpdatePayment}
-                  onDeletePayment={handleDeletePayment}
-                  currency={generalSettings.currency}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['finances/expenses']) &&
-              activeView === 'finances/expenses' && (
-                <ExpensesView
-                  expenses={expenses}
-                  onAddExpense={addExpense}
-                  onUpdateExpense={handleUpdateExpense}
-                  onDeleteExpense={handleDeleteExpense}
                   currency={generalSettings.currency}
                 />
               )}

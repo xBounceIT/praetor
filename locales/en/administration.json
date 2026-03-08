@@ -46,10 +46,6 @@
       "supplier_orders": "Supplier Orders",
       "supplier_invoices": "Supplier Invoices"
     },
-    "finances": {
-      "payments": "Payments",
-      "expenses": "Expenses"
-    },
     "projects": {
       "manage": "Projects",
       "manage_all": "Projects (All)",

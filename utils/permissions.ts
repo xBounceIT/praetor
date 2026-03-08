@@ -51,10 +51,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'accounting.supplier_orders', actions: CRUD, module: 'accounting' },
   { id: 'accounting.supplier_invoices', actions: CRUD, module: 'accounting' },
 
-  // Finances
-  { id: 'finances.payments', actions: CRUD, module: 'finances' },
-  { id: 'finances.expenses', actions: CRUD, module: 'finances' },
-
   // Projects
   { id: 'projects.manage', actions: CRUD, module: 'projects' },
   { id: 'projects.manage_all', actions: VIEW_ONLY, isScope: true, module: 'projects' },
@@ -156,8 +152,6 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'accounting/clients-invoices': buildPermission('accounting.clients_invoices', 'view'),
   'accounting/supplier-orders': buildPermission('accounting.supplier_orders', 'view'),
   'accounting/supplier-invoices': buildPermission('accounting.supplier_invoices', 'view'),
-  'finances/payments': buildPermission('finances.payments', 'view'),
-  'finances/expenses': buildPermission('finances.expenses', 'view'),
   'projects/manage': buildPermission('projects.manage', 'view'),
   'projects/tasks': buildPermission('projects.tasks', 'view'),
   'hr/internal': buildPermission('hr.internal', 'view'),

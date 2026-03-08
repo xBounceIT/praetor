@@ -46,10 +46,6 @@
       "supplier_orders": "Ordini Fornitori",
       "supplier_invoices": "Fatture Fornitori"
     },
-    "finances": {
-      "payments": "Pagamenti",
-      "expenses": "Spese"
-    },
     "projects": {
       "manage": "Progetti",
       "manage_all": "Progetti (Tutti)",

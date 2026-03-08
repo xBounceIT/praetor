@@ -23,11 +23,9 @@ The project follows a full-stack architecture with a React-based frontend and a 
     - **Client Quotes:** Create and manage sales quotations.
     - **Special Bids:** Client-specific pricing and discounts.
     - **Products Catalog:** Internal and external product listings.
-- **Accounting & Finances:**
+- **Accounting:**
     - **Clients Orders:** Track orders from clients.
     - **Invoices:** Manage billing and payment status.
-    - **Payments:** Record and track payments received.
-    - **Expenses:** Log and categorize business expenses.
 - **HR (Human Resources):**
     - **Workforce:** Manage internal and external employees.
     - **Work Units:** Hierarchical organizational structure with manager assignments.

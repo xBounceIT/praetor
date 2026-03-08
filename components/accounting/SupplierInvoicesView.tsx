@@ -184,11 +184,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
                   {row.supplierName}
                 </div>
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  {row.linkedExpenseId
-                    ? `${t('accounting:supplierInvoices.linkedExpense')}: ${row.linkedExpenseId}`
-                    : t('accounting:supplierInvoices.noLinkedExpense')}
-                </div>
               </div>
             </div>
           );

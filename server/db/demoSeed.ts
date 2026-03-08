@@ -9,13 +9,11 @@ import {
   DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
-  DEMO_EXPENSES,
   DEMO_IDS,
   DEMO_INVOICES,
   DEMO_ITEM_IDS,
   DEMO_NOTIFICATIONS,
   DEMO_PASSWORD_HASH,
-  DEMO_PAYMENTS,
   DEMO_PRODUCTS,
   DEMO_PROJECTS,
   DEMO_QUOTES,
@@ -248,20 +246,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
 
   incrementCount(
     cleanupCountsByTable,
-    'expenses',
-    await executeDelete(client, 'expenses', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.expenses);
-      pushTextArrayPredicate(builder, 'supplier_invoice_id', DEMO_IDS.supplierInvoices);
-      pushTextArrayPredicate(
-        builder,
-        'receipt_reference',
-        nonEmpty(DEMO_EXPENSES.map((expense) => expense.receiptReference)),
-      );
-    }),
-  );
-
-  incrementCount(
-    cleanupCountsByTable,
     'supplier_invoice_items',
     await executeDelete(client, 'supplier_invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierInvoiceItems);
@@ -367,21 +351,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
         builder,
         'purchase_order_number',
         DEMO_SUPPLIER_QUOTES.map((quote) => quote.purchaseOrderNumber),
-      );
-    }),
-  );
-
-  incrementCount(
-    cleanupCountsByTable,
-    'payments',
-    await executeDelete(client, 'payments', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.payments);
-      pushTextArrayPredicate(builder, 'invoice_id', DEMO_IDS.invoices);
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
-      pushTextArrayPredicate(
-        builder,
-        'reference',
-        DEMO_PAYMENTS.map((payment) => payment.reference),
       );
     }),
   );
@@ -676,7 +645,6 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_ITEM_IDS.invoiceItems,
     expected: DEMO_EXPECTED_COUNTS.invoice_items,
   },
-  { table: 'payments', ids: DEMO_IDS.payments, expected: DEMO_EXPECTED_COUNTS.payments },
   {
     table: 'supplier_quotes',
     ids: DEMO_IDS.supplierQuotes,
@@ -717,7 +685,6 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_ITEM_IDS.supplierInvoiceItems,
     expected: DEMO_EXPECTED_COUNTS.supplier_invoice_items,
   },
-  { table: 'expenses', ids: DEMO_IDS.expenses, expected: DEMO_EXPECTED_COUNTS.expenses },
   { table: 'projects', ids: DEMO_IDS.projects, expected: DEMO_EXPECTED_COUNTS.projects },
   {
     table: 'notifications',

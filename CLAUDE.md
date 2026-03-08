@@ -25,11 +25,6 @@ bun run build        # TypeScript compilation
 bun run start        # Run compiled server
 ```
 
-### Docker (full stack)
-```bash
-docker compose up -d --build    # Build and start all services
-```
-
 ## Architecture
 
 ### State Management
@@ -45,20 +40,15 @@ docker compose up -d --build    # Build and start all services
 
 ### Database
 - Direct PostgreSQL via `pg` driver (no ORM)
-- Connection pool in `/server/db/index.ts`
 - Raw SQL queries with parameterized inputs
-- Schema in `/server/db/schema.sql`, migrations in `/server/db/*.ts`
 - Snake_case in DB → camelCase in API responses
 
 ### Authentication
 - JWT (HS256) with optional LDAP/AD fallback
 - Roles: admin (full access), manager (CRM/reports), user (personal tracking)
-- Middleware: `/server/middleware/auth.ts`
 
 ### Internationalization
 - i18next with English (en) and Italian (it)
-- Translations in `/locales/{en,it}/*.json`
-- Namespaces: common, layout, auth, timesheets, crm, hr, projects, finances, suppliers, settings, notifications
 
 ## Key Patterns
 
@@ -72,10 +62,6 @@ Backend routes in `/server/routes/` with prefix-based registration:
 - Views: PascalCase `*View.tsx` (e.g., `ClientsView.tsx`, `SalesView.tsx`)
 - Utilities: camelCase (e.g., `geminiService.ts`)
 - Routes: kebab-case (e.g., `general-settings.ts`)
-
-### Types
-- Central type definitions in `/types.ts`
-- Fastify extensions in `/server/types/fastify.d.ts`
 
 ## Important Notes
 

@@ -30,7 +30,6 @@ const moduleRoutes: Record<string, View[]> = {
     'accounting/supplier-orders',
     'accounting/supplier-invoices',
   ],
-  finances: ['finances/payments', 'finances/expenses'],
   hr: ['hr/internal', 'hr/external'],
   reports: ['reports/ai-reporting'],
   administration: [
@@ -53,7 +52,6 @@ const getModuleFromRoute = (route: View): string => {
   if (route.startsWith('hr/')) return 'hr';
   if (route.startsWith('projects/')) return 'projects';
   if (route.startsWith('accounting/')) return 'accounting';
-  if (route.startsWith('finances/')) return 'finances';
   if (route.startsWith('reports/')) return 'reports';
   if (route.startsWith('administration/')) return 'administration';
   return 'timesheets'; // default
@@ -108,7 +106,6 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
       { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
       { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
-      { id: 'finances', name: t('modules.finances'), icon: 'fa-coins', active: false },
       { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
       { id: 'reports', name: t('modules.reports'), icon: 'fa-chart-simple', active: false },
       { id: 'administration', name: t('modules.administration'), icon: 'fa-gears', active: false },
@@ -458,35 +455,6 @@ const Layout: React.FC<LayoutProps> = ({
                 isCollapsed={isCollapsed}
                 onClick={() => {
                   onViewChange('projects/tasks');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-          </>
-        );
-      case 'finances':
-        return (
-          <>
-            {canAccessView('finances/payments') && (
-              <NavItem
-                icon="fa-money-bill-wave"
-                label={t('routes.payments')}
-                active={activeView === 'finances/payments'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('finances/payments');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('finances/expenses') && (
-              <NavItem
-                icon="fa-receipt"
-                label={t('routes.expenses')}
-                active={activeView === 'finances/expenses'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('finances/expenses');
                   setIsMobileMenuOpen(false);
                 }}
               />
