@@ -26,8 +26,6 @@
     "statusExpired": "Expired",
     "statusAccepted": "Accepted",
     "statusDenied": "Denied",
-    "statusDraft": "Draft",
-    "statusSent": "Sent",
     "noQuotes": "No quotes found",
     "createFirst": "Create your first quote",
     "quoteSaved": "Quote saved successfully",

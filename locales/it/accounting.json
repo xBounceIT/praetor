@@ -138,7 +138,9 @@
   "supplierInvoices": {
     "title": "Fatture Fornitori",
     "subtitle": "Fatture create dagli ordini fornitori.",
+    "addInvoice": "Aggiungi Fattura Fornitore",
     "editInvoice": "Modifica Fattura",
+    "selectSupplier": "Seleziona un fornitore",
     "supplier": "Fornitore",
     "invoiceNumber": "Numero Fattura",
     "issueDate": "Data Emissione",
