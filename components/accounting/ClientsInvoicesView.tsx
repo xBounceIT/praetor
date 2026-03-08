@@ -777,8 +777,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               placeholder={t('accounting:clientsInvoices.selectSpecialBid')}
                               displayValue={getBidDisplayValue(item.specialBidId)}
                               searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                              className="overflow-hidden w-full"
+                              buttonClassName="w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
                           <div className="space-y-1 md:col-span-2 min-w-0">
@@ -799,8 +798,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               }
                               placeholder={t('accounting:clientsInvoices.selectProductPlaceholder')}
                               searchable={true}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                              className="overflow-hidden w-full"
+                              buttonClassName="w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
                           <div className="space-y-1 md:col-span-1">
@@ -891,7 +889,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.total')}
                             </label>
-                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
+                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
                               {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>

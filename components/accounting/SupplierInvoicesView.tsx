@@ -407,8 +407,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                   updateItem(index, 'productId', value as string)
                                 }
                                 searchable={true}
-                                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                                className="overflow-hidden w-full"
+                                buttonClassName="w-full max-w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
 
@@ -482,7 +481,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('common:labels.total')}
                               </label>
-                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
+                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-bold text-slate-700">
                                 {lineTotal.toFixed(2)} {currency}
                               </div>
                             </div>
