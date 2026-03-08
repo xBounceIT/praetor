@@ -157,10 +157,16 @@ const Layout: React.FC<LayoutProps> = ({
   const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(new Set());
   const [prevActiveModuleId, setPrevActiveModuleId] = useState<string | null>(null);
 
-  // Sync expanded module with active module activeModule changes
+  // Sync expanded modules when active module changes (navigation) — close old active
   if (activeModule.id !== prevActiveModuleId) {
+    const oldActiveId = prevActiveModuleId;
     setPrevActiveModuleId(activeModule.id);
-    setExpandedModuleIds((prev) => new Set(prev).add(activeModule.id));
+    setExpandedModuleIds((prev) => {
+      const next = new Set(prev);
+      if (oldActiveId) next.delete(oldActiveId);
+      next.add(activeModule.id);
+      return next;
+    });
   }
 
   const handleModuleSwitch = (module: Module) => {
@@ -169,6 +175,10 @@ const Layout: React.FC<LayoutProps> = ({
       if (next.has(module.id)) {
         next.delete(module.id);
       } else {
+        // Close any other non-active expanded module before expanding this one
+        for (const id of next) {
+          if (id !== activeModule.id) next.delete(id);
+        }
         next.add(module.id);
       }
       return next;
