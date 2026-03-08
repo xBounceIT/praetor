@@ -1471,7 +1471,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                 <Tooltip
                                   label={
                                     copiedMessageId === userMessage.id
-                                      ? t('notifications:copied', {
+                                      ? t('notifications:success.copied', {
                                           defaultValue: 'Copied to clipboard',
                                         })
                                       : t('common:buttons.copy', { defaultValue: 'Copy' })
@@ -1741,7 +1741,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                               <Tooltip
                                 label={
                                   copiedMessageId === assistantMessage.id
-                                    ? t('notifications:copied', {
+                                    ? t('notifications:success.copied', {
                                         defaultValue: 'Copied to clipboard',
                                       })
                                     : t('common:buttons.copy', { defaultValue: 'Copy' })

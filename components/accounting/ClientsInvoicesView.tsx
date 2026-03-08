@@ -51,7 +51,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   onDeleteInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common']);
+  const { t } = useTranslation(['accounting', 'sales', 'common']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -425,6 +425,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         header: t('accounting:clientsInvoices.invoiceNumber'),
         id: 'invoiceNumber',
         accessorFn: (row: Invoice) => row.invoiceNumber,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
         ),
@@ -441,6 +443,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         header: t('common:labels.date'),
         id: 'issueDate',
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.issueDate),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.issueDate)}</span>
         ),
@@ -449,6 +453,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         header: t('accounting:clientsInvoices.dueDate'),
         id: 'dueDate',
         accessorFn: (row: Invoice) => formatDateOnlyForLocale(row.dueDate),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="text-sm text-slate-600">{formatDateOnlyForLocale(row.dueDate)}</span>
         ),
@@ -457,6 +463,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         header: t('common:labels.amount'),
         id: 'invoiceTotal',
         accessorFn: (row: Invoice) => row.total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-slate-700">
             {(row.total ?? 0).toFixed(2)} {currency}
@@ -493,7 +501,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         header: t('accounting:clientsInvoices.status'),
         id: 'invoiceStatus',
         accessorFn: (row: Invoice) =>
-          statusOptions.find((option) => option.id === row.status)?.name || row.status,
+          statusOptions.find((opt) => opt.id === row.status)?.name || row.status,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: Invoice }) => (
           <StatusBadge
             type={row.status as StatusType}
@@ -504,6 +514,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('common:common.more'),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,

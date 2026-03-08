@@ -179,7 +179,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   };
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative min-w-0 ${className}`} ref={containerRef}>
       {label && (
         <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
           {label}
@@ -242,7 +242,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             >
               {() => (
                 <span
-                  className={`truncate block ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
+                  className={`block w-full truncate ${!isMulti && value ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}
                 >
                   {buttonLabel}
                 </span>

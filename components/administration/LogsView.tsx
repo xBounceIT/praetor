@@ -84,7 +84,7 @@ const LogsView: React.FC = () => {
       className="h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
     >
       <i className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'}`} />
-      {t('buttons.refresh', { ns: 'common' })}
+      {t('common:buttons.refresh')}
     </button>
   );
 

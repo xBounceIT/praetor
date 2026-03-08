@@ -95,7 +95,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onCreateInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common', 'crm']);
+  const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
@@ -235,6 +235,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         header: t('accounting:supplierOrders.total'),
         id: 'orderTotal',
         accessorFn: (row: SupplierSaleOrder) => calculateTotals(row.items, row.discount).total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const { total } = calculateTotals(row.items, row.discount);
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
@@ -251,6 +253,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         header: t('accounting:supplierOrders.paymentTerms'),
         id: 'paymentTerms',
         accessorFn: (row: SupplierSaleOrder) => getPaymentTermsLabel(row.paymentTerms, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const isMuted = row.status === 'confirmed' || row.status === 'denied';
 
@@ -267,6 +271,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         header: t('accounting:supplierOrders.status'),
         id: 'orderStatus',
         accessorFn: (row: SupplierSaleOrder) => getOrderStatusLabel(row.status, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => (
           <div
             className={row.status === 'confirmed' || row.status === 'denied' ? 'opacity-60' : ''}
@@ -281,6 +287,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       {
         header: t('common:common.more'),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,
@@ -667,7 +675,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('crm:quotes.noProductsAdded')}
+                  {t('sales:supplierOffers.noItemsAdded')}
                 </div>
               )}
             </div>

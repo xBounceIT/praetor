@@ -97,7 +97,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (!editingProject && !canCreateProjects) return;
 
     const newErrors: Record<string, string> = {};
-    if (!name?.trim()) newErrors.name = t('projects:projects.projectNameRequired');
+    if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
 
     if (Object.keys(newErrors).length > 0) {

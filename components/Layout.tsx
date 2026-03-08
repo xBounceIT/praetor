@@ -252,6 +252,7 @@ const Layout: React.FC<LayoutProps> = ({
           <>
             {canAccessView('sales/client-quotes') && (
               <NavItem
+                entityIcon="fa-user"
                 icon="fa-file-invoice"
                 label={t('routes.clientQuotes')}
                 active={activeView === 'sales/client-quotes'}
@@ -264,6 +265,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('sales/client-offers') && (
               <NavItem
+                entityIcon="fa-user"
                 icon="fa-file-signature"
                 label={t('routes.clientOffers')}
                 active={activeView === 'sales/client-offers'}
@@ -276,7 +278,8 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('sales/supplier-quotes') && (
               <NavItem
-                icon="fa-file-lines"
+                entityIcon="fa-truck"
+                icon="fa-file-invoice"
                 label={t('routes.supplierQuotes')}
                 active={activeView === 'sales/supplier-quotes'}
                 isCollapsed={isCollapsed}
@@ -288,6 +291,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('sales/supplier-offers') && (
               <NavItem
+                entityIcon="fa-truck"
                 icon="fa-file-signature"
                 label={t('routes.supplierOffers')}
                 active={activeView === 'sales/supplier-offers'}
@@ -305,6 +309,7 @@ const Layout: React.FC<LayoutProps> = ({
           <>
             {canAccessView('accounting/clients-orders') && (
               <NavItem
+                entityIcon="fa-user"
                 icon="fa-cart-shopping"
                 label={t('routes.clientsOrders')}
                 active={activeView === 'accounting/clients-orders'}
@@ -317,6 +322,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('accounting/clients-invoices') && (
               <NavItem
+                entityIcon="fa-user"
                 icon="fa-file-invoice-dollar"
                 label={t('routes.clientsInvoices')}
                 active={activeView === 'accounting/clients-invoices'}
@@ -329,6 +335,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('accounting/supplier-orders') && (
               <NavItem
+                entityIcon="fa-truck"
                 icon="fa-cart-shopping"
                 label={t('routes.supplierOrders')}
                 active={activeView === 'accounting/supplier-orders'}
@@ -341,6 +348,7 @@ const Layout: React.FC<LayoutProps> = ({
             )}
             {canAccessView('accounting/supplier-invoices') && (
               <NavItem
+                entityIcon="fa-truck"
                 icon="fa-file-invoice-dollar"
                 label={t('routes.supplierInvoices')}
                 active={activeView === 'accounting/supplier-invoices'}
@@ -879,6 +887,7 @@ const Layout: React.FC<LayoutProps> = ({
 
 interface NavItemProps {
   icon?: string;
+  entityIcon?: string;
   iconElement?: React.ReactNode;
   label: string;
   active: boolean;
@@ -889,43 +898,52 @@ interface NavItemProps {
 
 const NavItem: React.FC<NavItemProps> = ({
   icon,
+  entityIcon,
   iconElement,
   label,
   active,
   isCollapsed,
   onClick,
   suffix,
-}) => (
-  <Tooltip label={label} position="right" disabled={!isCollapsed} wrapperClassName="w-full">
-    {() => (
-      <button
-        onClick={onClick}
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-          active
-            ? 'bg-white/20 text-white shadow-lg shadow-black/10'
-            : 'text-white/60 hover:bg-white/10 hover:text-white'
-        } ${isCollapsed ? 'justify-center' : ''}`}
-      >
-        {iconElement ? (
-          <span
-            className={`w-5 text-center text-lg flex items-center justify-center ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
-          >
-            {iconElement}
-          </span>
-        ) : (
-          <i
-            className={`fa-solid ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-white/60 group-hover:text-white'}`}
-          ></i>
-        )}
-        {!isCollapsed && (
-          <>
-            <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">{label}</span>
-            {suffix}
-          </>
-        )}
-      </button>
-    )}
-  </Tooltip>
-);
+}) => {
+  const colorClass = active ? 'text-white' : 'text-white/60 group-hover:text-white';
+  return (
+    <Tooltip label={label} position="right" disabled={!isCollapsed} wrapperClassName="w-full">
+      {() => (
+        <button
+          onClick={onClick}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+            active
+              ? 'bg-white/20 text-white shadow-lg shadow-black/10'
+              : 'text-white/60 hover:bg-white/10 hover:text-white'
+          } ${isCollapsed ? 'justify-center' : ''}`}
+        >
+          {iconElement ? (
+            <span
+              className={`w-5 text-center text-lg flex items-center justify-center ${colorClass}`}
+            >
+              {iconElement}
+            </span>
+          ) : entityIcon ? (
+            <span className={`flex items-center gap-1 ${colorClass}`}>
+              <i className={`fa-solid ${entityIcon} text-xs`}></i>
+              <i className={`fa-solid ${icon} text-base`}></i>
+            </span>
+          ) : (
+            <i className={`fa-solid ${icon} w-5 text-center text-lg ${colorClass}`}></i>
+          )}
+          {!isCollapsed && (
+            <>
+              <span className="font-semibold text-sm whitespace-nowrap overflow-hidden">
+                {label}
+              </span>
+              {suffix}
+            </>
+          )}
+        </button>
+      )}
+    </Tooltip>
+  );
+};
 
 export default Layout;

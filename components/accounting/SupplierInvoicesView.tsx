@@ -67,7 +67,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   onDeleteInvoice,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'common', 'crm']);
+  const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
     () => suppliers.filter((supplier) => !supplier.isDisabled),
@@ -260,6 +260,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         header: t('accounting:supplierInvoices.status'),
         id: 'invoiceStatus',
         accessorFn: (row: SupplierInvoice) => getStatusLabel(row.status, t),
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: SupplierInvoice }) => (
           <div className={row.status === 'paid' || row.status === 'cancelled' ? 'opacity-60' : ''}>
             <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status, t)} />
@@ -269,6 +271,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       {
         header: t('common:common.more'),
         id: 'actions',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableSorting: true,
         disableFiltering: true,
         align: 'right' as const,

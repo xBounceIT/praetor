@@ -203,7 +203,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             )}
           </Tooltip>
           {row.employeeType === 'internal' ? (
-            <Tooltip label={t('common:delete')}>
+            <Tooltip label={t('common:buttons.delete')}>
               {() => (
                 <button
                   onClick={() => confirmDelete(row)}
@@ -312,7 +312,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 onClick={() => setIsModalOpen(false)}
                 className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
               >
-                {t('common:cancel')}
+                {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
@@ -349,7 +349,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               onClick={() => setIsDeleteConfirmOpen(false)}
               className="flex-1 px-6 py-4 text-slate-600 font-bold hover:bg-slate-50 transition-colors"
             >
-              {t('common:cancel')}
+              {t('common:buttons.cancel')}
             </button>
             <button
               onClick={handleDelete}

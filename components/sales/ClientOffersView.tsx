@@ -194,6 +194,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       {
         header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
         accessorKey: 'offerCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => (
           <div className="font-mono text-sm font-bold text-slate-500">{row.offerCode}</div>
         ),
@@ -202,6 +204,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),
         id: 'total',
         accessorFn: (row) => calculateTotals(row.items, row.discount).total,
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const { total } = calculateTotals(row.items, row.discount);
@@ -215,6 +219,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       {
         header: t('sales:clientOffers.statusColumn', { defaultValue: 'Status' }),
         accessorKey: 'status',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         cell: ({ row }) => {
           return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
         },
@@ -223,6 +229,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         header: t('sales:clientOffers.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
         align: 'right',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {

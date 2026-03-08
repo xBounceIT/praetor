@@ -16,7 +16,8 @@ const Checkbox: React.FC<CheckboxProps> = ({
   size = 'md',
 }) => {
   const sizeClasses = size === 'sm' ? 'w-3.5 h-3.5' : 'w-5 h-5';
-  const iconSize = size === 'sm' ? 'text-[8px]' : 'text-[10px]';
+  const checkmarkSizeClasses = size === 'sm' ? 'w-2 h-2' : 'w-3 h-3';
+  const indeterminateSizeClasses = size === 'sm' ? 'w-1.5 h-0.5' : 'w-2 h-0.5';
 
   return (
     <label
@@ -33,11 +34,22 @@ const Checkbox: React.FC<CheckboxProps> = ({
         className={`${sizeClasses} bg-white border-2 border-slate-300 rounded-md transition-all duration-200 peer-checked:bg-praetor peer-checked:border-praetor ${!disabled ? 'group-hover:border-praetor/50' : ''} peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center ${indeterminate && !checked ? 'bg-praetor border-praetor' : ''}`}
       >
         {indeterminate && !checked ? (
-          <span className="w-2 h-0.5 bg-white rounded-full" />
+          <span className={`${indeterminateSizeClasses} bg-white rounded-full`} />
         ) : (
-          <i
-            className={`fa-solid fa-check text-white ${iconSize} leading-none w-full h-full text-center flex items-center justify-center transition-transform duration-200 ${checked ? 'scale-100' : 'scale-0'}`}
-          />
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            className={`${checkmarkSizeClasses} block text-white transition-transform duration-200 ${checked ? 'scale-100' : 'scale-0'}`}
+          >
+            <path
+              d="M3.5 8.5L6.5 11.5L12.5 4.5"
+              stroke="currentColor"
+              strokeWidth="2.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         )}
       </div>
     </label>
