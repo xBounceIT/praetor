@@ -198,16 +198,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           const isMuted = row.status === 'paid' || row.status === 'cancelled';
 
           return (
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor text-sm">
-                <i className="fa-solid fa-file-invoice-dollar"></i>
-              </div>
-              <div>
-                <div className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
-                  {row.supplierName}
-                </div>
-              </div>
-            </div>
+            <span className={`font-bold ${isMuted ? 'text-slate-400' : 'text-slate-800'}`}>
+              {row.supplierName}
+            </span>
           );
         },
       },
