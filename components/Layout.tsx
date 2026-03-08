@@ -702,11 +702,17 @@ const Layout: React.FC<LayoutProps> = ({
               </Tooltip>
 
               {/* Module Sub-items */}
-              {expandedModuleId === module.id && !isCollapsed && (
+              {!isCollapsed && (
                 <div
-                  className={`animate-in slide-in-from-top-2 duration-200 space-y-1 mt-1 pb-2 ${isCollapsed ? '' : 'bg-black/10 rounded-xl p-2'}`}
+                  className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
+                    expandedModuleId === module.id ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                  }`}
                 >
-                  {renderModuleNavItems(module.id)}
+                  <div className="overflow-hidden min-h-0">
+                    <div className="space-y-1 mt-1 pb-2 bg-black/10 rounded-xl p-2">
+                      {renderModuleNavItems(module.id)}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
