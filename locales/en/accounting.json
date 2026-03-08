@@ -130,7 +130,8 @@
     "markSent": "Mark as sent",
     "markConfirmed": "Mark as confirmed",
     "markDenied": "Mark as denied",
-    "createInvoice": "Create invoice"
+    "createInvoice": "Create invoice",
+    "orderNumber": "Order #{{number}}"
   },
   "supplierInvoices": {
     "title": "Supplier Invoices",

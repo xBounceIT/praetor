@@ -130,7 +130,8 @@
     "markSent": "Segna come inviato",
     "markConfirmed": "Segna come confermato",
     "markDenied": "Segna come rifiutato",
-    "createInvoice": "Crea fattura"
+    "createInvoice": "Crea fattura",
+    "orderNumber": "Ordine #{{number}}"
   },
   "supplierInvoices": {
     "title": "Fatture Fornitori",

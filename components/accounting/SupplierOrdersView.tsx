@@ -201,9 +201,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       {
         header: t('accounting:supplierOrders.orderNumber', { defaultValue: 'Order Number' }),
         id: 'orderNumber',
-        accessorFn: (row: SupplierSaleOrder) => row.id,
+        accessorFn: (row: SupplierSaleOrder) => row.orderNumber || row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-slate-700">{row.orderNumber || row.id}</span>
         ),
       },
       {

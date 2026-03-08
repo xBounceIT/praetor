@@ -395,9 +395,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {
         header: t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' }),
         id: 'orderNumber',
-        accessorFn: (row: ClientsOrder) => row.id,
+        accessorFn: (row: ClientsOrder) => row.orderNumber || row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <span className="font-bold text-slate-700">{row.id}</span>
+          <span className="font-bold text-slate-700">{row.orderNumber || row.id}</span>
         ),
       },
       {

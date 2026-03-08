@@ -321,6 +321,7 @@ export interface ClientsOrderItem {
 
 export interface ClientsOrder {
   id: string;
+  orderNumber?: string;
   linkedQuoteId?: string; // Reference to source quote
   linkedOfferId?: string;
   clientId: string;
@@ -565,6 +566,7 @@ export interface SupplierSaleOrderItem {
 
 export interface SupplierSaleOrder {
   id: string;
+  orderNumber?: string;
   linkedQuoteId?: string;
   linkedOfferId: string;
   supplierId: string;

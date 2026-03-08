@@ -840,6 +840,7 @@ BEGIN
 END $$;
 
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS linked_offer_id VARCHAR(50);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS order_number VARCHAR(50) UNIQUE;
 
 DO $$
 BEGIN
@@ -1033,6 +1034,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_sales_linked_offer_id
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_linked_quote_id ON supplier_sales(linked_quote_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_supplier_id ON supplier_sales(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_status ON supplier_sales(status);
+
+ALTER TABLE supplier_sales ADD COLUMN IF NOT EXISTS order_number VARCHAR(50) UNIQUE;
 
 CREATE TABLE IF NOT EXISTS supplier_sale_items (
     id VARCHAR(50) PRIMARY KEY,
