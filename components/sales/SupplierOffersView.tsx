@@ -172,18 +172,16 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const columns = useMemo<Column<SupplierOffer>[]>(
     () => [
       {
-        header: t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' }),
-        accessorKey: 'supplierName',
-        cell: ({ row }) => <div className="font-bold text-slate-800">{row.supplierName}</div>,
-      },
-      {
         header: t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' }),
         accessorKey: 'offerCode',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">{row.offerCode}</div>
-        ),
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.offerCode}</span>,
+      },
+      {
+        header: t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' }),
+        accessorKey: 'supplierName',
+        cell: ({ row }) => <div className="font-bold text-slate-800">{row.supplierName}</div>,
       },
       {
         header: t('sales:supplierOffers.total', { defaultValue: 'Total' }),

@@ -185,20 +185,18 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const columns = useMemo<Column<ClientOffer>[]>(
     () => [
       {
+        header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
+        accessorKey: 'offerCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.offerCode}</span>,
+      },
+      {
         header: t('sales:clientOffers.clientColumn', { defaultValue: 'Client' }),
         accessorKey: 'clientName',
         cell: ({ row }) => {
           return <div className="font-bold text-slate-800">{row.clientName}</div>;
         },
-      },
-      {
-        header: t('sales:clientOffers.offerCodeColumn', { defaultValue: 'Offer Code' }),
-        accessorKey: 'offerCode',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">{row.offerCode}</div>
-        ),
       },
       {
         header: t('sales:clientOffers.totalColumn', { defaultValue: 'Total' }),

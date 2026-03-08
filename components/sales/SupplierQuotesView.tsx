@@ -215,6 +215,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
+        header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
+        id: 'quoteCode',
+        accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        cell: ({ row }) => (
+          <span className="font-bold text-slate-700">
+            {row.quoteCode || row.purchaseOrderNumber}
+          </span>
+        ),
+      },
+      {
         header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
         accessorKey: 'supplierName',
         cell: ({ row }) => (
@@ -229,18 +241,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   ? formatDateOnlyForLocale(row.expirationDate)
                   : ''}
             </div>
-          </div>
-        ),
-      },
-      {
-        header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
-        id: 'quoteCode',
-        accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">
-            {row.quoteCode || row.purchaseOrderNumber}
           </div>
         ),
       },
