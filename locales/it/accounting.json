@@ -40,7 +40,7 @@
     "subtotal": "Imponibile",
     "total": "Totale",
     "margin": "Margine",
-    "orderNumber": "Ordine #{{number}}"
+    "orderNumber": "Numero ordine"
   },
   "clientsInvoices": {
     "title": "Fatture Clienti",
@@ -131,7 +131,7 @@
     "markConfirmed": "Segna come confermato",
     "markDenied": "Segna come rifiutato",
     "createInvoice": "Crea fattura",
-    "orderNumber": "Ordine #{{number}}"
+    "orderNumber": "Numero ordine"
   },
   "supplierInvoices": {
     "title": "Fatture Fornitori",

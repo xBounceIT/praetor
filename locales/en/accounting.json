@@ -40,7 +40,7 @@
     "subtotal": "Subtotal",
     "total": "Total",
     "margin": "Margin",
-    "orderNumber": "Order #{{number}}"
+    "orderNumber": "Order Number"
   },
   "clientsInvoices": {
     "title": "Client's Invoices",
@@ -131,7 +131,7 @@
     "markConfirmed": "Mark as confirmed",
     "markDenied": "Mark as denied",
     "createInvoice": "Create invoice",
-    "orderNumber": "Order #{{number}}"
+    "orderNumber": "Order Number"
   },
   "supplierInvoices": {
     "title": "Supplier Invoices",
