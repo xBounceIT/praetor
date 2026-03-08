@@ -724,13 +724,17 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               {formData.items && formData.items.length > 0 && (
                 <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <div className="col-span-3 ml-1">{t('accounting:clientsInvoices.specialBid')}</div>
-                    <div className="col-span-3">{t('common:labels.product')}</div>
+                    <div className="col-span-2 ml-1">
+                      {t('accounting:clientsInvoices.specialBid')}
+                    </div>
+                    <div className="col-span-2">{t('common:labels.product')}</div>
                     <div className="col-span-1">{t('common:labels.quantity')}</div>
-                    <div className="col-span-1">{t('common:labels.price')} ({currency})</div>
+                    <div className="col-span-2">
+                      {t('common:labels.price')} ({currency})
+                    </div>
                     <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
                     <div className="col-span-1">{t('common:labels.discount')}%</div>
-                    <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
+                    <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
                   </div>
                   <div className="w-8 shrink-0"></div>
                 </div>
@@ -747,7 +751,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     >
                       <div className="flex items-start gap-2">
                         <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                          <div className="space-y-1 md:col-span-3">
+                          <div className="space-y-1 md:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('accounting:clientsInvoices.specialBid')}
                             </label>
@@ -776,7 +780,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-3">
+                          <div className="space-y-1 md:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.product')}
                             </label>
@@ -818,11 +822,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                               />
                               <span className="shrink-0 text-xs font-semibold text-slate-400">
-                                {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))?.name || t('accounting:clientsInvoices.unit')}
+                                {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
+                                  ?.name || t('accounting:clientsInvoices.unit')}
                               </span>
                             </div>
                           </div>
-                          <div className="space-y-1 md:col-span-1">
+                          <div className="space-y-1 md:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.price')} ({currency})
                             </label>
@@ -880,7 +885,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-2">
+                          <div className="space-y-1 md:col-span-3">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.total')}
                             </label>

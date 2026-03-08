@@ -364,10 +364,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               {(formData.items || []).length > 0 && (
                 <div className="mb-1 hidden items-center gap-2 px-3 md:flex">
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
-                    <div className="col-span-3">{t('accounting:clientsInvoices.descriptionPlaceholder')}</div>
+                    <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
+                    <div className="col-span-3">
+                      {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                    </div>
                     <div className="col-span-1">{t('common:labels.quantity')}</div>
-                    <div className="col-span-1">{t('crm:internalListing.salePrice')} ({currency})</div>
+                    <div className="col-span-2">
+                      {t('crm:internalListing.salePrice')} ({currency})
+                    </div>
                     <div className="col-span-1">{t('accounting:clientsInvoices.vat')}</div>
                     <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
                     <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
@@ -383,10 +387,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     const lineTotal = lineSubtotal - lineDiscount;
 
                     return (
-                      <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                      >
                         <div className="flex items-start gap-2">
                           <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12">
-                            <div className="space-y-1 md:col-span-3">
+                            <div className="space-y-1 md:col-span-2">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('crm:quotes.productsServices')}
                               </label>
@@ -396,7 +403,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                   name: product.name,
                                 }))}
                                 value={item.productId || ''}
-                                onChange={(value) => updateItem(index, 'productId', value as string)}
+                                onChange={(value) =>
+                                  updateItem(index, 'productId', value as string)
+                                }
                                 searchable={true}
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
@@ -429,7 +438,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                               />
                             </div>
 
-                            <div className="space-y-1 md:col-span-1">
+                            <div className="space-y-1 md:col-span-2">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('crm:internalListing.salePrice')} ({currency})
                               </label>
