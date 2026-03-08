@@ -696,7 +696,7 @@ const Layout: React.FC<LayoutProps> = ({
           className={`p-6 border-t border-white/10 transition-opacity duration-300 ${isCollapsed ? 'md:opacity-0 overflow-hidden' : 'opacity-100'}`}
         >
           <div className="text-[10px] text-white/40 font-medium whitespace-nowrap">
-            Praetor v{import.meta.env.VITE_APP_VERSION} · {import.meta.env.VITE_BUILD_DATE}
+            Praetor v{import.meta.env.VITE_APP_VERSION}
           </div>
         </div>
       </nav>
