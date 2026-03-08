@@ -120,8 +120,6 @@
     "total": "Total",
     "notes": "Notes",
     "actionsColumn": "Actions",
-    "deleteTitle": "Delete supplier invoice?",
-    "linkedExpense": "Linked expense",
-    "noLinkedExpense": "No linked expense"
+    "deleteTitle": "Delete supplier invoice?"
   }
 }

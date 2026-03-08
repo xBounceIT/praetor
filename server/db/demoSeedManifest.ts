@@ -109,12 +109,6 @@ export const DEMO_INVOICES = [
   { id: 'dm_inv_05', invoiceNumber: 'DM-INV-2605', linkedSaleId: null },
 ] as const;
 
-export const DEMO_PAYMENTS = [
-  { id: 'dm_pay_01', reference: 'DM-PAY-2601' },
-  { id: 'dm_pay_02', reference: 'DM-PAY-2602' },
-  { id: 'dm_pay_03', reference: 'DM-PAY-2603' },
-] as const;
-
 export const DEMO_SUPPLIER_QUOTES = [
   { id: 'dm_sq_01', quoteCode: 'DM-SQ-2601', purchaseOrderNumber: 'DM-SQ-2601' },
   { id: 'dm_sq_02', quoteCode: 'DM-SQ-2602', purchaseOrderNumber: 'DM-SQ-2602' },
@@ -160,44 +154,6 @@ export const DEMO_SUPPLIER_INVOICES = [
   { id: 'dm_sinv_05', invoiceNumber: 'DM-SINV-2605', linkedSaleId: null },
 ] as const;
 
-export const DEMO_EXPENSES = [
-  {
-    id: 'dm_exp_si_01',
-    supplierInvoiceId: 'dm_sinv_01',
-    receiptReference: 'DM-SINV-2601',
-  },
-  {
-    id: 'dm_exp_si_02',
-    supplierInvoiceId: 'dm_sinv_02',
-    receiptReference: 'DM-SINV-2602',
-  },
-  {
-    id: 'dm_exp_si_03',
-    supplierInvoiceId: 'dm_sinv_03',
-    receiptReference: 'DM-SINV-2603',
-  },
-  {
-    id: 'dm_exp_si_04',
-    supplierInvoiceId: 'dm_sinv_04',
-    receiptReference: 'DM-SINV-2604',
-  },
-  {
-    id: 'dm_exp_si_05',
-    supplierInvoiceId: 'dm_sinv_05',
-    receiptReference: 'DM-SINV-2605',
-  },
-  {
-    id: 'dm_exp_m_01',
-    supplierInvoiceId: null,
-    receiptReference: null,
-  },
-  {
-    id: 'dm_exp_m_02',
-    supplierInvoiceId: null,
-    receiptReference: 'OBS-RENEW-2026',
-  },
-] as const;
-
 export const DEMO_PROJECTS = [
   { id: 'dm_proj_01', name: `DM-CLI-001_DM-SVC-AUDIT_${currentYear}` },
   { id: 'dm_proj_02', name: `DM-CLI-001_DM-SVC-DEPLOY_${currentYear}` },
@@ -225,12 +181,10 @@ export const DEMO_IDS = {
   customerOffers: DEMO_CUSTOMER_OFFERS.map((item) => item.id),
   sales: DEMO_SALES.map((item) => item.id),
   invoices: DEMO_INVOICES.map((item) => item.id),
-  payments: DEMO_PAYMENTS.map((item) => item.id),
   supplierQuotes: DEMO_SUPPLIER_QUOTES.map((item) => item.id),
   supplierOffers: DEMO_SUPPLIER_OFFERS.map((item) => item.id),
   supplierSales: DEMO_SUPPLIER_SALES.map((item) => item.id),
   supplierInvoices: DEMO_SUPPLIER_INVOICES.map((item) => item.id),
-  expenses: DEMO_EXPENSES.map((item) => item.id),
   projects: DEMO_PROJECTS.map((item) => item.id),
   notifications: [...DEMO_NOTIFICATIONS],
   users: [...DEMO_USER_IDS],
@@ -252,7 +206,6 @@ export const DEMO_EXPECTED_COUNTS = {
   sale_items: DEMO_ITEM_IDS.saleItems.length,
   invoices: DEMO_INVOICES.length,
   invoice_items: DEMO_ITEM_IDS.invoiceItems.length,
-  payments: DEMO_PAYMENTS.length,
   supplier_quotes: DEMO_SUPPLIER_QUOTES.length,
   supplier_quote_items: DEMO_ITEM_IDS.supplierQuoteItems.length,
   supplier_offers: DEMO_SUPPLIER_OFFERS.length,
@@ -261,7 +214,6 @@ export const DEMO_EXPECTED_COUNTS = {
   supplier_sale_items: DEMO_ITEM_IDS.supplierSaleItems.length,
   supplier_invoices: DEMO_SUPPLIER_INVOICES.length,
   supplier_invoice_items: DEMO_ITEM_IDS.supplierInvoiceItems.length,
-  expenses: DEMO_EXPENSES.length,
   projects: DEMO_PROJECTS.length,
   notifications: DEMO_NOTIFICATIONS.length,
 } as const;

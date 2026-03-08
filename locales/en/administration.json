@@ -41,10 +41,6 @@
       "clients_orders": "Client Orders",
       "clients_invoices": "Client Invoices"
     },
-    "finances": {
-      "payments": "Payments",
-      "expenses": "Expenses"
-    },
     "projects": {
       "manage": "Projects",
       "manage_all": "Projects (All)",

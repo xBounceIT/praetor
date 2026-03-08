@@ -6,7 +6,6 @@ import enAdministration from './locales/en/administration.json';
 import enAuth from './locales/en/auth.json';
 import enCommon from './locales/en/common.json';
 import enCrm from './locales/en/crm.json';
-import enFinances from './locales/en/finances.json';
 import enHr from './locales/en/hr.json';
 import enLayout from './locales/en/layout.json';
 import enNotifications from './locales/en/notifications.json';
@@ -21,7 +20,6 @@ import itAdministration from './locales/it/administration.json';
 import itAuth from './locales/it/auth.json';
 import itCommon from './locales/it/common.json';
 import itCrm from './locales/it/crm.json';
-import itFinances from './locales/it/finances.json';
 import itHr from './locales/it/hr.json';
 import itLayout from './locales/it/layout.json';
 import itNotifications from './locales/it/notifications.json';
@@ -42,7 +40,6 @@ const resources = {
     crm: enCrm,
     hr: enHr,
     projects: enProjects,
-    finances: enFinances,
     suppliers: enSuppliers,
     settings: enSettings,
     notifications: enNotifications,
@@ -60,7 +57,6 @@ const resources = {
     crm: itCrm,
     hr: itHr,
     projects: itProjects,
-    finances: itFinances,
     suppliers: itSuppliers,
     settings: itSettings,
     notifications: itNotifications,
@@ -86,7 +82,6 @@ i18n
       'crm',
       'hr',
       'projects',
-      'finances',
       'suppliers',
       'settings',
       'notifications',

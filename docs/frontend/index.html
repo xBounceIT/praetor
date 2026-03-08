@@ -55,7 +55,13 @@ AI Reporting is optional. If you enable it, configure the provider + API key + m
 <pre><code class="bash"><span class="hl-0">cp</span><span class="hl-1"> </span><span class="hl-2">.env.example</span><span class="hl-1"> </span><span class="hl-2">.env</span><br/><span class="hl-0">docker</span><span class="hl-1"> </span><span class="hl-2">compose</span><span class="hl-1"> </span><span class="hl-2">up</span><span class="hl-1"> </span><span class="hl-3">-d</span><span class="hl-1"> </span><span class="hl-3">--build</span>
 </code><button type="button">Copy</button></pre>
 
-<p>The compose setup defaults backend <code>TRUST_PROXY=1</code> for the bundled Caddy -&gt; API hop.</p>
+<p>The compose setup defaults backend <code>TRUST_PROXY=1</code> for the bundled Caddy -&gt; API hop.
+Set <code>DEMO_SEEDING=true</code> in <code>.env</code> when you want the stack to provision the canonical demo users and demo business data.
+That refresh flow is intended for demo and test stacks, owns the canonical demo namespace, and supports reused Docker volumes.</p>
+<p>To rerun the same refresh manually against an existing backend database:</p>
+<pre><code class="bash"><span class="hl-0">cd</span><span class="hl-1"> </span><span class="hl-2">server</span><br/><span class="hl-0">bun</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">seed:demo</span>
+</code><button type="button">Copy</button></pre>
+
 <a id="customer-compose-pulls-prebuilt-images" class="tsd-anchor"></a><h3 class="tsd-anchor-link">Customer Compose (pulls prebuilt images)<a href="#customer-compose-pulls-prebuilt-images" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Use this when deploying from a container registry (GHCR by default), without cloning source.</p>
 <pre><code class="bash"><span class="hl-0">cp</span><span class="hl-1"> </span><span class="hl-2">deploy/.env.customer.example</span><span class="hl-1"> </span><span class="hl-2">.env</span><br/><span class="hl-4"># edit .env and set PRAETOR_VERSION + secrets</span><br/><br/><span class="hl-0">docker</span><span class="hl-1"> </span><span class="hl-2">compose</span><span class="hl-1"> </span><span class="hl-3">--env-file</span><span class="hl-1"> </span><span class="hl-2">.env</span><span class="hl-1"> </span><span class="hl-3">-f</span><span class="hl-1"> </span><span class="hl-2">deploy/docker-compose.customer.yml</span><span class="hl-1"> </span><span class="hl-2">pull</span><br/><span class="hl-0">docker</span><span class="hl-1"> </span><span class="hl-2">compose</span><span class="hl-1"> </span><span class="hl-3">--env-file</span><span class="hl-1"> </span><span class="hl-2">.env</span><span class="hl-1"> </span><span class="hl-3">-f</span><span class="hl-1"> </span><span class="hl-2">deploy/docker-compose.customer.yml</span><span class="hl-1"> </span><span class="hl-2">up</span><span class="hl-1"> </span><span class="hl-3">-d</span>
 </code><button type="button">Copy</button></pre>
@@ -73,9 +79,9 @@ AI Reporting is optional. If you enable it, configure the provider + API key + m
 <li>
 <p><strong>Login</strong>:</p>
 <ul>
-<li>Default Admin: <code>admin</code> / <code>password</code></li>
-<li>Default Manager: <code>manager</code> / <code>password</code></li>
-<li>Default User: <code>user</code> / <code>password</code></li>
+<li>Bootstrap Admin: <code>admin</code> / <code>password</code></li>
+<li>Demo Manager: <code>manager</code> / <code>password</code> when <code>DEMO_SEEDING=true</code></li>
+<li>Demo User: <code>user</code> / <code>password</code> when <code>DEMO_SEEDING=true</code></li>
 </ul>
 </li>
 <li>

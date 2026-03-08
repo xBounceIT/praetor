@@ -41,10 +41,6 @@
       "clients_orders": "Ordini Clienti",
       "clients_invoices": "Fatture Clienti"
     },
-    "finances": {
-      "payments": "Pagamenti",
-      "expenses": "Spese"
-    },
     "projects": {
       "manage": "Progetti",
       "manage_all": "Progetti (Tutti)",

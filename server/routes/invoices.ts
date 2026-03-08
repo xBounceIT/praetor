@@ -729,7 +729,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      // Items and payments will be deleted automatically via CASCADE
+      // Invoice items will be deleted automatically via CASCADE
       try {
         const result = await query('DELETE FROM invoices WHERE id = $1 RETURNING id', [
           idResult.value,
@@ -747,8 +747,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (error.code === '23503') {
           // Foreign key violation
           return reply.code(409).send({
-            error:
-              'Cannot delete invoice because it is referenced by other records (e.g. payments)',
+            error: 'Cannot delete invoice because it is referenced by other records',
           });
         }
         throw err;

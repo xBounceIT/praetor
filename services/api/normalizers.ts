@@ -4,11 +4,9 @@ import type {
   ClientOfferItem,
   ClientsOrder,
   ClientsOrderItem,
-  Expense,
   GeneralSettings,
   Invoice,
   InvoiceItem,
-  Payment,
   Product,
   ProjectTask,
   Quote,
@@ -184,16 +182,6 @@ export const normalizeInvoice = (i: Invoice): Invoice => ({
   total: Number(i.total ?? 0),
   amountPaid: Number(i.amountPaid ?? 0),
   items: (i.items || []).map(normalizeInvoiceItem),
-});
-
-export const normalizePayment = (p: Payment): Payment => ({
-  ...p,
-  amount: Number(p.amount || 0),
-});
-
-export const normalizeExpense = (e: Expense): Expense => ({
-  ...e,
-  amount: Number(e.amount || 0),
 });
 
 export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuoteItem => ({

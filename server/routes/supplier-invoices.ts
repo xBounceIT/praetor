@@ -80,7 +80,6 @@ const invoiceSchema = {
     total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: ['string', 'null'] },
-    linkedExpenseId: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     items: { type: 'array', items: invoiceItemSchema },
@@ -218,70 +217,6 @@ const toRequiredDateOnly = (value: unknown, fieldName: string) => {
   return normalizedDate;
 };
 
-const syncExpenseForInvoice = async (invoice: {
-  id: string;
-  supplierName: string;
-  invoiceNumber: string;
-  issueDate: string | Date;
-  total: string | number;
-  notes?: string | null;
-}) => {
-  const expenseDate = toRequiredDateOnly(invoice.issueDate, 'supplierInvoice.issueDate');
-  const description = `Supplier invoice ${invoice.invoiceNumber}`;
-
-  const existingExpenseResult = await query(
-    'SELECT id FROM expenses WHERE supplier_invoice_id = $1 LIMIT 1',
-    [invoice.id],
-  );
-
-  if (existingExpenseResult.rows.length > 0) {
-    const expenseResult = await query(
-      `UPDATE expenses
-       SET description = $1,
-           amount = $2,
-           expense_date = $3,
-           category = $4,
-           vendor = $5,
-           receipt_reference = $6,
-           notes = $7,
-           source_type = 'supplier_invoice'
-       WHERE supplier_invoice_id = $8
-       RETURNING id`,
-      [
-        description,
-        Number(invoice.total ?? 0),
-        expenseDate,
-        'other',
-        invoice.supplierName,
-        invoice.invoiceNumber,
-        invoice.notes ?? null,
-        invoice.id,
-      ],
-    );
-    return expenseResult.rows[0]?.id ?? null;
-  }
-
-  const expenseId = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const expenseResult = await query(
-    `INSERT INTO expenses
-      (id, description, amount, expense_date, category, vendor, receipt_reference, notes, source_type, supplier_invoice_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'supplier_invoice', $9)
-     RETURNING id`,
-    [
-      expenseId,
-      description,
-      Number(invoice.total ?? 0),
-      expenseDate,
-      'other',
-      invoice.supplierName,
-      invoice.invoiceNumber,
-      invoice.notes ?? null,
-      invoice.id,
-    ],
-  );
-  return expenseResult.rows[0]?.id ?? null;
-};
-
 const generateSupplierInvoiceNumber = async (issueDate: string) => {
   const year = issueDate.split('-')[0];
   const matchingInvoicesResult = await query(
@@ -356,12 +291,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             si.total,
             si.amount_paid as "amountPaid",
             si.notes,
-            (
-              SELECT e.id
-              FROM expenses e
-              WHERE e.supplier_invoice_id = si.id
-              LIMIT 1
-            ) as "linkedExpenseId",
             EXTRACT(EPOCH FROM si.created_at) * 1000 as "createdAt",
             EXTRACT(EPOCH FROM si.updated_at) * 1000 as "updatedAt"
          FROM supplier_invoices si
@@ -542,7 +471,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   total,
                   amount_paid as "amountPaid",
                   notes,
-                  null::varchar as "linkedExpenseId",
                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                   EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
               [
@@ -611,18 +539,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           createdItems.push(itemResult.rows[0]);
         }
 
-        const linkedExpenseId = await syncExpenseForInvoice({
-          id: invoiceId,
-          supplierName: supplierNameResult.value,
-          invoiceNumber: resolvedInvoiceNumber,
-          issueDate: issueDateResult.value,
-          total: totalResult.value || 0,
-          notes: (notes as string | undefined) || null,
-        });
-
-        return reply
-          .code(201)
-          .send(formatInvoiceResponse({ ...invoiceResult.rows[0], linkedExpenseId }, createdItems));
+        return reply.code(201).send(formatInvoiceResponse(invoiceResult.rows[0], createdItems));
       } catch (error) {
         const databaseError = error as DatabaseError;
         if (databaseError.code === '23505') {
@@ -822,12 +739,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               total,
               amount_paid as "amountPaid",
               notes,
-              (
-                SELECT e.id
-                FROM expenses e
-                WHERE e.supplier_invoice_id = supplier_invoices.id
-                LIMIT 1
-              ) as "linkedExpenseId",
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
@@ -902,20 +813,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           updatedItems = itemsResult.rows;
         }
 
-        const invoice = invoiceResult.rows[0];
-        let linkedExpenseId = invoice.linkedExpenseId;
-        if (!isStatusChangeOnly) {
-          linkedExpenseId = await syncExpenseForInvoice({
-            id: idResult.value,
-            supplierName: String(invoice.supplierName),
-            invoiceNumber: String(invoice.invoiceNumber),
-            issueDate: invoice.issueDate as string | Date,
-            total: invoice.total as string | number,
-            notes: (invoice.notes as string | null | undefined) ?? null,
-          });
-        }
-
-        return formatInvoiceResponse({ ...invoice, linkedExpenseId }, updatedItems);
+        return formatInvoiceResponse(invoiceResult.rows[0], updatedItems);
       } catch (error) {
         const databaseError = error as DatabaseError;
         if (databaseError.code === '23505') {
@@ -955,7 +853,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Only draft invoices can be deleted' });
       }
 
-      await query('DELETE FROM expenses WHERE supplier_invoice_id = $1', [idResult.value]);
       await query('DELETE FROM supplier_invoices WHERE id = $1', [idResult.value]);
 
       return reply.code(204).send();

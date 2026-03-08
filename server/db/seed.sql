@@ -874,30 +874,6 @@ ON CONFLICT (id) DO UPDATE SET
     tax_rate = EXCLUDED.tax_rate,
     discount = EXCLUDED.discount;
 
-INSERT INTO payments (
-    id,
-    invoice_id,
-    client_id,
-    amount,
-    payment_date,
-    payment_method,
-    reference,
-    notes,
-    created_at
-) VALUES
-    ('dm_pay_01', 'dm_inv_03', 'dm_cli_01', 4000.00, CURRENT_DATE - INTERVAL '7 days', 'bank_transfer', 'DM-PAY-2601', 'First installment for fully paid invoice.', CURRENT_TIMESTAMP - INTERVAL '7 days'),
-    ('dm_pay_02', 'dm_inv_03', 'dm_cli_01', 3689.97, CURRENT_DATE - INTERVAL '2 days', 'credit_card', 'DM-PAY-2602', 'Closing payment for the invoiced confirmed order.', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_pay_03', 'dm_inv_02', 'dm_cli_03', 600.00, CURRENT_DATE - INTERVAL '5 days', 'cash', 'DM-PAY-2603', 'Partial payment leaving the invoice in sent status.', CURRENT_TIMESTAMP - INTERVAL '5 days')
-ON CONFLICT (id) DO UPDATE SET
-    invoice_id = EXCLUDED.invoice_id,
-    client_id = EXCLUDED.client_id,
-    amount = EXCLUDED.amount,
-    payment_date = EXCLUDED.payment_date,
-    payment_method = EXCLUDED.payment_method,
-    reference = EXCLUDED.reference,
-    notes = EXCLUDED.notes,
-    created_at = EXCLUDED.created_at;
-
 INSERT INTO supplier_quotes (
     id,
     supplier_id,
@@ -1083,7 +1059,7 @@ INSERT INTO supplier_sales (
     ('dm_ss_01', 'dm_sq_11', 'dm_sfo_06', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware offer.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
     ('dm_ss_02', 'dm_sq_07', 'dm_sfo_04', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
     ('dm_ss_03', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted security offer and already invoiced and mirrored into expenses.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted security offer and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
     ('dm_ss_05', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', 'Denied supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
@@ -1158,7 +1134,7 @@ INSERT INTO supplier_invoices (
     ('dm_sinv_01', NULL, 'dm_sup_01', 'TechSource Distribution', 'DM-SINV-2601', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 422.40, 2342.40, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
     ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', 'DM-SINV-2602', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 3203.20, 17763.20, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
     ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', 'DM-SINV-2603', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 1348.60, 7478.60, 7478.60, 'Paid supplier invoice linked to a confirmed order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', 'DM-SINV-2604', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 5192.00, 28792.00, 0.00, 'Overdue supplier invoice mirrored as an expense.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
+    ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', 'DM-SINV-2604', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 5192.00, 28792.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
     ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', 'DM-SINV-2605', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 211.20, 1171.20, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_sale_id = EXCLUDED.linked_sale_id,
@@ -1200,38 +1176,6 @@ ON CONFLICT (id) DO UPDATE SET
     unit_price = EXCLUDED.unit_price,
     tax_rate = EXCLUDED.tax_rate,
     discount = EXCLUDED.discount;
-
-INSERT INTO expenses (
-    id,
-    description,
-    amount,
-    expense_date,
-    category,
-    vendor,
-    receipt_reference,
-    source_type,
-    supplier_invoice_id,
-    notes,
-    created_at
-) VALUES
-    ('dm_exp_si_01', 'Supplier invoice DM-SINV-2601', 2342.40, CURRENT_DATE - INTERVAL '18 days', 'other', 'TechSource Distribution', 'DM-SINV-2601', 'supplier_invoice', 'dm_sinv_01', 'Mirrored from draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days'),
-    ('dm_exp_si_02', 'Supplier invoice DM-SINV-2602', 17763.20, CURRENT_DATE - INTERVAL '32 days', 'other', 'CloudSeat Licensing', 'DM-SINV-2602', 'supplier_invoice', 'dm_sinv_02', 'Mirrored from partially settled supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '32 days'),
-    ('dm_exp_si_03', 'Supplier invoice DM-SINV-2603', 7478.60, CURRENT_DATE - INTERVAL '19 days', 'other', 'SecureEdge Systems', 'DM-SINV-2603', 'supplier_invoice', 'dm_sinv_03', 'Mirrored from paid supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '19 days'),
-    ('dm_exp_si_04', 'Supplier invoice DM-SINV-2604', 28792.00, CURRENT_DATE - INTERVAL '48 days', 'other', 'PrintLogistics Hub', 'DM-SINV-2604', 'supplier_invoice', 'dm_sinv_04', 'Mirrored from overdue supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '48 days'),
-    ('dm_exp_si_05', 'Supplier invoice DM-SINV-2605', 1171.20, CURRENT_DATE - INTERVAL '11 days', 'other', 'TechSource Distribution', 'DM-SINV-2605', 'supplier_invoice', 'dm_sinv_05', 'Mirrored from cancelled supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '11 days'),
-    ('dm_exp_m_01', 'Demo travel for customer workshop', 820.00, CURRENT_DATE - INTERVAL '12 days', 'travel', 'Trenitalia Business', NULL, 'manual', NULL, 'Manual expense used for editable finance coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days'),
-    ('dm_exp_m_02', 'Demo software monitoring renewal', 1299.00, CURRENT_DATE - INTERVAL '4 days', 'software', 'Observa Cloud', 'OBS-RENEW-2026', 'manual', NULL, 'Manual expense kept editable in the UI.', CURRENT_TIMESTAMP - INTERVAL '4 days')
-ON CONFLICT (id) DO UPDATE SET
-    description = EXCLUDED.description,
-    amount = EXCLUDED.amount,
-    expense_date = EXCLUDED.expense_date,
-    category = EXCLUDED.category,
-    vendor = EXCLUDED.vendor,
-    receipt_reference = EXCLUDED.receipt_reference,
-    source_type = EXCLUDED.source_type,
-    supplier_invoice_id = EXCLUDED.supplier_invoice_id,
-    notes = EXCLUDED.notes,
-    created_at = EXCLUDED.created_at;
 
 INSERT INTO projects (
     id,

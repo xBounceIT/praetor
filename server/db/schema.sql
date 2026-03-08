@@ -69,14 +69,6 @@ BEGIN
             ('manager', 'accounting.clients_invoices.create'),
             ('manager', 'accounting.clients_invoices.update'),
             ('manager', 'accounting.clients_invoices.delete'),
-            ('manager', 'finances.payments.view'),
-            ('manager', 'finances.payments.create'),
-            ('manager', 'finances.payments.update'),
-            ('manager', 'finances.payments.delete'),
-            ('manager', 'finances.expenses.view'),
-            ('manager', 'finances.expenses.create'),
-            ('manager', 'finances.expenses.update'),
-            ('manager', 'finances.expenses.delete'),
             ('manager', 'projects.manage.view'),
             ('manager', 'projects.manage.create'),
             ('manager', 'projects.manage.update'),
@@ -172,6 +164,9 @@ WHERE rp.role_id = r.id
     rp.permission LIKE 'administration.%'
     OR rp.permission LIKE 'configuration.%'
   );
+
+-- Migration: Remove deprecated Finances module permissions.
+DELETE FROM role_permissions WHERE permission LIKE 'finances.%';
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -1171,96 +1166,9 @@ CREATE TABLE IF NOT EXISTS supplier_invoice_items (
 CREATE INDEX IF NOT EXISTS idx_supplier_invoice_items_invoice_id
     ON supplier_invoice_items(invoice_id);
 
--- Payments table (tracks payments for invoices)
-CREATE TABLE IF NOT EXISTS payments (
-    id VARCHAR(50) PRIMARY KEY,
-    invoice_id VARCHAR(50) REFERENCES invoices(id) ON DELETE CASCADE,
-    client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    amount DECIMAL(12, 2) NOT NULL,
-    payment_date DATE NOT NULL,
-    payment_method VARCHAR(50) NOT NULL DEFAULT 'bank_transfer',
-    reference VARCHAR(255),
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments(invoice_id);
-CREATE INDEX IF NOT EXISTS idx_payments_client_id ON payments(client_id);
-CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date);
-
--- Expenses table
-CREATE TABLE IF NOT EXISTS expenses (
-    id VARCHAR(50) PRIMARY KEY,
-    description VARCHAR(255) NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    expense_date DATE NOT NULL,
-    category VARCHAR(50) NOT NULL DEFAULT 'other',
-    vendor VARCHAR(255),
-    receipt_reference VARCHAR(255),
-    source_type VARCHAR(30) NOT NULL DEFAULT 'manual',
-    supplier_invoice_id VARCHAR(50),
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'manual';
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_invoice_id VARCHAR(50);
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'expenses_supplier_invoice_id_fkey'
-    ) THEN
-        ALTER TABLE expenses
-            ADD CONSTRAINT expenses_supplier_invoice_id_fkey
-            FOREIGN KEY (supplier_invoice_id) REFERENCES supplier_invoices(id) ON DELETE CASCADE;
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'expenses_source_type_check'
-    ) THEN
-        ALTER TABLE expenses DROP CONSTRAINT expenses_source_type_check;
-    END IF;
-    ALTER TABLE expenses
-        ADD CONSTRAINT expenses_source_type_check
-        CHECK (source_type IN ('manual', 'supplier_invoice'));
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
-CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
-CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_supplier_invoice_id
-    ON expenses(supplier_invoice_id)
-    WHERE supplier_invoice_id IS NOT NULL;
-
--- Migration: Ensure payments foreign key has ON DELETE CASCADE
-DO $$
-DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN (
-        SELECT tc.constraint_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
-        WHERE tc.table_name = 'payments'
-        AND tc.constraint_type = 'FOREIGN KEY'
-        AND kcu.column_name = 'invoice_id'
-        AND ccu.table_name = 'invoices'
-    )
-    LOOP
-        EXECUTE 'ALTER TABLE payments DROP CONSTRAINT ' || quote_ident(r.constraint_name);
-        EXECUTE 'ALTER TABLE payments ADD CONSTRAINT ' || quote_ident(r.constraint_name) || ' FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE';
-    END LOOP;
-END $$;
+-- Migration: Remove deprecated Finances tables.
+DROP TABLE IF EXISTS payments CASCADE;
+DROP TABLE IF EXISTS expenses CASCADE;
 
 -- Notifications table for in-app notifications
 CREATE TABLE IF NOT EXISTS notifications (

@@ -120,8 +120,6 @@
     "total": "Totale",
     "notes": "Note",
     "actionsColumn": "Azioni",
-    "deleteTitle": "Eliminare fattura fornitore?",
-    "linkedExpense": "Spesa collegata",
-    "noLinkedExpense": "Nessuna spesa collegata"
+    "deleteTitle": "Eliminare fattura fornitore?"
   }
 }
