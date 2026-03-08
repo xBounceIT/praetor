@@ -65,7 +65,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onViewQuote,
   currency,
 }) => {
-  const { t } = useTranslation(['accounting', 'crm', 'common']);
+  const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientsOrder | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -106,11 +106,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (!formData.clientId) {
-      newErrors.clientId = t('crm:quotes.errors.clientRequired');
+      newErrors.clientId = t('sales:clientQuotes.errors.clientRequired');
     }
 
     if (!formData.items || formData.items.length === 0) {
-      newErrors.items = t('crm:quotes.errors.itemsRequired');
+      newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -380,10 +380,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     : activeSpecialBids;
 
   const getBidDisplayValue = (bidId?: string) => {
-    if (!bidId) return t('crm:quotes.noSpecialBid');
+    if (!bidId) return t('sales:clientQuotes.noSpecialBid');
     const bid =
       activeSpecialBids.find((b) => b.id === bidId) || specialBids.find((b) => b.id === bidId);
-    return bid ? `${bid.clientName} · ${bid.productName}` : t('crm:quotes.noSpecialBid');
+    return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
   };
 
   const isLinkedQuote = Boolean(formData.linkedQuoteId);
@@ -468,7 +468,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div className="flex justify-end gap-2">
             {onViewQuote && row.linkedQuoteId && (
-              <Tooltip label={t('crm:quotes.viewQuote')}>
+              <Tooltip label={t('sales:clientQuotes.viewQuote')}>
                 {() => (
                   <button
                     onClick={(e) => {
@@ -488,7 +488,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               label={
                 row.status === 'draft'
                   ? t('accounting:clientsOrders.editOrder')
-                  : t('crm:quotes.viewQuote')
+                  : t('sales:clientQuotes.viewQuote')
               }
             >
               {() => (
@@ -646,7 +646,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     }}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
-                    {t('crm:quotes.viewQuote')}
+                    {t('sales:clientQuotes.viewQuote')}
                   </button>
                 )}
               </div>
@@ -659,7 +659,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 {t('accounting:clientsOrders.orderDetails')}
               </h4>
               <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
                   <div className="space-y-1.5">
                     <label className="ml-1 text-xs font-bold text-slate-500">
                       {t('accounting:clientsOrders.client')}
@@ -668,7 +668,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                       value={formData.clientId || ''}
                       onChange={(val) => handleClientChange(val as string)}
-                      placeholder={t('crm:quotes.selectAClient')}
+                      placeholder={t('sales:clientQuotes.selectAClient')}
                       searchable={true}
                       disabled={isReadOnly}
                       className={errors.clientId ? 'border-red-300' : ''}
@@ -707,12 +707,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       searchable={false}
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="ml-1 text-xs font-bold text-slate-500">
-                      {t('crm:quotes.globalDiscount')}
+                      {t('sales:clientQuotes.globalDiscount')}
                     </label>
                     <div
                       className={`flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all focus-within:ring-2 focus-within:ring-praetor ${isLinkedQuote ? 'opacity-50' : ''}`}
@@ -743,7 +740,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:quotes.productsServices')}
+                  {t('sales:clientQuotes.productsServices')}
                 </h4>
                 <button
                   type="button"
@@ -751,7 +748,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   disabled={isReadOnly}
                   className="flex items-center gap-1 text-xs font-bold text-praetor hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <i className="fa-solid fa-plus"></i> {t('crm:quotes.addProduct')}
+                  <i className="fa-solid fa-plus"></i> {t('sales:clientQuotes.addProduct')}
                 </button>
               </div>
               {errors.items && (
@@ -764,13 +761,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <div className="col-span-2 ml-1">
                       {t('accounting:clientsOrders.specialBidLabel')}
                     </div>
-                    <div className="col-span-3">{t('crm:quotes.productsServices')}</div>
-                    <div className="col-span-1 text-center">{t('crm:quotes.qty')}</div>
+                    <div className="col-span-3">{t('sales:clientQuotes.productsServices')}</div>
+                    <div className="col-span-1 text-center">{t('sales:clientQuotes.qty')}</div>
                     <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
                     <div className="col-span-1 text-center">
                       {t('crm:internalListing.molPercentage')}
                     </div>
-                    <div className="col-span-1 text-center">{t('crm:quotes.marginLabel')}</div>
+                    <div className="col-span-1 text-center">
+                      {t('sales:clientQuotes.marginLabel')}
+                    </div>
                     <div className="col-span-3 pr-2 text-right">
                       {t('crm:internalListing.salePrice')}
                     </div>
@@ -810,7 +809,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               </label>
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('crm:quotes.noSpecialBid') },
+                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBid') },
                                   ...clientSpecialBids.map((b) => ({
                                     id: b.id,
                                     name: `${b.clientName} · ${b.productName}`,
@@ -824,7 +823,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     val === 'none' ? '' : (val as string),
                                   )
                                 }
-                                placeholder={t('crm:quotes.selectBid')}
+                                placeholder={t('sales:clientQuotes.selectBid')}
                                 displayValue={getBidDisplayValue(item.specialBidId)}
                                 searchable={true}
                                 disabled={isReadOnly}
@@ -833,7 +832,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             </div>
                             <div className="space-y-1 md:col-span-3 min-w-0">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.productsServices')}
+                                {t('sales:clientQuotes.productsServices')}
                               </label>
                               <CustomSelect
                                 options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
@@ -841,7 +840,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 onChange={(val) =>
                                   updateProductRow(index, 'productId', val as string)
                                 }
-                                placeholder={t('crm:quotes.selectProduct')}
+                                placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
                                 disabled={isReadOnly}
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
@@ -849,7 +848,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             </div>
                             <div className="space-y-1 md:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.qty')}
+                                {t('sales:clientQuotes.qty')}
                               </label>
                               <ValidatedNumberInput
                                 step="0.01"
@@ -892,7 +891,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             </div>
                             <div className="flex items-center justify-center space-y-1 md:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('crm:quotes.marginLabel')}
+                                {t('sales:clientQuotes.marginLabel')}
                               </label>
                               <span className="text-xs font-bold text-emerald-600">
                                 {margin.toFixed(2)} {currency}
@@ -926,7 +925,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('crm:quotes.noProductsAdded')}
+                  {t('sales:clientQuotes.noProductsAdded')}
                 </div>
               )}
             </div>
@@ -942,7 +941,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   rows={4}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder={t('crm:quotes.additionalNotesPlaceholder')}
+                  placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
                   disabled={isReadOnly}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
                 />
@@ -960,7 +959,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <>
                       <div className="flex justify-between">
                         <span className="text-sm font-bold text-slate-500">
-                          {t('crm:quotes.taxableAmount')}
+                          {t('sales:clientQuotes.taxableAmount')}
                         </span>
                         <span className="text-sm font-bold text-slate-700">
                           {subtotal.toFixed(2)} {currency}
@@ -969,7 +968,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       {formData.discount !== undefined && formData.discount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('crm:quotes.discountAmount', { discount: formData.discount })}
+                            {t('sales:clientQuotes.discountAmount', {
+                              discount: formData.discount,
+                            })}
                           </span>
                           <span className="text-sm font-bold text-amber-600">
                             -{discountAmount.toFixed(2)} {currency}
@@ -979,7 +980,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       {Object.entries(taxGroups).map(([rate, amount]) => (
                         <div key={rate} className="flex justify-between text-xs">
                           <span className="font-semibold text-slate-500">
-                            {t('crm:quotes.ivaTax', { rate })}
+                            {t('sales:clientQuotes.ivaTax', { rate })}
                           </span>
                           <span className="font-semibold text-slate-700">
                             {amount.toFixed(2)} {currency}
@@ -988,7 +989,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       ))}
                       <div className="flex justify-between border-t border-slate-200 pt-3">
                         <span className="text-lg font-black text-slate-800">
-                          {t('crm:quotes.totalLabel')}
+                          {t('sales:clientQuotes.totalLabel')}
                         </span>
                         <span className="text-lg font-black text-praetor">
                           {total.toFixed(2)} {currency}
@@ -996,7 +997,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="font-bold text-slate-500">
-                          {t('crm:quotes.marginLabel')}
+                          {t('sales:clientQuotes.marginLabel')}
                         </span>
                         <span className="font-bold text-emerald-600">
                           {margin.toFixed(2)} {currency} ({marginPercentage.toFixed(1)}%)

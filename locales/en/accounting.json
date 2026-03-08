@@ -35,6 +35,7 @@
     "client": "Client",
     "paymentTerms": "Payment Terms",
     "notes": "Notes",
+    "status": "Status",
     "discount": "Discount (%)",
     "subtotal": "Subtotal",
     "total": "Total",

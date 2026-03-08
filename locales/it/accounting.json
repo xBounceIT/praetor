@@ -35,6 +35,7 @@
     "client": "Cliente",
     "paymentTerms": "Termini di Pagamento",
     "notes": "Note",
+    "status": "Stato",
     "discount": "Sconto (%)",
     "subtotal": "Imponibile",
     "total": "Totale",
