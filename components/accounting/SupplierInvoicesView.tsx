@@ -436,7 +436,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
                           <div className="space-y-1.5 md:col-span-2">
                             <label className="ml-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {t('crm:internalListing.salePrice')}
+                              {t('crm:internalListing.salePrice')} ({currency})
                             </label>
                             <ValidatedNumberInput
                               value={item.unitPrice}

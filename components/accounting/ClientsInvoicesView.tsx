@@ -726,18 +726,16 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   <div className="col-span-3">{t('accounting:clientsInvoices.specialBid')}</div>
                   <div className="col-span-3">{t('common:labels.product')}</div>
                   <div className="col-span-1">{t('common:labels.quantity')}</div>
-                  <div className="col-span-1">{t('accounting:clientsInvoices.unitOfMeasure')}</div>
-                  <div className="col-span-1">{t('common:labels.price')}</div>
+                  <div className="col-span-1">{t('common:labels.price')} ({currency})</div>
                   <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
                   <div className="col-span-1">{t('common:labels.discount')}%</div>
-                  <div className="col-span-1 pr-2 text-right">{t('common:labels.total')}</div>
+                  <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                 </div>
               )}
 
               <div className="space-y-3">
                 {formData.items?.map((item, index) => {
                   const lineTotal = getLineTotal(item);
-                  const isProductLinked = Boolean(item.productId);
 
                   return (
                     <div
@@ -800,45 +798,30 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.quantity')}
                             </label>
-                            <ValidatedNumberInput
-                              min="0"
-                              step="0.01"
-                              required
-                              value={item.quantity}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateItemRow(
-                                  index,
-                                  'quantity',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                min="0"
+                                step="0.01"
+                                required
+                                value={item.quantity}
+                                onValueChange={(value) => {
+                                  const parsed = parseFloat(value);
+                                  updateItemRow(
+                                    index,
+                                    'quantity',
+                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                  );
+                                }}
+                                className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                              />
+                              <span className="shrink-0 text-xs font-semibold text-slate-400">
+                                {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))?.name || t('accounting:clientsInvoices.unit')}
+                              </span>
+                            </div>
                           </div>
                           <div className="space-y-1 md:col-span-1">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                              {t('accounting:clientsInvoices.unitOfMeasure')}
-                            </label>
-                            <CustomSelect
-                              options={unitOptions}
-                              value={item.unitOfMeasure || 'unit'}
-                              onChange={(value) =>
-                                updateItemRow(
-                                  index,
-                                  'unitOfMeasure',
-                                  value as InvoiceItem['unitOfMeasure'],
-                                )
-                              }
-                              placeholder={t('accounting:clientsInvoices.selectUnitOfMeasure')}
-                              searchable={false}
-                              disabled={isProductLinked}
-                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1 md:col-span-1">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                              {t('common:labels.price')}
+                              {t('common:labels.price')} ({currency})
                             </label>
                             <ValidatedNumberInput
                               min="0"
@@ -894,11 +877,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                             />
                           </div>
-                          <div className="space-y-1 md:col-span-1">
+                          <div className="space-y-1 md:col-span-2">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.total')}
                             </label>
-                            <div className="flex min-h-[42px] items-center justify-end rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
+                            <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
                               {lineTotal.toFixed(2)} {currency}
                             </div>
                           </div>
