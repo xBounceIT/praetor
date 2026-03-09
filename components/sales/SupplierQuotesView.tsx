@@ -56,7 +56,7 @@ export interface SupplierQuotesViewProps {
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
   quoteFilterId?: string | null;
-  quoteIdsWithOrders?: Set<string>;
+  quoteIdsWithOrders?: Record<string, string>;
   onViewOrder?: (quoteId: string) => void;
   currency: string;
 }
@@ -284,12 +284,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          const hasOrder = quoteIdsWithOrders?.has(row.id);
+          const orderNumber = quoteIdsWithOrders?.[row.id];
+          const hasOrder = Boolean(orderNumber);
           return (
             <div className="flex justify-end gap-2">
               {onViewOrder && hasOrder && (
                 <Tooltip
-                  label={t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' })}
+                  label={
+                    t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' }) +
+                    (orderNumber ? ` (${orderNumber})` : '')
+                  }
                 >
                   {() => (
                     <button

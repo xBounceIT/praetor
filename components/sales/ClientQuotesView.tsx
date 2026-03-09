@@ -28,7 +28,7 @@ export interface ClientQuotesViewProps {
   onCreateOffer?: (quote: Quote) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
-  quoteIdsWithOrders?: Set<string>;
+  quoteIdsWithOrders?: Record<string, string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
   onViewOrder?: (quoteId: string) => void;
   currency: string;
@@ -732,7 +732,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const hasOffer = hasOfferForQuote(row);
-          const hasOrder = quoteIdsWithOrders?.has(row.id);
+          const orderNumber = quoteIdsWithOrders?.[row.id];
+          const hasOrder = Boolean(orderNumber);
           const offerStatus = getOfferStatusForQuote(row);
           const history = isHistoryRow(row);
 
@@ -769,7 +770,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             <div className="flex justify-end gap-2">
               {onViewOrder && hasOrder && (
                 <Tooltip
-                  label={t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' })}
+                  label={
+                    t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' }) +
+                    (orderNumber ? ` (${orderNumber})` : '')
+                  }
                 >
                   {() => (
                     <button

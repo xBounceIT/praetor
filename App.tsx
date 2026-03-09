@@ -760,15 +760,23 @@ const App: React.FC = () => {
   }, [clientsOrders]);
 
   const quoteIdsWithOrders = useMemo(() => {
-    return new Set(
-      clientsOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
+    const map: Record<string, string> = {};
+    clientsOrders.forEach((order) => {
+      if (order.linkedQuoteId) {
+        map[order.linkedQuoteId] = order.orderNumber || order.id;
+      }
+    });
+    return map;
   }, [clientsOrders]);
 
   const supplierQuoteIdsWithOrders = useMemo(() => {
-    return new Set(
-      supplierOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
+    const map: Record<string, string> = {};
+    supplierOrders.forEach((order) => {
+      if (order.linkedQuoteId) {
+        map[order.linkedQuoteId] = order.orderNumber || order.id;
+      }
+    });
+    return map;
   }, [supplierOrders]);
 
   const orderIdsWithInvoices = useMemo(() => {
