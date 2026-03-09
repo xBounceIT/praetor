@@ -1,7 +1,13 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
+import type {
+  Product,
+  Supplier,
+  SupplierOffer,
+  SupplierQuote,
+  SupplierQuoteItem,
+} from '../../types';
 import {
   formatDateOnlyForLocale,
   getLocalDateString,
@@ -56,9 +62,12 @@ export interface SupplierQuotesViewProps {
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
   quoteFilterId?: string | null;
-  quoteIdsWithOrders?: Record<string, string>;
+  quoteIdsWithOffers?: Set<string>;
+  quoteIdsWithOrders?: Set<string>;
+  onViewOffers?: (quoteId: string) => void;
   onViewOrder?: (quoteId: string) => void;
   currency: string;
+  offers?: SupplierOffer[];
 }
 
 const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
@@ -70,9 +79,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   quoteFilterId,
+  quoteIdsWithOffers,
   quoteIdsWithOrders,
+  onViewOffers,
   onViewOrder,
   currency,
+  offers = [],
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -284,16 +296,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          const orderNumber = quoteIdsWithOrders?.[row.id];
-          const hasOrder = Boolean(orderNumber);
+          const hasOrder = quoteIdsWithOrders?.has(row.id);
           return (
             <div className="flex justify-end gap-2">
               {onViewOrder && hasOrder && (
                 <Tooltip
-                  label={
-                    t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' }) +
-                    (orderNumber ? ` (${orderNumber})` : '')
-                  }
+                  label={t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' })}
                 >
                   {() => (
                     <button

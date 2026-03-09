@@ -760,24 +760,22 @@ const App: React.FC = () => {
   }, [clientsOrders]);
 
   const quoteIdsWithOrders = useMemo(() => {
-    const map: Record<string, string> = {};
-    clientsOrders.forEach((order) => {
-      if (order.linkedQuoteId) {
-        map[order.linkedQuoteId] = order.orderNumber || order.id;
-      }
-    });
-    return map;
+    return new Set(
+      clientsOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
   }, [clientsOrders]);
 
   const supplierQuoteIdsWithOrders = useMemo(() => {
-    const map: Record<string, string> = {};
-    supplierOrders.forEach((order) => {
-      if (order.linkedQuoteId) {
-        map[order.linkedQuoteId] = order.orderNumber || order.id;
-      }
-    });
-    return map;
+    return new Set(
+      supplierOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
   }, [supplierOrders]);
+
+  const supplierQuoteIdsWithOffers = useMemo(() => {
+    return new Set(
+      supplierOffers.map((offer) => offer.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
+  }, [supplierOffers]);
 
   const orderIdsWithInvoices = useMemo(() => {
     const ids = new Set<string>();
@@ -3177,11 +3175,16 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
+                  offers={enrichedClientOffers}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
                   quoteIdsWithOrders={quoteIdsWithOrders}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
+                  onViewOffers={(quoteId) => {
+                    setQuoteFilterId(quoteId);
+                    setActiveView('sales/client-offers');
+                  }}
                   onViewOrder={(quoteId) => {
                     setQuoteFilterId(quoteId);
                     setActiveView('accounting/clients-orders');
@@ -3218,9 +3221,15 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
+                  offers={enrichedSupplierOffers}
                   quoteFilterId={supplierQuoteFilterId}
+                  quoteIdsWithOffers={supplierQuoteIdsWithOffers}
                   quoteIdsWithOrders={supplierQuoteIdsWithOrders}
                   currency={generalSettings.currency}
+                  onViewOffers={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('sales/supplier-offers');
+                  }}
                   onViewOrder={(quoteId) => {
                     setSupplierQuoteFilterId(quoteId);
                     setActiveView('accounting/supplier-orders');

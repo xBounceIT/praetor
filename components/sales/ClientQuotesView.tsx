@@ -28,10 +28,12 @@ export interface ClientQuotesViewProps {
   onCreateOffer?: (quote: Quote) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
-  quoteIdsWithOrders?: Record<string, string>;
+  quoteIdsWithOrders?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
+  onViewOffers?: (quoteId: string) => void;
   onViewOrder?: (quoteId: string) => void;
   currency: string;
+  offers?: ClientOffer[];
 }
 
 const calcProductSalePrice = (costo: number, molPercentage: number) => {
@@ -51,8 +53,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quoteIdsWithOffers,
   quoteIdsWithOrders,
   quoteOfferStatuses,
+  onViewOffers,
   onViewOrder,
   currency,
+  offers = [],
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
 
@@ -732,8 +736,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const hasOffer = hasOfferForQuote(row);
-          const orderNumber = quoteIdsWithOrders?.[row.id];
-          const hasOrder = Boolean(orderNumber);
+          const hasOrder = quoteIdsWithOrders?.has(row.id);
           const offerStatus = getOfferStatusForQuote(row);
           const history = isHistoryRow(row);
 
@@ -770,10 +773,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             <div className="flex justify-end gap-2">
               {onViewOrder && hasOrder && (
                 <Tooltip
-                  label={
-                    t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' }) +
-                    (orderNumber ? ` (${orderNumber})` : '')
-                  }
+                  label={t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' })}
                 >
                   {() => (
                     <button

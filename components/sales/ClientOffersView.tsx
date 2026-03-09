@@ -88,6 +88,7 @@ export interface ClientOffersViewProps {
   onCreateClientsOrder?: (offer: ClientOffer) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
   currency: string;
+  quoteFilterId?: string | null;
 }
 
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
@@ -102,6 +103,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   onCreateClientsOrder,
   onViewQuote,
   currency,
+  quoteFilterId,
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -151,9 +153,15 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   });
 
   const isReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
+  const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
-    return offers.filter((offer) => {
+    let currentOffers = offers;
+    if (quoteFilterId) {
+      currentOffers = currentOffers.filter((o) => o.linkedQuoteId === quoteFilterId);
+    }
+
+    return currentOffers.filter((offer) => {
       const matchesSearch =
         searchTerm.trim() === '' ||
         offer.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,7 +169,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       const matchesStatus = filterStatus === 'all' || offer.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
-  }, [offers, searchTerm, filterStatus]);
+  }, [offers, searchTerm, filterStatus, quoteFilterId]);
 
   const openEditModal = useCallback((offer: ClientOffer) => {
     setEditingOffer(offer);
@@ -572,7 +580,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       defaultValue: 'Select a client',
                     })}
                     searchable={true}
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || isClientLocked}
                     className={errors.clientId ? 'border-red-300' : ''}
                   />
                   {errors.clientId && (
@@ -994,7 +1002,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       </div>
 
       <StandardTable<ClientOffer>
-        title={t('sales:clientOffers.activeOffers', { defaultValue: 'Active Offers' })}
+        title={
+          quoteFilterId
+            ? t('sales:clientOffers.activeOffersFiltered', {
+                defaultValue: 'Active Offers for Quote',
+              })
+            : t('sales:clientOffers.activeOffers', { defaultValue: 'Active Offers' })
+        }
         data={filteredOffers}
         columns={columns}
         defaultRowsPerPage={5}
