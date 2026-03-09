@@ -56,6 +56,8 @@ export interface SupplierQuotesViewProps {
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
   quoteFilterId?: string | null;
+  quoteIdsWithOrders?: Set<string>;
+  onViewOrder?: (quoteId: string) => void;
   currency: string;
 }
 
@@ -68,6 +70,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   quoteFilterId,
+  quoteIdsWithOrders,
+  onViewOrder,
   currency,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
@@ -279,112 +283,144 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         disableFiltering: true,
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-2">
-            <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
-              {() => (
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openEditModal(row);
-                  }}
-                  className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+        cell: ({ row }) => {
+          const hasOrder = quoteIdsWithOrders?.has(row.id);
+          return (
+            <div className="flex justify-end gap-2">
+              {onViewOrder && hasOrder && (
+                <Tooltip
+                  label={t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' })}
                 >
-                  <i className="fa-solid fa-pen-to-square"></i>
-                </button>
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onViewOrder(row.id);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-file-invoice"></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
-            </Tooltip>
-            {row.status === 'draft' && !row.linkedOfferId && (
-              <Tooltip label={t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}>
+              <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
                 {() => (
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
-                      onUpdateQuote(row.id, { status: 'sent' });
-                    }}
-                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                  >
-                    <i className="fa-solid fa-paper-plane"></i>
-                  </button>
-                )}
-              </Tooltip>
-            )}
-            {row.status === 'sent' && !row.linkedOfferId && (
-              <>
-                <Tooltip
-                  label={t('sales:supplierQuotes.markAccepted', {
-                    defaultValue: 'Mark as accepted',
-                  })}
-                >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onUpdateQuote(row.id, { status: 'accepted' });
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                    >
-                      <i className="fa-solid fa-check"></i>
-                    </button>
-                  )}
-                </Tooltip>
-                <Tooltip
-                  label={t('sales:supplierQuotes.markDenied', {
-                    defaultValue: 'Mark as denied',
-                  })}
-                >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onUpdateQuote(row.id, { status: 'denied' });
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <i className="fa-solid fa-xmark"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              </>
-            )}
-            {row.status === 'accepted' && !row.linkedOfferId && onCreateOffer && (
-              <Tooltip
-                label={t('sales:supplierQuotes.createOffer', { defaultValue: 'Create offer' })}
-              >
-                {() => (
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCreateOffer(row);
+                      openEditModal(row);
                     }}
                     className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                   >
-                    <i className="fa-solid fa-file-signature"></i>
+                    <i className="fa-solid fa-pen-to-square"></i>
                   </button>
                 )}
               </Tooltip>
-            )}
-            {row.status === 'draft' && !row.linkedOfferId && (
-              <Tooltip label={t('common:buttons.delete', { defaultValue: 'Delete' })}>
-                {() => (
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setQuoteToDelete(row);
-                      setIsDeleteConfirmOpen(true);
-                    }}
-                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+              {row.status === 'draft' && !row.linkedOfferId && (
+                <Tooltip
+                  label={t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}
+                >
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onUpdateQuote(row.id, { status: 'sent' });
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                    >
+                      <i className="fa-solid fa-paper-plane"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+              {row.status === 'sent' && !row.linkedOfferId && (
+                <>
+                  <Tooltip
+                    label={t('sales:supplierQuotes.markAccepted', {
+                      defaultValue: 'Mark as accepted',
+                    })}
                   >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
-                )}
-              </Tooltip>
-            )}
-          </div>
-        ),
+                    {() => (
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onUpdateQuote(row.id, { status: 'accepted' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                      >
+                        <i className="fa-solid fa-check"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  <Tooltip
+                    label={t('sales:supplierQuotes.markDenied', {
+                      defaultValue: 'Mark as denied',
+                    })}
+                  >
+                    {() => (
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onUpdateQuote(row.id, { status: 'denied' });
+                        }}
+                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                </>
+              )}
+              {row.status === 'accepted' && !row.linkedOfferId && onCreateOffer && (
+                <Tooltip
+                  label={t('sales:supplierQuotes.createOffer', { defaultValue: 'Create offer' })}
+                >
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCreateOffer(row);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-file-signature"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+              {row.status === 'draft' && !row.linkedOfferId && (
+                <Tooltip label={t('common:buttons.delete', { defaultValue: 'Delete' })}>
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setQuoteToDelete(row);
+                        setIsDeleteConfirmOpen(true);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+            </div>
+          );
+        },
       },
     ],
-    [currency, getStatusLabel, onCreateOffer, onUpdateQuote, openEditModal, products, t],
+    [
+      currency,
+      getStatusLabel,
+      onCreateOffer,
+      onUpdateQuote,
+      openEditModal,
+      products,
+      quoteIdsWithOrders,
+      onViewOrder,
+      t,
+    ],
   );
 
   const handleSubmit = async (event: React.FormEvent) => {

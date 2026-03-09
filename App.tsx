@@ -754,14 +754,22 @@ const App: React.FC = () => {
   }, [clientOffers]);
 
   const offerIdsWithOrders = useMemo(() => {
-    const ids = new Set<string>();
-    clientsOrders.forEach((order) => {
-      if (order.linkedOfferId) {
-        ids.add(order.linkedOfferId);
-      }
-    });
-    return ids;
+    return new Set(
+      clientsOrders.map((order) => order.linkedOfferId).filter((id): id is string => Boolean(id)),
+    );
   }, [clientsOrders]);
+
+  const quoteIdsWithOrders = useMemo(() => {
+    return new Set(
+      clientsOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
+  }, [clientsOrders]);
+
+  const supplierQuoteIdsWithOrders = useMemo(() => {
+    return new Set(
+      supplierOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
+  }, [supplierOrders]);
 
   const orderIdsWithInvoices = useMemo(() => {
     const ids = new Set<string>();
@@ -3143,8 +3151,13 @@ const App: React.FC = () => {
                   onCreateOffer={handleCreateClientOfferFromQuote}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
+                  quoteIdsWithOrders={quoteIdsWithOrders}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
+                  onViewOrder={(quoteId) => {
+                    setQuoteFilterId(quoteId);
+                    setActiveView('accounting/clients-orders');
+                  }}
                 />
               )}
 
@@ -3178,7 +3191,12 @@ const App: React.FC = () => {
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
                   quoteFilterId={supplierQuoteFilterId}
+                  quoteIdsWithOrders={supplierQuoteIdsWithOrders}
                   currency={generalSettings.currency}
+                  onViewOrder={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('accounting/supplier-orders');
+                  }}
                 />
               )}
 

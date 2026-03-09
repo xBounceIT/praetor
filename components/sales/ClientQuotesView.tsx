@@ -28,7 +28,9 @@ export interface ClientQuotesViewProps {
   onCreateOffer?: (quote: Quote) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
+  quoteIdsWithOrders?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
+  onViewOrder?: (quoteId: string) => void;
   currency: string;
 }
 
@@ -47,7 +49,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   quoteIdsWithOffers,
+  quoteIdsWithOrders,
   quoteOfferStatuses,
+  onViewOrder,
   currency,
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
@@ -728,6 +732,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const hasOffer = hasOfferForQuote(row);
+          const hasOrder = quoteIdsWithOrders?.has(row.id);
           const offerStatus = getOfferStatusForQuote(row);
           const history = isHistoryRow(row);
 
@@ -762,6 +767,23 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
+              {onViewOrder && hasOrder && (
+                <Tooltip
+                  label={t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' })}
+                >
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewOrder(row.id);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-file-invoice"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
               <Tooltip
                 label={
                   history
