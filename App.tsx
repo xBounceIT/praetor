@@ -2266,7 +2266,7 @@ const App: React.FC = () => {
           specialBidMolPercentage: item.specialBidMolPercentage,
           discount: item.discount,
           note: item.note,
-          id: 'temp-' + Math.random().toString(36).substr(2, 9),
+          id: 'temp-' + Math.random().toString(36).substring(2, 11),
           orderId: '',
         })),
         discount: offer.discount,
@@ -3141,6 +3141,7 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
+                  onViewOffer={() => setActiveView('sales/client-offers')}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
                   quoteOfferStatuses={quoteOfferStatuses}
@@ -3178,6 +3179,7 @@ const App: React.FC = () => {
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
                   quoteFilterId={supplierQuoteFilterId}
+                  onViewOffer={() => setActiveView('sales/supplier-offers')}
                   currency={generalSettings.currency}
                 />
               )}
