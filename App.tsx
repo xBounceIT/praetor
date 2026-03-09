@@ -2217,11 +2217,16 @@ const App: React.FC = () => {
 
   const handleCreateClientsOrderFromOffer = async (offer: ClientOffer) => {
     try {
+      // Look up the quote to get the quote code
+      const linkedQuote = quotes.find((q) => q.id === offer.linkedQuoteId);
+      const linkedQuoteCode = linkedQuote?.quoteCode;
+
       const orderData: Partial<ClientsOrder> = {
         clientId: offer.clientId,
         clientName: offer.clientName,
         status: 'draft',
         linkedQuoteId: offer.linkedQuoteId,
+        linkedQuoteCode,
         linkedOfferId: offer.id,
         paymentTerms: offer.paymentTerms,
         items: offer.items.map((item) => ({
