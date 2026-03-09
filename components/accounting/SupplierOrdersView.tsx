@@ -224,7 +224,8 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 {row.linkedOfferId}
               </div>
               <div className="text-[10px] text-slate-400">
-                {row.linkedQuoteId ||
+                {row.linkedQuoteCode ||
+                  row.linkedQuoteId ||
                   t('accounting:supplierOrders.noQuoteLink', {
                     defaultValue: 'No quote link',
                   })}

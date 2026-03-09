@@ -801,6 +801,26 @@ const App: React.FC = () => {
     [supplierOrders, supplierQuotes],
   );
 
+  const enrichedClientOffers = useMemo(
+    () =>
+      clientOffers.map((offer) => {
+        if (!offer.linkedQuoteId || offer.linkedQuoteCode) return offer;
+        const quote = quotes.find((q) => q.id === offer.linkedQuoteId);
+        return quote ? { ...offer, linkedQuoteCode: quote.quoteCode } : offer;
+      }),
+    [clientOffers, quotes],
+  );
+
+  const enrichedSupplierOffers = useMemo(
+    () =>
+      supplierOffers.map((offer) => {
+        if (!offer.linkedQuoteId || offer.linkedQuoteCode) return offer;
+        const quote = supplierQuotes.find((q) => q.id === offer.linkedQuoteId);
+        return quote ? { ...offer, linkedQuoteCode: quote.quoteCode } : offer;
+      }),
+    [supplierOffers, supplierQuotes],
+  );
+
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
     if (!currentUser) return false;
@@ -3164,7 +3184,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']) &&
               activeView === 'sales/client-offers' && (
                 <ClientOffersView
-                  offers={clientOffers}
+                  offers={enrichedClientOffers}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3203,7 +3223,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-offers']) &&
               activeView === 'sales/supplier-offers' && (
                 <SupplierOffersView
-                  offers={supplierOffers}
+                  offers={enrichedSupplierOffers}
                   suppliers={suppliers}
                   products={products}
                   onUpdateOffer={handleUpdateSupplierOffer}

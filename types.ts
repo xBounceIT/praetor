@@ -274,11 +274,11 @@ export interface ClientOfferItem {
   discount?: number;
   note?: string;
 }
-
 export interface ClientOffer {
   id: string;
   offerCode: string;
   linkedQuoteId: string;
+  linkedQuoteCode?: string;
   clientId: string;
   clientName: string;
   items: ClientOfferItem[];
@@ -529,6 +529,7 @@ export interface SupplierOffer {
   id: string;
   offerCode: string;
   linkedQuoteId: string;
+  linkedQuoteCode?: string;
   linkedOrderId?: string;
   supplierId: string;
   supplierName: string;

@@ -411,7 +411,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 <span>
                   {t('sales:supplierOffers.sourceQuote', {
                     defaultValue: 'Source quote: {{quoteId}}',
-                    quoteId: editingOffer.linkedQuoteId,
+                    quoteId: editingOffer.linkedQuoteCode || editingOffer.linkedQuoteId,
                   })}
                 </span>
                 {onViewQuote && (

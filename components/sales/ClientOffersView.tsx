@@ -527,7 +527,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <span>
                   {t('sales:clientOffers.sourceQuote', {
                     defaultValue: 'Source quote: {{quoteId}}',
-                    quoteId: editingOffer.linkedQuoteId,
+                    quoteId: editingOffer.linkedQuoteCode || editingOffer.linkedQuoteId,
                   })}
                 </span>
                 {onViewQuote && (
