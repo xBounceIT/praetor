@@ -476,7 +476,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('accounting:supplierOrders.linkedQuoteInfo', {
-                        number: formData.linkedQuoteId,
+                        number: formData.linkedQuoteCode || formData.linkedQuoteId,
                       })}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">

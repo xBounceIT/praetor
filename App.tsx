@@ -773,6 +773,26 @@ const App: React.FC = () => {
     return ids;
   }, [supplierInvoices]);
 
+  const enrichedClientsOrders = useMemo(
+    () =>
+      clientsOrders.map((order) => {
+        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
+        const quote = quotes.find((q) => q.id === order.linkedQuoteId);
+        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
+      }),
+    [clientsOrders, quotes],
+  );
+
+  const enrichedSupplierOrders = useMemo(
+    () =>
+      supplierOrders.map((order) => {
+        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
+        const quote = supplierQuotes.find((q) => q.id === order.linkedQuoteId);
+        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
+      }),
+    [supplierOrders, supplierQuotes],
+  );
+
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
     if (!currentUser) return false;
@@ -3185,7 +3205,7 @@ const App: React.FC = () => {
             ) &&
               activeView === 'accounting/clients-orders' && (
                 <ClientsOrdersView
-                  orders={clientsOrders}
+                  orders={enrichedClientsOrders}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3223,7 +3243,7 @@ const App: React.FC = () => {
             ) &&
               activeView === 'accounting/supplier-orders' && (
                 <SupplierOrdersView
-                  orders={supplierOrders}
+                  orders={enrichedSupplierOrders}
                   suppliers={suppliers}
                   products={products}
                   orderIdsWithInvoices={orderIdsWithInvoices}
