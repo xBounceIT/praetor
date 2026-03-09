@@ -133,7 +133,11 @@
     "markConfirmed": "Mark as confirmed",
     "markDenied": "Mark as denied",
     "createInvoice": "Create invoice",
-    "orderNumber": "Order Number"
+    "orderNumber": "Order Number",
+    "linkedQuote": "Linked Quote",
+    "linkedQuoteInfo": "This order was created from quote #{{number}}",
+    "quoteDetailsReadOnly": "(Quote details are read-only)",
+    "viewQuote": "View Quote"
   },
   "supplierInvoices": {
     "title": "Supplier Invoices",

@@ -731,6 +731,7 @@ const App: React.FC = () => {
         : '404';
   });
   const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
+  const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -772,6 +773,26 @@ const App: React.FC = () => {
     return ids;
   }, [supplierInvoices]);
 
+  const enrichedClientsOrders = useMemo(
+    () =>
+      clientsOrders.map((order) => {
+        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
+        const quote = quotes.find((q) => q.id === order.linkedQuoteId);
+        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
+      }),
+    [clientsOrders, quotes],
+  );
+
+  const enrichedSupplierOrders = useMemo(
+    () =>
+      supplierOrders.map((order) => {
+        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
+        const quote = supplierQuotes.find((q) => q.id === order.linkedQuoteId);
+        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
+      }),
+    [supplierOrders, supplierQuotes],
+  );
+
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
     if (!currentUser) return false;
@@ -809,7 +830,10 @@ const App: React.FC = () => {
     if (activeView !== 'sales/client-quotes' && quoteFilterId) {
       React.startTransition(() => setQuoteFilterId(null));
     }
-  }, [activeView, quoteFilterId]);
+    if (activeView !== 'sales/supplier-quotes' && supplierQuoteFilterId) {
+      React.startTransition(() => setSupplierQuoteFilterId(null));
+    }
+  }, [activeView, quoteFilterId, supplierQuoteFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -2217,11 +2241,16 @@ const App: React.FC = () => {
 
   const handleCreateClientsOrderFromOffer = async (offer: ClientOffer) => {
     try {
+      // Look up the quote to get the quote code
+      const linkedQuote = quotes.find((q) => q.id === offer.linkedQuoteId);
+      const linkedQuoteCode = linkedQuote?.quoteCode;
+
       const orderData: Partial<ClientsOrder> = {
         clientId: offer.clientId,
         clientName: offer.clientName,
         status: 'draft',
         linkedQuoteId: offer.linkedQuoteId,
+        linkedQuoteCode,
         linkedOfferId: offer.id,
         paymentTerms: offer.paymentTerms,
         items: offer.items.map((item) => ({
@@ -3149,6 +3178,7 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
+                  quoteFilterId={supplierQuoteFilterId}
                   onViewOffer={() => setActiveView('sales/supplier-offers')}
                   currency={generalSettings.currency}
                 />
@@ -3163,6 +3193,10 @@ const App: React.FC = () => {
                   onUpdateOffer={handleUpdateSupplierOffer}
                   onDeleteOffer={handleDeleteSupplierOffer}
                   onCreateOrder={handleCreateSupplierOrderFromOffer}
+                  onViewQuote={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('sales/supplier-quotes');
+                  }}
                   currency={generalSettings.currency}
                 />
               )}
@@ -3173,7 +3207,7 @@ const App: React.FC = () => {
             ) &&
               activeView === 'accounting/clients-orders' && (
                 <ClientsOrdersView
-                  orders={clientsOrders}
+                  orders={enrichedClientsOrders}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3211,13 +3245,17 @@ const App: React.FC = () => {
             ) &&
               activeView === 'accounting/supplier-orders' && (
                 <SupplierOrdersView
-                  orders={supplierOrders}
+                  orders={enrichedSupplierOrders}
                   suppliers={suppliers}
                   products={products}
                   orderIdsWithInvoices={orderIdsWithInvoices}
                   onUpdateOrder={handleUpdateSupplierOrder}
                   onDeleteOrder={handleDeleteSupplierOrder}
                   onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
+                  onViewQuote={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('sales/supplier-quotes');
+                  }}
                   currency={generalSettings.currency}
                 />
               )}

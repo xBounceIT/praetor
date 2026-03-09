@@ -323,6 +323,7 @@ export interface ClientsOrder {
   id: string;
   orderNumber?: string;
   linkedQuoteId?: string; // Reference to source quote
+  linkedQuoteCode?: string; // Human-readable quote number
   linkedOfferId?: string;
   clientId: string;
   clientName: string;
@@ -568,6 +569,7 @@ export interface SupplierSaleOrder {
   id: string;
   orderNumber?: string;
   linkedQuoteId?: string;
+  linkedQuoteCode?: string;
   linkedOfferId: string;
   supplierId: string;
   supplierName: string;

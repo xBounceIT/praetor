@@ -87,6 +87,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setEditingOrder(order);
     setFormData({
       linkedQuoteId: order.linkedQuoteId,
+      linkedQuoteCode: order.linkedQuoteCode,
       clientId: order.clientId,
       clientName: order.clientName,
       items: order.items,
@@ -639,7 +640,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('accounting:clientsOrders.linkedQuoteInfo', {
-                        number: formData.linkedQuoteId,
+                        number: formData.linkedQuoteCode || formData.linkedQuoteId,
                       })}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
