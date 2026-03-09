@@ -82,6 +82,7 @@ export interface SupplierOrdersViewProps {
   onUpdateOrder: (id: string, updates: Partial<SupplierSaleOrder>) => void | Promise<void>;
   onDeleteOrder: (id: string) => void | Promise<void>;
   onCreateInvoice?: (order: SupplierSaleOrder) => void | Promise<void>;
+  onViewQuote?: (quoteId: string) => void;
   currency: string;
 }
 
@@ -93,6 +94,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onUpdateOrder,
   onDeleteOrder,
   onCreateInvoice,
+  onViewQuote,
   currency,
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
@@ -298,6 +300,23 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
+              {onViewQuote && row.linkedQuoteId && (
+                <Tooltip label={t('accounting:supplierOrders.viewQuote')}>
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const linkedQuoteId = row.linkedQuoteId;
+                        if (!linkedQuoteId) return;
+                        onViewQuote(linkedQuoteId);
+                      }}
+                      className="rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-praetor"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
               <Tooltip
                 label={
                   isDraft
@@ -406,6 +425,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       currency,
       onCreateInvoice,
       onUpdateOrder,
+      onViewQuote,
       openEditModal,
       orderIdsWithInvoices,
       t,
@@ -440,6 +460,43 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                       'Non-draft orders are read-only. Change status from the list actions.',
                   })}
                 </span>
+              </div>
+            )}
+
+            {/* Linked Quote Info */}
+            {formData.linkedQuoteId && (
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <i className="fa-solid fa-link"></i>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {t('accounting:supplierOrders.linkedQuote')}
+                    </div>
+                    <div className="text-xs text-praetor">
+                      {t('accounting:supplierOrders.linkedQuoteInfo', {
+                        number: formData.linkedQuoteId,
+                      })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {t('accounting:supplierOrders.quoteDetailsReadOnly')}
+                    </div>
+                  </div>
+                </div>
+                {onViewQuote && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const linkedQuoteId = formData.linkedQuoteId;
+                      if (!linkedQuoteId) return;
+                      onViewQuote(linkedQuoteId);
+                    }}
+                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                  >
+                    {t('accounting:supplierOrders.viewQuote')}
+                  </button>
+                )}
               </div>
             )}
 

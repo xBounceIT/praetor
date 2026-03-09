@@ -55,6 +55,7 @@ export interface SupplierQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
+  quoteFilterId?: string | null;
   currency: string;
 }
 
@@ -66,6 +67,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
+  quoteFilterId,
   currency,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);

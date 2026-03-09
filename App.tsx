@@ -731,6 +731,7 @@ const App: React.FC = () => {
         : '404';
   });
   const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
+  const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -809,7 +810,10 @@ const App: React.FC = () => {
     if (activeView !== 'sales/client-quotes' && quoteFilterId) {
       React.startTransition(() => setQuoteFilterId(null));
     }
-  }, [activeView, quoteFilterId]);
+    if (activeView !== 'sales/supplier-quotes' && supplierQuoteFilterId) {
+      React.startTransition(() => setSupplierQuoteFilterId(null));
+    }
+  }, [activeView, quoteFilterId, supplierQuoteFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -3153,6 +3157,7 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
+                  quoteFilterId={supplierQuoteFilterId}
                   currency={generalSettings.currency}
                 />
               )}
@@ -3166,6 +3171,10 @@ const App: React.FC = () => {
                   onUpdateOffer={handleUpdateSupplierOffer}
                   onDeleteOffer={handleDeleteSupplierOffer}
                   onCreateOrder={handleCreateSupplierOrderFromOffer}
+                  onViewQuote={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('sales/supplier-quotes');
+                  }}
                   currency={generalSettings.currency}
                 />
               )}
@@ -3221,6 +3230,10 @@ const App: React.FC = () => {
                   onUpdateOrder={handleUpdateSupplierOrder}
                   onDeleteOrder={handleDeleteSupplierOrder}
                   onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
+                  onViewQuote={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('sales/supplier-quotes');
+                  }}
                   currency={generalSettings.currency}
                 />
               )}
