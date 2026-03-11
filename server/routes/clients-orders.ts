@@ -492,7 +492,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Insert order items
       const createdItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
       for (const item of normalizedItems) {
-        const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
           `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -986,7 +986,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Insert new items
         for (const item of normalizedItems) {
-          const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -1085,7 +1085,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
 
           if (existingProject.rows.length === 0) {
-            const projectId = 'p-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+            const projectId = 'p-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
             await query(
               `INSERT INTO projects (id, name, client_id, color, description, is_disabled)
              VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -1121,7 +1121,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Create a notification for each manager
         for (const manager of managersResult.rows) {
-          const notificationId = 'n-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          const notificationId =
+            'n-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           await query(
             `INSERT INTO notifications (id, user_id, type, title, message, data)
            VALUES ($1, $2, $3, $4, $5, $6)`,

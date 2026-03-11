@@ -26,6 +26,7 @@ export interface ClientQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
   onCreateOffer?: (quote: Quote) => void;
+  onViewOffer?: (offerId: string) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteIdsWithOrders?: Set<string>;
@@ -50,6 +51,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
+  onViewOffer,
   quoteIdsWithOffers,
   quoteIdsWithOrders,
   quoteOfferStatuses,
@@ -626,6 +628,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const columns = useMemo<Column<Quote>[]>(
     () => [
       {
+        header: t('sales:clientQuotes.quoteCodeColumn'),
+        accessorKey: 'quoteCode',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[8rem]',
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.quoteCode}</span>,
+      },
+      {
         header: t('sales:clientQuotes.clientColumn'),
         accessorKey: 'clientName',
         cell: ({ row }) => {
@@ -636,15 +645,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
           );
         },
-      },
-      {
-        header: t('sales:clientQuotes.quoteCodeColumn'),
-        accessorKey: 'quoteCode',
-        className: 'whitespace-nowrap',
-        headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm font-bold text-slate-500">{row.quoteCode}</div>
-        ),
       },
       {
         header: t('sales:clientQuotes.totalColumn'),
@@ -811,6 +811,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </button>
                 )}
               </Tooltip>
+              {row.linkedOfferId && onViewOffer && (
+                <Tooltip label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewOffer(row.linkedOfferId!);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
               {row.status === 'accepted' && onCreateOffer && (
                 <Tooltip label={createOfferTitle}>
                   {() => (
@@ -952,6 +967,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       calculateQuoteTotals,
       getStatusLabel,
       onCreateOffer,
+      onViewOffer,
       onUpdateQuote,
       confirmDelete,
       openEditModal,
@@ -962,7 +978,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -982,7 +998,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -1035,9 +1051,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     }}
                     placeholder="Q0000"
                     disabled={isReadOnly}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border ${
+                    className={`w-full rounded-xl border ${
                       errors.quoteCode ? 'border-red-300' : 'border-slate-200'
-                    } rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                    } bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
                   />
                   {errors.quoteCode && (
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
@@ -1095,21 +1111,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     value={formData.expirationDate}
                     onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
                     disabled={isReadOnly}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('sales:clientQuotes.notesLabel')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
-                    disabled={isReadOnly}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -1186,7 +1188,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
                     return (
-                      <div key={item.id} className="bg-slate-50 p-3 rounded-xl space-y-3">
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                      >
                         <div className="lg:hidden flex items-start gap-3">
                           <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="min-w-0">
@@ -1425,95 +1430,105 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               )}
             </div>
 
-            {/* Totals Section - Right Aligned */}
-            {formData.items && formData.items.length > 0 && (
-              <div className="mt-4 flex flex-col items-end space-y-2 px-3">
-                {(() => {
-                  const discountValue = Number.isNaN(formData.discount ?? 0)
-                    ? 0
-                    : (formData.discount ?? 0);
-                  const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
-                    calculateTotals(formData.items, discountValue);
-                  return (
-                    <>
-                      {errors.total && (
-                        <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
-                      )}
-
-                      {/* Imponibile */}
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-bold text-slate-500">
-                          {t('sales:clientQuotes.taxableAmount')}:
-                        </span>
-                        <span className="text-sm font-black text-slate-800 whitespace-nowrap">
-                          {subtotal.toFixed(2)} {currency}
-                        </span>
-                      </div>
-
-                      {/* Sconto */}
-                      {discountValue > 0 && (
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
-                            {discountValue}%):
-                          </span>
-                          <span className="text-sm font-black text-amber-600 whitespace-nowrap">
-                            -{discountAmount.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* IVA */}
-                      {Object.entries(taxGroups).map(([rate, amount]) => (
-                        <div key={rate} className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.ivaTax', { rate })}:
-                          </span>
-                          <span className="text-sm font-black text-slate-800 whitespace-nowrap">
-                            {amount.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                      ))}
-
-                      {/* Margin */}
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-bold text-emerald-600">
-                          {t('sales:clientQuotes.marginLabel')} (
-                          {(marginPercentage || 0).toFixed(1)}%):
-                        </span>
-                        <span className="text-sm font-black text-emerald-600 whitespace-nowrap">
-                          {margin.toFixed(2)} {currency}
-                        </span>
-                      </div>
-
-                      {/* Total */}
-                      <div className="flex items-center gap-4 pt-2 mt-2 border-t border-slate-100">
-                        <span className="text-lg font-black text-slate-400 uppercase tracking-widest">
-                          {t('sales:clientQuotes.totalLabel')}:
-                        </span>
-                        <span className="inline-flex items-baseline whitespace-nowrap text-3xl font-black text-praetor">
-                          {total.toFixed(2)}{' '}
-                          <span className="text-lg text-slate-400 font-bold">{currency}</span>
-                        </span>
-                      </div>
-                    </>
-                  );
-                })()}
+            {/* Notes & Cost Summary */}
+            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
+              <div className="w-full space-y-4 md:w-2/3">
+                <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:clientQuotes.notesLabel')}
+                </h4>
+                <textarea
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
+                  disabled={isReadOnly}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                />
               </div>
-            )}
 
-            <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+              <div className="w-full space-y-3 md:w-1/3">
+                <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
+                  <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
+                  {t('sales:clientQuotes.totalLabel')}
+                </h4>
+                {formData.items &&
+                  formData.items.length > 0 &&
+                  (() => {
+                    const discountValue = Number.isNaN(formData.discount ?? 0)
+                      ? 0
+                      : (formData.discount ?? 0);
+                    const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
+                      calculateTotals(formData.items, discountValue);
+                    return (
+                      <>
+                        {errors.total && (
+                          <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-sm font-bold text-slate-500">
+                            {t('sales:clientQuotes.taxableAmount')}
+                          </span>
+                          <span className="text-sm font-bold text-slate-700">
+                            {subtotal.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                        {discountValue > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-sm font-bold text-slate-500">
+                              {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
+                              {discountValue}%)
+                            </span>
+                            <span className="text-sm font-bold text-amber-600">
+                              -{discountAmount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        )}
+                        {Object.entries(taxGroups).map(([rate, amount]) => (
+                          <div key={rate} className="flex justify-between text-xs">
+                            <span className="font-semibold text-slate-500">
+                              {t('sales:clientQuotes.ivaTax', { rate })}
+                            </span>
+                            <span className="font-semibold text-slate-700">
+                              {amount.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between">
+                          <span className="text-sm font-bold text-emerald-600">
+                            {t('sales:clientQuotes.marginLabel')} (
+                            {(marginPercentage || 0).toFixed(1)}%)
+                          </span>
+                          <span className="text-sm font-bold text-emerald-600">
+                            {margin.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t border-slate-200 pt-3">
+                          <span className="text-lg font-black text-slate-800">
+                            {t('sales:clientQuotes.totalLabel')}
+                          </span>
+                          <span className="text-lg font-black text-praetor">
+                            {total.toFixed(2)} {currency}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+                className="rounded-xl px-6 py-3 font-bold text-slate-500 hover:bg-slate-50"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={isReadOnly}
-                className="px-10 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-xl bg-praetor px-8 py-3 font-bold text-white shadow-lg shadow-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isReadOnly
                   ? t('sales:clientQuotes.statusQuote', {
@@ -1568,33 +1583,29 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800">
-                {t('sales:clientQuotes.deleteQuote')}?
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {t('sales:clientQuotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
+        <div className="w-full max-w-sm space-y-4 overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+          </div>
+          <h3 className="text-lg font-black text-slate-800">
+            {t('sales:clientQuotes.deleteQuote')}?
+          </h3>
+          <p className="text-sm text-slate-500">
+            {t('sales:clientQuotes.deleteConfirm', { clientName: quoteToDelete?.clientName })}
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="flex-1 rounded-xl py-3 font-bold text-slate-500 hover:bg-slate-50"
+            >
+              {t('common:buttons.cancel')}
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700"
+            >
+              {t('common:buttons.delete')}
+            </button>
           </div>
         </div>
       </Modal>

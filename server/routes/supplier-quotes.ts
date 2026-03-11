@@ -332,7 +332,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const createdItems = [];
       for (const item of normalizedItems) {
-        const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
           `INSERT INTO supplier_quote_items (
           id, quote_id, product_id, product_name, quantity, unit_price, discount, note
@@ -548,7 +548,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await query('DELETE FROM supplier_quote_items WHERE quote_id = $1', [idResult.value]);
 
         for (const item of normalizedItems) {
-          const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO supplier_quote_items (
             id, quote_id, product_id, product_name, quantity, unit_price, discount, note

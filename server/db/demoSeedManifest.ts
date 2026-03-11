@@ -6,7 +6,6 @@ const currentYear = new Date().getFullYear();
 export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy';
 
 export const DEMO_CACHE_NAMESPACES = ['clients', 'products', 'projects', 'tasks', 'users'] as const;
-export const DEMO_SETTINGS_CACHE_NAMESPACES = ['settings:user:u2', 'settings:user:u3'] as const;
 
 export const DEMO_USERS = [
   {
@@ -17,6 +16,7 @@ export const DEMO_USERS = [
     avatarInitials: 'MG',
     fullName: 'Manager User',
     email: 'manager@example.com',
+    costPerHour: 65.0,
   },
   {
     id: 'u3',
@@ -26,11 +26,64 @@ export const DEMO_USERS = [
     avatarInitials: 'US',
     fullName: 'Standard User',
     email: 'user@example.com',
+    costPerHour: 45.0,
+  },
+  {
+    id: 'u4',
+    name: 'Sales Manager',
+    username: 'salesmanager',
+    role: 'manager',
+    avatarInitials: 'SM',
+    fullName: 'Sales Manager',
+    email: 'salesmanager@example.com',
+    costPerHour: 60.0,
+  },
+  {
+    id: 'u5',
+    name: 'Elena Rossi',
+    username: 'erossi',
+    role: 'user',
+    avatarInitials: 'ER',
+    fullName: 'Elena Rossi',
+    email: 'erossi@example.com',
+    costPerHour: 50.0,
+  },
+  {
+    id: 'u6',
+    name: 'Marco Bianchi',
+    username: 'mbianchi',
+    role: 'user',
+    avatarInitials: 'MB',
+    fullName: 'Marco Bianchi',
+    email: 'mbianchi@example.com',
+    costPerHour: 40.0,
+  },
+  {
+    id: 'u7',
+    name: 'Sofia Conti',
+    username: 'sconti',
+    role: 'user',
+    avatarInitials: 'SC',
+    fullName: 'Sofia Conti',
+    email: 'sconti@example.com',
+    costPerHour: 55.0,
+  },
+  {
+    id: 'u8',
+    name: 'Luca Moretti',
+    username: 'lmoretti',
+    role: 'user',
+    avatarInitials: 'LM',
+    fullName: 'Luca Moretti',
+    email: 'lmoretti@example.com',
+    costPerHour: 35.0,
   },
 ] as const;
 
 export const DEMO_USER_IDS = DEMO_USERS.map((user) => user.id);
 export const DEMO_USERNAMES = DEMO_USERS.map((user) => user.username);
+export const DEMO_SETTINGS_CACHE_NAMESPACES = DEMO_USERS.map((user) => `settings:user:${user.id}`);
+export const DEMO_ENTRIES_CACHE_NAMESPACES = DEMO_USERS.map((user) => `entries:user:${user.id}`);
 
 export const COMPATIBILITY_DEFAULTS = {
   clients: ['c1', 'c2'],
@@ -161,6 +214,43 @@ export const DEMO_PROJECTS = [
 
 export const DEMO_NOTIFICATIONS = ['dm_notif_01', 'dm_notif_02'] as const;
 
+export const DEMO_WORK_UNITS = [
+  { id: 'dm_wu_01', name: 'Development Team', description: 'Frontend and backend engineering.' },
+  {
+    id: 'dm_wu_02',
+    name: 'Sales & Marketing',
+    description: 'Customer acquisition and brand management.',
+  },
+  {
+    id: 'dm_wu_03',
+    name: 'IT Operations',
+    description: 'Infrastructure, support, and cross-team ops.',
+  },
+] as const;
+
+export const DEMO_WORK_UNIT_MANAGERS = [
+  { workUnitId: 'dm_wu_01', userId: 'u2' },
+  { workUnitId: 'dm_wu_02', userId: 'u4' },
+  { workUnitId: 'dm_wu_03', userId: 'u2' },
+  { workUnitId: 'dm_wu_03', userId: 'u4' },
+] as const;
+
+export const DEMO_USER_WORK_UNITS = [
+  { userId: 'u2', workUnitId: 'dm_wu_01' },
+  { userId: 'u3', workUnitId: 'dm_wu_01' },
+  { userId: 'u5', workUnitId: 'dm_wu_01' },
+  { userId: 'u6', workUnitId: 'dm_wu_01' },
+  { userId: 'u4', workUnitId: 'dm_wu_02' },
+  { userId: 'u7', workUnitId: 'dm_wu_02' },
+  { userId: 'u8', workUnitId: 'dm_wu_02' },
+  { userId: 'u2', workUnitId: 'dm_wu_03' },
+  { userId: 'u4', workUnitId: 'dm_wu_03' },
+  { userId: 'u5', workUnitId: 'dm_wu_03' },
+  { userId: 'u7', workUnitId: 'dm_wu_03' },
+] as const;
+
+export const DEMO_TIME_ENTRY_IDS = rangeIds('dm_te_', 25);
+
 export const DEMO_ITEM_IDS = {
   quoteItems: rangeIds('dm_cqi_', 14),
   customerOfferItems: rangeIds('dm_coi_', 7),
@@ -187,6 +277,8 @@ export const DEMO_IDS = {
   supplierInvoices: DEMO_SUPPLIER_INVOICES.map((item) => item.id),
   projects: DEMO_PROJECTS.map((item) => item.id),
   notifications: [...DEMO_NOTIFICATIONS],
+  workUnits: DEMO_WORK_UNITS.map((item) => item.id),
+  timeEntries: [...DEMO_TIME_ENTRY_IDS],
   users: [...DEMO_USER_IDS],
   settingsUserIds: [...DEMO_USER_IDS],
 } as const;
@@ -216,4 +308,8 @@ export const DEMO_EXPECTED_COUNTS = {
   supplier_invoice_items: DEMO_ITEM_IDS.supplierInvoiceItems.length,
   projects: DEMO_PROJECTS.length,
   notifications: DEMO_NOTIFICATIONS.length,
+  work_units: DEMO_WORK_UNITS.length,
+  work_unit_managers: DEMO_WORK_UNIT_MANAGERS.length,
+  user_work_units: DEMO_USER_WORK_UNITS.length,
+  time_entries: DEMO_TIME_ENTRY_IDS.length,
 } as const;

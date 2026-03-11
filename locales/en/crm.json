@@ -378,5 +378,10 @@
     "180gg": "180 Days",
     "240gg": "240 Days",
     "365gg": "365 Days"
+  },
+  "quotes": {
+    "productsServices": "Product / Service",
+    "qty": "Qty",
+    "discountAmount": "Discount ({{discount}}%)"
   }
 }
