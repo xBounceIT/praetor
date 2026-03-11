@@ -110,6 +110,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [products],
   );
 
+  const filteredQuotes = useMemo(() => {
+    if (quoteFilterId) {
+      return quotes.filter((q) => q.id === quoteFilterId);
+    }
+    return quotes;
+  }, [quotes, quoteFilterId]);
+
   const [editingQuote, setEditingQuote] = useState<SupplierQuote | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -913,8 +920,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       </div>
 
       <StandardTable<SupplierQuote>
-        title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
-        data={quotes}
+        title={
+          quoteFilterId
+            ? t('sales:supplierQuotes.activeQuotesFiltered', {
+                defaultValue: 'Active Quotes for Quote',
+              })
+            : t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })
+        }
+        data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
       />

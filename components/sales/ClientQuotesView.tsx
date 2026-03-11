@@ -50,6 +50,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
+  quoteFilterId,
   quoteIdsWithOffers,
   quoteIdsWithOrders,
   quoteOfferStatuses,
@@ -76,6 +77,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     ],
     [t],
   );
+
+  const filteredQuotes = useMemo(() => {
+    if (quoteFilterId) {
+      return quotes.filter((q) => q.id === quoteFilterId);
+    }
+    return quotes;
+  }, [quotes, quoteFilterId]);
 
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -1655,8 +1663,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {/* Search and Filters */}
 
       <StandardTable<Quote>
-        title={t('sales:clientQuotes.activeQuotes')}
-        data={quotes}
+        title={
+          quoteFilterId
+            ? t('sales:clientQuotes.activeQuotesFiltered', {
+                defaultValue: 'Active Quotes for Quote',
+              })
+            : t('sales:clientQuotes.activeQuotes')
+        }
+        data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => {
