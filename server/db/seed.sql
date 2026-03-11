@@ -470,6 +470,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO special_bids (
     id,
+    bid_code,
     client_id,
     client_name,
     product_id,
@@ -483,6 +484,7 @@ INSERT INTO special_bids (
 ) VALUES
     (
         'dm_bid_01',
+        'DM-BID-001',
         'dm_cli_01',
         'Northwind Retail Italia S.p.A.',
         'dm_prd_06',
@@ -496,6 +498,7 @@ INSERT INTO special_bids (
     ),
     (
         'dm_bid_02',
+        'DM-BID-002',
         'dm_cli_02',
         'Helios Energy Services S.r.l.',
         'dm_prd_05',
@@ -509,6 +512,7 @@ INSERT INTO special_bids (
     ),
     (
         'dm_bid_03',
+        'DM-BID-003',
         'dm_cli_03',
         'Comune di Verona - Innovazione Digitale',
         'dm_prd_08',
@@ -521,6 +525,7 @@ INSERT INTO special_bids (
         CURRENT_TIMESTAMP - INTERVAL '2 days'
     )
 ON CONFLICT (id) DO UPDATE SET
+    bid_code = EXCLUDED.bid_code,
     client_id = EXCLUDED.client_id,
     client_name = EXCLUDED.client_name,
     product_id = EXCLUDED.product_id,
