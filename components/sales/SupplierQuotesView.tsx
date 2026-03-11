@@ -257,29 +257,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
-        header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
-        accessorKey: 'supplierName',
-        cell: ({ row }) => {
-          const history = isHistoryRow(row);
-          return (
-            <div>
-              <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
-                {row.supplierName}
-              </div>
-              <div className="text-xs text-slate-400">
-                {row.linkedOfferId
-                  ? `${t('sales:supplierQuotes.linkedOffer', {
-                      defaultValue: 'Linked to offer',
-                    })} ${row.linkedOfferId}`
-                  : row.expirationDate
-                    ? formatDateOnlyForLocale(row.expirationDate)
-                    : ''}
-              </div>
-            </div>
-          );
-        },
-      },
-      {
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
         id: 'quoteCode',
         accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
