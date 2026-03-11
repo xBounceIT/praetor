@@ -233,7 +233,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex justify-end gap-2">
-            {onViewQuote && (
+            {row.linkedQuoteId && onViewQuote && (
               <Tooltip label={t('sales:supplierOffers.viewQuote', { defaultValue: 'View quote' })}>
                 {() => (
                   <button

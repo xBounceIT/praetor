@@ -249,7 +249,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
-              {onViewQuote && (
+              {row.linkedQuoteId && onViewQuote && (
                 <Tooltip label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}>
                   {() => (
                     <button
