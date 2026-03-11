@@ -59,6 +59,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onViewOffers,
   onViewOrder,
   currency,
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = [],
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
@@ -825,6 +826,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
                         onViewOffer(row.linkedOfferId!);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
