@@ -983,6 +983,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
+        onRowClick={openEditModal}
       />
     </div>
   );
