@@ -89,6 +89,7 @@ export interface ClientOffersViewProps {
   onViewQuote?: (quoteId: string) => void;
   currency: string;
   quoteFilterId?: string | null;
+  offerFilterCode?: string | null;
 }
 
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
@@ -104,6 +105,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   onViewQuote,
   currency,
   quoteFilterId,
+  offerFilterCode,
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -160,6 +162,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     if (quoteFilterId) {
       currentOffers = currentOffers.filter((o) => o.linkedQuoteId === quoteFilterId);
     }
+    if (offerFilterCode) {
+      currentOffers = currentOffers.filter((o) => o.offerCode === offerFilterCode);
+    }
 
     return currentOffers.filter((offer) => {
       const matchesSearch =
@@ -169,7 +174,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       const matchesStatus = filterStatus === 'all' || offer.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
-  }, [offers, searchTerm, filterStatus, quoteFilterId]);
+  }, [offers, searchTerm, filterStatus, quoteFilterId, offerFilterCode]);
 
   const openEditModal = useCallback((offer: ClientOffer) => {
     setEditingOffer(offer);
@@ -1001,11 +1006,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
       <StandardTable<ClientOffer>
         title={
-          quoteFilterId
-            ? t('sales:clientOffers.activeOffersFiltered', {
-                defaultValue: 'Active Offers for Quote',
+          offerFilterCode
+            ? t('sales:clientOffers.activeOffersFilteredByCode', {
+                defaultValue: 'Offer {{code}}',
+                code: offerFilterCode,
               })
-            : t('sales:clientOffers.activeOffers', { defaultValue: 'Customers Offers' })
+            : quoteFilterId
+              ? t('sales:clientOffers.activeOffersFiltered', {
+                  defaultValue: 'Active Offers for Quote',
+                })
+              : t('sales:clientOffers.activeOffers', { defaultValue: 'Customers Offers' })
         }
         data={filteredOffers}
         columns={columns}

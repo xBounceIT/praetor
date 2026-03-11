@@ -732,6 +732,8 @@ const App: React.FC = () => {
   });
   const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
+  const [offerFilterCode, setOfferFilterCode] = useState<string | null>(null);
+  const [supplierOfferFilterCode, setSupplierOfferFilterCode] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -3206,7 +3208,10 @@ const App: React.FC = () => {
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
                   offers={enrichedClientOffers}
-                  onViewOffer={() => setActiveView('sales/client-offers')}
+                  onViewOffer={(offerId, offerCode) => {
+                    setOfferFilterCode(offerCode);
+                    setActiveView('sales/client-offers');
+                  }}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
                   quoteIdsWithOrders={quoteIdsWithOrders}
@@ -3240,6 +3245,7 @@ const App: React.FC = () => {
                   }}
                   currency={generalSettings.currency}
                   quoteFilterId={quoteFilterId}
+                  offerFilterCode={offerFilterCode}
                 />
               )}
 
@@ -3257,7 +3263,10 @@ const App: React.FC = () => {
                   quoteFilterId={supplierQuoteFilterId}
                   quoteIdsWithOffers={supplierQuoteIdsWithOffers}
                   quoteIdsWithOrders={supplierQuoteIdsWithOrders}
-                  onViewOffer={() => setActiveView('sales/supplier-offers')}
+                  onViewOffer={(offerId, offerCode) => {
+                    setSupplierOfferFilterCode(offerCode);
+                    setActiveView('sales/supplier-offers');
+                  }}
                   currency={generalSettings.currency}
                   onViewOffers={(quoteId) => {
                     setSupplierQuoteFilterId(quoteId);
@@ -3285,6 +3294,7 @@ const App: React.FC = () => {
                   }}
                   currency={generalSettings.currency}
                   quoteFilterId={supplierQuoteFilterId}
+                  offerFilterCode={supplierOfferFilterCode}
                 />
               )}
 

@@ -52,6 +52,7 @@ export interface SupplierOffersViewProps {
   onViewQuote?: (quoteId: string) => void;
   currency: string;
   quoteFilterId?: string | null;
+  offerFilterCode?: string | null;
 }
 
 const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
@@ -64,6 +65,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   onViewQuote,
   currency,
   quoteFilterId,
+  offerFilterCode,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -112,9 +114,15 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const isSupplierLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
-    if (!quoteFilterId) return offers;
-    return offers.filter((o) => o.linkedQuoteId === quoteFilterId);
-  }, [offers, quoteFilterId]);
+    let currentOffers = offers;
+    if (quoteFilterId) {
+      currentOffers = currentOffers.filter((o) => o.linkedQuoteId === quoteFilterId);
+    }
+    if (offerFilterCode) {
+      currentOffers = currentOffers.filter((o) => o.offerCode === offerFilterCode);
+    }
+    return currentOffers;
+  }, [offers, quoteFilterId, offerFilterCode]);
   const totalAmount = calculateTotals(formData.items || [], Number(formData.discount || 0)).total;
 
   const inputClassName =
@@ -780,11 +788,16 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
 
       <StandardTable<SupplierOffer>
         title={
-          quoteFilterId
-            ? t('sales:supplierOffers.activeOffersFiltered', {
-                defaultValue: 'Active Offers for Quote',
+          offerFilterCode
+            ? t('sales:supplierOffers.activeOffersFilteredByCode', {
+                defaultValue: 'Offer {{code}}',
+                code: offerFilterCode,
               })
-            : t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })
+            : quoteFilterId
+              ? t('sales:supplierOffers.activeOffersFiltered', {
+                  defaultValue: 'Active Offers for Quote',
+                })
+              : t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })
         }
         data={filteredOffers}
         columns={columns}

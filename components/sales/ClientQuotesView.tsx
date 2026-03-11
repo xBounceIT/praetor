@@ -26,7 +26,7 @@ export interface ClientQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
   onCreateOffer?: (quote: Quote) => void;
-  onViewOffer?: (offerId: string) => void;
+  onViewOffer?: (offerId: string, offerCode: string) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteIdsWithOrders?: Set<string>;
@@ -827,7 +827,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
-                        onViewOffer(row.linkedOfferId!);
+                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                     >
