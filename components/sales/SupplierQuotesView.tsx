@@ -526,7 +526,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </div>
                   <div>
                     <div className="text-sm font-bold text-slate-900">
-                      {t('sales:supplierQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
+                      {t('sales:supplierQuotes.linkedOfferTitle', { defaultValue: 'Linked Offer' })}
                     </div>
                     <div className="text-xs text-praetor">
                       {t('sales:supplierQuotes.linkedOfferInfo', {

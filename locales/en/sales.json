@@ -189,7 +189,7 @@
     "addQuote": "Add quote",
     "viewQuote": "View quote",
     "readOnlyLinked": "This quote is read-only because an offer was created from it.",
-    "linkedOffer": "Linked Offer",
+    "linkedOfferTitle": "Linked Offer",
     "linkedOfferInfo": "Offer #{{number}}",
     "offerDetailsReadOnly": "(Quote details are read-only)",
     "viewOffer": "View Offer",
