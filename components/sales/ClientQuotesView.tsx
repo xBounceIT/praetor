@@ -955,6 +955,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       onUpdateQuote,
       confirmDelete,
       openEditModal,
+      quoteIdsWithOrders,
+      onViewOrder,
     ],
   );
 

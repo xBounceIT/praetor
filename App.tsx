@@ -881,10 +881,18 @@ const App: React.FC = () => {
   }, [activeView, currentUser, isLoading]);
 
   useEffect(() => {
-    if (activeView !== 'sales/client-quotes' && quoteFilterId) {
+    if (
+      activeView !== 'sales/client-quotes' &&
+      activeView !== 'sales/client-offers' &&
+      quoteFilterId
+    ) {
       React.startTransition(() => setQuoteFilterId(null));
     }
-    if (activeView !== 'sales/supplier-quotes' && supplierQuoteFilterId) {
+    if (
+      activeView !== 'sales/supplier-quotes' &&
+      activeView !== 'sales/supplier-offers' &&
+      supplierQuoteFilterId
+    ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
     }
   }, [activeView, quoteFilterId, supplierQuoteFilterId]);
@@ -3228,6 +3236,7 @@ const App: React.FC = () => {
                     setActiveView('sales/client-quotes');
                   }}
                   currency={generalSettings.currency}
+                  quoteFilterId={quoteFilterId}
                 />
               )}
 
@@ -3271,6 +3280,7 @@ const App: React.FC = () => {
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}
+                  quoteFilterId={supplierQuoteFilterId}
                 />
               )}
 
