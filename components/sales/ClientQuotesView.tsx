@@ -52,6 +52,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   onViewOffer,
+  quoteFilterId,
   quoteIdsWithOffers,
   quoteIdsWithOrders,
   quoteOfferStatuses,
@@ -78,6 +79,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     ],
     [t],
   );
+
+  const filteredQuotes = useMemo(() => {
+    if (quoteFilterId) {
+      return quotes.filter((q) => q.id === quoteFilterId);
+    }
+    return quotes;
+  }, [quotes, quoteFilterId]);
 
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -971,6 +979,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       onUpdateQuote,
       confirmDelete,
       openEditModal,
+      quoteIdsWithOrders,
+      onViewOrder,
     ],
   );
 
@@ -1006,6 +1016,40 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     defaultValue: 'This quote is read-only because an offer was created from it.',
                   })}
                 </span>
+              </div>
+            )}
+            {editingQuote?.linkedOfferId && (
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <i className="fa-solid fa-link"></i>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
+                    </div>
+                    <div className="text-xs text-praetor">
+                      {t('sales:clientQuotes.linkedOfferInfo', {
+                        number: editingQuote.linkedOfferCode || editingQuote.linkedOfferId,
+                        defaultValue: 'Offer #{{number}}',
+                      })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {t('sales:clientQuotes.offerDetailsReadOnly', {
+                        defaultValue: '(Quote details are read-only)',
+                      })}
+                    </div>
+                  </div>
+                </div>
+                {onViewOffers && (
+                  <button
+                    type="button"
+                    onClick={() => onViewOffers(editingQuote.id)}
+                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                  >
+                    {t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' })}
+                  </button>
+                )}
               </div>
             )}
             {/* Client Selection */}
@@ -1630,8 +1674,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {/* Search and Filters */}
 
       <StandardTable<Quote>
-        title={t('sales:clientQuotes.activeQuotes')}
-        data={quotes}
+        title={
+          quoteFilterId
+            ? t('sales:clientQuotes.activeQuotesFiltered', {
+                defaultValue: 'Active Quotes for Quote',
+              })
+            : t('sales:clientQuotes.activeQuotes')
+        }
+        data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => {

@@ -41,6 +41,7 @@ export interface ClientsOrdersViewProps {
   onDeleteClientsOrder: (id: string) => void;
   onViewQuote?: (quoteId: string) => void;
   currency: string;
+  quoteFilterId?: string | null;
 }
 
 const calcProductSalePrice = (costo: number, molPercentage: number) => {
@@ -64,6 +65,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onDeleteClientsOrder,
   onViewQuote,
   currency,
+  quoteFilterId,
 }) => {
   const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -389,6 +391,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const isLinkedQuote = Boolean(formData.linkedQuoteId);
   const isReadOnly = Boolean(isLinkedQuote || (editingOrder && editingOrder.status !== 'draft'));
+
+  // Filter orders by quoteFilterId if provided
+  const filteredOrders = useMemo(() => {
+    if (quoteFilterId) {
+      return orders.filter((o) => o.linkedQuoteId === quoteFilterId);
+    }
+    return orders;
+  }, [orders, quoteFilterId]);
 
   // Table columns definition with TableFilter support
   const columns = useMemo(
@@ -1085,7 +1095,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {/* Main Table with all orders and TableFilter */}
       <StandardTable<ClientsOrder>
         title={t('accounting:clientsOrders.title')}
-        data={orders}
+        data={filteredOrders}
         columns={columns}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"

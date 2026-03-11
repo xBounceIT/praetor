@@ -807,6 +807,26 @@ const App: React.FC = () => {
     [supplierOrders, supplierQuotes],
   );
 
+  const enrichedQuotes = useMemo(
+    () =>
+      quotes.map((quote) => {
+        if (!quote.linkedOfferId || quote.linkedOfferCode) return quote;
+        const offer = clientOffers.find((o) => o.id === quote.linkedOfferId);
+        return offer ? { ...quote, linkedOfferCode: offer.offerCode } : quote;
+      }),
+    [quotes, clientOffers],
+  );
+
+  const enrichedSupplierQuotes = useMemo(
+    () =>
+      supplierQuotes.map((quote) => {
+        if (!quote.linkedOfferId || quote.linkedOfferCode) return quote;
+        const offer = supplierOffers.find((o) => o.id === quote.linkedOfferId);
+        return offer ? { ...quote, linkedOfferCode: offer.offerCode } : quote;
+      }),
+    [supplierQuotes, supplierOffers],
+  );
+
   const enrichedClientOffers = useMemo(
     () =>
       clientOffers.map((offer) => {
@@ -861,10 +881,20 @@ const App: React.FC = () => {
   }, [activeView, currentUser, isLoading]);
 
   useEffect(() => {
-    if (activeView !== 'sales/client-quotes' && quoteFilterId) {
+    if (
+      activeView !== 'sales/client-quotes' &&
+      activeView !== 'sales/client-offers' &&
+      activeView !== 'accounting/clients-orders' &&
+      quoteFilterId
+    ) {
       React.startTransition(() => setQuoteFilterId(null));
     }
-    if (activeView !== 'sales/supplier-quotes' && supplierQuoteFilterId) {
+    if (
+      activeView !== 'sales/supplier-quotes' &&
+      activeView !== 'sales/supplier-offers' &&
+      activeView !== 'accounting/supplier-orders' &&
+      supplierQuoteFilterId
+    ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
     }
   }, [activeView, quoteFilterId, supplierQuoteFilterId]);
@@ -3167,7 +3197,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
               activeView === 'sales/client-quotes' && (
                 <ClientQuotesView
-                  quotes={quotes}
+                  quotes={enrichedQuotes}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3209,13 +3239,14 @@ const App: React.FC = () => {
                     setActiveView('sales/client-quotes');
                   }}
                   currency={generalSettings.currency}
+                  quoteFilterId={quoteFilterId}
                 />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-quotes']) &&
               activeView === 'sales/supplier-quotes' && (
                 <SupplierQuotesView
-                  quotes={supplierQuotes}
+                  quotes={enrichedSupplierQuotes}
                   suppliers={suppliers}
                   products={products}
                   onAddQuote={addSupplierQuote}
@@ -3253,6 +3284,7 @@ const App: React.FC = () => {
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}
+                  quoteFilterId={supplierQuoteFilterId}
                 />
               )}
 
@@ -3273,6 +3305,7 @@ const App: React.FC = () => {
                     setQuoteFilterId(quoteId);
                     setActiveView('sales/client-quotes');
                   }}
+                  quoteFilterId={quoteFilterId}
                 />
               )}
 
@@ -3312,6 +3345,7 @@ const App: React.FC = () => {
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}
+                  quoteFilterId={supplierQuoteFilterId}
                 />
               )}
 

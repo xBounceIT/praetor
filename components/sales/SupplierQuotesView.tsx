@@ -86,6 +86,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onViewOrder,
   onViewOffer,
   currency,
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for API compatibility
   offers = [],
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
@@ -112,6 +113,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [products],
   );
 
+  const filteredQuotes = useMemo(() => {
+    if (quoteFilterId) {
+      return quotes.filter((q) => q.id === quoteFilterId);
+    }
+    return quotes;
+  }, [quotes, quoteFilterId]);
+
   const [editingQuote, setEditingQuote] = useState<SupplierQuote | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -131,6 +139,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   });
 
   const isReadOnly = Boolean(editingQuote?.linkedOfferId);
+
+  const hasOfferForQuote = useCallback(
+    (quote: SupplierQuote) => Boolean(quote.linkedOfferId || quoteIdsWithOffers?.has(quote.id)),
+    [quoteIdsWithOffers],
+  );
+
+  const isHistoryRow = useCallback(
+    (quote: SupplierQuote) => {
+      const hasOffer = hasOfferForQuote(quote);
+      return quote.status === 'denied' || hasOffer;
+    },
+    [hasOfferForQuote],
+  );
+
   const totalAmount = calculateTotals(
     formData.items || [],
     Number(formData.discount || 0),
@@ -235,6 +257,29 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
+        header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
+        accessorKey: 'supplierName',
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div>
+              <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+                {row.supplierName}
+              </div>
+              <div className="text-xs text-slate-400">
+                {row.linkedOfferId
+                  ? `${t('sales:supplierQuotes.linkedOffer', {
+                      defaultValue: 'Linked to offer',
+                    })} ${row.linkedOfferId}`
+                  : row.expirationDate
+                    ? formatDateOnlyForLocale(row.expirationDate)
+                    : ''}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
         id: 'quoteCode',
         accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
@@ -258,20 +303,30 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
-        cell: ({ row }) => (
-          <span className="text-sm font-bold text-slate-700">
-            {calculateTotals(row.items, row.discount, products).toFixed(2)} {currency}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
+            >
+              {calculateTotals(row.items, row.discount, products).toFixed(2)} {currency}
+            </span>
+          );
+        },
       },
       {
         header: t('sales:supplierQuotes.status', { defaultValue: 'Status' }),
         accessorKey: 'status',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
-        cell: ({ row }) => (
-          <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
-        ),
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div className={history ? 'opacity-60' : ''}>
+              <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
+            </div>
+          );
+        },
       },
       {
         header: t('sales:supplierQuotes.actionsColumn', { defaultValue: 'Actions' }),
@@ -283,6 +338,23 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => {
           const hasOrder = quoteIdsWithOrders?.has(row.id);
+          const hasOffer = hasOfferForQuote(row);
+          const history = isHistoryRow(row);
+
+          const isEditDisabled = hasOffer;
+          const editTitle = hasOffer
+            ? t('sales:supplierQuotes.offerAlreadyExists', {
+                defaultValue: 'An offer for this quote already exists.',
+              })
+            : t('common:buttons.edit', { defaultValue: 'Edit' });
+
+          const isCreateOfferDisabled = history || hasOffer;
+          const createOfferTitle = hasOffer
+            ? t('sales:supplierQuotes.offerAlreadyExists', {
+                defaultValue: 'An offer for this quote already exists.',
+              })
+            : t('sales:supplierQuotes.createOffer', { defaultValue: 'Create offer' });
+
           return (
             <div className="flex justify-end gap-2">
               {row.linkedOfferId && onViewOffer && (
@@ -319,20 +391,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
-              <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
+              <Tooltip label={editTitle}>
                 {() => (
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (isEditDisabled) return;
                       openEditModal(row);
                     }}
-                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    disabled={isEditDisabled}
+                    className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
                 )}
               </Tooltip>
-              {row.status === 'draft' && !row.linkedOfferId && (
+              {row.status === 'draft' && !hasOffer && (
                 <Tooltip
                   label={t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}
                 >
@@ -349,7 +423,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
-              {row.status === 'sent' && !row.linkedOfferId && (
+              {row.status === 'sent' && !hasOffer && (
                 <>
                   <Tooltip
                     label={t('sales:supplierQuotes.markAccepted', {
@@ -387,24 +461,24 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </Tooltip>
                 </>
               )}
-              {row.status === 'accepted' && !row.linkedOfferId && onCreateOffer && (
-                <Tooltip
-                  label={t('sales:supplierQuotes.createOffer', { defaultValue: 'Create offer' })}
-                >
+              {row.status === 'accepted' && onCreateOffer && (
+                <Tooltip label={createOfferTitle}>
                   {() => (
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
+                        if (isCreateOfferDisabled) return;
                         onCreateOffer(row);
                       }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                      disabled={isCreateOfferDisabled}
+                      className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-slate-400 hover:text-praetor hover:bg-slate-100'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>
                   )}
                 </Tooltip>
               )}
-              {row.status === 'draft' && !row.linkedOfferId && (
+              {row.status === 'draft' && !hasOffer && (
                 <Tooltip label={t('common:buttons.delete', { defaultValue: 'Delete' })}>
                   {() => (
                     <button
@@ -436,6 +510,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       quoteIdsWithOrders,
       onViewOrder,
       t,
+      isHistoryRow,
+      hasOfferForQuote,
     ],
   );
 
@@ -520,6 +596,40 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     defaultValue: 'This quote is read-only because an offer was created from it.',
                   })}
                 </span>
+              </div>
+            )}
+            {editingQuote?.linkedOfferId && (
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                    <i className="fa-solid fa-link"></i>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {t('sales:supplierQuotes.linkedOfferTitle', { defaultValue: 'Linked Offer' })}
+                    </div>
+                    <div className="text-xs text-praetor">
+                      {t('sales:supplierQuotes.linkedOfferInfo', {
+                        number: editingQuote.linkedOfferCode || editingQuote.linkedOfferId,
+                        defaultValue: 'Offer #{{number}}',
+                      })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {t('sales:supplierQuotes.offerDetailsReadOnly', {
+                        defaultValue: '(Quote details are read-only)',
+                      })}
+                    </div>
+                  </div>
+                </div>
+                {onViewOffers && (
+                  <button
+                    type="button"
+                    onClick={() => onViewOffers(editingQuote.id)}
+                    className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
+                  >
+                    {t('sales:supplierQuotes.viewOffer', { defaultValue: 'View Offer' })}
+                  </button>
+                )}
               </div>
             )}
 
@@ -885,8 +995,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       </div>
 
       <StandardTable<SupplierQuote>
-        title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
-        data={quotes}
+        title={
+          quoteFilterId
+            ? t('sales:supplierQuotes.activeQuotesFiltered', {
+                defaultValue: 'Active Quotes for Quote',
+              })
+            : t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })
+        }
+        data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
       />
