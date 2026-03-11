@@ -84,6 +84,7 @@ export interface SupplierOrdersViewProps {
   onCreateInvoice?: (order: SupplierSaleOrder) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
   currency: string;
+  quoteFilterId?: string | null;
 }
 
 const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
@@ -96,6 +97,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onCreateInvoice,
   onViewQuote,
   currency,
+  quoteFilterId,
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -197,6 +199,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     () => calculateTotals(formData.items || [], Number(formData.discount || 0)),
     [formData.discount, formData.items],
   );
+
+  // Filter orders by quoteFilterId if provided
+  const filteredOrders = useMemo(() => {
+    if (quoteFilterId) {
+      return orders.filter((o) => o.linkedQuoteId === quoteFilterId);
+    }
+    return orders;
+  }, [orders, quoteFilterId]);
 
   const columns = useMemo(
     () => [
@@ -873,7 +883,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
       <StandardTable<SupplierSaleOrder>
         title={t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
-        data={orders}
+        data={filteredOrders}
         columns={columns}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"

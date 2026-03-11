@@ -884,6 +884,7 @@ const App: React.FC = () => {
     if (
       activeView !== 'sales/client-quotes' &&
       activeView !== 'sales/client-offers' &&
+      activeView !== 'accounting/clients-orders' &&
       quoteFilterId
     ) {
       React.startTransition(() => setQuoteFilterId(null));
@@ -891,6 +892,7 @@ const App: React.FC = () => {
     if (
       activeView !== 'sales/supplier-quotes' &&
       activeView !== 'sales/supplier-offers' &&
+      activeView !== 'accounting/supplier-orders' &&
       supplierQuoteFilterId
     ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
@@ -3301,6 +3303,7 @@ const App: React.FC = () => {
                     setQuoteFilterId(quoteId);
                     setActiveView('sales/client-quotes');
                   }}
+                  quoteFilterId={quoteFilterId}
                 />
               )}
 
@@ -3340,6 +3343,7 @@ const App: React.FC = () => {
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}
+                  quoteFilterId={supplierQuoteFilterId}
                 />
               )}
 
