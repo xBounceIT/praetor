@@ -8,11 +8,7 @@ import type {
   SupplierQuote,
   SupplierQuoteItem,
 } from '../../types';
-import {
-  formatDateOnlyForLocale,
-  getLocalDateString,
-  normalizeDateOnlyString,
-} from '../../utils/date';
+import { getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -35,22 +31,36 @@ const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknow
   { id: '365gg', name: t('crm:paymentTerms.365gg') },
 ];
 
+interface TotalsBreakdown {
+  subtotal: number;
+  discountAmount: number;
+  totalTax: number;
+  taxGroups: Record<number, number>;
+  total: number;
+}
+
 const calculateTotals = (
   items: SupplierQuoteItem[],
   globalDiscount: number,
   products: Product[],
-) => {
+): TotalsBreakdown => {
   let subtotal = 0;
-  let totalTax = 0;
+  const taxGroups: Record<number, number> = {};
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
     const product = products.find((candidate) => candidate.id === item.productId);
-    totalTax += lineNet * (1 - globalDiscount / 100) * (Number(product?.taxRate ?? 0) / 100);
+    const taxRate = Number(product?.taxRate ?? 0);
+    const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+    const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+    taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
   });
-  return subtotal - subtotal * (globalDiscount / 100) + totalTax;
+  const discountAmount = subtotal * (globalDiscount / 100);
+  const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+  const total = subtotal - discountAmount + totalTax;
+  return { subtotal, discountAmount, totalTax, taxGroups, total };
 };
 
 export interface SupplierQuotesViewProps {
@@ -153,7 +163,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [hasOfferForQuote],
   );
 
-  const totalAmount = calculateTotals(
+  const totalsBreakdown = calculateTotals(
     formData.items || [],
     Number(formData.discount || 0),
     products,
@@ -276,17 +286,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculateTotals(row.items, row.discount, products),
+        accessorFn: (row) => calculateTotals(row.items, row.discount, products).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const history = isHistoryRow(row);
+          const { total } = calculateTotals(row.items, row.discount, products);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
             >
-              {calculateTotals(row.items, row.discount, products).toFixed(2)} {currency}
+              {total.toFixed(2)} {currency}
             </span>
           );
         },
@@ -771,10 +782,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' })}
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:supplierQuotes.discount', { defaultValue: 'Disc %' })}
                     </div>
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
                     </div>
                   </div>
@@ -783,73 +797,83 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
-                  {formData.items.map((item, index) => (
-                    <div
-                      key={item.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2"
-                    >
-                      <div className="grid grid-cols-12 gap-3 items-center">
-                        <div className="col-span-12 md:col-span-4">
-                          <CustomSelect
-                            options={activeProducts.map((product) => ({
-                              id: product.id,
-                              name: product.name,
-                            }))}
-                            value={item.productId}
-                            onChange={(value) => updateItem(index, 'productId', value as string)}
-                            placeholder={t('sales:supplierQuotes.selectProduct', {
-                              defaultValue: 'Select product',
-                            })}
-                            searchable={true}
-                            disabled={isReadOnly}
-                            buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <ValidatedNumberInput
-                            value={item.quantity}
-                            onValueChange={(value) =>
-                              updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                            }
-                            disabled={isReadOnly}
-                            className={`${itemInputClassName} text-center`}
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <ValidatedNumberInput
-                            value={item.unitPrice}
-                            onValueChange={(value) =>
-                              updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                            }
-                            disabled={isReadOnly}
-                            className={`${itemInputClassName} text-center`}
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <ValidatedNumberInput
-                            value={item.discount || 0}
-                            onValueChange={(value) =>
-                              updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                            }
-                            disabled={isReadOnly}
-                            className={`${itemInputClassName} text-center`}
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <input
-                            type="text"
-                            value={item.note || ''}
-                            disabled={isReadOnly}
-                            onChange={(event) => updateItem(index, 'note', event.target.value)}
-                            placeholder={t('form:placeholderNotes', {
-                              defaultValue: 'Optional notes...',
-                            })}
-                            className={itemInputClassName}
-                          />
+                  {formData.items.map((item, index) => {
+                    const lineSubtotal = item.quantity * item.unitPrice;
+                    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+                    const lineTotal = lineSubtotal - lineDiscount;
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2"
+                      >
+                        <div className="grid grid-cols-12 gap-3 items-center">
+                          <div className="col-span-12 md:col-span-4">
+                            <CustomSelect
+                              options={activeProducts.map((product) => ({
+                                id: product.id,
+                                name: product.name,
+                              }))}
+                              value={item.productId}
+                              onChange={(value) => updateItem(index, 'productId', value as string)}
+                              placeholder={t('sales:supplierQuotes.selectProduct', {
+                                defaultValue: 'Select product',
+                              })}
+                              searchable={true}
+                              disabled={isReadOnly}
+                              buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                            />
+                          </div>
+                          <div className="col-span-6 md:col-span-2">
+                            <ValidatedNumberInput
+                              value={item.quantity}
+                              onValueChange={(value) =>
+                                updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                              }
+                              disabled={isReadOnly}
+                              className={`${itemInputClassName} text-center`}
+                            />
+                          </div>
+                          <div className="col-span-6 md:col-span-2">
+                            <ValidatedNumberInput
+                              value={item.unitPrice}
+                              onValueChange={(value) =>
+                                updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                              }
+                              disabled={isReadOnly}
+                              className={`${itemInputClassName} text-center`}
+                            />
+                          </div>
+                          <div className="col-span-4 md:col-span-1">
+                            <ValidatedNumberInput
+                              value={item.discount || 0}
+                              onValueChange={(value) =>
+                                updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                              }
+                              disabled={isReadOnly}
+                              className={`${itemInputClassName} text-center`}
+                            />
+                          </div>
+                          <div className="col-span-4 md:col-span-2 flex items-center justify-center">
+                            <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
+                              {lineTotal.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                          <div className="col-span-4 md:col-span-1">
+                            <input
+                              type="text"
+                              value={item.note || ''}
+                              disabled={isReadOnly}
+                              onChange={(event) => updateItem(index, 'note', event.target.value)}
+                              placeholder={t('form:placeholderNotes', {
+                                defaultValue: 'Notes',
+                              })}
+                              className={`${itemInputClassName} text-center`}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 text-slate-400 text-sm">
@@ -876,7 +900,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, notes: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -885,14 +909,52 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                 </h4>
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="text-lg font-black text-slate-800">
-                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                  </span>
-                  <span className="text-lg font-black text-praetor">
-                    {totalAmount.toFixed(2)} {currency}
-                  </span>
-                </div>
+                {formData.items && formData.items.length > 0 && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-bold text-slate-500">
+                        {t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700">
+                        {totalsBreakdown.subtotal.toFixed(2)} {currency}
+                      </span>
+                    </div>
+                    {Number(formData.discount || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm font-bold text-slate-500">
+                          {t('sales:supplierQuotes.discountAmount', {
+                            defaultValue: 'Discount',
+                          })}{' '}
+                          ({formData.discount}%)
+                        </span>
+                        <span className="text-sm font-bold text-amber-600">
+                          -{totalsBreakdown.discountAmount.toFixed(2)} {currency}
+                        </span>
+                      </div>
+                    )}
+                    {Object.entries(totalsBreakdown.taxGroups).map(([rate, amount]) => (
+                      <div key={rate} className="flex justify-between text-xs">
+                        <span className="font-semibold text-slate-500">
+                          {t('sales:supplierQuotes.taxRate', {
+                            rate,
+                            defaultValue: 'Tax {{rate}}%',
+                          })}
+                        </span>
+                        <span className="font-semibold text-slate-700">
+                          {amount.toFixed(2)} {currency}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between border-t border-slate-200 pt-3">
+                      <span className="text-lg font-black text-slate-800">
+                        {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                      </span>
+                      <span className="text-lg font-black text-praetor">
+                        {totalsBreakdown.total.toFixed(2)} {currency}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
