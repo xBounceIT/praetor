@@ -827,7 +827,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
-                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId);
+                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId!);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                     >

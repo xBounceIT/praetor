@@ -43,6 +43,7 @@ export type StandardTableProps<T extends object = object> = {
   defaultRowsPerPage?: number;
   rowClassName?: (row: T) => string;
   onRowClick?: (row: T) => void;
+  initialFilterState?: Record<string, string[]>;
 };
 
 const StandardTable = <T extends object>({
@@ -62,6 +63,7 @@ const StandardTable = <T extends object>({
   defaultRowsPerPage = 10,
   rowClassName,
   onRowClick,
+  initialFilterState,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
   const filterRef = useRef<HTMLButtonElement>(null); // Ref for the filter button
@@ -69,7 +71,13 @@ const StandardTable = <T extends object>({
 
   // Internal State for Data Mode
   const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
-  const [filterState, setFilterState] = useState<Record<string, string[]>>({});
+  const [filterState, setFilterState] = useState<Record<string, string[]>>(
+    initialFilterState ?? {},
+  );
+
+  useEffect(() => {
+    setFilterState(initialFilterState ?? {});
+  }, [initialFilterState]);
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);

@@ -365,7 +365,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
-                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId);
+                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId!);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                     >

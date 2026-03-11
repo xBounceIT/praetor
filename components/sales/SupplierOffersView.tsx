@@ -114,15 +114,18 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const isSupplierLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
-    let currentOffers = offers;
     if (quoteFilterId) {
-      currentOffers = currentOffers.filter((o) => o.linkedQuoteId === quoteFilterId);
+      return offers.filter((o) => o.linkedQuoteId === quoteFilterId);
     }
+    return offers;
+  }, [offers, quoteFilterId]);
+
+  const tableInitialFilterState = useMemo(() => {
     if (offerFilterCode) {
-      currentOffers = currentOffers.filter((o) => o.offerCode === offerFilterCode);
+      return { offerCode: [offerFilterCode] };
     }
-    return currentOffers;
-  }, [offers, quoteFilterId, offerFilterCode]);
+    return undefined;
+  }, [offerFilterCode]);
   const totalAmount = calculateTotals(formData.items || [], Number(formData.discount || 0)).total;
 
   const inputClassName =
@@ -788,20 +791,16 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
 
       <StandardTable<SupplierOffer>
         title={
-          offerFilterCode
-            ? t('sales:supplierOffers.activeOffersFilteredByCode', {
-                defaultValue: 'Offer {{code}}',
-                code: offerFilterCode,
+          quoteFilterId
+            ? t('sales:supplierOffers.activeOffersFiltered', {
+                defaultValue: 'Active Offers for Quote',
               })
-            : quoteFilterId
-              ? t('sales:supplierOffers.activeOffersFiltered', {
-                  defaultValue: 'Active Offers for Quote',
-                })
-              : t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })
+            : t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })
         }
         data={filteredOffers}
         columns={columns}
         defaultRowsPerPage={5}
+        initialFilterState={tableInitialFilterState}
       />
     </div>
   );

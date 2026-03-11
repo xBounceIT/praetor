@@ -937,6 +937,15 @@ const App: React.FC = () => {
     }
   }, [activeView, currentUser, viewingUserId]);
 
+  useEffect(() => {
+    if (activeView !== 'sales/client-offers') {
+      setOfferFilterCode(null);
+    }
+    if (activeView !== 'sales/supplier-offers') {
+      setSupplierOfferFilterCode(null);
+    }
+  }, [activeView]);
+
   // Check for existing token on mount
   useEffect(() => {
     const checkAuth = async () => {
