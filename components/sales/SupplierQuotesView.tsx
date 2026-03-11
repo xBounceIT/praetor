@@ -365,6 +365,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
+                        // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
                         onViewOffer(row.linkedOfferId!);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
