@@ -222,6 +222,7 @@
     "markDenied": "Mark as denied",
     "createOffer": "Create offer",
     "linkedOffer": "Linked to offer",
+    "offerAlreadyExists": "An offer for this quote already exists.",
     "errors": {
       "supplierRequired": "Supplier is required",
       "quoteCodeRequired": "Quote Code is required",

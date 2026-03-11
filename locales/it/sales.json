@@ -222,6 +222,7 @@
     "markDenied": "Segna come rifiutato",
     "createOffer": "Crea offerta",
     "linkedOffer": "Collegato all'offerta",
+    "offerAlreadyExists": "Esiste già un'offerta per questo preventivo.",
     "errors": {
       "supplierRequired": "Il fornitore è obbligatorio",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
