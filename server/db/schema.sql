@@ -756,6 +756,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_offer_items_offer_id ON customer_offer_i
 -- Special bids table
 CREATE TABLE IF NOT EXISTS special_bids (
     id VARCHAR(50) PRIMARY KEY,
+    bid_code VARCHAR(50) UNIQUE NOT NULL,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
@@ -767,6 +768,31 @@ CREATE TABLE IF NOT EXISTS special_bids (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migration: Add bid_code column for existing installations
+ALTER TABLE special_bids ADD COLUMN IF NOT EXISTS bid_code VARCHAR(50);
+
+-- Generate bid codes for existing bids (runs only once when bid_code is added)
+DO $$
+DECLARE
+    bid_record RECORD;
+    next_sequence INTEGER := 1;
+    current_year INTEGER;
+BEGIN
+    current_year := EXTRACT(YEAR FROM CURRENT_DATE);
+    FOR bid_record IN
+        SELECT id FROM special_bids WHERE bid_code IS NULL ORDER BY created_at ASC
+    LOOP
+        UPDATE special_bids
+        SET bid_code = 'BID-' || current_year || '-' || LPAD(next_sequence::TEXT, 4, '0')
+        WHERE id = bid_record.id;
+        next_sequence := next_sequence + 1;
+    END LOOP;
+END $$;
+
+-- Make bid_code NOT NULL and create unique index (safe to run multiple times)
+ALTER TABLE special_bids ALTER COLUMN bid_code SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_special_bids_bid_code_unique ON special_bids(bid_code);
 
 -- Migration: Rename expiration_date to end_date and add start_date for existing installations
 DO $$

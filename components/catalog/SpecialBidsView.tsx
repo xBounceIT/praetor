@@ -56,6 +56,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   const isActiveBid = (bid: SpecialBid) => !isExpired(bid.endDate) && !isNotStarted(bid.startDate);
 
   const [formData, setFormData] = useState<Partial<SpecialBid>>({
+    bidCode: '',
     clientId: '',
     clientName: '',
     productId: '',
@@ -79,6 +80,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     }
     setEditingBid(null);
     setFormData({
+      bidCode: '',
       clientId: '',
       clientName: '',
       productId: '',
@@ -97,6 +99,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     const formattedStartDate = bid.startDate ? normalizeDateOnlyString(bid.startDate) : '';
     const formattedEndDate = bid.endDate ? normalizeDateOnlyString(bid.endDate) : '';
     setFormData({
+      bidCode: bid.bidCode,
       clientId: bid.clientId,
       clientName: bid.clientName,
       productId: bid.productId,
@@ -287,6 +290,15 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   // Table columns definition with TableFilter support
   const columns = useMemo(
     () => [
+      {
+        header: t('externalListing.bidCode'),
+        accessorFn: (row: SpecialBid) => row.bidCode,
+        cell: ({ row }: { row: SpecialBid }) => (
+          <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+            {row.bidCode}
+          </span>
+        ),
+      },
       {
         header: t('externalListing.client'),
         accessorFn: (row: SpecialBid) => row.clientName,
@@ -480,6 +492,34 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
                   />
                   {errors.productId && (
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.productId}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('externalListing.bidCode')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.bidCode || ''}
+                    onChange={(e) => {
+                      setFormData({ ...formData, bidCode: e.target.value });
+                      if (errors.bidCode) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.bidCode;
+                          return next;
+                        });
+                      }
+                    }}
+                    placeholder={t('externalListing.bidCodePlaceholder')}
+                    disabled={editingBid ? isExpired(editingBid.endDate) : false}
+                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.bidCode ? 'border-red-300' : 'border-slate-200'}`}
+                  />
+                  <p className="text-slate-400 text-[10px] ml-1">
+                    {t('externalListing.bidCodeHelp')}
+                  </p>
+                  {errors.bidCode && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.bidCode}</p>
                   )}
                 </div>
                 <div className="space-y-1.5 md:col-span-2">

@@ -51,6 +51,7 @@ export interface SupplierOffersViewProps {
   onCreateOrder?: (offer: SupplierOffer) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
   currency: string;
+  quoteFilterId?: string | null;
 }
 
 const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
@@ -62,6 +63,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   onCreateOrder,
   onViewQuote,
   currency,
+  quoteFilterId,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -108,6 +110,11 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
 
   const isReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isSupplierLocked = Boolean(editingOffer?.linkedQuoteId);
+
+  const filteredOffers = useMemo(() => {
+    if (!quoteFilterId) return offers;
+    return offers.filter((o) => o.linkedQuoteId === quoteFilterId);
+  }, [offers, quoteFilterId]);
   const totalAmount = calculateTotals(formData.items || [], Number(formData.discount || 0)).total;
 
   const inputClassName =
@@ -409,7 +416,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 <span>
                   {t('sales:supplierOffers.sourceQuote', {
                     defaultValue: 'Source quote: {{quoteId}}',
-                    quoteId: editingOffer.linkedQuoteId,
+                    quoteId: editingOffer.linkedQuoteCode || editingOffer.linkedQuoteId,
                   })}
                 </span>
                 {onViewQuote && (
@@ -772,8 +779,14 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       </div>
 
       <StandardTable<SupplierOffer>
-        title={t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })}
-        data={offers}
+        title={
+          quoteFilterId
+            ? t('sales:supplierOffers.activeOffersFiltered', {
+                defaultValue: 'Active Offers for Quote',
+              })
+            : t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })
+        }
+        data={filteredOffers}
         columns={columns}
         defaultRowsPerPage={5}
       />

@@ -754,14 +754,28 @@ const App: React.FC = () => {
   }, [clientOffers]);
 
   const offerIdsWithOrders = useMemo(() => {
-    const ids = new Set<string>();
-    clientsOrders.forEach((order) => {
-      if (order.linkedOfferId) {
-        ids.add(order.linkedOfferId);
-      }
-    });
-    return ids;
+    return new Set(
+      clientsOrders.map((order) => order.linkedOfferId).filter((id): id is string => Boolean(id)),
+    );
   }, [clientsOrders]);
+
+  const quoteIdsWithOrders = useMemo(() => {
+    return new Set(
+      clientsOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
+  }, [clientsOrders]);
+
+  const supplierQuoteIdsWithOrders = useMemo(() => {
+    return new Set(
+      supplierOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
+  }, [supplierOrders]);
+
+  const supplierQuoteIdsWithOffers = useMemo(() => {
+    return new Set(
+      supplierOffers.map((offer) => offer.linkedQuoteId).filter((id): id is string => Boolean(id)),
+    );
+  }, [supplierOffers]);
 
   const orderIdsWithInvoices = useMemo(() => {
     const ids = new Set<string>();
@@ -791,6 +805,26 @@ const App: React.FC = () => {
         return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
       }),
     [supplierOrders, supplierQuotes],
+  );
+
+  const enrichedClientOffers = useMemo(
+    () =>
+      clientOffers.map((offer) => {
+        if (!offer.linkedQuoteId || offer.linkedQuoteCode) return offer;
+        const quote = quotes.find((q) => q.id === offer.linkedQuoteId);
+        return quote ? { ...offer, linkedQuoteCode: quote.quoteCode } : offer;
+      }),
+    [clientOffers, quotes],
+  );
+
+  const enrichedSupplierOffers = useMemo(
+    () =>
+      supplierOffers.map((offer) => {
+        if (!offer.linkedQuoteId || offer.linkedQuoteCode) return offer;
+        const quote = supplierQuotes.find((q) => q.id === offer.linkedQuoteId);
+        return quote ? { ...offer, linkedQuoteCode: quote.quoteCode } : offer;
+      }),
+    [supplierOffers, supplierQuotes],
   );
 
   const isRouteAccessible = useMemo(() => {
@@ -3141,18 +3175,28 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
+                  offers={enrichedClientOffers}
                   onViewOffer={() => setActiveView('sales/client-offers')}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
+                  quoteIdsWithOrders={quoteIdsWithOrders}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
+                  onViewOffers={(quoteId) => {
+                    setQuoteFilterId(quoteId);
+                    setActiveView('sales/client-offers');
+                  }}
+                  onViewOrder={(quoteId) => {
+                    setQuoteFilterId(quoteId);
+                    setActiveView('accounting/clients-orders');
+                  }}
                 />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']) &&
               activeView === 'sales/client-offers' && (
                 <ClientOffersView
-                  offers={clientOffers}
+                  offers={enrichedClientOffers}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3178,16 +3222,27 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
+                  offers={enrichedSupplierOffers}
                   quoteFilterId={supplierQuoteFilterId}
+                  quoteIdsWithOffers={supplierQuoteIdsWithOffers}
+                  quoteIdsWithOrders={supplierQuoteIdsWithOrders}
                   onViewOffer={() => setActiveView('sales/supplier-offers')}
                   currency={generalSettings.currency}
+                  onViewOffers={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('sales/supplier-offers');
+                  }}
+                  onViewOrder={(quoteId) => {
+                    setSupplierQuoteFilterId(quoteId);
+                    setActiveView('accounting/supplier-orders');
+                  }}
                 />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-offers']) &&
               activeView === 'sales/supplier-offers' && (
                 <SupplierOffersView
-                  offers={supplierOffers}
+                  offers={enrichedSupplierOffers}
                   suppliers={suppliers}
                   products={products}
                   onUpdateOffer={handleUpdateSupplierOffer}
