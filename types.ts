@@ -253,6 +253,7 @@ export interface Quote {
   expirationDate: string; // YYYY-MM-DD date-only string
   isExpired?: boolean;
   linkedOfferId?: string;
+  linkedOfferCode?: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -508,6 +509,7 @@ export interface SupplierQuote {
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   linkedOfferId?: string;
+  linkedOfferCode?: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;

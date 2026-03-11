@@ -807,6 +807,26 @@ const App: React.FC = () => {
     [supplierOrders, supplierQuotes],
   );
 
+  const enrichedQuotes = useMemo(
+    () =>
+      quotes.map((quote) => {
+        if (!quote.linkedOfferId || quote.linkedOfferCode) return quote;
+        const offer = clientOffers.find((o) => o.id === quote.linkedOfferId);
+        return offer ? { ...quote, linkedOfferCode: offer.offerCode } : quote;
+      }),
+    [quotes, clientOffers],
+  );
+
+  const enrichedSupplierQuotes = useMemo(
+    () =>
+      supplierQuotes.map((quote) => {
+        if (!quote.linkedOfferId || quote.linkedOfferCode) return quote;
+        const offer = supplierOffers.find((o) => o.id === quote.linkedOfferId);
+        return offer ? { ...quote, linkedOfferCode: offer.offerCode } : quote;
+      }),
+    [supplierQuotes, supplierOffers],
+  );
+
   const enrichedClientOffers = useMemo(
     () =>
       clientOffers.map((offer) => {
@@ -3167,7 +3187,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
               activeView === 'sales/client-quotes' && (
                 <ClientQuotesView
-                  quotes={quotes}
+                  quotes={enrichedQuotes}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3214,7 +3234,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-quotes']) &&
               activeView === 'sales/supplier-quotes' && (
                 <SupplierQuotesView
-                  quotes={supplierQuotes}
+                  quotes={enrichedSupplierQuotes}
                   suppliers={suppliers}
                   products={products}
                   onAddQuote={addSupplierQuote}
