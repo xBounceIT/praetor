@@ -516,7 +516,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Insert invoice items
       const createdItems = [];
       for (const item of normalizedItems) {
-        const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
           `INSERT INTO invoice_items (
                         id, invoice_id, product_id, special_bid_id, description, unit_of_measure, quantity, unit_price, tax_rate, discount
@@ -747,7 +747,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Insert new items
         for (const item of normalizedItems) {
-          const itemId = 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          const itemId =
+            'inv-item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO invoice_items (
                             id, invoice_id, product_id, special_bid_id, description, unit_of_measure, quantity, unit_price, tax_rate, discount

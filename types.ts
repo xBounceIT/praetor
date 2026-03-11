@@ -201,6 +201,7 @@ export interface Product {
 
 export interface SpecialBid {
   id: string;
+  bidCode: string;
   clientId: string;
   clientName: string;
   productId: string;

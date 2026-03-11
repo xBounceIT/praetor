@@ -207,6 +207,9 @@
     "createBid": "Crea Offerta Speciale",
     "client": "Cliente",
     "product": "Prodotto",
+    "bidCode": "Codice Offerta",
+    "bidCodePlaceholder": "BID-AAAA-NNNN (auto-generato se vuoto)",
+    "bidCodeHelp": "Lascia vuoto per auto-generare, o inserisci un codice personalizzato",
     "unitPrice": "Prezzo Unitario",
     "startDate": "Data Inizio",
     "endDate": "Data Fine",
@@ -371,5 +374,10 @@
     "180gg": "180 Giorni",
     "240gg": "240 Giorni",
     "365gg": "365 Giorni"
+  },
+  "quotes": {
+    "productsServices": "Prodotto / Servizio",
+    "qty": "Q.tà",
+    "discountAmount": "Sconto ({{discount}}%)"
   }
 }

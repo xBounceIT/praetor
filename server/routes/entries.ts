@@ -359,7 +359,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ]);
       const hourlyCost = userResult.rows[0]?.cost_per_hour || 0;
 
-      const id = Math.random().toString(36).substr(2, 9);
+      const id = Math.random().toString(36).substring(2, 11);
 
       const locationValue = location || 'remote';
 

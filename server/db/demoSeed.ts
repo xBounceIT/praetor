@@ -8,6 +8,7 @@ import {
   DEMO_CACHE_NAMESPACES,
   DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
+  DEMO_ENTRIES_CACHE_NAMESPACES,
   DEMO_EXPECTED_COUNTS,
   DEMO_IDS,
   DEMO_INVOICES,
@@ -26,6 +27,7 @@ import {
   DEMO_SUPPLIERS,
   DEMO_USER_IDS,
   DEMO_USERS,
+  DEMO_WORK_UNITS,
 } from './demoSeedManifest.ts';
 import pool, { query } from './index.ts';
 
@@ -184,13 +186,15 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
       DEMO_PASSWORD_HASH,
       user.role,
       user.avatarInitials,
+      user.costPerHour,
+      'app_user',
     );
-    const index = userValues.length - 5;
-    return `($${index}, $${index + 1}, $${index + 2}, $${index + 3}, $${index + 4}, $${index + 5})`;
+    const index = userValues.length - 7;
+    return `($${index}, $${index + 1}, $${index + 2}, $${index + 3}, $${index + 4}, $${index + 5}, $${index + 6}, $${index + 7})`;
   });
   const usersResult = await executeStatement(
     client,
-    `INSERT INTO users (id, name, username, password_hash, role, avatar_initials)
+    `INSERT INTO users (id, name, username, password_hash, role, avatar_initials, cost_per_hour, employee_type)
      VALUES ${userTuples.join(', ')}
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
@@ -198,19 +202,25 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
        password_hash = EXCLUDED.password_hash,
        role = EXCLUDED.role,
        avatar_initials = EXCLUDED.avatar_initials,
+       cost_per_hour = EXCLUDED.cost_per_hour,
+       employee_type = EXCLUDED.employee_type,
        is_disabled = FALSE`,
     userValues,
   );
   incrementCount(counts, 'users', usersResult.rowCount ?? 0);
 
+  const userRolesValues: unknown[] = [];
+  const userRolesTuples = DEMO_USERS.map((user) => {
+    userRolesValues.push(user.id, user.role);
+    const idx = userRolesValues.length - 1;
+    return `($${idx}, $${idx + 1})`;
+  });
   const userRolesResult = await executeStatement(
     client,
     `INSERT INTO user_roles (user_id, role_id)
-     SELECT user_id, role_id
-     FROM (
-       VALUES ('u2', 'manager'), ('u3', 'user')
-     ) AS v(user_id, role_id)
+     VALUES ${userRolesTuples.join(', ')}
      ON CONFLICT DO NOTHING`,
+    userRolesValues,
   );
   incrementCount(counts, 'user_roles', userRolesResult.rowCount ?? 0);
 
@@ -235,6 +245,43 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
 
 const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: string[]) => {
   const cleanupCountsByTable: Record<string, number> = {};
+
+  incrementCount(
+    cleanupCountsByTable,
+    'time_entries',
+    await executeDelete(client, 'time_entries', (builder) => {
+      pushTextArrayPredicate(builder, 'id', DEMO_IDS.timeEntries);
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'user_work_units',
+    await executeDelete(client, 'user_work_units', (builder) => {
+      pushTextArrayPredicate(builder, 'work_unit_id', DEMO_IDS.workUnits);
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'work_unit_managers',
+    await executeDelete(client, 'work_unit_managers', (builder) => {
+      pushTextArrayPredicate(builder, 'work_unit_id', DEMO_IDS.workUnits);
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'work_units',
+    await executeDelete(client, 'work_units', (builder) => {
+      pushTextArrayPredicate(builder, 'id', DEMO_IDS.workUnits);
+      pushTextArrayPredicate(
+        builder,
+        'name',
+        DEMO_WORK_UNITS.map((wu) => wu.name),
+      );
+    }),
+  );
 
   incrementCount(
     cleanupCountsByTable,
@@ -691,6 +738,20 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_IDS.notifications,
     expected: DEMO_EXPECTED_COUNTS.notifications,
   },
+  { table: 'work_units', ids: DEMO_IDS.workUnits, expected: DEMO_EXPECTED_COUNTS.work_units },
+  {
+    table: 'work_unit_managers',
+    countColumn: 'work_unit_id',
+    ids: DEMO_IDS.workUnits,
+    expected: DEMO_EXPECTED_COUNTS.work_unit_managers,
+  },
+  {
+    table: 'user_work_units',
+    countColumn: 'work_unit_id',
+    ids: DEMO_IDS.workUnits,
+    expected: DEMO_EXPECTED_COUNTS.user_work_units,
+  },
+  { table: 'time_entries', ids: DEMO_IDS.timeEntries, expected: DEMO_EXPECTED_COUNTS.time_entries },
 ];
 
 const verifyDemoDataset = async () => {
@@ -719,6 +780,10 @@ const invalidateDemoCaches = async () => {
   }
 
   for (const namespace of DEMO_SETTINGS_CACHE_NAMESPACES) {
+    await bumpNamespaceVersion(namespace);
+  }
+
+  for (const namespace of DEMO_ENTRIES_CACHE_NAMESPACES) {
     await bumpNamespaceVersion(namespace);
   }
 };
