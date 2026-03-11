@@ -120,9 +120,9 @@ export const DEMO_PRODUCTS = [
 ] as const;
 
 export const DEMO_SPECIAL_BIDS = [
-  { id: 'dm_bid_01', clientId: 'dm_cli_01', productId: 'dm_prd_06' },
-  { id: 'dm_bid_02', clientId: 'dm_cli_02', productId: 'dm_prd_05' },
-  { id: 'dm_bid_03', clientId: 'dm_cli_03', productId: 'dm_prd_08' },
+  { id: 'dm_bid_01', bidCode: 'DM-BID-001', clientId: 'dm_cli_01', productId: 'dm_prd_06' },
+  { id: 'dm_bid_02', bidCode: 'DM-BID-002', clientId: 'dm_cli_02', productId: 'dm_prd_05' },
+  { id: 'dm_bid_03', bidCode: 'DM-BID-003', clientId: 'dm_cli_03', productId: 'dm_prd_08' },
 ] as const;
 
 export const DEMO_QUOTES = [
