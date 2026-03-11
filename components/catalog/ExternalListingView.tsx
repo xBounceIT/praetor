@@ -859,22 +859,17 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         onRowClick={openEditModal}
         columns={[
           {
+            header: t('crm:internalListing.productCode'),
+            accessorKey: 'productCode',
+            cell: ({ row: p }) => (
+              <span className="font-bold text-slate-700">{p.productCode || '-'}</span>
+            ),
+          },
+          {
             header: t('common:labels.name'),
             accessorKey: 'name',
             className: 'px-6 py-5 font-bold text-slate-800 min-w-[200px]',
             cell: ({ row: p }) => <div className="font-bold text-slate-800">{p.name}</div>,
-          },
-          {
-            header: t('crm:internalListing.productCode'),
-            accessorKey: 'productCode',
-            cell: ({ row: p }) =>
-              p.productCode ? (
-                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase shrink-0 whitespace-nowrap">
-                  {p.productCode}
-                </span>
-              ) : (
-                <span className="text-slate-300">-</span>
-              ),
           },
           {
             header: t('crm:internalListing.supplier'),
