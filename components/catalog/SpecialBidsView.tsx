@@ -294,9 +294,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
         header: t('externalListing.bidCode'),
         accessorFn: (row: SpecialBid) => row.bidCode,
         cell: ({ row }: { row: SpecialBid }) => (
-          <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
-            {row.bidCode}
-          </span>
+          <span className="font-bold text-slate-700">{row.bidCode}</span>
         ),
       },
       {
