@@ -730,7 +730,6 @@ const App: React.FC = () => {
         ? 'timesheets/tracker'
         : '404';
   });
-  const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [quoteFilterCode, setQuoteFilterCode] = useState<string | null>(null);
   const [supplierQuoteFilterCode, setSupplierQuoteFilterCode] = useState<string | null>(null);
@@ -883,14 +882,6 @@ const App: React.FC = () => {
     if (
       activeView !== 'sales/client-quotes' &&
       activeView !== 'sales/client-offers' &&
-      activeView !== 'accounting/clients-orders' &&
-      quoteFilterId
-    ) {
-      React.startTransition(() => setQuoteFilterId(null));
-    }
-    if (
-      activeView !== 'sales/client-quotes' &&
-      activeView !== 'sales/client-offers' &&
       quoteFilterCode
     ) {
       React.startTransition(() => setQuoteFilterCode(null));
@@ -910,7 +901,7 @@ const App: React.FC = () => {
     ) {
       React.startTransition(() => setSupplierQuoteFilterCode(null));
     }
-  }, [activeView, quoteFilterId, quoteFilterCode, supplierQuoteFilterId, supplierQuoteFilterCode]);
+  }, [activeView, quoteFilterCode, supplierQuoteFilterId, supplierQuoteFilterCode]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -3233,7 +3224,6 @@ const App: React.FC = () => {
                     setOfferFilterCode(offerCode);
                     setActiveView('sales/client-offers');
                   }}
-                  quoteFilterId={quoteFilterId}
                   quoteFilterCode={quoteFilterCode}
                   quoteIdsWithOffers={quoteIdsWithOffers}
                   quoteOfferStatuses={quoteOfferStatuses}
@@ -3279,15 +3269,17 @@ const App: React.FC = () => {
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
                   offers={enrichedSupplierOffers}
-                  quoteFilterId={supplierQuoteFilterId}
                   quoteFilterCode={supplierQuoteFilterCode}
                   quoteIdsWithOffers={supplierQuoteIdsWithOffers}
                   onViewOffer={(_offerId, offerCode) => {
+                    setSupplierQuoteFilterId(null);
+                    setSupplierQuoteFilterCode(null);
                     setSupplierOfferFilterCode(offerCode);
                     setActiveView('sales/supplier-offers');
                   }}
                   currency={generalSettings.currency}
                   onViewOffers={(_quoteId, quoteCode) => {
+                    setSupplierQuoteFilterId(null);
                     setSupplierOfferFilterCode(null);
                     setSupplierQuoteFilterCode(quoteCode);
                     setActiveView('sales/supplier-offers');
@@ -3305,6 +3297,8 @@ const App: React.FC = () => {
                   onDeleteOffer={handleDeleteSupplierOffer}
                   onCreateOrder={handleCreateSupplierOrderFromOffer}
                   onViewQuote={(_quoteId, quoteCode) => {
+                    setSupplierQuoteFilterId(null);
+                    setSupplierOfferFilterCode(null);
                     setSupplierQuoteFilterCode(quoteCode);
                     setActiveView('sales/supplier-quotes');
                   }}
@@ -3368,7 +3362,12 @@ const App: React.FC = () => {
                   onDeleteOrder={handleDeleteSupplierOrder}
                   onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
                   onViewQuote={(quoteId) => {
+                    const quoteCode =
+                      enrichedSupplierQuotes.find((quote) => quote.id === quoteId)?.quoteCode ??
+                      null;
                     setSupplierQuoteFilterId(quoteId);
+                    setSupplierOfferFilterCode(null);
+                    setSupplierQuoteFilterCode(quoteCode);
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}

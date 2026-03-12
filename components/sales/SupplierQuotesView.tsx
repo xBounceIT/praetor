@@ -61,7 +61,6 @@ export interface SupplierQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
-  quoteFilterId?: string | null;
   quoteFilterCode?: string | null;
   quoteIdsWithOffers?: Set<string>;
   onViewOffers?: (quoteId: string, quoteCode: string) => void;
@@ -78,7 +77,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onUpdateQuote,
   onDeleteQuote,
   onCreateOffer,
-  quoteFilterId,
   quoteFilterCode,
   quoteIdsWithOffers,
   onViewOffers,
@@ -988,18 +986,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       </div>
 
       <StandardTable<SupplierQuote>
-        title={
-          quoteFilterCode
-            ? t('sales:supplierQuotes.activeQuotesFilteredByCode', {
-                defaultValue: 'Quote {{code}}',
-                code: quoteFilterCode,
-              })
-            : quoteFilterId
-              ? t('sales:supplierQuotes.activeQuotesFiltered', {
-                  defaultValue: 'Active Quotes for Quote',
-                })
-              : t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })
-        }
+        title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}

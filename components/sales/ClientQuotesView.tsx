@@ -27,7 +27,6 @@ export interface ClientQuotesViewProps {
   onDeleteQuote: (id: string) => void;
   onCreateOffer?: (quote: Quote) => void;
   onViewOffer?: (offerId: string, offerCode: string) => void;
-  quoteFilterId?: string | null;
   quoteFilterCode?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
@@ -51,7 +50,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   onViewOffer,
-  quoteFilterId,
   quoteFilterCode,
   quoteIdsWithOffers,
   quoteOfferStatuses,
@@ -1658,18 +1656,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {/* Search and Filters */}
 
       <StandardTable<Quote>
-        title={
-          quoteFilterCode
-            ? t('sales:clientQuotes.activeQuotesFilteredByCode', {
-                defaultValue: 'Quote {{code}}',
-                code: quoteFilterCode,
-              })
-            : quoteFilterId
-              ? t('sales:clientQuotes.activeQuotesFiltered', {
-                  defaultValue: 'Active Quotes for Quote',
-                })
-              : t('sales:clientQuotes.activeQuotes')
-        }
+        title={t('sales:clientQuotes.activeQuotes')}
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
