@@ -62,9 +62,10 @@ export interface SupplierQuotesViewProps {
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
   quoteFilterId?: string | null;
+  quoteFilterCode?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteIdsWithOrders?: Set<string>;
-  onViewOffers?: (quoteId: string) => void;
+  onViewOffers?: (quoteId: string, quoteCode: string) => void;
   onViewOrder?: (quoteId: string) => void;
   onViewOffer?: (offerId: string, offerCode: string) => void;
   currency: string;
@@ -80,6 +81,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   quoteFilterId,
+  quoteFilterCode,
   quoteIdsWithOffers,
   quoteIdsWithOrders,
   onViewOffers,
@@ -114,11 +116,15 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   );
 
   const filteredQuotes = useMemo(() => {
-    if (quoteFilterId) {
-      return quotes.filter((q) => q.id === quoteFilterId);
-    }
     return quotes;
-  }, [quotes, quoteFilterId]);
+  }, [quotes]);
+
+  const tableInitialFilterState = useMemo(() => {
+    if (quoteFilterCode) {
+      return { quoteCode: [quoteFilterCode] };
+    }
+    return undefined;
+  }, [quoteFilterCode]);
 
   const [editingQuote, setEditingQuote] = useState<SupplierQuote | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
@@ -361,17 +367,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <Tooltip
                   label={t('sales:supplierQuotes.viewOffer', { defaultValue: 'View offer' })}
                 >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId!);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-link"></i>
-                    </button>
-                  )}
+                  {() => {
+                    const offerId = row.linkedOfferId as string;
+                    const offerCode = (row.linkedOfferCode || row.linkedOfferId) as string;
+                    return (
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewOffer(offerId, offerCode);
+                        }}
+                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                      >
+                        <i className="fa-solid fa-link"></i>
+                      </button>
+                    );
+                  }}
                 </Tooltip>
               )}
               {onViewOrder && hasOrder && (
@@ -624,7 +634,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 {onViewOffers && (
                   <button
                     type="button"
-                    onClick={() => onViewOffers(editingQuote.id)}
+                    onClick={() =>
+                      onViewOffers(
+                        editingQuote.id,
+                        editingQuote.quoteCode ||
+                          editingQuote.purchaseOrderNumber ||
+                          editingQuote.id,
+                      )
+                    }
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
                     {t('sales:supplierQuotes.viewOffer', { defaultValue: 'View Offer' })}
@@ -996,15 +1013,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
       <StandardTable<SupplierQuote>
         title={
-          quoteFilterId
-            ? t('sales:supplierQuotes.activeQuotesFiltered', {
-                defaultValue: 'Active Quotes for Quote',
+          quoteFilterCode
+            ? t('sales:supplierQuotes.activeQuotesFilteredByCode', {
+                defaultValue: 'Quote {{code}}',
+                code: quoteFilterCode,
               })
-            : t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })
+            : quoteFilterId
+              ? t('sales:supplierQuotes.activeQuotesFiltered', {
+                  defaultValue: 'Active Quotes for Quote',
+                })
+              : t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })
         }
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
+        initialFilterState={tableInitialFilterState}
       />
     </div>
   );

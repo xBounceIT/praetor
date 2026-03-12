@@ -28,10 +28,11 @@ export interface ClientQuotesViewProps {
   onCreateOffer?: (quote: Quote) => void;
   onViewOffer?: (offerId: string, offerCode: string) => void;
   quoteFilterId?: string | null;
+  quoteFilterCode?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteIdsWithOrders?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
-  onViewOffers?: (quoteId: string) => void;
+  onViewOffers?: (quoteId: string, quoteCode: string) => void;
   onViewOrder?: (quoteId: string) => void;
   currency: string;
   offers?: ClientOffer[];
@@ -53,6 +54,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onCreateOffer,
   onViewOffer,
   quoteFilterId,
+  quoteFilterCode,
   quoteIdsWithOffers,
   quoteIdsWithOrders,
   quoteOfferStatuses,
@@ -82,11 +84,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   );
 
   const filteredQuotes = useMemo(() => {
-    if (quoteFilterId) {
-      return quotes.filter((q) => q.id === quoteFilterId);
-    }
     return quotes;
-  }, [quotes, quoteFilterId]);
+  }, [quotes]);
+
+  const tableInitialFilterState = useMemo(() => {
+    if (quoteFilterCode) {
+      return { quoteCode: [quoteFilterCode] };
+    }
+    return undefined;
+  }, [quoteFilterCode]);
 
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -1046,7 +1052,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {onViewOffers && (
                   <button
                     type="button"
-                    onClick={() => onViewOffers(editingQuote.id)}
+                    onClick={() => onViewOffers(editingQuote.id, editingQuote.quoteCode)}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
                     {t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' })}
@@ -1677,15 +1683,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
       <StandardTable<Quote>
         title={
-          quoteFilterId
-            ? t('sales:clientQuotes.activeQuotesFiltered', {
-                defaultValue: 'Active Quotes for Quote',
+          quoteFilterCode
+            ? t('sales:clientQuotes.activeQuotesFilteredByCode', {
+                defaultValue: 'Quote {{code}}',
+                code: quoteFilterCode,
               })
-            : t('sales:clientQuotes.activeQuotes')
+            : quoteFilterId
+              ? t('sales:clientQuotes.activeQuotesFiltered', {
+                  defaultValue: 'Active Quotes for Quote',
+                })
+              : t('sales:clientQuotes.activeQuotes')
         }
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
+        initialFilterState={tableInitialFilterState}
         onRowClick={(row) => {
           // Allow viewing/editing for all quotes except those in history (expired/denied with special handling)
           // Accepted and denied quotes open in read-only mode via isReadOnly flag

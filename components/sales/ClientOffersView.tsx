@@ -86,9 +86,9 @@ export interface ClientOffersViewProps {
   onUpdateOffer: (id: string, updates: Partial<ClientOffer>) => void | Promise<void>;
   onDeleteOffer: (id: string) => void | Promise<void>;
   onCreateClientsOrder?: (offer: ClientOffer) => void | Promise<void>;
-  onViewQuote?: (quoteId: string) => void;
+  onViewQuote?: (quoteId: string, quoteCode: string) => void;
   currency: string;
-  quoteFilterId?: string | null;
+  quoteFilterCode?: string | null;
   offerFilterCode?: string | null;
 }
 
@@ -104,7 +104,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   onCreateClientsOrder,
   onViewQuote,
   currency,
-  quoteFilterId,
+  quoteFilterCode,
   offerFilterCode,
 }) => {
   const { t } = useTranslation(['sales', 'crm', 'common', 'form']);
@@ -158,15 +158,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
-    let currentOffers = offers;
-    if (quoteFilterId) {
-      currentOffers = currentOffers.filter((o) => o.linkedQuoteId === quoteFilterId);
-    }
-    if (offerFilterCode) {
-      currentOffers = currentOffers.filter((o) => o.offerCode === offerFilterCode);
-    }
-
-    return currentOffers.filter((offer) => {
+    return offers.filter((offer) => {
       const matchesSearch =
         searchTerm.trim() === '' ||
         offer.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -174,7 +166,18 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       const matchesStatus = filterStatus === 'all' || offer.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
-  }, [offers, searchTerm, filterStatus, quoteFilterId, offerFilterCode]);
+  }, [offers, searchTerm, filterStatus]);
+
+  const tableInitialFilterState = useMemo(() => {
+    const filters: Record<string, string[]> = {};
+    if (offerFilterCode) {
+      filters.offerCode = [offerFilterCode];
+    }
+    if (quoteFilterCode) {
+      filters.linkedQuoteCode = [quoteFilterCode];
+    }
+    return Object.keys(filters).length > 0 ? filters : undefined;
+  }, [offerFilterCode, quoteFilterCode]);
 
   const openEditModal = useCallback((offer: ClientOffer) => {
     setEditingOffer(offer);
@@ -249,19 +252,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
-              {row.linkedQuoteId && onViewQuote && (
+              {row.linkedQuoteId && onViewQuote && row.linkedQuoteCode && (
                 <Tooltip label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}>
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewQuote(row.linkedQuoteId);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-link"></i>
-                    </button>
-                  )}
+                  {() => {
+                    const quoteId = row.linkedQuoteId;
+                    const quoteCode = row.linkedQuoteCode as string;
+                    return (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewQuote(quoteId, quoteCode);
+                        }}
+                        className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                      >
+                        <i className="fa-solid fa-link"></i>
+                      </button>
+                    );
+                  }}
                 </Tooltip>
               )}
               <Tooltip label={t('common:buttons.edit')}>
@@ -541,10 +548,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     quoteId: editingOffer.linkedQuoteCode || editingOffer.linkedQuoteId,
                   })}
                 </span>
-                {onViewQuote && (
+                {onViewQuote && editingOffer.linkedQuoteCode && (
                   <button
                     type="button"
-                    onClick={() => onViewQuote(editingOffer.linkedQuoteId)}
+                    onClick={() => {
+                      const quoteId = editingOffer.linkedQuoteId;
+                      const quoteCode = editingOffer.linkedQuoteCode as string;
+                      onViewQuote(quoteId, quoteCode);
+                    }}
                     className="text-praetor font-bold hover:text-slate-700"
                   >
                     {t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
@@ -1011,7 +1022,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 defaultValue: 'Offer {{code}}',
                 code: offerFilterCode,
               })
-            : quoteFilterId
+            : quoteFilterCode
               ? t('sales:clientOffers.activeOffersFiltered', {
                   defaultValue: 'Active Offers for Quote',
                 })
@@ -1022,6 +1033,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         defaultRowsPerPage={5}
         onRowClick={(row) => openEditModal(row)}
         rowClassName={() => 'cursor-pointer hover:bg-slate-50/50'}
+        initialFilterState={tableInitialFilterState}
       />
     </div>
   );

@@ -49,9 +49,9 @@ export interface SupplierOffersViewProps {
   onUpdateOffer: (id: string, updates: Partial<SupplierOffer>) => void | Promise<void>;
   onDeleteOffer: (id: string) => void | Promise<void>;
   onCreateOrder?: (offer: SupplierOffer) => void | Promise<void>;
-  onViewQuote?: (quoteId: string) => void;
+  onViewQuote?: (quoteId: string, quoteCode: string) => void;
   currency: string;
-  quoteFilterId?: string | null;
+  quoteFilterCode?: string | null;
   offerFilterCode?: string | null;
 }
 
@@ -64,7 +64,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   onCreateOrder,
   onViewQuote,
   currency,
-  quoteFilterId,
+  quoteFilterCode,
   offerFilterCode,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
@@ -114,18 +114,19 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const isSupplierLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
-    if (quoteFilterId) {
-      return offers.filter((o) => o.linkedQuoteId === quoteFilterId);
-    }
     return offers;
-  }, [offers, quoteFilterId]);
+  }, [offers]);
 
   const tableInitialFilterState = useMemo(() => {
+    const filters: Record<string, string[]> = {};
     if (offerFilterCode) {
-      return { offerCode: [offerFilterCode] };
+      filters.offerCode = [offerFilterCode];
     }
-    return undefined;
-  }, [offerFilterCode]);
+    if (quoteFilterCode) {
+      filters.linkedQuoteCode = [quoteFilterCode];
+    }
+    return Object.keys(filters).length > 0 ? filters : undefined;
+  }, [offerFilterCode, quoteFilterCode]);
   const totalAmount = calculateTotals(formData.items || [], Number(formData.discount || 0)).total;
 
   const inputClassName =
@@ -233,19 +234,23 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex justify-end gap-2">
-            {row.linkedQuoteId && onViewQuote && (
+            {row.linkedQuoteId && onViewQuote && row.linkedQuoteCode && (
               <Tooltip label={t('sales:supplierOffers.viewQuote', { defaultValue: 'View quote' })}>
-                {() => (
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onViewQuote(row.linkedQuoteId);
-                    }}
-                    className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                  >
-                    <i className="fa-solid fa-link"></i>
-                  </button>
-                )}
+                {() => {
+                  const quoteId = row.linkedQuoteId;
+                  const quoteCode = row.linkedQuoteCode as string;
+                  return (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onViewQuote(quoteId, quoteCode);
+                      }}
+                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  );
+                }}
               </Tooltip>
             )}
             <Tooltip label={t('common:buttons.edit', { defaultValue: 'Edit' })}>
@@ -430,10 +435,14 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                     quoteId: editingOffer.linkedQuoteCode || editingOffer.linkedQuoteId,
                   })}
                 </span>
-                {onViewQuote && (
+                {onViewQuote && editingOffer.linkedQuoteCode && (
                   <button
                     type="button"
-                    onClick={() => onViewQuote(editingOffer.linkedQuoteId)}
+                    onClick={() => {
+                      const quoteId = editingOffer.linkedQuoteId;
+                      const quoteCode = editingOffer.linkedQuoteCode as string;
+                      onViewQuote(quoteId, quoteCode);
+                    }}
                     className="text-praetor font-bold hover:text-slate-700"
                   >
                     {t('sales:supplierOffers.viewQuote', { defaultValue: 'View quote' })}
@@ -791,7 +800,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
 
       <StandardTable<SupplierOffer>
         title={
-          quoteFilterId
+          quoteFilterCode
             ? t('sales:supplierOffers.activeOffersFiltered', {
                 defaultValue: 'Active Offers for Quote',
               })
