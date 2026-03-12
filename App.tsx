@@ -3286,6 +3286,7 @@ const App: React.FC = () => {
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
                   offers={enrichedSupplierOffers}
                   quoteFilterId={supplierQuoteFilterId}
+                  quoteFilterCode={supplierQuoteFilterCode}
                   quoteIdsWithOffers={supplierQuoteIdsWithOffers}
                   quoteIdsWithOrders={supplierQuoteIdsWithOrders}
                   onViewOffer={(_offerId, offerCode) => {
