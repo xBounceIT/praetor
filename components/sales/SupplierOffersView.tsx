@@ -123,7 +123,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       filters.offerCode = [offerFilterCode];
     }
     if (quoteFilterCode) {
-      filters.linkedQuoteCode = [quoteFilterCode];
+      filters.quoteCode = [quoteFilterCode];
     }
     return Object.keys(filters).length > 0 ? filters : undefined;
   }, [offerFilterCode, quoteFilterCode]);
