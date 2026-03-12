@@ -30,10 +30,8 @@ export interface ClientQuotesViewProps {
   quoteFilterId?: string | null;
   quoteFilterCode?: string | null;
   quoteIdsWithOffers?: Set<string>;
-  quoteIdsWithOrders?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
   onViewOffers?: (quoteId: string, quoteCode: string) => void;
-  onViewOrder?: (quoteId: string) => void;
   currency: string;
   offers?: ClientOffer[];
 }
@@ -56,10 +54,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quoteFilterId,
   quoteFilterCode,
   quoteIdsWithOffers,
-  quoteIdsWithOrders,
   quoteOfferStatuses,
   onViewOffers,
-  onViewOrder,
   currency,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = [],
@@ -751,7 +747,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const hasOffer = hasOfferForQuote(row);
-          const hasOrder = quoteIdsWithOrders?.has(row.id);
           const offerStatus = getOfferStatusForQuote(row);
           const history = isHistoryRow(row);
 
@@ -786,23 +781,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
-              {onViewOrder && hasOrder && (
-                <Tooltip
-                  label={t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' })}
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewOrder(row.id);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-file-invoice"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              )}
               <Tooltip
                 label={
                   history
@@ -987,8 +965,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       onUpdateQuote,
       confirmDelete,
       openEditModal,
-      quoteIdsWithOrders,
-      onViewOrder,
     ],
   );
 

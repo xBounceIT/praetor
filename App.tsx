@@ -763,18 +763,6 @@ const App: React.FC = () => {
     );
   }, [clientsOrders]);
 
-  const quoteIdsWithOrders = useMemo(() => {
-    return new Set(
-      clientsOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
-  }, [clientsOrders]);
-
-  const supplierQuoteIdsWithOrders = useMemo(() => {
-    return new Set(
-      supplierOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
-  }, [supplierOrders]);
-
   const supplierQuoteIdsWithOffers = useMemo(() => {
     return new Set(
       supplierOffers.map((offer) => offer.linkedQuoteId).filter((id): id is string => Boolean(id)),
@@ -3246,16 +3234,11 @@ const App: React.FC = () => {
                   }}
                   quoteFilterId={quoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
-                  quoteIdsWithOrders={quoteIdsWithOrders}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
                   onViewOffers={(_quoteId, quoteCode) => {
                     setQuoteFilterCode(quoteCode);
                     setActiveView('sales/client-offers');
-                  }}
-                  onViewOrder={(quoteId) => {
-                    setQuoteFilterId(quoteId);
-                    setActiveView('accounting/clients-orders');
                   }}
                 />
               )}
@@ -3295,7 +3278,6 @@ const App: React.FC = () => {
                   quoteFilterId={supplierQuoteFilterId}
                   quoteFilterCode={supplierQuoteFilterCode}
                   quoteIdsWithOffers={supplierQuoteIdsWithOffers}
-                  quoteIdsWithOrders={supplierQuoteIdsWithOrders}
                   onViewOffer={(_offerId, offerCode) => {
                     setSupplierOfferFilterCode(offerCode);
                     setActiveView('sales/supplier-offers');
@@ -3305,10 +3287,6 @@ const App: React.FC = () => {
                     setSupplierOfferFilterCode(null);
                     setSupplierQuoteFilterCode(quoteCode);
                     setActiveView('sales/supplier-offers');
-                  }}
-                  onViewOrder={(quoteId) => {
-                    setSupplierQuoteFilterId(quoteId);
-                    setActiveView('accounting/supplier-orders');
                   }}
                 />
               )}

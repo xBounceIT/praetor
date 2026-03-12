@@ -64,9 +64,7 @@ export interface SupplierQuotesViewProps {
   quoteFilterId?: string | null;
   quoteFilterCode?: string | null;
   quoteIdsWithOffers?: Set<string>;
-  quoteIdsWithOrders?: Set<string>;
   onViewOffers?: (quoteId: string, quoteCode: string) => void;
-  onViewOrder?: (quoteId: string) => void;
   onViewOffer?: (offerId: string, offerCode: string) => void;
   currency: string;
   offers?: SupplierOffer[];
@@ -83,9 +81,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   quoteFilterId,
   quoteFilterCode,
   quoteIdsWithOffers,
-  quoteIdsWithOrders,
   onViewOffers,
-  onViewOrder,
   onViewOffer,
   currency,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for API compatibility
@@ -343,7 +339,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          const hasOrder = quoteIdsWithOrders?.has(row.id);
           const hasOffer = hasOfferForQuote(row);
           const history = isHistoryRow(row);
 
@@ -382,23 +377,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       </button>
                     );
                   }}
-                </Tooltip>
-              )}
-              {onViewOrder && hasOrder && (
-                <Tooltip
-                  label={t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' })}
-                >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onViewOrder(row.id);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-file-invoice"></i>
-                    </button>
-                  )}
                 </Tooltip>
               )}
               <Tooltip label={editTitle}>
@@ -517,8 +495,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       onViewOffer,
       openEditModal,
       products,
-      quoteIdsWithOrders,
-      onViewOrder,
       t,
       isHistoryRow,
       hasOfferForQuote,
