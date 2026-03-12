@@ -794,11 +794,18 @@ const App: React.FC = () => {
   const enrichedClientsOrders = useMemo(
     () =>
       clientsOrders.map((order) => {
-        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
-        const quote = quotes.find((q) => q.id === order.linkedQuoteId);
-        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
+        let enriched = order;
+        if (order.linkedQuoteId && !order.linkedQuoteCode) {
+          const quote = quotes.find((q) => q.id === order.linkedQuoteId);
+          if (quote) enriched = { ...enriched, linkedQuoteCode: quote.quoteCode };
+        }
+        if (order.linkedOfferId && !order.linkedOfferCode) {
+          const offer = clientOffers.find((o) => o.id === order.linkedOfferId);
+          if (offer) enriched = { ...enriched, linkedOfferCode: offer.offerCode };
+        }
+        return enriched;
       }),
-    [clientsOrders, quotes],
+    [clientsOrders, quotes, clientOffers],
   );
 
   const enrichedSupplierOrders = useMemo(
@@ -3338,11 +3345,11 @@ const App: React.FC = () => {
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}
-                  onViewQuote={(quoteId) => {
-                    setQuoteFilterId(quoteId);
-                    setActiveView('sales/client-quotes');
+                  onViewOffer={(offerCode) => {
+                    setOfferFilterCode(offerCode);
+                    setActiveView('sales/client-offers');
                   }}
-                  quoteFilterId={quoteFilterId}
+                  offerFilterCode={offerFilterCode}
                 />
               )}
 

@@ -327,6 +327,7 @@ export interface ClientsOrder {
   linkedQuoteId?: string; // Reference to source quote
   linkedQuoteCode?: string; // Human-readable quote number
   linkedOfferId?: string;
+  linkedOfferCode?: string; // Human-readable offer code (from linked ClientOffer)
   clientId: string;
   clientName: string;
   items: ClientsOrderItem[];
