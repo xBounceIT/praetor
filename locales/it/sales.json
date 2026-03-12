@@ -129,7 +129,7 @@
   "clientOffers": {
     "title": "Offerte Clienti",
     "subtitle": "Offerte create dai preventivi clienti.",
-    "activeOffers": "Offerte Attive",
+    "activeOffers": "Offerte clienti",
     "activeOffersFiltered": "Offerte Attive per Preventivo",
     "activeOffersFilteredByCode": "Offerta {{code}}",
     "editOffer": "Modifica offerta",

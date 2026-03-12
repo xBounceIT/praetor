@@ -3229,14 +3229,17 @@ const App: React.FC = () => {
                   onCreateOffer={handleCreateClientOfferFromQuote}
                   offers={enrichedClientOffers}
                   onViewOffer={(_offerId, offerCode) => {
+                    setQuoteFilterCode(null);
                     setOfferFilterCode(offerCode);
                     setActiveView('sales/client-offers');
                   }}
                   quoteFilterId={quoteFilterId}
+                  quoteFilterCode={quoteFilterCode}
                   quoteIdsWithOffers={quoteIdsWithOffers}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
                   onViewOffers={(_quoteId, quoteCode) => {
+                    setOfferFilterCode(null);
                     setQuoteFilterCode(quoteCode);
                     setActiveView('sales/client-offers');
                   }}
@@ -3255,6 +3258,7 @@ const App: React.FC = () => {
                   onDeleteOffer={handleDeleteClientOffer}
                   onCreateClientsOrder={handleCreateClientsOrderFromOffer}
                   onViewQuote={(_quoteId, quoteCode) => {
+                    setOfferFilterCode(null);
                     setQuoteFilterCode(quoteCode);
                     setActiveView('sales/client-quotes');
                   }}
@@ -3324,6 +3328,7 @@ const App: React.FC = () => {
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}
                   onViewOffer={(offerCode) => {
+                    setQuoteFilterCode(null);
                     setOfferFilterCode(offerCode);
                     setActiveView('sales/client-offers');
                   }}

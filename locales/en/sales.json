@@ -129,7 +129,7 @@
   "clientOffers": {
     "title": "Client Offers",
     "subtitle": "Offers created from customer quotes.",
-    "activeOffers": "Active Offers",
+    "activeOffers": "Customer offers",
     "activeOffersFiltered": "Active Offers for Quote",
     "activeOffersFilteredByCode": "Offer {{code}}",
     "editOffer": "Edit offer",

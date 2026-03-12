@@ -240,6 +240,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         },
       },
       {
+        header: 'linkedQuoteCode',
+        accessorKey: 'linkedQuoteCode',
+        hidden: true,
+      },
+      {
         header: t('sales:clientOffers.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
         align: 'right',
@@ -1016,18 +1021,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       </div>
 
       <StandardTable<ClientOffer>
-        title={
-          offerFilterCode
-            ? t('sales:clientOffers.activeOffersFilteredByCode', {
-                defaultValue: 'Offer {{code}}',
-                code: offerFilterCode,
-              })
-            : quoteFilterCode
-              ? t('sales:clientOffers.activeOffersFiltered', {
-                  defaultValue: 'Active Offers for Quote',
-                })
-              : t('sales:clientOffers.activeOffers', { defaultValue: 'Customers Offers' })
-        }
+        title={t('sales:clientOffers.activeOffers', { defaultValue: 'Customer offers' })}
         data={filteredOffers}
         columns={columns}
         defaultRowsPerPage={5}
