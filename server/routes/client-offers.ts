@@ -65,7 +65,6 @@ const offerSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    offerCode: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -80,7 +79,6 @@ const offerSchema = {
   },
   required: [
     'id',
-    'offerCode',
     'linkedQuoteId',
     'clientId',
     'clientName',
@@ -115,7 +113,7 @@ const offerItemBodySchema = {
 const offerCreateBodySchema = {
   type: 'object',
   properties: {
-    offerCode: { type: 'string' },
+    id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -126,13 +124,13 @@ const offerCreateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
-  required: ['offerCode', 'linkedQuoteId', 'clientId', 'clientName', 'items', 'expirationDate'],
+  required: ['id', 'linkedQuoteId', 'clientId', 'clientName', 'items', 'expirationDate'],
 } as const;
 
 const offerUpdateBodySchema = {
   type: 'object',
   properties: {
-    offerCode: { type: 'string' },
+    id: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
@@ -265,7 +263,6 @@ const normalizeOfferItemRow = (row: Record<string, unknown>) => ({
 
 const normalizeOfferRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
-  offerCode: String(row.offerCode),
   linkedQuoteId: String(row.linkedQuoteId),
   clientId: String(row.clientId),
   clientName: String(row.clientName),
@@ -301,7 +298,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const offersResult = await query(
         `SELECT
             id,
-            offer_code as "offerCode",
             linked_quote_id as "linkedQuoteId",
             client_id as "clientId",
             client_name as "clientName",
@@ -374,7 +370,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
-        offerCode,
+        id: nextId,
         linkedQuoteId,
         clientId,
         clientName,
@@ -385,7 +381,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        offerCode: unknown;
+        id: unknown;
         linkedQuoteId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -397,8 +393,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const offerCodeResult = requireNonEmptyString(offerCode, 'offerCode');
-      if (!offerCodeResult.ok) return badRequest(reply, offerCodeResult.message);
+      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
@@ -407,6 +403,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
+      }
+
+      const existingIdResult = await query('SELECT id FROM customer_offers WHERE id = $1', [
+        nextIdResult.value,
+      ]);
+      if (existingIdResult.rows.length > 0) {
+        return reply.code(409).send({ error: 'Offer ID already exists' });
       }
 
       const quoteResult = await query('SELECT id, status FROM quotes WHERE id = $1', [
@@ -435,16 +438,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
-      const offerId = 'co-' + Date.now();
       let createdOfferResult: DbQueryResult;
       try {
         createdOfferResult = await query(
           `INSERT INTO customer_offers
-            (id, offer_code, linked_quote_id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            (id, linked_quote_id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING
               id,
-              offer_code as "offerCode",
               linked_quote_id as "linkedQuoteId",
               client_id as "clientId",
               client_name as "clientName",
@@ -456,8 +457,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
-            offerId,
-            offerCodeResult.value,
+            nextIdResult.value,
             linkedQuoteIdResult.value,
             clientIdResult.value,
             clientNameResult.value,
@@ -470,8 +470,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (err) {
         const error = err as DatabaseError;
-        if (error.code === '23505' && error.detail?.includes('offer_code')) {
-          return reply.code(409).send({ error: 'Offer code already exists' });
+        if (
+          error.code === '23505' &&
+          (error.constraint === 'customer_offers_pkey' || error.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Offer ID already exists' });
         }
         throw err;
       }
@@ -500,7 +503,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              note`,
           [
             itemId,
-            offerId,
+            nextIdResult.value,
             item.productId,
             item.productName,
             item.specialBidId,
@@ -543,7 +546,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
-        offerCode,
+        id: nextId,
         clientId,
         clientName,
         items,
@@ -553,7 +556,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        offerCode?: unknown;
+        id?: unknown;
         clientId?: unknown;
         clientName?: unknown;
         items?: OfferItemInput[] | unknown;
@@ -584,28 +587,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existingOffer = existingOfferResult.rows[0];
 
-      const isStatusChangeOnly =
-        status !== undefined &&
-        offerCode === undefined &&
-        clientId === undefined &&
-        clientName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        discount === undefined &&
-        expirationDate === undefined &&
-        notes === undefined;
-      if (existingOffer.status !== 'draft' && !isStatusChangeOnly) {
+      const hasLockedFieldUpdates =
+        clientId !== undefined ||
+        clientName !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        discount !== undefined ||
+        expirationDate !== undefined ||
+        notes !== undefined;
+      if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({
           error: 'Non-draft offers are read-only',
           currentStatus: existingOffer.status,
         });
       }
 
-      let offerCodeValue = offerCode;
-      if (offerCode !== undefined) {
-        const offerCodeResult = optionalNonEmptyString(offerCode, 'offerCode');
-        if (!offerCodeResult.ok) return badRequest(reply, offerCodeResult.message);
-        offerCodeValue = offerCodeResult.value;
+      let nextIdValue = nextId;
+      if (nextId !== undefined) {
+        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
+        if (nextIdResult.value) {
+          const existingIdResult = await query(
+            'SELECT id FROM customer_offers WHERE id = $1 AND id <> $2',
+            [nextIdResult.value, idResult.value],
+          );
+          if (existingIdResult.rows.length > 0) {
+            return reply.code(409).send({ error: 'Offer ID already exists' });
+          }
+        }
       }
 
       let clientIdValue = clientId;
@@ -664,7 +674,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         updatedOfferResult = await query(
           `UPDATE customer_offers
-           SET offer_code = COALESCE($1, offer_code),
+           SET id = COALESCE($1, id),
                client_id = COALESCE($2, client_id),
                client_name = COALESCE($3, client_name),
                payment_terms = COALESCE($4, payment_terms),
@@ -676,7 +686,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            WHERE id = $9
            RETURNING
               id,
-              offer_code as "offerCode",
               linked_quote_id as "linkedQuoteId",
               client_id as "clientId",
               client_name as "clientName",
@@ -688,7 +697,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
-            offerCodeValue,
+            nextIdValue,
             clientIdValue,
             clientNameValue,
             paymentTerms,
@@ -701,8 +710,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (err) {
         const error = err as DatabaseError;
-        if (error.code === '23505' && error.detail?.includes('offer_code')) {
-          return reply.code(409).send({ error: 'Offer code already exists' });
+        if (
+          error.code === '23505' &&
+          (error.constraint === 'customer_offers_pkey' || error.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Offer ID already exists' });
         }
         throw err;
       }
@@ -711,6 +723,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
 
+      const updatedOfferId = String(updatedOfferResult.rows[0].id);
+
       let updatedItems: ReturnType<typeof normalizeOfferItemRow>[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -718,7 +732,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         const normalizedItems = normalizeItems(items, reply);
         if (!normalizedItems) return;
-        await query('DELETE FROM customer_offer_items WHERE offer_id = $1', [idResult.value]);
+        await query('DELETE FROM customer_offer_items WHERE offer_id = $1', [updatedOfferId]);
         for (const item of normalizedItems) {
           const itemId = 'coi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
           const itemResult = await query(
@@ -742,7 +756,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                note`,
             [
               itemId,
-              idResult.value,
+              updatedOfferId,
               item.productId,
               item.productName,
               item.specialBidId,
@@ -778,7 +792,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               note
            FROM customer_offer_items
            WHERE offer_id = $1`,
-          [idResult.value],
+          [updatedOfferId],
         );
         updatedItems = itemsResult.rows.map((item) =>
           normalizeOfferItemRow(item as Record<string, unknown>),

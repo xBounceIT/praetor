@@ -642,8 +642,7 @@ CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON products(supplier_id);
 
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (
-    id VARCHAR(50) PRIMARY KEY,
-    quote_code VARCHAR(20) UNIQUE NOT NULL,
+    id VARCHAR(100) PRIMARY KEY,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -675,7 +674,7 @@ END $$;
 -- Quote items table
 CREATE TABLE IF NOT EXISTS quote_items (
     id VARCHAR(50) PRIMARY KEY,
-    quote_id VARCHAR(50) NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+    quote_id VARCHAR(100) NOT NULL REFERENCES quotes(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     special_bid_id VARCHAR(50),
@@ -713,9 +712,8 @@ CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
 
 -- Customer offers
 CREATE TABLE IF NOT EXISTS customer_offers (
-    id VARCHAR(50) PRIMARY KEY,
-    offer_code VARCHAR(100) UNIQUE NOT NULL,
-    linked_quote_id VARCHAR(50) NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT,
+    id VARCHAR(100) PRIMARY KEY,
+    linked_quote_id VARCHAR(100) NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -735,7 +733,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_offers_created_at ON customer_offers(cre
 
 CREATE TABLE IF NOT EXISTS customer_offer_items (
     id VARCHAR(50) PRIMARY KEY,
-    offer_id VARCHAR(50) NOT NULL REFERENCES customer_offers(id) ON DELETE CASCADE,
+    offer_id VARCHAR(100) NOT NULL REFERENCES customer_offers(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     special_bid_id VARCHAR(50),
@@ -839,9 +837,9 @@ ALTER TABLE general_settings ADD CONSTRAINT general_settings_ai_provider_check
 
 -- Sales table (safe for existing installations)
 CREATE TABLE IF NOT EXISTS sales (
-    id VARCHAR(50) PRIMARY KEY,
-    linked_quote_id VARCHAR(50) REFERENCES quotes(id) ON DELETE SET NULL,
-    linked_offer_id VARCHAR(50) REFERENCES customer_offers(id) ON DELETE SET NULL,
+    id VARCHAR(100) PRIMARY KEY,
+    linked_quote_id VARCHAR(100) REFERENCES quotes(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    linked_offer_id VARCHAR(100) REFERENCES customer_offers(id) ON DELETE SET NULL ON UPDATE CASCADE,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -865,8 +863,7 @@ BEGIN
     END IF;
 END $$;
 
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS linked_offer_id VARCHAR(50);
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS order_number VARCHAR(50) UNIQUE;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS linked_offer_id VARCHAR(100);
 
 DO $$
 BEGIN
@@ -877,7 +874,7 @@ BEGIN
     ) THEN
         ALTER TABLE sales
             ADD CONSTRAINT sales_linked_offer_id_fkey
-            FOREIGN KEY (linked_offer_id) REFERENCES customer_offers(id) ON DELETE SET NULL;
+            FOREIGN KEY (linked_offer_id) REFERENCES customer_offers(id) ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
 END $$;
 
@@ -909,7 +906,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 -- Sale items table (safe for existing installations)
 CREATE TABLE IF NOT EXISTS sale_items (
     id VARCHAR(50) PRIMARY KEY,
-    sale_id VARCHAR(50) NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id VARCHAR(100) NOT NULL REFERENCES sales(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     special_bid_id VARCHAR(50),
@@ -948,11 +945,9 @@ CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 
 -- Supplier Quotes table
 CREATE TABLE IF NOT EXISTS supplier_quotes (
-    id VARCHAR(50) PRIMARY KEY,
+    id VARCHAR(100) PRIMARY KEY,
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
-    purchase_order_number VARCHAR(100) NOT NULL,
-    quote_code VARCHAR(100),
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
     discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')),
@@ -964,14 +959,7 @@ CREATE TABLE IF NOT EXISTS supplier_quotes (
 
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_supplier_id ON supplier_quotes(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_status ON supplier_quotes(status);
-CREATE INDEX IF NOT EXISTS idx_supplier_quotes_po ON supplier_quotes(purchase_order_number);
-CREATE INDEX IF NOT EXISTS idx_supplier_quotes_quote_code ON supplier_quotes(quote_code);
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_created_at ON supplier_quotes(created_at);
-
-ALTER TABLE supplier_quotes ADD COLUMN IF NOT EXISTS quote_code VARCHAR(100);
-UPDATE supplier_quotes
-SET quote_code = purchase_order_number
-WHERE quote_code IS NULL;
 
 DO $$
 BEGIN
@@ -992,7 +980,7 @@ END $$;
 -- Supplier Quote Items table
 CREATE TABLE IF NOT EXISTS supplier_quote_items (
     id VARCHAR(50) PRIMARY KEY,
-    quote_id VARCHAR(50) NOT NULL REFERENCES supplier_quotes(id) ON DELETE CASCADE,
+    quote_id VARCHAR(100) NOT NULL REFERENCES supplier_quotes(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
@@ -1006,9 +994,8 @@ CREATE INDEX IF NOT EXISTS idx_supplier_quote_items_quote_id ON supplier_quote_i
 
 -- Supplier offers
 CREATE TABLE IF NOT EXISTS supplier_offers (
-    id VARCHAR(50) PRIMARY KEY,
-    offer_code VARCHAR(100) UNIQUE NOT NULL,
-    linked_quote_id VARCHAR(50) NOT NULL REFERENCES supplier_quotes(id) ON DELETE RESTRICT,
+    id VARCHAR(100) PRIMARY KEY,
+    linked_quote_id VARCHAR(100) NOT NULL REFERENCES supplier_quotes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -1027,7 +1014,7 @@ CREATE INDEX IF NOT EXISTS idx_supplier_offers_status ON supplier_offers(status)
 
 CREATE TABLE IF NOT EXISTS supplier_offer_items (
     id VARCHAR(50) PRIMARY KEY,
-    offer_id VARCHAR(50) NOT NULL REFERENCES supplier_offers(id) ON DELETE CASCADE,
+    offer_id VARCHAR(100) NOT NULL REFERENCES supplier_offers(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
@@ -1042,9 +1029,9 @@ CREATE INDEX IF NOT EXISTS idx_supplier_offer_items_offer_id ON supplier_offer_i
 
 -- Supplier sale orders
 CREATE TABLE IF NOT EXISTS supplier_sales (
-    id VARCHAR(50) PRIMARY KEY,
-    linked_quote_id VARCHAR(50) REFERENCES supplier_quotes(id) ON DELETE SET NULL,
-    linked_offer_id VARCHAR(50) NOT NULL REFERENCES supplier_offers(id) ON DELETE RESTRICT,
+    id VARCHAR(100) PRIMARY KEY,
+    linked_quote_id VARCHAR(100) REFERENCES supplier_quotes(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    linked_offer_id VARCHAR(100) NOT NULL REFERENCES supplier_offers(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -1061,11 +1048,9 @@ CREATE INDEX IF NOT EXISTS idx_supplier_sales_linked_quote_id ON supplier_sales(
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_supplier_id ON supplier_sales(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_status ON supplier_sales(status);
 
-ALTER TABLE supplier_sales ADD COLUMN IF NOT EXISTS order_number VARCHAR(50) UNIQUE;
-
 CREATE TABLE IF NOT EXISTS supplier_sale_items (
     id VARCHAR(50) PRIMARY KEY,
-    sale_id VARCHAR(50) NOT NULL REFERENCES supplier_sales(id) ON DELETE CASCADE,
+    sale_id VARCHAR(100) NOT NULL REFERENCES supplier_sales(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
@@ -1101,11 +1086,10 @@ END $$;
 
 -- Invoices table
 CREATE TABLE IF NOT EXISTS invoices (
-    id VARCHAR(50) PRIMARY KEY,
-    linked_sale_id VARCHAR(50) REFERENCES sales(id) ON DELETE SET NULL,
+    id VARCHAR(100) PRIMARY KEY,
+    linked_sale_id VARCHAR(100) REFERENCES sales(id) ON DELETE SET NULL ON UPDATE CASCADE,
     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name VARCHAR(255) NOT NULL,
-    invoice_number VARCHAR(50) UNIQUE NOT NULL,
     issue_date DATE NOT NULL,
     due_date DATE NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
@@ -1125,7 +1109,7 @@ CREATE INDEX IF NOT EXISTS idx_invoices_issue_date ON invoices(issue_date);
 -- Invoice items table
 CREATE TABLE IF NOT EXISTS invoice_items (
     id VARCHAR(50) PRIMARY KEY,
-    invoice_id VARCHAR(50) NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    invoice_id VARCHAR(100) NOT NULL REFERENCES invoices(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE SET NULL,
     special_bid_id VARCHAR(50),
     description VARCHAR(255) NOT NULL,
@@ -1157,11 +1141,10 @@ CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice
 
 -- Supplier invoices
 CREATE TABLE IF NOT EXISTS supplier_invoices (
-    id VARCHAR(50) PRIMARY KEY,
-    linked_sale_id VARCHAR(50) REFERENCES supplier_sales(id) ON DELETE SET NULL,
+    id VARCHAR(100) PRIMARY KEY,
+    linked_sale_id VARCHAR(100) REFERENCES supplier_sales(id) ON DELETE SET NULL ON UPDATE CASCADE,
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
-    invoice_number VARCHAR(50) UNIQUE NOT NULL,
     issue_date DATE NOT NULL,
     due_date DATE NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
@@ -1200,7 +1183,7 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS supplier_invoice_items (
     id VARCHAR(50) PRIMARY KEY,
-    invoice_id VARCHAR(50) NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
+    invoice_id VARCHAR(100) NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE ON UPDATE CASCADE,
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE SET NULL,
     description VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,

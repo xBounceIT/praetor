@@ -39,9 +39,9 @@ export interface ClientsOrdersViewProps {
   specialBids: SpecialBid[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => void;
   onDeleteClientsOrder: (id: string) => void;
-  onViewOffer?: (offerCode: string) => void;
+  onViewOffer?: (offerId: string) => void;
   currency: string;
-  offerFilterCode?: string | null;
+  offerFilterId?: string | null;
 }
 
 const calcProductSalePrice = (costo: number, molPercentage: number) => {
@@ -65,7 +65,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onDeleteClientsOrder,
   onViewOffer,
   currency,
-  offerFilterCode,
+  offerFilterId,
 }) => {
   const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,9 +89,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setEditingOrder(order);
     setFormData({
       linkedQuoteId: order.linkedQuoteId,
-      linkedQuoteCode: order.linkedQuoteCode,
       linkedOfferId: order.linkedOfferId,
-      linkedOfferCode: order.linkedOfferCode,
       clientId: order.clientId,
       clientName: order.clientName,
       items: order.items,
@@ -394,23 +392,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const isLinkedOffer = Boolean(formData.linkedOfferId);
   const isReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
 
-  // Filter orders by offerFilterCode if provided
+  // Filter orders by offerFilterId if provided
   const filteredOrders = useMemo(() => {
-    if (offerFilterCode) {
-      return orders.filter((o) => o.linkedOfferCode === offerFilterCode);
+    if (offerFilterId) {
+      return orders.filter((o) => o.linkedOfferId === offerFilterId);
     }
     return orders;
-  }, [orders, offerFilterCode]);
+  }, [orders, offerFilterId]);
 
   // Table columns definition with TableFilter support
   const columns = useMemo(
     () => [
       {
         header: t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' }),
-        id: 'orderNumber',
-        accessorFn: (row: ClientsOrder) => row.orderNumber || row.id,
+        id: 'id',
+        accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <span className="font-bold text-slate-700">{row.orderNumber || row.id}</span>
+          <span className="font-bold text-slate-700">{row.id}</span>
         ),
       },
       {
@@ -491,21 +489,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         align: 'right' as const,
         cell: ({ row }: { row: ClientsOrder }) => (
           <div className="flex justify-end gap-2">
-            {onViewOffer && row.linkedOfferId && row.linkedOfferCode && (
+            {onViewOffer && row.linkedOfferId && (
               <Tooltip label={t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const linkedOfferCode = row.linkedOfferCode;
-                      if (!linkedOfferCode) return;
-                      onViewOffer(linkedOfferCode);
-                    }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-link"></i>
-                  </button>
-                )}
+                {() => {
+                  const linkedOfferId = row.linkedOfferId;
+                  if (!linkedOfferId) return null;
+                  return (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewOffer(linkedOfferId);
+                      }}
+                      className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  );
+                }}
               </Tooltip>
             )}
             <Tooltip
@@ -652,7 +652,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('accounting:clientsOrders.linkedOfferInfo', {
-                        number: formData.linkedOfferCode || formData.linkedOfferId,
+                        number: formData.linkedOfferId,
                         defaultValue: 'Offer #{{number}}',
                       })}
                     </div>
@@ -663,14 +663,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     </div>
                   </div>
                 </div>
-                {onViewOffer && formData.linkedOfferCode && (
+                {onViewOffer && formData.linkedOfferId && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const linkedOfferCode = formData.linkedOfferCode;
-                      if (!linkedOfferCode) return;
-                      onViewOffer(linkedOfferCode);
-                    }}
+                    onClick={() => onViewOffer(formData.linkedOfferId as string)}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
                     {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}

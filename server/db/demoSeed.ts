@@ -17,12 +17,10 @@ import {
   DEMO_PASSWORD_HASH,
   DEMO_PRODUCTS,
   DEMO_PROJECTS,
-  DEMO_QUOTES,
   DEMO_SALES,
   DEMO_SETTINGS_CACHE_NAMESPACES,
   DEMO_SUPPLIER_INVOICES,
   DEMO_SUPPLIER_OFFERS,
-  DEMO_SUPPLIER_QUOTES,
   DEMO_SUPPLIER_SALES,
   DEMO_SUPPLIERS,
   DEMO_USER_IDS,
@@ -309,11 +307,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
       pushTextArrayPredicate(
         builder,
-        'invoice_number',
-        DEMO_SUPPLIER_INVOICES.map((invoice) => invoice.invoiceNumber),
-      );
-      pushTextArrayPredicate(
-        builder,
         'linked_sale_id',
         nonEmpty(DEMO_SUPPLIER_INVOICES.map((invoice) => invoice.linkedSaleId)),
       );
@@ -362,11 +355,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
       pushTextArrayPredicate(
         builder,
-        'offer_code',
-        DEMO_SUPPLIER_OFFERS.map((offer) => offer.offerCode),
-      );
-      pushTextArrayPredicate(
-        builder,
         'linked_quote_id',
         DEMO_SUPPLIER_OFFERS.map((offer) => offer.linkedQuoteId),
       );
@@ -389,16 +377,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     await executeDelete(client, 'supplier_quotes', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_IDS.supplierQuotes);
       pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
-      pushTextArrayPredicate(
-        builder,
-        'quote_code',
-        DEMO_SUPPLIER_QUOTES.map((quote) => quote.quoteCode),
-      );
-      pushTextArrayPredicate(
-        builder,
-        'purchase_order_number',
-        DEMO_SUPPLIER_QUOTES.map((quote) => quote.purchaseOrderNumber),
-      );
     }),
   );
 
@@ -418,11 +396,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     await executeDelete(client, 'invoices', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_IDS.invoices);
       pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
-      pushTextArrayPredicate(
-        builder,
-        'invoice_number',
-        DEMO_INVOICES.map((invoice) => invoice.invoiceNumber),
-      );
       pushTextArrayPredicate(
         builder,
         'linked_sale_id',
@@ -475,11 +448,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
       pushTextArrayPredicate(
         builder,
-        'offer_code',
-        DEMO_CUSTOMER_OFFERS.map((offer) => offer.offerCode),
-      );
-      pushTextArrayPredicate(
-        builder,
         'linked_quote_id',
         DEMO_CUSTOMER_OFFERS.map((offer) => offer.linkedQuoteId),
       );
@@ -503,11 +471,6 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
     await executeDelete(client, 'quotes', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_IDS.quotes);
       pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
-      pushTextArrayPredicate(
-        builder,
-        'quote_code',
-        DEMO_QUOTES.map((quote) => quote.quoteCode),
-      );
     }),
   );
 

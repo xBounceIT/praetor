@@ -212,10 +212,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     () => [
       {
         header: t('accounting:supplierOrders.orderNumber', { defaultValue: 'Order Number' }),
-        id: 'orderNumber',
-        accessorFn: (row: SupplierSaleOrder) => row.orderNumber || row.id,
+        id: 'id',
+        accessorFn: (row: SupplierSaleOrder) => row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
-          <span className="font-bold text-slate-700">{row.orderNumber || row.id}</span>
+          <span className="font-bold text-slate-700">{row.id}</span>
         ),
       },
       {
@@ -234,8 +234,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 {row.linkedOfferId}
               </div>
               <div className="text-[10px] text-slate-400">
-                {row.linkedQuoteCode ||
-                  row.linkedQuoteId ||
+                {row.linkedQuoteId ||
                   t('accounting:supplierOrders.noQuoteLink', {
                     defaultValue: 'No quote link',
                   })}
@@ -487,7 +486,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('accounting:supplierOrders.linkedQuoteInfo', {
-                        number: formData.linkedQuoteCode || formData.linkedQuoteId,
+                        number: formData.linkedQuoteId,
                       })}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">

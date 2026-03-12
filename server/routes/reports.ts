@@ -1710,7 +1710,6 @@ const buildBusinessDataset = async (
         `WITH per_quote AS (
         SELECT
           q.id,
-          q.quote_code,
           q.client_name,
           q.status,
           q.created_at,
@@ -1723,7 +1722,6 @@ const buildBusinessDataset = async (
       )
       SELECT
         id,
-        quote_code,
         client_name,
         status,
         net_value,
@@ -1774,7 +1772,7 @@ const buildBusinessDataset = async (
         })),
         topQuotesByNet: topQuotes.rows.map((r) => ({
           id: toText(r.id),
-          quoteCode: toText(r.quote_code),
+          quoteCode: toText(r.id),
           clientName: toText(r.client_name),
           status: toText(r.status),
           netValue: toNumber(r.net_value),
@@ -2011,7 +2009,6 @@ const buildBusinessDataset = async (
       const topInvoices = await query(
         `SELECT
          id,
-         invoice_number,
          client_name,
          status,
          due_date,
@@ -2049,7 +2046,7 @@ const buildBusinessDataset = async (
         })),
         topInvoicesByOutstanding: topInvoices.rows.map((r) => ({
           id: toText(r.id),
-          invoiceNumber: toText(r.invoice_number),
+          invoiceNumber: toText(r.id),
           clientName: toText(r.client_name),
           status: toText(r.status),
           dueDate: toText(r.due_date),
@@ -2276,7 +2273,6 @@ const buildBusinessDataset = async (
         SELECT
           sq.id,
           sq.supplier_name,
-          sq.purchase_order_number,
           sq.status,
           sq.created_at,
           SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0))
@@ -2289,7 +2285,6 @@ const buildBusinessDataset = async (
       SELECT
         id,
         supplier_name,
-        purchase_order_number,
         status,
         net_value,
         EXTRACT(EPOCH FROM created_at) * 1000 as created_at
@@ -2318,7 +2313,7 @@ const buildBusinessDataset = async (
         topQuotesByNet: topQuotes.rows.map((r) => ({
           id: toText(r.id),
           supplierName: toText(r.supplier_name),
-          purchaseOrderNumber: toText(r.purchase_order_number),
+          purchaseOrderNumber: toText(r.id),
           status: toText(r.status),
           netValue: toNumber(r.net_value),
           createdAt: toNumber(r.created_at),

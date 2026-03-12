@@ -65,7 +65,6 @@ const invoiceSchema = {
     linkedSaleId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
-    invoiceNumber: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
@@ -82,7 +81,6 @@ const invoiceSchema = {
     'id',
     'clientId',
     'clientName',
-    'invoiceNumber',
     'issueDate',
     'dueDate',
     'status',
@@ -114,10 +112,10 @@ const invoiceItemBodySchema = {
 const invoiceCreateBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     linkedSaleId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
-    invoiceNumber: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
@@ -128,15 +126,15 @@ const invoiceCreateBodySchema = {
     notes: { type: 'string' },
     items: { type: 'array', items: invoiceItemBodySchema },
   },
-  required: ['clientId', 'clientName', 'invoiceNumber', 'issueDate', 'dueDate', 'items'],
+  required: ['clientId', 'clientName', 'issueDate', 'dueDate', 'items'],
 } as const;
 
 const invoiceUpdateBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
-    invoiceNumber: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
@@ -155,6 +153,18 @@ const toRequiredDateOnly = (value: unknown, fieldName: string) => {
     throw new TypeError(`Invalid date value for ${fieldName}`);
   }
   return normalizedDate;
+};
+
+const generateInvoiceId = async (issueDate: string) => {
+  const year = issueDate.split('-')[0];
+  const result = await query(
+    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
+     FROM invoices
+     WHERE id ~ $1`,
+    [`^INV-${year}-[0-9]+$`],
+  );
+  const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
+  return `INV-${year}-${String(nextSequence).padStart(4, '0')}`;
 };
 
 const formatInvoiceItem = (item: Record<string, unknown>) => ({
@@ -335,7 +345,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 linked_sale_id as "linkedSaleId",
                 client_id as "clientId", 
                 client_name as "clientName", 
-                invoice_number as "invoiceNumber", 
                 issue_date as "issueDate",
                 due_date as "dueDate",
                 status, 
@@ -405,10 +414,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
+        id: nextId,
         linkedSaleId,
         clientId,
         clientName,
-        invoiceNumber,
         issueDate,
         dueDate,
         status,
@@ -419,10 +428,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
         items,
       } = request.body as {
+        id?: unknown;
         linkedSaleId: unknown;
         clientId: unknown;
         clientName: unknown;
-        invoiceNumber: unknown;
         issueDate: unknown;
         dueDate: unknown;
         status: unknown;
@@ -439,9 +448,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const clientNameResult = requireNonEmptyString(clientName, 'clientName');
       if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
-
-      const invoiceNumberResult = requireNonEmptyString(invoiceNumber, 'invoiceNumber');
-      if (!invoiceNumberResult.ok) return badRequest(reply, invoiceNumberResult.message);
 
       const issueDateResult = parseDateString(issueDate, 'issueDate');
       if (!issueDateResult.ok) return badRequest(reply, issueDateResult.message);
@@ -471,47 +477,58 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
 
-      const invoiceId = 'inv-' + Date.now();
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+      const invoiceId = nextIdResult.value || (await generateInvoiceId(issueDateResult.value));
 
-      // Insert invoice
-      const invoiceResult = await query(
-        `INSERT INTO invoices (
-                    id, linked_sale_id, client_id, client_name, invoice_number, issue_date, due_date, 
-                    status, subtotal, tax_amount, total, amount_paid, notes
-                ) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
-                RETURNING 
-                    id, 
-                    linked_sale_id as "linkedSaleId",
-                    client_id as "clientId", 
-                    client_name as "clientName", 
-                    invoice_number as "invoiceNumber", 
-                    issue_date as "issueDate",
-                    due_date as "dueDate",
-                    status, 
-                    subtotal,
-                    tax_amount as "taxAmount",
-                    total,
-                    amount_paid as "amountPaid",
-                    notes,
-                    EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                    EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          invoiceId,
-          linkedSaleId || null,
-          clientIdResult.value,
-          clientNameResult.value,
-          invoiceNumberResult.value,
-          issueDateResult.value,
-          dueDateResult.value,
-          status || 'draft',
-          subtotalResult.value || 0,
-          taxAmountResult.value || 0,
-          totalResult.value || 0,
-          amountPaidResult.value || 0,
-          notes,
-        ],
-      );
+      let invoiceResult: Awaited<ReturnType<typeof query>>;
+      try {
+        invoiceResult = await query(
+          `INSERT INTO invoices (
+                      id, linked_sale_id, client_id, client_name, issue_date, due_date, 
+                      status, subtotal, tax_amount, total, amount_paid, notes
+                  ) 
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+                  RETURNING 
+                      id, 
+                      linked_sale_id as "linkedSaleId",
+                      client_id as "clientId", 
+                      client_name as "clientName", 
+                      issue_date as "issueDate",
+                      due_date as "dueDate",
+                      status, 
+                      subtotal,
+                      tax_amount as "taxAmount",
+                      total,
+                      amount_paid as "amountPaid",
+                      notes,
+                      EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                      EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            invoiceId,
+            linkedSaleId || null,
+            clientIdResult.value,
+            clientNameResult.value,
+            issueDateResult.value,
+            dueDateResult.value,
+            status || 'draft',
+            subtotalResult.value || 0,
+            taxAmountResult.value || 0,
+            totalResult.value || 0,
+            amountPaidResult.value || 0,
+            notes,
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'invoices_pkey' || databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Invoice ID already exists' });
+        }
+        throw error;
+      }
 
       // Insert invoice items
       const createdItems = [];
@@ -575,9 +592,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
+        id: nextId,
         clientId,
         clientName,
-        invoiceNumber,
         issueDate,
         dueDate,
         status,
@@ -588,9 +605,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
         items,
       } = request.body as {
+        id: unknown;
         clientId: unknown;
         clientName: unknown;
-        invoiceNumber: unknown;
         issueDate: unknown;
         dueDate: unknown;
         status: unknown;
@@ -623,11 +640,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientNameValue = clientNameResult.value;
       }
 
-      let invoiceNumberValue = invoiceNumber;
-      if (invoiceNumber !== undefined) {
-        const invoiceNumberResult = optionalNonEmptyString(invoiceNumber, 'invoiceNumber');
-        if (!invoiceNumberResult.ok) return badRequest(reply, invoiceNumberResult.message);
-        invoiceNumberValue = invoiceNumberResult.value;
+      let nextIdValue = nextId;
+      if (nextId !== undefined) {
+        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
+        if (nextIdResult.value) {
+          const existingIdResult = await query(
+            'SELECT id FROM invoices WHERE id = $1 AND id <> $2',
+            [nextIdResult.value, idResult.value],
+          );
+          if (existingIdResult.rows.length > 0) {
+            return reply.code(409).send({ error: 'Invoice ID already exists' });
+          }
+        }
       }
 
       let issueDateValue = issueDate;
@@ -679,56 +705,69 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Update invoice
-      const invoiceResult = await query(
-        `UPDATE invoices 
-                SET client_id = COALESCE($1, client_id),
-                    client_name = COALESCE($2, client_name),
-                    invoice_number = COALESCE($3, invoice_number),
-                    issue_date = COALESCE($4, issue_date),
-                    due_date = COALESCE($5, due_date),
-                    status = COALESCE($6, status),
-                    subtotal = COALESCE($7, subtotal),
-                    tax_amount = COALESCE($8, tax_amount),
-                    total = COALESCE($9, total),
-                    amount_paid = COALESCE($10, amount_paid),
-                    notes = COALESCE($11, notes),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = $12 
-                RETURNING 
-                    id, 
-                    linked_sale_id as "linkedSaleId",
-                    client_id as "clientId", 
-                    client_name as "clientName", 
-                    invoice_number as "invoiceNumber", 
-                    issue_date as "issueDate",
-                    due_date as "dueDate",
-                    status, 
-                    subtotal,
-                    tax_amount as "taxAmount",
-                    total,
-                    amount_paid as "amountPaid",
-                    notes,
-                    EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-                    EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          clientIdValue,
-          clientNameValue,
-          invoiceNumberValue,
-          issueDateValue,
-          dueDateValue,
-          status,
-          subtotalValue,
-          taxAmountValue,
-          totalValue,
-          amountPaidValue,
-          notes,
-          idResult.value,
-        ],
-      );
+      let invoiceResult: Awaited<ReturnType<typeof query>>;
+      try {
+        invoiceResult = await query(
+          `UPDATE invoices 
+                  SET id = COALESCE($1, id),
+                      client_id = COALESCE($2, client_id),
+                      client_name = COALESCE($3, client_name),
+                      issue_date = COALESCE($4, issue_date),
+                      due_date = COALESCE($5, due_date),
+                      status = COALESCE($6, status),
+                      subtotal = COALESCE($7, subtotal),
+                      tax_amount = COALESCE($8, tax_amount),
+                      total = COALESCE($9, total),
+                      amount_paid = COALESCE($10, amount_paid),
+                      notes = COALESCE($11, notes),
+                      updated_at = CURRENT_TIMESTAMP
+                  WHERE id = $12 
+                  RETURNING 
+                      id, 
+                      linked_sale_id as "linkedSaleId",
+                      client_id as "clientId", 
+                      client_name as "clientName", 
+                      issue_date as "issueDate",
+                      due_date as "dueDate",
+                      status, 
+                      subtotal,
+                      tax_amount as "taxAmount",
+                      total,
+                      amount_paid as "amountPaid",
+                      notes,
+                      EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+                      EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            nextIdValue,
+            clientIdValue,
+            clientNameValue,
+            issueDateValue,
+            dueDateValue,
+            status,
+            subtotalValue,
+            taxAmountValue,
+            totalValue,
+            amountPaidValue,
+            notes,
+            idResult.value,
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'invoices_pkey' || databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Invoice ID already exists' });
+        }
+        throw error;
+      }
 
       if (invoiceResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Invoice not found' });
       }
+
+      const updatedInvoiceId = String(invoiceResult.rows[0].id);
 
       // If items are provided, update them
       let updatedItems = [];
@@ -743,7 +782,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const normalizedItems = await validateAndNormalizeItems(items, reply, effectiveClientId);
         if (!normalizedItems) return;
         // Delete existing items
-        await query('DELETE FROM invoice_items WHERE invoice_id = $1', [idResult.value]);
+        await query('DELETE FROM invoice_items WHERE invoice_id = $1', [updatedInvoiceId]);
 
         // Insert new items
         for (const item of normalizedItems) {
@@ -767,7 +806,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                             discount`,
             [
               itemId,
-              idResult.value,
+              updatedInvoiceId,
               item.productId || null,
               item.specialBidId || null,
               item.description,
@@ -796,7 +835,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         discount
                     FROM invoice_items
                     WHERE invoice_id = $1`,
-          [idResult.value],
+          [updatedInvoiceId],
         );
         updatedItems = itemsResult.rows;
       }

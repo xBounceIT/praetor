@@ -51,7 +51,6 @@ const offerSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    offerCode: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     linkedOrderId: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
@@ -67,7 +66,6 @@ const offerSchema = {
   },
   required: [
     'id',
-    'offerCode',
     'linkedQuoteId',
     'supplierId',
     'supplierName',
@@ -96,7 +94,7 @@ const itemBodySchema = {
 const createBodySchema = {
   type: 'object',
   properties: {
-    offerCode: { type: 'string' },
+    id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
@@ -107,13 +105,13 @@ const createBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
-  required: ['offerCode', 'linkedQuoteId', 'supplierId', 'supplierName', 'items', 'expirationDate'],
+  required: ['id', 'linkedQuoteId', 'supplierId', 'supplierName', 'items', 'expirationDate'],
 } as const;
 
 const updateBodySchema = {
   type: 'object',
   properties: {
-    offerCode: { type: 'string' },
+    id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     items: { type: 'array', items: itemBodySchema },
@@ -214,7 +212,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const offersResult = await query(
         `SELECT
             so.id,
-            so.offer_code as "offerCode",
             so.linked_quote_id as "linkedQuoteId",
             ss.id as "linkedOrderId",
             so.supplier_id as "supplierId",
@@ -277,7 +274,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
-        offerCode,
+        id: nextId,
         linkedQuoteId,
         supplierId,
         supplierName,
@@ -288,7 +285,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        offerCode: unknown;
+        id: unknown;
         linkedQuoteId: unknown;
         supplierId: unknown;
         supplierName: unknown;
@@ -300,8 +297,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const offerCodeResult = requireNonEmptyString(offerCode, 'offerCode');
-      if (!offerCodeResult.ok) return badRequest(reply, offerCodeResult.message);
+      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
       const supplierIdResult = requireNonEmptyString(supplierId, 'supplierId');
@@ -337,16 +334,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
-      const offerId = 'so-' + Date.now();
       let createdOfferResult: DbQueryResult;
       try {
         createdOfferResult = await query(
           `INSERT INTO supplier_offers
-            (id, offer_code, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, status, expiration_date, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, status, expiration_date, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING
               id,
-              offer_code as "offerCode",
               linked_quote_id as "linkedQuoteId",
               null::varchar as "linkedOrderId",
               supplier_id as "supplierId",
@@ -359,8 +354,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
-            offerId,
-            offerCodeResult.value,
+            nextIdResult.value,
             linkedQuoteIdResult.value,
             supplierIdResult.value,
             supplierNameResult.value,
@@ -373,8 +367,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (err) {
         const error = err as DatabaseError;
-        if (error.code === '23505' && error.detail?.includes('offer_code')) {
-          return reply.code(409).send({ error: 'Offer code already exists' });
+        if (
+          error.code === '23505' &&
+          (error.constraint === 'supplier_offers_pkey' || error.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Offer ID already exists' });
         }
         throw err;
       }
@@ -398,7 +395,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              note`,
           [
             itemId,
-            offerId,
+            nextIdResult.value,
             item.productId,
             item.productName,
             item.quantity,
@@ -436,7 +433,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
-        offerCode,
+        id: nextId,
         supplierId,
         supplierName,
         items,
@@ -446,7 +443,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        offerCode?: unknown;
+        id?: unknown;
         supplierId?: unknown;
         supplierName?: unknown;
         items?: SupplierOfferItemInput[] | unknown;
@@ -477,28 +474,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existingOffer = existingOfferResult.rows[0];
 
-      const isStatusChangeOnly =
-        status !== undefined &&
-        offerCode === undefined &&
-        supplierId === undefined &&
-        supplierName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        discount === undefined &&
-        expirationDate === undefined &&
-        notes === undefined;
-      if (existingOffer.status !== 'draft' && !isStatusChangeOnly) {
+      const hasLockedFieldUpdates =
+        supplierId !== undefined ||
+        supplierName !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        discount !== undefined ||
+        expirationDate !== undefined ||
+        notes !== undefined;
+      if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({
           error: 'Non-draft offers are read-only',
           currentStatus: existingOffer.status,
         });
       }
 
-      let offerCodeValue = offerCode;
-      if (offerCode !== undefined) {
-        const offerCodeResult = optionalNonEmptyString(offerCode, 'offerCode');
-        if (!offerCodeResult.ok) return badRequest(reply, offerCodeResult.message);
-        offerCodeValue = offerCodeResult.value;
+      let nextIdValue = nextId;
+      if (nextId !== undefined) {
+        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
+        if (nextIdResult.value) {
+          const existingIdResult = await query(
+            'SELECT id FROM supplier_offers WHERE id = $1 AND id <> $2',
+            [nextIdResult.value, idResult.value],
+          );
+          if (existingIdResult.rows.length > 0) {
+            return reply.code(409).send({ error: 'Offer ID already exists' });
+          }
+        }
       }
 
       let supplierIdValue = supplierId;
@@ -560,7 +564,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         updatedOfferResult = await query(
           `UPDATE supplier_offers
-           SET offer_code = COALESCE($1, offer_code),
+           SET id = COALESCE($1, id),
                supplier_id = COALESCE($2, supplier_id),
                supplier_name = COALESCE($3, supplier_name),
                payment_terms = COALESCE($4, payment_terms),
@@ -572,7 +576,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            WHERE id = $9
            RETURNING
               id,
-              offer_code as "offerCode",
               linked_quote_id as "linkedQuoteId",
               (
                 SELECT ss.id
@@ -590,7 +593,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
-            offerCodeValue,
+            nextIdValue,
             supplierIdValue,
             supplierNameValue,
             paymentTerms,
@@ -603,8 +606,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (err) {
         const error = err as DatabaseError;
-        if (error.code === '23505' && error.detail?.includes('offer_code')) {
-          return reply.code(409).send({ error: 'Offer code already exists' });
+        if (
+          error.code === '23505' &&
+          (error.constraint === 'supplier_offers_pkey' || error.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Offer ID already exists' });
         }
         throw err;
       }
@@ -613,6 +619,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
 
+      const updatedOfferId = String(updatedOfferResult.rows[0].id);
+
       let updatedItems: unknown[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -620,7 +628,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         const normalizedItems = normalizeItems(items, reply);
         if (!normalizedItems) return;
-        await query('DELETE FROM supplier_offer_items WHERE offer_id = $1', [idResult.value]);
+        await query('DELETE FROM supplier_offer_items WHERE offer_id = $1', [updatedOfferId]);
         for (const item of normalizedItems) {
           const itemId = 'soi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
           const itemResult = await query(
@@ -639,7 +647,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                note`,
             [
               itemId,
-              idResult.value,
+              updatedOfferId,
               item.productId,
               item.productName,
               item.quantity,
@@ -665,7 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               note
            FROM supplier_offer_items
            WHERE offer_id = $1`,
-          [idResult.value],
+          [updatedOfferId],
         );
         updatedItems = itemsResult.rows;
       }

@@ -26,11 +26,11 @@ export interface ClientQuotesViewProps {
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
   onCreateOffer?: (quote: Quote) => void;
-  onViewOffer?: (offerId: string, offerCode: string) => void;
-  quoteFilterCode?: string | null;
+  onViewOffer?: (offerId: string) => void;
+  quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
-  onViewOffers?: (quoteId: string, quoteCode: string) => void;
+  onViewOffers?: (quoteId: string) => void;
   currency: string;
   offers?: ClientOffer[];
 }
@@ -50,7 +50,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onDeleteQuote,
   onCreateOffer,
   onViewOffer,
-  quoteFilterCode,
+  quoteFilterId,
   quoteIdsWithOffers,
   quoteOfferStatuses,
   onViewOffers,
@@ -82,11 +82,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   }, [quotes]);
 
   const tableInitialFilterState = useMemo(() => {
-    if (quoteFilterCode) {
-      return { quoteCode: [quoteFilterCode] };
+    if (quoteFilterId) {
+      return { id: [quoteFilterId] };
     }
     return undefined;
-  }, [quoteFilterCode]);
+  }, [quoteFilterId]);
 
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -201,7 +201,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   // Form State
   const [formData, setFormData] = useState<Partial<Quote>>({
-    quoteCode: '',
+    id: '',
     clientId: '',
     clientName: '',
     items: [],
@@ -223,7 +223,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     setEditingQuote(null);
     setPendingClientChange(null);
     setFormData({
-      quoteCode: '',
+      id: '',
       clientId: '',
       clientName: '',
       items: [],
@@ -243,7 +243,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     // Ensure expirationDate is in YYYY-MM-DD format for the date input
     const formattedDate = quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '';
     setFormData({
-      quoteCode: quote.quoteCode,
+      id: quote.id,
       clientId: quote.clientId,
       clientName: quote.clientName,
       items: quote.items,
@@ -271,8 +271,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       newErrors.clientId = t('sales:clientQuotes.errors.clientRequired');
     }
 
-    if (!formData.quoteCode?.trim()) {
-      newErrors.quoteCode = t('sales:clientQuotes.errors.quoteCodeRequired', {
+    if (!formData.id?.trim()) {
+      newErrors.id = t('sales:clientQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
     }
@@ -638,10 +638,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     () => [
       {
         header: t('sales:clientQuotes.quoteCodeColumn'),
-        accessorKey: 'quoteCode',
+        accessorKey: 'id',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-slate-700">{row.quoteCode}</span>,
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
       },
       {
         header: t('sales:clientQuotes.clientColumn'),
@@ -809,7 +809,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
-                        onViewOffer(row.linkedOfferId!, row.linkedOfferCode || row.linkedOfferId!);
+                        onViewOffer(row.linkedOfferId!);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                     >
@@ -1012,7 +1012,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('sales:clientQuotes.linkedOfferInfo', {
-                        number: editingQuote.linkedOfferCode || editingQuote.linkedOfferId,
+                        number: editingQuote.linkedOfferId,
                         defaultValue: 'Offer #{{number}}',
                       })}
                     </div>
@@ -1026,7 +1026,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {onViewOffers && (
                   <button
                     type="button"
-                    onClick={() => onViewOffers(editingQuote.id, editingQuote.quoteCode)}
+                    onClick={() => onViewOffers(editingQuote.id)}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
                     {t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' })}
@@ -1064,13 +1064,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.quoteCode || ''}
+                    value={formData.id || ''}
                     onChange={(e) => {
-                      setFormData({ ...formData, quoteCode: e.target.value });
-                      if (errors.quoteCode) {
+                      setFormData({ ...formData, id: e.target.value });
+                      if (errors.id) {
                         setErrors((prev) => {
                           const next = { ...prev };
-                          delete next.quoteCode;
+                          delete next.id;
                           return next;
                         });
                       }
@@ -1078,11 +1078,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     placeholder="Q0000"
                     disabled={isReadOnly}
                     className={`w-full rounded-xl border ${
-                      errors.quoteCode ? 'border-red-300' : 'border-slate-200'
+                      errors.id ? 'border-red-300' : 'border-slate-200'
                     } bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
                   />
-                  {errors.quoteCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
+                  {errors.id && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
               </div>

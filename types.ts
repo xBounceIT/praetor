@@ -233,7 +233,6 @@ export interface QuoteItem {
 
 export interface Quote {
   id: string;
-  quoteCode: string;
   clientId: string;
   clientName: string;
   items: QuoteItem[];
@@ -254,7 +253,6 @@ export interface Quote {
   expirationDate: string; // YYYY-MM-DD date-only string
   isExpired?: boolean;
   linkedOfferId?: string;
-  linkedOfferCode?: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -278,9 +276,7 @@ export interface ClientOfferItem {
 }
 export interface ClientOffer {
   id: string;
-  offerCode: string;
   linkedQuoteId: string;
-  linkedQuoteCode?: string;
   clientId: string;
   clientName: string;
   items: ClientOfferItem[];
@@ -323,11 +319,8 @@ export interface ClientsOrderItem {
 
 export interface ClientsOrder {
   id: string;
-  orderNumber?: string;
   linkedQuoteId?: string; // Reference to source quote
-  linkedQuoteCode?: string; // Human-readable quote number
   linkedOfferId?: string;
-  linkedOfferCode?: string; // Human-readable offer code (from linked ClientOffer)
   clientId: string;
   clientName: string;
   items: ClientsOrderItem[];
@@ -448,7 +441,6 @@ export interface Invoice {
   linkedSaleId?: string;
   clientId: string;
   clientName: string;
-  invoiceNumber: string;
   issueDate: string;
   dueDate: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
@@ -492,8 +484,6 @@ export interface SupplierQuote {
   id: string;
   supplierId: string;
   supplierName: string;
-  quoteCode: string;
-  purchaseOrderNumber?: string;
   items: SupplierQuoteItem[];
   paymentTerms:
     | 'immediate'
@@ -511,7 +501,6 @@ export interface SupplierQuote {
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
   linkedOfferId?: string;
-  linkedOfferCode?: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -531,9 +520,7 @@ export interface SupplierOfferItem {
 
 export interface SupplierOffer {
   id: string;
-  offerCode: string;
   linkedQuoteId: string;
-  linkedQuoteCode?: string;
   linkedOrderId?: string;
   supplierId: string;
   supplierName: string;
@@ -572,9 +559,7 @@ export interface SupplierSaleOrderItem {
 
 export interface SupplierSaleOrder {
   id: string;
-  orderNumber?: string;
   linkedQuoteId?: string;
-  linkedQuoteCode?: string;
   linkedOfferId: string;
   supplierId: string;
   supplierName: string;
@@ -615,7 +600,6 @@ export interface SupplierInvoice {
   linkedSaleId?: string;
   supplierId: string;
   supplierName: string;
-  invoiceNumber: string;
   issueDate: string;
   dueDate: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
