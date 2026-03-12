@@ -3294,6 +3294,7 @@ const App: React.FC = () => {
                   }}
                   currency={generalSettings.currency}
                   onViewOffers={(_quoteId, quoteCode) => {
+                    setSupplierOfferFilterCode(null);
                     setSupplierQuoteFilterCode(quoteCode);
                     setActiveView('sales/supplier-offers');
                   }}
