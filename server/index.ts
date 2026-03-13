@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import buildApp from './app.ts';
 import { DEFAULT_ADMIN_PASSWORD, ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
@@ -9,6 +12,18 @@ const PORT = Number(process.env.PORT ?? 3001);
 const DEFAULT_JWT_SECRET = 'praetor-secret-key-change-in-production';
 const DEFAULT_ENCRYPTION_KEY = 'praetor-encryption-key-change-in-production';
 const logger = createChildLogger({ module: 'startup' });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const schemaPath = join(__dirname, 'db', 'schema.sql');
+const REQUIRED_BOOTSTRAP_TABLES = [
+  'roles',
+  'users',
+  'user_roles',
+  'settings',
+  'user_clients',
+  'user_projects',
+  'user_tasks',
+] as const;
 
 const fastify = await buildApp();
 
@@ -36,6 +51,37 @@ const warnInsecureRuntimeDefaults = () => {
 
   for (const warning of warnings) {
     logger.warn({ warning }, 'Security warning');
+  }
+};
+
+const bootstrapDatabase = async () => {
+  if (!existsSync(schemaPath)) {
+    throw new Error(`Schema file not found at ${schemaPath}`);
+  }
+
+  const schemaSql = readFileSync(schemaPath, 'utf8');
+  await query(schemaSql);
+
+  const tableCheck = await query(
+    `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])
+      ORDER BY table_name
+    `,
+    [REQUIRED_BOOTSTRAP_TABLES],
+  );
+
+  const foundTables = tableCheck.rows.map((row) => String(row.table_name));
+  const missingTables = REQUIRED_BOOTSTRAP_TABLES.filter(
+    (tableName) => !foundTables.includes(tableName),
+  );
+
+  logger.info({ foundTables }, 'Database schema verified');
+
+  if (missingTables.length > 0) {
+    throw new Error(`Database bootstrap incomplete. Missing tables: ${missingTables.join(', ')}`);
   }
 };
 
@@ -77,173 +123,20 @@ try {
   }
   if (dbReady) logger.info('PostgreSQL ready');
 
-  await fastify.listen({ port: PORT, host: '0.0.0.0' });
+  await bootstrapDatabase();
 
-  // Run automatic migration on startup
-  const fs = await import('fs');
-  const path = await import('path');
-  const { fileURLToPath } = await import('url');
+  // Ensure required bootstrap user data always exists.
+  await ensureBootstrapAdmin();
 
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const schemaPath = path.join(__dirname, 'db', 'schema.sql');
-
-  if (fs.existsSync(schemaPath)) {
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-    const { query } = await import('./db/index.ts');
-    await query(schemaSql);
-
-    // Explicitly verify that the new tables exist
-    const tableCheck = await query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name IN ('user_clients', 'user_projects', 'user_tasks')
-    `);
-
-    const foundTables = tableCheck.rows.map((r) => r.table_name);
-    logger.info({ foundTables }, 'Database schema verified');
-
-    if (!foundTables.includes('user_clients')) {
-      logger.error({ foundTables }, 'Critical schema issue: user_clients table was not created');
-    }
-
-    // Ensure required bootstrap user data always exists.
-    await ensureBootstrapAdmin();
-
-    // Run demo seed.sql only when explicitly enabled.
-    const isDemoSeedingEnabled = parseBooleanEnv(process.env.DEMO_SEEDING);
-    if (isDemoSeedingEnabled) {
-      await runDemoSeedRefresh({ source: 'startup' });
-    } else {
-      logger.info('Demo seeding disabled (set DEMO_SEEDING=true to enable)');
-    }
-
-    // Merge legacy client VAT/tax fields into a canonical fiscal_code field
-    try {
-      const { mergeClientFiscalFields } = await import('./db/merge_client_fiscal_fields.ts');
-      await mergeClientFiscalFields();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'merge_client_fiscal_fields' },
-        'Migration failed',
-      );
-    }
-
-    // Run data migration for default clients
-    try {
-      const { migrate: updateClients } = await import('./db/update_default_clients.ts');
-      await updateClients();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'update_default_clients' },
-        'Migration failed',
-      );
-    }
-
-    // Run settings language migration
-    try {
-      const { migrate: addLanguageToSettings } = await import('./db/add_language_to_settings.ts');
-      await addLanguageToSettings();
-      // Run update language constraint migration
-      const { migrate: updateLanguageConstraint } = await import(
-        './db/update_language_constraint.ts'
-      );
-      await updateLanguageConstraint();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'settings_language' },
-        'Migration failed',
-      );
-    }
-
-    // Run migration to remove payment_terms from clients
-    try {
-      const { up: removePaymentTerms } = await import('./db/remove_payment_terms_from_clients.ts');
-      await removePaymentTerms();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'remove_payment_terms_from_clients' },
-        'Migration failed',
-      );
-    }
-
-    // Run sale status migration
-    try {
-      const { migrate: migrateSaleStatus } = await import('./db/migrate_sale_status.ts');
-      await migrateSaleStatus();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'migrate_sale_status' },
-        'Migration failed',
-      );
-    }
-
-    // Run products structure update migration
-    try {
-      const { migrate: updateProductsStructure } = await import(
-        './db/update_products_structure.ts'
-      );
-      await updateProductsStructure();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'update_products_structure' },
-        'Migration failed',
-      );
-    }
-
-    // Run migration to assign all items to manager users
-    if (!isDemoSeedingEnabled) {
-      try {
-        const { migrate: assignItemsToManagers } = await import('./db/assign_items_to_managers.ts');
-        await assignItemsToManagers();
-      } catch (err) {
-        logger.error(
-          { err: serializeError(err), migration: 'assign_items_to_managers' },
-          'Migration failed',
-        );
-      }
-    }
-
-    // Run migration to update currency precision
-    try {
-      const { migrate: updateCurrencyPrecision } = await import(
-        './db/update_currency_precision.ts'
-      );
-      await updateCurrencyPrecision();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'update_currency_precision' },
-        'Migration failed',
-      );
-    }
-
-    // Run migration to enforce unique downstream link indexes
-    try {
-      const { migrate: addUniqueDownstreamLinks } = await import(
-        './db/add_unique_downstream_links.ts'
-      );
-      await addUniqueDownstreamLinks();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'add_unique_downstream_links' },
-        'Migration failed',
-      );
-    }
-
-    // Run migration to add unique constraint to client_code
-    try {
-      const { addUniqueClientCode } = await import('./db/add_unique_client_code.ts');
-      await addUniqueClientCode();
-    } catch (err) {
-      logger.error(
-        { err: serializeError(err), migration: 'add_unique_client_code' },
-        'Migration failed',
-      );
-    }
+  // Run demo seed.sql only when explicitly enabled.
+  const isDemoSeedingEnabled = parseBooleanEnv(process.env.DEMO_SEEDING);
+  if (isDemoSeedingEnabled) {
+    await runDemoSeedRefresh({ source: 'startup' });
   } else {
-    logger.warn({ schemaPath }, 'Schema file not found');
+    logger.info('Demo seeding disabled (set DEMO_SEEDING=true to enable)');
   }
+
+  await fastify.listen({ port: PORT, host: '0.0.0.0' });
 
   logger.info({ port: PORT }, 'Praetor API server running with HTTP/1.1 over HTTP');
 
