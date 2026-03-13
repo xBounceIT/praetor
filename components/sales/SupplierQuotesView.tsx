@@ -100,8 +100,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onViewOrder,
   onViewOffer,
   currency,
-  // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for API compatibility
-  offers = [],
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -542,15 +540,23 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
               {history && (
                 <Tooltip
-                  label={t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })}
+                  label={
+                    hasOffer
+                      ? t('sales:supplierQuotes.offerAlreadyExists', {
+                          defaultValue: 'An offer for this quote already exists.',
+                        })
+                      : t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })
+                  }
                 >
                   {() => (
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
+                        if (hasOffer) return;
                         onUpdateQuote(row.id, { status: 'draft' });
                       }}
-                      className="p-2 rounded-lg transition-all text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                      disabled={hasOffer}
+                      className={`p-2 rounded-lg transition-all ${hasOffer ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
                     >
                       <i className="fa-solid fa-rotate-left"></i>
                     </button>
