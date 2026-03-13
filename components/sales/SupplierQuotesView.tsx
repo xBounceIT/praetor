@@ -348,6 +348,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         accessorKey: 'expirationDate',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
+        filterFormat: (value) => (value ? formatDateOnlyForLocale(String(value)) : '—'),
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
@@ -362,6 +363,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         accessorKey: 'status',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
+        filterFormat: (value) => getStatusLabel(String(value)),
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
