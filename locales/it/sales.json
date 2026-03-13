@@ -227,6 +227,7 @@
     "createOffer": "Crea offerta",
     "linkedOffer": "Collegato all'offerta",
     "offerAlreadyExists": "Esiste già un'offerta per questo preventivo.",
+    "restoreQuote": "Ripristina preventivo",
     "errors": {
       "supplierRequired": "Il fornitore è obbligatorio",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",

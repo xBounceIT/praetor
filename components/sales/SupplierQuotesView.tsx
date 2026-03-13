@@ -8,7 +8,11 @@ import type {
   SupplierQuote,
   SupplierQuoteItem,
 } from '../../types';
-import { getLocalDateString, normalizeDateOnlyString } from '../../utils/date';
+import {
+  formatDateOnlyForLocale,
+  getLocalDateString,
+  normalizeDateOnlyString,
+} from '../../utils/date';
 import { roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -264,6 +268,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     }));
   }, [editingQuote?.id, isReadOnly]);
 
+  const removeItem = useCallback(
+    (index: number) => {
+      if (isReadOnly) return;
+      setFormData((prev) => {
+        const items = [...(prev.items || [])];
+        items.splice(index, 1);
+        return { ...prev, items };
+      });
+    },
+    [isReadOnly],
+  );
+
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
@@ -281,7 +297,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
         accessorKey: 'supplierName',
-        cell: ({ row }) => <div className="font-bold text-slate-800">{row.supplierName}</div>,
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+              {row.supplierName}
+            </div>
+          );
+        },
       },
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
@@ -299,6 +322,38 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             >
               {total.toFixed(2)} {currency}
             </span>
+          );
+        },
+      },
+      {
+        header: t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' }),
+        accessorKey: 'paymentTerms',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
+            >
+              {row.paymentTerms === 'immediate'
+                ? t('sales:clientQuotes.immediatePayment')
+                : row.paymentTerms}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:supplierQuotes.expirationDate', { defaultValue: 'Expiration Date' }),
+        accessorKey: 'expirationDate',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div className={`text-sm ${history ? 'text-slate-400' : 'text-slate-600'}`}>
+              {row.expirationDate ? formatDateOnlyForLocale(row.expirationDate) : '—'}
+            </div>
           );
         },
       },
@@ -483,6 +538,23 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
+              {history && (
+                <Tooltip
+                  label={t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })}
+                >
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onUpdateQuote(row.id, { status: 'draft' });
+                      }}
+                      className="p-2 rounded-lg transition-all text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                    >
+                      <i className="fa-solid fa-rotate-left"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
             </div>
           );
         },
@@ -551,7 +623,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -771,7 +843,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="px-3 mb-1">
+                <div className="hidden md:block px-3 mb-1">
                   <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
@@ -804,72 +876,84 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2"
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
                       >
-                        <div className="grid grid-cols-12 gap-3 items-center">
-                          <div className="col-span-12 md:col-span-4">
-                            <CustomSelect
-                              options={activeProducts.map((product) => ({
-                                id: product.id,
-                                name: product.name,
-                              }))}
-                              value={item.productId}
-                              onChange={(value) => updateItem(index, 'productId', value as string)}
-                              placeholder={t('sales:supplierQuotes.selectProduct', {
-                                defaultValue: 'Select product',
-                              })}
-                              searchable={true}
-                              disabled={isReadOnly}
-                              buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                            />
+                        <div className="flex gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-12 md:col-span-4">
+                              <CustomSelect
+                                options={activeProducts.map((product) => ({
+                                  id: product.id,
+                                  name: product.name,
+                                }))}
+                                value={item.productId}
+                                onChange={(value) =>
+                                  updateItem(index, 'productId', value as string)
+                                }
+                                placeholder={t('sales:supplierQuotes.selectProduct', {
+                                  defaultValue: 'Select product',
+                                })}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-6 md:col-span-2">
+                              <ValidatedNumberInput
+                                value={item.quantity}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                }
+                                disabled={isReadOnly}
+                                className={`${itemInputClassName} text-center`}
+                              />
+                            </div>
+                            <div className="col-span-6 md:col-span-2">
+                              <ValidatedNumberInput
+                                value={item.unitPrice}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                }
+                                disabled={isReadOnly}
+                                className={`${itemInputClassName} text-center`}
+                              />
+                            </div>
+                            <div className="col-span-4 md:col-span-1">
+                              <ValidatedNumberInput
+                                value={item.discount || 0}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                }
+                                disabled={isReadOnly}
+                                className={`${itemInputClassName} text-center`}
+                              />
+                            </div>
+                            <div className="col-span-4 md:col-span-2 flex items-center justify-center">
+                              <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
+                                {lineTotal.toFixed(2)} {currency}
+                              </span>
+                            </div>
                           </div>
-                          <div className="col-span-6 md:col-span-2">
-                            <ValidatedNumberInput
-                              value={item.quantity}
-                              onValueChange={(value) =>
-                                updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                              }
-                              disabled={isReadOnly}
-                              className={`${itemInputClassName} text-center`}
-                            />
-                          </div>
-                          <div className="col-span-6 md:col-span-2">
-                            <ValidatedNumberInput
-                              value={item.unitPrice}
-                              onValueChange={(value) =>
-                                updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                              }
-                              disabled={isReadOnly}
-                              className={`${itemInputClassName} text-center`}
-                            />
-                          </div>
-                          <div className="col-span-4 md:col-span-1">
-                            <ValidatedNumberInput
-                              value={item.discount || 0}
-                              onValueChange={(value) =>
-                                updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                              }
-                              disabled={isReadOnly}
-                              className={`${itemInputClassName} text-center`}
-                            />
-                          </div>
-                          <div className="col-span-4 md:col-span-2 flex items-center justify-center">
-                            <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
-                              {lineTotal.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                          <div className="col-span-4 md:col-span-1">
-                            <input
-                              type="text"
-                              value={item.note || ''}
-                              disabled={isReadOnly}
-                              onChange={(event) => updateItem(index, 'note', event.target.value)}
-                              placeholder={t('form:placeholderNotes', {
-                                defaultValue: 'Notes',
-                              })}
-                              className={`${itemInputClassName} text-center`}
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            disabled={isReadOnly}
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            value={item.note || ''}
+                            disabled={isReadOnly}
+                            onChange={(event) => updateItem(index, 'note', event.target.value)}
+                            placeholder={t('form:placeholderNotes', {
+                              defaultValue: 'Notes',
+                            })}
+                            className={itemInputClassName}
+                          />
                         </div>
                       </div>
                     );
@@ -1045,7 +1129,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
-        onRowClick={openEditModal}
+        onRowClick={(row) => {
+          const canOpenModal =
+            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
+          if (canOpenModal) {
+            openEditModal(row);
+          }
+        }}
+        rowClassName={(row) => {
+          const history = isHistoryRow(row);
+          const canOpenModal =
+            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
+          const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
+          return history
+            ? `bg-slate-50 text-slate-400 hover:bg-slate-100 ${cursorClass}`
+            : `hover:bg-slate-50/50 ${cursorClass}`;
+        }}
       />
     </div>
   );
