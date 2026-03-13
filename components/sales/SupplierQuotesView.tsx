@@ -843,8 +843,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden md:block px-3 mb-1">
-                  <div className="grid grid-cols-12 gap-3">
+                <div className="hidden md:flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
                     <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                     </div>
@@ -860,10 +860,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
-                    </div>
                   </div>
+                  <div className="w-10 shrink-0" />
                 </div>
               )}
 
@@ -899,14 +897,24 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               />
                             </div>
                             <div className="col-span-6 md:col-span-2">
-                              <ValidatedNumberInput
-                                value={item.quantity}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                                }
-                                disabled={isReadOnly}
-                                className={`${itemInputClassName} text-center`}
-                              />
+                              <div className="flex items-center gap-1.5">
+                                <ValidatedNumberInput
+                                  value={item.quantity}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                  }
+                                  disabled={isReadOnly}
+                                  className={`${itemInputClassName} text-center flex-1`}
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+                                  {`/ ${
+                                    products.find((p) => p.id === item.productId)?.costUnit ===
+                                    'hours'
+                                      ? t('crm:internalListing.hour')
+                                      : t('crm:internalListing.unit')
+                                  }`}
+                                </span>
+                              </div>
                             </div>
                             <div className="col-span-6 md:col-span-2">
                               <ValidatedNumberInput
