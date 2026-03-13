@@ -52,6 +52,7 @@ export interface SupplierOffersViewProps {
   onViewQuote?: (quoteId: string) => void;
   currency: string;
   quoteFilterId?: string | null;
+  offerFilterId?: string | null;
 }
 
 const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
@@ -64,6 +65,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   onViewQuote,
   currency,
   quoteFilterId,
+  offerFilterId,
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -95,7 +97,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<SupplierOffer>>({
-    offerCode: '',
+    id: '',
     linkedQuoteId: '',
     linkedOrderId: undefined,
     supplierId: '',
@@ -112,9 +114,19 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
   const isSupplierLocked = Boolean(editingOffer?.linkedQuoteId);
 
   const filteredOffers = useMemo(() => {
-    if (!quoteFilterId) return offers;
-    return offers.filter((o) => o.linkedQuoteId === quoteFilterId);
-  }, [offers, quoteFilterId]);
+    return offers;
+  }, [offers]);
+
+  const tableInitialFilterState = useMemo(() => {
+    const filters: Record<string, string[]> = {};
+    if (offerFilterId) {
+      filters.id = [offerFilterId];
+    }
+    if (quoteFilterId) {
+      filters.linkedQuoteId = [quoteFilterId];
+    }
+    return Object.keys(filters).length > 0 ? filters : undefined;
+  }, [offerFilterId, quoteFilterId]);
   const totalAmount = calculateTotals(formData.items || [], Number(formData.discount || 0)).total;
 
   const inputClassName =
@@ -180,10 +192,10 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
     () => [
       {
         header: t('sales:supplierOffers.offerCode', { defaultValue: 'Offer Code' }),
-        accessorKey: 'offerCode',
+        accessorKey: 'id',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-slate-700">{row.offerCode}</span>,
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
       },
       {
         header: t('sales:supplierOffers.supplier', { defaultValue: 'Supplier' }),
@@ -213,6 +225,11 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         ),
       },
       {
+        header: 'linkedQuoteId',
+        accessorKey: 'linkedQuoteId',
+        hidden: true,
+      },
+      {
         header: t('sales:supplierOffers.actionsColumn', { defaultValue: 'Actions' }),
         id: 'actions',
         align: 'right',
@@ -222,7 +239,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         disableFiltering: true,
         cell: ({ row }) => (
           <div className="flex justify-end gap-2">
-            {onViewQuote && (
+            {row.linkedQuoteId && onViewQuote && (
               <Tooltip label={t('sales:supplierOffers.viewQuote', { defaultValue: 'View quote' })}>
                 {() => (
                   <button
@@ -359,8 +376,8 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
         defaultValue: 'Supplier is required',
       });
     }
-    if (!formData.offerCode?.trim()) {
-      nextErrors.offerCode = t('sales:supplierOffers.offerCodeRequired', {
+    if (!formData.id?.trim()) {
+      nextErrors.id = t('sales:supplierOffers.offerCodeRequired', {
         defaultValue: 'Offer Code is required',
       });
     }
@@ -416,7 +433,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                 <span>
                   {t('sales:supplierOffers.sourceQuote', {
                     defaultValue: 'Source quote: {{quoteId}}',
-                    quoteId: editingOffer.linkedQuoteCode || editingOffer.linkedQuoteId,
+                    quoteId: editingOffer.linkedQuoteId,
                   })}
                 </span>
                 {onViewQuote && (
@@ -478,15 +495,22 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.offerCode || ''}
+                    value={formData.id || ''}
                     disabled={isReadOnly}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, offerCode: event.target.value }))
-                    }
-                    className={`${inputClassName} ${errors.offerCode ? 'border-red-300' : ''}`}
+                    onChange={(event) => {
+                      setFormData((prev) => ({ ...prev, id: event.target.value }));
+                      if (errors.id) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.id;
+                          return next;
+                        });
+                      }
+                    }}
+                    className={`${inputClassName} ${errors.id ? 'border-red-300' : ''}`}
                   />
-                  {errors.offerCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.offerCode}</p>
+                  {errors.id && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
               </div>
@@ -736,9 +760,7 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
               <h3 className="text-lg font-black text-slate-800">
                 {t('sales:supplierOffers.deleteTitle', { defaultValue: 'Delete supplier offer?' })}
               </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                {offerToDelete?.offerCode}
-              </p>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">{offerToDelete?.id}</p>
             </div>
             <div className="flex gap-3 pt-2">
               <button
@@ -779,16 +801,11 @@ const SupplierOffersView: React.FC<SupplierOffersViewProps> = ({
       </div>
 
       <StandardTable<SupplierOffer>
-        title={
-          quoteFilterId
-            ? t('sales:supplierOffers.activeOffersFiltered', {
-                defaultValue: 'Active Offers for Quote',
-              })
-            : t('sales:supplierOffers.activeOffers', { defaultValue: 'Suppliers Offers' })
-        }
+        title={t('sales:supplierOffers.activeOffers', { defaultValue: 'Active Offers' })}
         data={filteredOffers}
         columns={columns}
         defaultRowsPerPage={5}
+        initialFilterState={tableInitialFilterState}
       />
     </div>
   );

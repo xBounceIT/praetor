@@ -76,7 +76,6 @@ const clientOrderSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    orderNumber: { type: ['string', 'null'] },
     linkedQuoteId: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
@@ -124,6 +123,7 @@ const clientOrderItemBodySchema = {
 const clientOrderCreateBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
@@ -140,6 +140,7 @@ const clientOrderCreateBodySchema = {
 const clientOrderUpdateBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -195,12 +196,12 @@ const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
   discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
 });
 
-const generateClientOrderNumber = async () => {
+const generateClientOrderId = async () => {
   const year = new Date().getFullYear();
   const result = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(order_number, '-', 3) AS INTEGER)), 0) as "maxSequence"
+    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
      FROM sales
-     WHERE order_number ~ $1`,
+     WHERE id ~ $1`,
     [`^ORD-${year}-[0-9]+$`],
   );
   const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
@@ -209,7 +210,6 @@ const generateClientOrderNumber = async () => {
 
 const normalizeClientOrderRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
-  orderNumber: toNullableString(row.orderNumber),
   linkedQuoteId: toNullableString(row.linkedQuoteId),
   linkedOfferId: toNullableString(row.linkedOfferId),
   clientId: String(row.clientId),
@@ -249,7 +249,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const clients_ordersResult = await query(
         `SELECT
                 id,
-                order_number as "orderNumber",
                 linked_quote_id as "linkedQuoteId",
                 linked_offer_id as "linkedOfferId",
                 client_id as "clientId",
@@ -328,6 +327,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
+        id: nextId,
         linkedQuoteId,
         linkedOfferId,
         clientId,
@@ -338,6 +338,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status,
         notes,
       } = request.body as {
+        id?: unknown;
         linkedQuoteId: unknown;
         linkedOfferId: unknown;
         clientId: unknown;
@@ -359,6 +360,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
       const linkedQuoteIdResult = optionalNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -443,17 +446,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         linkedQuoteIdValue = offerResult.rows[0].linkedQuoteId || null;
       }
 
-      const orderId = 's-' + Date.now();
-      const orderNumber = await generateClientOrderNumber();
+      const orderId = nextIdResult.value || (await generateClientOrderId());
 
       let orderResult: Awaited<ReturnType<typeof query>>;
       try {
         orderResult = await query(
-          `INSERT INTO sales (id, order_number, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          `INSERT INTO sales (id, linked_quote_id, linked_offer_id, client_id, client_name, payment_terms, discount, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                RETURNING
                   id,
-                  order_number as "orderNumber",
                   linked_quote_id as "linkedQuoteId",
                   linked_offer_id as "linkedOfferId",
                   client_id as "clientId",
@@ -466,7 +467,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
             orderId,
-            orderNumber,
             linkedQuoteIdValue,
             linkedOfferIdResult.value || null,
             clientIdResult.value,
@@ -479,6 +479,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (error) {
         const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'sales_pkey' || databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Order ID already exists' });
+        }
         if (
           databaseError.code === '23505' &&
           (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
@@ -558,19 +564,45 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { linkedOfferId, clientId, clientName, items, paymentTerms, discount, status, notes } =
-        request.body as {
-          linkedOfferId: unknown;
-          clientId: unknown;
-          clientName: unknown;
-          items: unknown;
-          paymentTerms: unknown;
-          discount: unknown;
-          status: unknown;
-          notes: unknown;
-        };
+      const {
+        id: nextId,
+        linkedOfferId,
+        clientId,
+        clientName,
+        items,
+        paymentTerms,
+        discount,
+        status,
+        notes,
+      } = request.body as {
+        id?: unknown;
+        linkedOfferId: unknown;
+        clientId: unknown;
+        clientName: unknown;
+        items: unknown;
+        paymentTerms: unknown;
+        discount: unknown;
+        status: unknown;
+        notes: unknown;
+      };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      let nextIdValue = nextId;
+      if (nextId !== undefined) {
+        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
+        if (nextIdResult.value) {
+          const existingIdResult = await query('SELECT id FROM sales WHERE id = $1 AND id <> $2', [
+            nextIdResult.value,
+            idResult.value,
+          ]);
+          if (existingIdResult.rows.length > 0) {
+            return reply.code(409).send({ error: 'Order ID already exists' });
+          }
+        }
+      }
 
       let clientIdValue = clientId;
       if (clientId !== undefined) {
@@ -746,17 +778,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Check if order is read-only (non-draft status)
       // Status changes are always allowed, but other field changes are blocked for non-draft clients_orders
-      const isStatusChangeOnly =
-        status !== undefined &&
-        linkedOfferId === undefined &&
-        clientIdValue === undefined &&
-        clientNameValue === undefined &&
-        paymentTerms === undefined &&
-        discountValue === undefined &&
-        notes === undefined &&
-        items === undefined;
+      const hasLockedFieldUpdates =
+        linkedOfferId !== undefined ||
+        clientIdValue !== undefined ||
+        clientNameValue !== undefined ||
+        paymentTerms !== undefined ||
+        discountValue !== undefined ||
+        notes !== undefined ||
+        items !== undefined;
 
-      if (existingOrder.status !== 'draft' && !isStatusChangeOnly) {
+      if (existingOrder.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({
           error: 'Non-draft clients_orders are read-only',
           currentStatus: existingOrder.status,
@@ -896,19 +927,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         orderResult = await query(
           `UPDATE sales
-               SET linked_offer_id = COALESCE($1, linked_offer_id),
-                   linked_quote_id = COALESCE($2, linked_quote_id),
-                   client_id = COALESCE($3, client_id),
-                   client_name = COALESCE($4, client_name),
-                   payment_terms = COALESCE($5, payment_terms),
-                   discount = COALESCE($6, discount),
-                   status = COALESCE($7, status),
-                   notes = COALESCE($8, notes),
+               SET id = COALESCE($1, id),
+                   linked_offer_id = COALESCE($2, linked_offer_id),
+                   linked_quote_id = COALESCE($3, linked_quote_id),
+                   client_id = COALESCE($4, client_id),
+                   client_name = COALESCE($5, client_name),
+                   payment_terms = COALESCE($6, payment_terms),
+                   discount = COALESCE($7, discount),
+                   status = COALESCE($8, status),
+                   notes = COALESCE($9, notes),
                    updated_at = CURRENT_TIMESTAMP
-               WHERE id = $9
+               WHERE id = $10
                RETURNING
                   id,
-                  order_number as "orderNumber",
                   linked_quote_id as "linkedQuoteId",
                   linked_offer_id as "linkedOfferId",
                   client_id as "clientId",
@@ -920,6 +951,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                   EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
+            nextIdValue,
             linkedOfferIdValue,
             linkedQuoteIdValue,
             clientIdValue,
@@ -935,6 +967,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const databaseError = error as DatabaseError;
         if (
           databaseError.code === '23505' &&
+          (databaseError.constraint === 'sales_pkey' || databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Order ID already exists' });
+        }
+        if (
+          databaseError.code === '23505' &&
           (databaseError.constraint === 'idx_sales_linked_offer_id_unique' ||
             databaseError.detail?.includes('(linked_offer_id)'))
         ) {
@@ -946,6 +984,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (orderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
       }
+
+      const updatedOrderId = String(orderResult.rows[0].id);
 
       // If items are provided, update them
       let updatedItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
@@ -973,7 +1013,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         note
                     FROM sale_items
                     WHERE sale_id = $1`,
-            [idResult.value],
+            [updatedOrderId],
           );
           updatedItems = itemsResult.rows.map((item) =>
             normalizeClientOrderItemRow(item as Record<string, unknown>),
@@ -982,7 +1022,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } else if (items !== undefined) {
         if (!normalizedItems) return;
         // Delete existing items
-        await query('DELETE FROM sale_items WHERE sale_id = $1', [idResult.value]);
+        await query('DELETE FROM sale_items WHERE sale_id = $1', [updatedOrderId]);
 
         // Insert new items
         for (const item of normalizedItems) {
@@ -1007,7 +1047,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         note`,
             [
               itemId,
-              idResult.value,
+              updatedOrderId,
               item.productId,
               item.productName,
               item.specialBidId || null,
@@ -1046,7 +1086,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     note
                 FROM sale_items
                 WHERE sale_id = $1`,
-          [idResult.value],
+          [updatedOrderId],
         );
         updatedItems = itemsResult.rows.map((item) =>
           normalizeClientOrderItemRow(item as Record<string, unknown>),
@@ -1061,7 +1101,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          FROM sale_items si
          LEFT JOIN products p ON si.product_id = p.id
          WHERE si.sale_id = $1`,
-          [idResult.value],
+          [updatedOrderId],
         );
 
         // Get the client code for project naming
@@ -1134,7 +1174,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               `New projects created from order confirmation`,
               JSON.stringify({
                 projectNames,
-                orderId: idResult.value,
+                orderId: updatedOrderId,
                 clientName: orderResult.rows[0].clientName,
               }),
             ],

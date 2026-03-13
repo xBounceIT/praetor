@@ -39,9 +39,9 @@ export interface ClientsOrdersViewProps {
   specialBids: SpecialBid[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => void;
   onDeleteClientsOrder: (id: string) => void;
-  onViewQuote?: (quoteId: string) => void;
+  onViewOffer?: (offerId: string) => void;
   currency: string;
-  quoteFilterId?: string | null;
+  offerFilterId?: string | null;
 }
 
 const calcProductSalePrice = (costo: number, molPercentage: number) => {
@@ -63,9 +63,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   specialBids,
   onUpdateClientsOrder,
   onDeleteClientsOrder,
-  onViewQuote,
+  onViewOffer,
   currency,
-  quoteFilterId,
+  offerFilterId,
 }) => {
   const { t } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,7 +89,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setEditingOrder(order);
     setFormData({
       linkedQuoteId: order.linkedQuoteId,
-      linkedQuoteCode: order.linkedQuoteCode,
+      linkedOfferId: order.linkedOfferId,
       clientId: order.clientId,
       clientName: order.clientName,
       items: order.items,
@@ -389,26 +389,26 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
   };
 
-  const isLinkedQuote = Boolean(formData.linkedQuoteId);
-  const isReadOnly = Boolean(isLinkedQuote || (editingOrder && editingOrder.status !== 'draft'));
+  const isLinkedOffer = Boolean(formData.linkedOfferId);
+  const isReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
 
-  // Filter orders by quoteFilterId if provided
+  // Filter orders by offerFilterId if provided
   const filteredOrders = useMemo(() => {
-    if (quoteFilterId) {
-      return orders.filter((o) => o.linkedQuoteId === quoteFilterId);
+    if (offerFilterId) {
+      return orders.filter((o) => o.linkedOfferId === offerFilterId);
     }
     return orders;
-  }, [orders, quoteFilterId]);
+  }, [orders, offerFilterId]);
 
   // Table columns definition with TableFilter support
   const columns = useMemo(
     () => [
       {
         header: t('accounting:clientsOrders.orderNumber', { defaultValue: 'Order Number' }),
-        id: 'orderNumber',
-        accessorFn: (row: ClientsOrder) => row.orderNumber || row.id,
+        id: 'id',
+        accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <span className="font-bold text-slate-700">{row.orderNumber || row.id}</span>
+          <span className="font-bold text-slate-700">{row.id}</span>
         ),
       },
       {
@@ -489,21 +489,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         align: 'right' as const,
         cell: ({ row }: { row: ClientsOrder }) => (
           <div className="flex justify-end gap-2">
-            {onViewQuote && row.linkedQuoteId && (
-              <Tooltip label={t('sales:clientQuotes.viewQuote')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const linkedQuoteId = row.linkedQuoteId;
-                      if (!linkedQuoteId) return;
-                      onViewQuote(linkedQuoteId);
-                    }}
-                    className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-link"></i>
-                  </button>
-                )}
+            {onViewOffer && row.linkedOfferId && (
+              <Tooltip label={t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}>
+                {() => {
+                  const linkedOfferId = row.linkedOfferId;
+                  if (!linkedOfferId) return null;
+                  return (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewOffer(linkedOfferId);
+                      }}
+                      className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-link"></i>
+                    </button>
+                  );
+                }}
               </Tooltip>
             )}
             <Tooltip
@@ -604,7 +606,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    [currency, onUpdateClientsOrder, onViewQuote, t, calculateTotals, confirmDelete, openEditModal],
+    [currency, onUpdateClientsOrder, onViewOffer, t, calculateTotals, confirmDelete, openEditModal],
   );
 
   return (
@@ -637,8 +639,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 </span>
               </div>
             )}
-            {/* Linked Quote Info */}
-            {formData.linkedQuoteId && (
+            {/* Linked Offer Info */}
+            {formData.linkedOfferId && (
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
@@ -646,29 +648,28 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   </div>
                   <div>
                     <div className="text-sm font-bold text-slate-900">
-                      {t('accounting:clientsOrders.linkedQuote')}
+                      {t('accounting:clientsOrders.linkedOffer', { defaultValue: 'Linked Offer' })}
                     </div>
                     <div className="text-xs text-praetor">
-                      {t('accounting:clientsOrders.linkedQuoteInfo', {
-                        number: formData.linkedQuoteCode || formData.linkedQuoteId,
+                      {t('accounting:clientsOrders.linkedOfferInfo', {
+                        number: formData.linkedOfferId,
+                        defaultValue: 'Offer #{{number}}',
                       })}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
-                      {t('accounting:clientsOrders.quoteDetailsReadOnly')}
+                      {t('accounting:clientsOrders.offerDetailsReadOnly', {
+                        defaultValue: '(Order details are read-only)',
+                      })}
                     </div>
                   </div>
                 </div>
-                {onViewQuote && (
+                {onViewOffer && formData.linkedOfferId && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const linkedQuoteId = formData.linkedQuoteId;
-                      if (!linkedQuoteId) return;
-                      onViewQuote(linkedQuoteId);
-                    }}
+                    onClick={() => onViewOffer(formData.linkedOfferId as string)}
                     className="text-xs font-bold text-praetor hover:text-slate-800 hover:underline"
                   >
-                    {t('sales:clientQuotes.viewQuote')}
+                    {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
                   </button>
                 )}
               </div>
@@ -734,7 +735,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       {t('sales:clientQuotes.globalDiscount')}
                     </label>
                     <div
-                      className={`flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all focus-within:ring-2 focus-within:ring-praetor ${isLinkedQuote ? 'opacity-50' : ''}`}
+                      className={`flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all focus-within:ring-2 focus-within:ring-praetor ${isLinkedOffer ? 'opacity-50' : ''}`}
                     >
                       <div className="flex w-12 self-stretch items-center justify-center border-r border-slate-200 bg-slate-100/30 text-xs font-bold text-slate-400">
                         %

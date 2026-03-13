@@ -15,6 +15,12 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
 type IncomingQuoteItem = {
   id?: string;
   productId: string;
@@ -277,7 +283,6 @@ const quoteSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    quoteCode: { type: 'string' },
     linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -293,7 +298,6 @@ const quoteSchema = {
   },
   required: [
     'id',
-    'quoteCode',
     'clientId',
     'clientName',
     'discount',
@@ -328,7 +332,7 @@ const quoteItemBodySchema = {
 const quoteCreateBodySchema = {
   type: 'object',
   properties: {
-    quoteCode: { type: 'string' },
+    id: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
@@ -338,13 +342,13 @@ const quoteCreateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
-  required: ['quoteCode', 'clientId', 'clientName', 'items', 'expirationDate'],
+  required: ['id', 'clientId', 'clientName', 'items', 'expirationDate'],
 } as const;
 
 const quoteUpdateBodySchema = {
   type: 'object',
   properties: {
-    quoteCode: { type: 'string' },
+    id: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
@@ -403,7 +407,6 @@ const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
 
 const normalizeQuoteRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
-  quoteCode: String(row.quoteCode),
   linkedOfferId: toNullableString(row.linkedOfferId),
   clientId: String(row.clientId),
   clientName: String(row.clientName),
@@ -448,7 +451,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const quotesResult = await query(
         `SELECT
                 id,
-                quote_code as "quoteCode",
                 (
                   SELECT co.id
                   FROM customer_offers co
@@ -535,7 +537,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
-        quoteCode,
+        id: nextId,
         clientId,
         clientName,
         items,
@@ -545,7 +547,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        quoteCode: unknown;
+        id: unknown;
         clientId: unknown;
         clientName: unknown;
         items: unknown;
@@ -556,13 +558,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const quoteCodeResult = requireNonEmptyString(quoteCode, 'quoteCode');
-      if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
-      const existingQuoteCode = await query('SELECT id FROM quotes WHERE quote_code = $1', [
-        quoteCodeResult.value,
+      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+      const existingQuote = await query('SELECT id FROM quotes WHERE id = $1', [
+        nextIdResult.value,
       ]);
-      if (existingQuoteCode.rows.length > 0) {
-        return reply.code(409).send({ error: 'Quote code already exists' });
+      if (existingQuote.rows.length > 0) {
+        return reply.code(409).send({ error: 'Quote ID already exists' });
       }
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
@@ -629,15 +631,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const quoteId = 'q-' + Date.now();
-
-        // Insert quote
         const quoteResult = await query(
-          `INSERT INTO quotes (id, quote_code, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO quotes (id, client_id, client_name, payment_terms, discount, status, expiration_date, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  RETURNING
                     id,
-                    quote_code as "quoteCode",
                     null::varchar as "linkedOfferId",
                     client_id as "clientId",
                     client_name as "clientName",
@@ -649,8 +647,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                     EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
-            quoteId,
-            quoteCodeResult.value,
+            nextIdResult.value,
             clientIdResult.value,
             clientNameResult.value,
             paymentTerms || 'immediate',
@@ -685,7 +682,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         note`,
             [
               itemId,
-              quoteId,
+              nextIdResult.value,
               item.productId,
               item.productName,
               item.specialBidId || null,
@@ -711,6 +708,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isExpired: isQuoteExpired(normalizedQuote.status, normalizedQuote.expirationDate),
         });
       } catch (err) {
+        const databaseError = err as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'quotes_pkey' || databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Quote ID already exists' });
+        }
         console.error('CRITICAL ERROR creating quote:', err);
         // Return the specific error message to the frontend for debugging
         return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
@@ -737,7 +741,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
-        quoteCode,
+        id: nextId,
         clientId,
         clientName,
         items,
@@ -748,7 +752,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
         isExpired: isExpiredOverride,
       } = request.body as {
-        quoteCode: unknown;
+        id: unknown;
         clientId: unknown;
         clientName: unknown;
         items: unknown;
@@ -762,11 +766,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      const isIdOnlyUpdate =
+        nextId !== undefined &&
+        clientId === undefined &&
+        clientName === undefined &&
+        items === undefined &&
+        paymentTerms === undefined &&
+        discount === undefined &&
+        status === undefined &&
+        expirationDate === undefined &&
+        notes === undefined &&
+        isExpiredOverride === undefined;
+
       const linkedOfferResult = await query(
         'SELECT id FROM customer_offers WHERE linked_quote_id = $1 LIMIT 1',
         [idResult.value],
       );
-      if (linkedOfferResult.rows.length > 0) {
+      if (linkedOfferResult.rows.length > 0 && !isIdOnlyUpdate) {
         return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
       }
 
@@ -779,7 +795,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentStatus = currentStatusResult.rows[0].status;
       const existingDiscountRaw = parseFloat(currentStatusResult.rows[0].discount || 0);
       const existingDiscount = Number.isFinite(existingDiscountRaw) ? existingDiscountRaw : 0;
-      const hasNonStatusUpdates =
+      const hasNonStatusOrIdUpdates =
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -787,23 +803,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined ||
-        quoteCode !== undefined;
-      if (currentStatus === 'confirmed' && hasNonStatusUpdates) {
+        isExpiredOverride !== undefined;
+      if (currentStatus === 'confirmed' && hasNonStatusOrIdUpdates) {
         return reply.code(409).send({ error: 'Confirmed quotes are read-only' });
       }
 
-      let quoteCodeValue: string | undefined;
-      if (quoteCode !== undefined) {
-        const quoteCodeResult = requireNonEmptyString(quoteCode, 'quoteCode');
-        if (!quoteCodeResult.ok) return badRequest(reply, quoteCodeResult.message);
-        quoteCodeValue = quoteCodeResult.value;
+      let nextIdValue: string | undefined;
+      if (nextId !== undefined) {
+        const nextIdResult = requireNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
 
-        const existingQuoteCode = await query(
-          'SELECT id FROM quotes WHERE quote_code = $1 AND id <> $2',
-          [quoteCodeValue, idResult.value],
-        );
-        if (existingQuoteCode.rows.length > 0) {
-          return reply.code(409).send({ error: 'Quote code already exists' });
+        const existingQuote = await query('SELECT id FROM quotes WHERE id = $1 AND id <> $2', [
+          nextIdValue,
+          idResult.value,
+        ]);
+        if (existingQuote.rows.length > 0) {
+          return reply.code(409).send({ error: 'Quote ID already exists' });
         }
       }
 
@@ -982,9 +998,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Update quote
-      const quoteResult = await query(
-        `UPDATE quotes
-             SET quote_code = COALESCE($1, quote_code),
+      let quoteResult: Awaited<ReturnType<typeof query>>;
+      try {
+        quoteResult = await query(
+          `UPDATE quotes
+             SET id = COALESCE($1, id),
                  client_id = COALESCE($2, client_id),
                  client_name = COALESCE($3, client_name),
                  payment_terms = COALESCE($4, payment_terms),
@@ -996,7 +1014,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              WHERE id = $9
              RETURNING
                 id,
-                quote_code as "quoteCode",
                 null::varchar as "linkedOfferId",
                 client_id as "clientId",
                 client_name as "clientName",
@@ -1007,28 +1024,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 notes,
                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                 EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          quoteCodeValue,
-          clientIdValue,
-          clientNameValue,
-          paymentTerms,
-          discountValue,
-          status,
-          expirationDateValue,
-          notes,
-          idResult.value,
-        ],
-      );
+          [
+            nextIdValue,
+            clientIdValue,
+            clientNameValue,
+            paymentTerms,
+            discountValue,
+            status,
+            expirationDateValue,
+            notes,
+            idResult.value,
+          ],
+        );
+      } catch (err) {
+        const databaseError = err as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'quotes_pkey' || databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Quote ID already exists' });
+        }
+        throw err;
+      }
 
       if (quoteResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
 
+      const updatedQuoteId = String(quoteResult.rows[0].id);
+
       // If items are provided, update them
       let updatedItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
       if (normalizedItems) {
         // Delete existing items
-        await query('DELETE FROM quote_items WHERE quote_id = $1', [idResult.value]);
+        await query('DELETE FROM quote_items WHERE quote_id = $1', [updatedQuoteId]);
 
         // Insert new items
         for (const item of normalizedItems) {
@@ -1053,7 +1082,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         note`,
             [
               itemId,
-              idResult.value,
+              updatedQuoteId,
               item.productId,
               item.productName,
               item.specialBidId || null,
@@ -1090,7 +1119,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     note
                 FROM quote_items
                 WHERE quote_id = $1`,
-          [idResult.value],
+          [updatedQuoteId],
         );
         updatedItems = itemsResult.rows.map((item) =>
           normalizeQuoteItemRow(item as Record<string, unknown>),

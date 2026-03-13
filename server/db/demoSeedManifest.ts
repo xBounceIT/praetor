@@ -126,85 +126,85 @@ export const DEMO_SPECIAL_BIDS = [
 ] as const;
 
 export const DEMO_QUOTES = [
-  { id: 'dm_cq_01', quoteCode: 'DM-Q-2601' },
-  { id: 'dm_cq_02', quoteCode: 'DM-Q-2602' },
-  { id: 'dm_cq_03', quoteCode: 'DM-Q-2603' },
-  { id: 'dm_cq_04', quoteCode: 'DM-Q-2604' },
-  { id: 'dm_cq_05', quoteCode: 'DM-Q-2605' },
-  { id: 'dm_cq_06', quoteCode: 'DM-Q-2606' },
-  { id: 'dm_cq_07', quoteCode: 'DM-Q-2607' },
-  { id: 'dm_cq_08', quoteCode: 'DM-Q-2608' },
-  { id: 'dm_cq_09', quoteCode: 'DM-Q-2609' },
-  { id: 'dm_cq_10', quoteCode: 'DM-Q-2610' },
+  { id: 'dm_cq_01' },
+  { id: 'dm_cq_02' },
+  { id: 'dm_cq_03' },
+  { id: 'dm_cq_04' },
+  { id: 'dm_cq_05' },
+  { id: 'dm_cq_06' },
+  { id: 'dm_cq_07' },
+  { id: 'dm_cq_08' },
+  { id: 'dm_cq_09' },
+  { id: 'dm_cq_10' },
 ] as const;
 
 export const DEMO_CUSTOMER_OFFERS = [
-  { id: 'dm_co_01', offerCode: 'DM-OFF-2601', linkedQuoteId: 'dm_cq_04' },
-  { id: 'dm_co_02', offerCode: 'DM-OFF-2602', linkedQuoteId: 'dm_cq_05' },
-  { id: 'dm_co_03', offerCode: 'DM-OFF-2603', linkedQuoteId: 'dm_cq_06' },
-  { id: 'dm_co_04', offerCode: 'DM-OFF-2604', linkedQuoteId: 'dm_cq_07' },
-  { id: 'dm_co_05', offerCode: 'DM-OFF-2605', linkedQuoteId: 'dm_cq_08' },
+  { id: 'dm_co_01', linkedQuoteId: 'dm_cq_04' },
+  { id: 'dm_co_02', linkedQuoteId: 'dm_cq_05' },
+  { id: 'dm_co_03', linkedQuoteId: 'dm_cq_06' },
+  { id: 'dm_co_04', linkedQuoteId: 'dm_cq_07' },
+  { id: 'dm_co_05', linkedQuoteId: 'dm_cq_08' },
 ] as const;
 
 export const DEMO_SALES = [
-  { id: 'dm_so_01', orderNumber: 'ORD-2026-0001', linkedOfferId: null },
-  { id: 'dm_so_02', orderNumber: 'ORD-2026-0002', linkedOfferId: 'dm_co_04' },
-  { id: 'dm_so_03', orderNumber: 'ORD-2026-0003', linkedOfferId: null },
-  { id: 'dm_so_04', orderNumber: 'ORD-2026-0004', linkedOfferId: null },
-  { id: 'dm_so_05', orderNumber: 'ORD-2026-0005', linkedOfferId: null },
+  { id: 'dm_so_01', linkedOfferId: null },
+  { id: 'dm_so_02', linkedOfferId: 'dm_co_04' },
+  { id: 'dm_so_03', linkedOfferId: null },
+  { id: 'dm_so_04', linkedOfferId: null },
+  { id: 'dm_so_05', linkedOfferId: null },
 ] as const;
 
 export const DEMO_INVOICES = [
-  { id: 'dm_inv_01', invoiceNumber: 'DM-INV-2601', linkedSaleId: null },
-  { id: 'dm_inv_02', invoiceNumber: 'DM-INV-2602', linkedSaleId: null },
-  { id: 'dm_inv_03', invoiceNumber: 'DM-INV-2603', linkedSaleId: 'dm_so_04' },
-  { id: 'dm_inv_04', invoiceNumber: 'DM-INV-2604', linkedSaleId: null },
-  { id: 'dm_inv_05', invoiceNumber: 'DM-INV-2605', linkedSaleId: null },
+  { id: 'dm_inv_01', linkedSaleId: null },
+  { id: 'dm_inv_02', linkedSaleId: null },
+  { id: 'dm_inv_03', linkedSaleId: 'dm_so_04' },
+  { id: 'dm_inv_04', linkedSaleId: null },
+  { id: 'dm_inv_05', linkedSaleId: null },
 ] as const;
 
 export const DEMO_SUPPLIER_QUOTES = [
-  { id: 'dm_sq_01', quoteCode: 'DM-SQ-2601', purchaseOrderNumber: 'DM-SQ-2601' },
-  { id: 'dm_sq_02', quoteCode: 'DM-SQ-2602', purchaseOrderNumber: 'DM-SQ-2602' },
-  { id: 'dm_sq_03', quoteCode: 'DM-SQ-2603', purchaseOrderNumber: 'DM-SQ-2603' },
-  { id: 'dm_sq_04', quoteCode: 'DM-SQ-2604', purchaseOrderNumber: 'DM-SQ-2604' },
-  { id: 'dm_sq_05', quoteCode: 'DM-SQ-2605', purchaseOrderNumber: 'DM-SQ-2605' },
-  { id: 'dm_sq_06', quoteCode: 'DM-SQ-2606', purchaseOrderNumber: 'DM-SQ-2606' },
-  { id: 'dm_sq_07', quoteCode: 'DM-SQ-2607', purchaseOrderNumber: 'DM-SQ-2607' },
-  { id: 'dm_sq_08', quoteCode: 'DM-SQ-2608', purchaseOrderNumber: 'DM-SQ-2608' },
-  { id: 'dm_sq_09', quoteCode: 'DM-SQ-2609', purchaseOrderNumber: 'DM-SQ-2609' },
-  { id: 'dm_sq_10', quoteCode: 'DM-SQ-2610', purchaseOrderNumber: 'DM-SQ-2610' },
-  { id: 'dm_sq_11', quoteCode: 'DM-SQ-2611', purchaseOrderNumber: 'DM-SQ-2611' },
-  { id: 'dm_sq_12', quoteCode: 'DM-SQ-2612', purchaseOrderNumber: 'DM-SQ-2612' },
-  { id: 'dm_sq_13', quoteCode: 'DM-SQ-2613', purchaseOrderNumber: 'DM-SQ-2613' },
-  { id: 'dm_sq_14', quoteCode: 'DM-SQ-2614', purchaseOrderNumber: 'DM-SQ-2614' },
+  { id: 'dm_sq_01' },
+  { id: 'dm_sq_02' },
+  { id: 'dm_sq_03' },
+  { id: 'dm_sq_04' },
+  { id: 'dm_sq_05' },
+  { id: 'dm_sq_06' },
+  { id: 'dm_sq_07' },
+  { id: 'dm_sq_08' },
+  { id: 'dm_sq_09' },
+  { id: 'dm_sq_10' },
+  { id: 'dm_sq_11' },
+  { id: 'dm_sq_12' },
+  { id: 'dm_sq_13' },
+  { id: 'dm_sq_14' },
 ] as const;
 
 export const DEMO_SUPPLIER_OFFERS = [
-  { id: 'dm_sfo_01', offerCode: 'DM-SOF-2601', linkedQuoteId: 'dm_sq_04' },
-  { id: 'dm_sfo_02', offerCode: 'DM-SOF-2602', linkedQuoteId: 'dm_sq_05' },
-  { id: 'dm_sfo_03', offerCode: 'DM-SOF-2603', linkedQuoteId: 'dm_sq_06' },
-  { id: 'dm_sfo_04', offerCode: 'DM-SOF-2604', linkedQuoteId: 'dm_sq_07' },
-  { id: 'dm_sfo_05', offerCode: 'DM-SOF-2605', linkedQuoteId: 'dm_sq_08' },
-  { id: 'dm_sfo_06', offerCode: 'DM-SOF-2606', linkedQuoteId: 'dm_sq_11' },
-  { id: 'dm_sfo_07', offerCode: 'DM-SOF-2607', linkedQuoteId: 'dm_sq_12' },
-  { id: 'dm_sfo_08', offerCode: 'DM-SOF-2608', linkedQuoteId: 'dm_sq_13' },
-  { id: 'dm_sfo_09', offerCode: 'DM-SOF-2609', linkedQuoteId: 'dm_sq_14' },
+  { id: 'dm_sfo_01', linkedQuoteId: 'dm_sq_04' },
+  { id: 'dm_sfo_02', linkedQuoteId: 'dm_sq_05' },
+  { id: 'dm_sfo_03', linkedQuoteId: 'dm_sq_06' },
+  { id: 'dm_sfo_04', linkedQuoteId: 'dm_sq_07' },
+  { id: 'dm_sfo_05', linkedQuoteId: 'dm_sq_08' },
+  { id: 'dm_sfo_06', linkedQuoteId: 'dm_sq_11' },
+  { id: 'dm_sfo_07', linkedQuoteId: 'dm_sq_12' },
+  { id: 'dm_sfo_08', linkedQuoteId: 'dm_sq_13' },
+  { id: 'dm_sfo_09', linkedQuoteId: 'dm_sq_14' },
 ] as const;
 
 export const DEMO_SUPPLIER_SALES = [
-  { id: 'dm_ss_01', orderNumber: 'SORD-2026-0001', linkedOfferId: 'dm_sfo_06' },
-  { id: 'dm_ss_02', orderNumber: 'SORD-2026-0002', linkedOfferId: 'dm_sfo_04' },
-  { id: 'dm_ss_03', orderNumber: 'SORD-2026-0003', linkedOfferId: 'dm_sfo_07' },
-  { id: 'dm_ss_04', orderNumber: 'SORD-2026-0004', linkedOfferId: 'dm_sfo_08' },
-  { id: 'dm_ss_05', orderNumber: 'SORD-2026-0005', linkedOfferId: 'dm_sfo_09' },
+  { id: 'dm_ss_01', linkedOfferId: 'dm_sfo_06' },
+  { id: 'dm_ss_02', linkedOfferId: 'dm_sfo_04' },
+  { id: 'dm_ss_03', linkedOfferId: 'dm_sfo_07' },
+  { id: 'dm_ss_04', linkedOfferId: 'dm_sfo_08' },
+  { id: 'dm_ss_05', linkedOfferId: 'dm_sfo_09' },
 ] as const;
 
 export const DEMO_SUPPLIER_INVOICES = [
-  { id: 'dm_sinv_01', invoiceNumber: 'DM-SINV-2601', linkedSaleId: null },
-  { id: 'dm_sinv_02', invoiceNumber: 'DM-SINV-2602', linkedSaleId: null },
-  { id: 'dm_sinv_03', invoiceNumber: 'DM-SINV-2603', linkedSaleId: 'dm_ss_04' },
-  { id: 'dm_sinv_04', invoiceNumber: 'DM-SINV-2604', linkedSaleId: null },
-  { id: 'dm_sinv_05', invoiceNumber: 'DM-SINV-2605', linkedSaleId: null },
+  { id: 'dm_sinv_01', linkedSaleId: null },
+  { id: 'dm_sinv_02', linkedSaleId: null },
+  { id: 'dm_sinv_03', linkedSaleId: 'dm_ss_04' },
+  { id: 'dm_sinv_04', linkedSaleId: null },
+  { id: 'dm_sinv_05', linkedSaleId: null },
 ] as const;
 
 export const DEMO_PROJECTS = [

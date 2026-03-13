@@ -21,24 +21,23 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
-const isSupplierInvoiceNumberConflict = (databaseError: DatabaseError) =>
-  databaseError.constraint === 'supplier_invoices_invoice_number_key' ||
-  databaseError.detail?.includes('(invoice_number)');
+const isSupplierInvoiceIdConflict = (databaseError: DatabaseError) =>
+  databaseError.constraint === 'supplier_invoices_pkey' || databaseError.detail?.includes('(id)');
 
 const duplicateInvoiceError = (databaseError: DatabaseError) => {
   if (databaseError.constraint === 'idx_supplier_invoices_linked_sale_id_unique') {
     return 'An invoice already exists for this order';
   }
-  if (databaseError.constraint === 'supplier_invoices_invoice_number_key') {
-    return 'Invoice number already exists';
+  if (databaseError.constraint === 'supplier_invoices_pkey') {
+    return 'Invoice ID already exists';
   }
   if (databaseError.detail?.includes('(linked_sale_id)')) {
     return 'An invoice already exists for this order';
   }
-  if (databaseError.detail?.includes('(invoice_number)')) {
-    return 'Invoice number already exists';
+  if (databaseError.detail?.includes('(id)')) {
+    return 'Invoice ID already exists';
   }
-  return 'Invoice number already exists';
+  return 'Invoice ID already exists';
 };
 
 const idParamSchema = {
@@ -71,7 +70,6 @@ const invoiceSchema = {
     linkedSaleId: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
-    invoiceNumber: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
@@ -88,7 +86,6 @@ const invoiceSchema = {
     'id',
     'supplierId',
     'supplierName',
-    'invoiceNumber',
     'issueDate',
     'dueDate',
     'status',
@@ -118,10 +115,10 @@ const invoiceItemBodySchema = {
 const createBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     linkedSaleId: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
-    invoiceNumber: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
@@ -138,9 +135,9 @@ const createBodySchema = {
 const updateBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
-    invoiceNumber: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
@@ -217,12 +214,12 @@ const toRequiredDateOnly = (value: unknown, fieldName: string) => {
   return normalizedDate;
 };
 
-const generateSupplierInvoiceNumber = async (issueDate: string) => {
+const generateSupplierInvoiceId = async (issueDate: string) => {
   const year = issueDate.split('-')[0];
   const matchingInvoicesResult = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(invoice_number, '-', 3) AS INTEGER)), 0) as "maxSequence"
+    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
      FROM supplier_invoices
-     WHERE invoice_number ~ $1`,
+     WHERE id ~ $1`,
     [`^SINV-${year}-[0-9]+$`],
   );
   const nextSequence = Number(matchingInvoicesResult.rows[0]?.maxSequence ?? 0) + 1;
@@ -282,7 +279,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             si.linked_sale_id as "linkedSaleId",
             si.supplier_id as "supplierId",
             si.supplier_name as "supplierName",
-            si.invoice_number as "invoiceNumber",
             si.issue_date as "issueDate",
             si.due_date as "dueDate",
             si.status,
@@ -351,10 +347,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
+        id: nextId,
         linkedSaleId,
         supplierId,
         supplierName,
-        invoiceNumber,
         issueDate,
         dueDate,
         status,
@@ -365,10 +361,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
         items,
       } = request.body as {
+        id?: unknown;
         linkedSaleId?: unknown;
         supplierId: unknown;
         supplierName: unknown;
-        invoiceNumber: unknown;
         issueDate: unknown;
         dueDate: unknown;
         status: unknown;
@@ -385,9 +381,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-
-      const invoiceNumberResult = optionalNonEmptyString(invoiceNumber, 'invoiceNumber');
-      if (!invoiceNumberResult.ok) return badRequest(reply, invoiceNumberResult.message);
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       const issueDateResult = parseDateString(issueDate, 'issueDate');
       if (!issueDateResult.ok) return badRequest(reply, issueDateResult.message);
@@ -440,29 +435,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const invoiceId = `sinv-${Date.now()}`;
-      const maxInsertAttempts = invoiceNumberResult.value ? 1 : 5;
+      const maxInsertAttempts = nextIdResult.value ? 1 : 5;
 
       try {
         let invoiceResult: Awaited<ReturnType<typeof query>> | null = null;
-        let resolvedInvoiceNumber = invoiceNumberResult.value;
+        let resolvedInvoiceId = nextIdResult.value;
 
         for (let attempt = 0; attempt < maxInsertAttempts; attempt++) {
-          if (!resolvedInvoiceNumber) {
-            resolvedInvoiceNumber = await generateSupplierInvoiceNumber(issueDateResult.value);
+          if (!resolvedInvoiceId) {
+            resolvedInvoiceId = await generateSupplierInvoiceId(issueDateResult.value);
           }
 
           try {
             invoiceResult = await query(
               `INSERT INTO supplier_invoices
-                (id, linked_sale_id, supplier_id, supplier_name, invoice_number, issue_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                (id, linked_sale_id, supplier_id, supplier_name, issue_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                RETURNING
                   id,
                   linked_sale_id as "linkedSaleId",
                   supplier_id as "supplierId",
                   supplier_name as "supplierName",
-                  invoice_number as "invoiceNumber",
                   issue_date as "issueDate",
                   due_date as "dueDate",
                   status,
@@ -474,11 +467,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
                   EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
               [
-                invoiceId,
+                resolvedInvoiceId,
                 linkedSaleIdResult.value || null,
                 supplierIdResult.value,
                 supplierNameResult.value,
-                resolvedInvoiceNumber,
                 issueDateResult.value,
                 dueDateResult.value,
                 status || 'draft',
@@ -493,20 +485,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           } catch (error) {
             const databaseError = error as DatabaseError;
             if (
-              !invoiceNumberResult.value &&
+              !nextIdResult.value &&
               databaseError.code === '23505' &&
-              isSupplierInvoiceNumberConflict(databaseError) &&
+              isSupplierInvoiceIdConflict(databaseError) &&
               attempt < maxInsertAttempts - 1
             ) {
-              resolvedInvoiceNumber = null;
+              resolvedInvoiceId = null;
               continue;
             }
             throw error;
           }
         }
 
-        if (!invoiceResult || !resolvedInvoiceNumber) {
-          return reply.code(409).send({ error: 'Invoice number already exists' });
+        if (!invoiceResult || !resolvedInvoiceId) {
+          return reply.code(409).send({ error: 'Invoice ID already exists' });
         }
 
         const createdItems: Array<Record<string, unknown>> = [];
@@ -527,7 +519,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 discount`,
             [
               itemId,
-              invoiceId,
+              resolvedInvoiceId,
               item.productId || null,
               item.description,
               item.quantity,
@@ -568,9 +560,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
+        id: nextId,
         supplierId,
         supplierName,
-        invoiceNumber,
         issueDate,
         dueDate,
         status,
@@ -581,9 +573,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
         items,
       } = request.body as {
+        id: unknown;
         supplierId: unknown;
         supplierName: unknown;
-        invoiceNumber: unknown;
         issueDate: unknown;
         dueDate: unknown;
         status: unknown;
@@ -612,11 +604,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierNameValue = supplierNameResult.value;
       }
 
-      let invoiceNumberValue = invoiceNumber;
-      if (invoiceNumber !== undefined) {
-        const invoiceNumberResult = optionalNonEmptyString(invoiceNumber, 'invoiceNumber');
-        if (!invoiceNumberResult.ok) return badRequest(reply, invoiceNumberResult.message);
-        invoiceNumberValue = invoiceNumberResult.value;
+      let nextIdValue = nextId;
+      if (nextId !== undefined) {
+        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
+        if (nextIdResult.value) {
+          const existingIdResult = await query(
+            'SELECT id FROM supplier_invoices WHERE id = $1 AND id <> $2',
+            [nextIdResult.value, idResult.value],
+          );
+          if (existingIdResult.rows.length > 0) {
+            return reply.code(409).send({ error: 'Invoice ID already exists' });
+          }
+        }
       }
 
       let issueDateValue = issueDate;
@@ -648,20 +649,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const existingInvoice = existingInvoiceResult.rows[0];
-      const isStatusChangeOnly =
-        status !== undefined &&
-        supplierId === undefined &&
-        supplierName === undefined &&
-        invoiceNumber === undefined &&
-        issueDate === undefined &&
-        dueDate === undefined &&
-        subtotal === undefined &&
-        taxAmount === undefined &&
-        total === undefined &&
-        amountPaid === undefined &&
-        notes === undefined &&
-        items === undefined;
-      if (existingInvoice.status !== 'draft' && !isStatusChangeOnly) {
+      const hasLockedFieldUpdates =
+        supplierId !== undefined ||
+        supplierName !== undefined ||
+        issueDate !== undefined ||
+        dueDate !== undefined ||
+        subtotal !== undefined ||
+        taxAmount !== undefined ||
+        total !== undefined ||
+        amountPaid !== undefined ||
+        notes !== undefined ||
+        items !== undefined;
+      if (existingInvoice.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({
           error: 'Non-draft invoices are read-only',
           currentStatus: existingInvoice.status,
@@ -712,9 +711,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         const invoiceResult = await query(
           `UPDATE supplier_invoices
-           SET supplier_id = COALESCE($1, supplier_id),
-               supplier_name = COALESCE($2, supplier_name),
-               invoice_number = COALESCE($3, invoice_number),
+           SET id = COALESCE($1, id),
+               supplier_id = COALESCE($2, supplier_id),
+               supplier_name = COALESCE($3, supplier_name),
                issue_date = COALESCE($4, issue_date),
                due_date = COALESCE($5, due_date),
                status = COALESCE($6, status),
@@ -730,7 +729,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               linked_sale_id as "linkedSaleId",
               supplier_id as "supplierId",
               supplier_name as "supplierName",
-              invoice_number as "invoiceNumber",
               issue_date as "issueDate",
               due_date as "dueDate",
               status,
@@ -742,9 +740,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
+            nextIdValue,
             supplierIdValue,
             supplierNameValue,
-            invoiceNumberValue,
             issueDateValue,
             dueDateValue,
             status,
@@ -757,6 +755,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
+        const updatedInvoiceId = String(invoiceResult.rows[0].id);
+
         let updatedItems: Array<Record<string, unknown>> = [];
         if (items !== undefined) {
           if (!Array.isArray(items) || items.length === 0) {
@@ -765,7 +765,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const normalizedItems = normalizeItems(items, reply);
           if (!normalizedItems) return;
 
-          await query('DELETE FROM supplier_invoice_items WHERE invoice_id = $1', [idResult.value]);
+          await query('DELETE FROM supplier_invoice_items WHERE invoice_id = $1', [
+            updatedInvoiceId,
+          ]);
 
           for (const item of normalizedItems) {
             const itemId = `sinv-item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -784,7 +786,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   discount`,
               [
                 itemId,
-                idResult.value,
+                updatedInvoiceId,
                 item.productId || null,
                 item.description,
                 item.quantity,
@@ -808,7 +810,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 discount
              FROM supplier_invoice_items
              WHERE invoice_id = $1`,
-            [idResult.value],
+            [updatedInvoiceId],
           );
           updatedItems = itemsResult.rows;
         }

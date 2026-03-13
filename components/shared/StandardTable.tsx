@@ -23,6 +23,7 @@ export type Column<T> = {
   disableFiltering?: boolean;
   filterFormat?: (value: T[keyof T] | string | number | boolean | null | undefined) => string;
   align?: 'left' | 'center' | 'right';
+  hidden?: boolean;
 };
 
 export type StandardTableProps<T extends object = object> = {
@@ -43,6 +44,7 @@ export type StandardTableProps<T extends object = object> = {
   defaultRowsPerPage?: number;
   rowClassName?: (row: T) => string;
   onRowClick?: (row: T) => void;
+  initialFilterState?: Record<string, string[]>;
 };
 
 const StandardTable = <T extends object>({
@@ -62,6 +64,7 @@ const StandardTable = <T extends object>({
   defaultRowsPerPage = 10,
   rowClassName,
   onRowClick,
+  initialFilterState,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
   const filterRef = useRef<HTMLButtonElement>(null); // Ref for the filter button
@@ -69,7 +72,13 @@ const StandardTable = <T extends object>({
 
   // Internal State for Data Mode
   const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
-  const [filterState, setFilterState] = useState<Record<string, string[]>>({});
+  const [filterState, setFilterState] = useState<Record<string, string[]>>(
+    initialFilterState ?? {},
+  );
+
+  useEffect(() => {
+    setFilterState(initialFilterState ?? {});
+  }, [initialFilterState]);
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -89,6 +98,10 @@ const StandardTable = <T extends object>({
   });
 
   const storageKey = useMemo(() => getStorageKey(title), [title]);
+  const visibleColumns = useMemo(
+    () => columns?.filter((column) => !column.hidden) ?? [],
+    [columns],
+  );
 
   // Close filter popup when clicking outside
   useEffect(() => {
@@ -312,12 +325,12 @@ const StandardTable = <T extends object>({
           <table className="w-max min-w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                {columns.map((col, colIdx) => {
+                {visibleColumns.map((col, colIdx) => {
                   const colId = getColId(col);
                   const isFiltered = filterState[colId] && filterState[colId].length > 0;
                   const isSorted = sortState?.colId === colId;
                   const isFirstColumn = colIdx === 0;
-                  const isLastColumn = colIdx === columns.length - 1;
+                  const isLastColumn = colIdx === visibleColumns.length - 1;
                   // Force alignment: first column left, last column right, otherwise use col.align
                   const effectiveAlign = isFirstColumn
                     ? 'left'
@@ -400,10 +413,10 @@ const StandardTable = <T extends object>({
                     onClick={() => onRowClick?.(row)}
                     className={`transition-colors text-sm ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
                   >
-                    {columns.map((col, colIdx) => {
+                    {visibleColumns.map((col, colIdx) => {
                       const val = getValue(row, col);
                       const isFirstColumn = colIdx === 0;
-                      const isLastColumn = colIdx === columns.length - 1;
+                      const isLastColumn = colIdx === visibleColumns.length - 1;
                       // Force alignment: first column left, last column right, otherwise use col.align
                       const effectiveAlign = isFirstColumn
                         ? 'left'
@@ -426,7 +439,7 @@ const StandardTable = <T extends object>({
               ) : (
                 <tr>
                   <td
-                    colSpan={columns.length}
+                    colSpan={Math.max(visibleColumns.length, 1)}
                     className="p-12 text-center text-slate-400 text-sm font-bold"
                   >
                     {emptyState ?? t('table.noResults')}
