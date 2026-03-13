@@ -108,14 +108,6 @@ try {
       logger.error({ foundTables }, 'Critical schema issue: user_clients table was not created');
     }
 
-    // Run migration to add quote_code (Must run BEFORE seed.sql because seed.sql references this column)
-    try {
-      const { addQuoteCode } = await import('./db/add_quote_code.ts');
-      await addQuoteCode();
-    } catch (err) {
-      logger.error({ err: serializeError(err), migration: 'add_quote_code' }, 'Migration failed');
-    }
-
     // Ensure required bootstrap user data always exists.
     await ensureBootstrapAdmin();
 

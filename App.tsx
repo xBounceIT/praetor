@@ -730,8 +730,10 @@ const App: React.FC = () => {
         ? 'timesheets/tracker'
         : '404';
   });
-  const [quoteFilterId, setQuoteFilterId] = useState<string | null>(null);
+  const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
+  const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
+  const [supplierOfferFilterId, setSupplierOfferFilterId] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -759,18 +761,6 @@ const App: React.FC = () => {
     );
   }, [clientsOrders]);
 
-  const quoteIdsWithOrders = useMemo(() => {
-    return new Set(
-      clientsOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
-  }, [clientsOrders]);
-
-  const supplierQuoteIdsWithOrders = useMemo(() => {
-    return new Set(
-      supplierOrders.map((order) => order.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
-  }, [supplierOrders]);
-
   const supplierQuoteIdsWithOffers = useMemo(() => {
     return new Set(
       supplierOffers.map((offer) => offer.linkedQuoteId).filter((id): id is string => Boolean(id)),
@@ -786,66 +776,6 @@ const App: React.FC = () => {
     });
     return ids;
   }, [supplierInvoices]);
-
-  const enrichedClientsOrders = useMemo(
-    () =>
-      clientsOrders.map((order) => {
-        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
-        const quote = quotes.find((q) => q.id === order.linkedQuoteId);
-        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
-      }),
-    [clientsOrders, quotes],
-  );
-
-  const enrichedSupplierOrders = useMemo(
-    () =>
-      supplierOrders.map((order) => {
-        if (!order.linkedQuoteId || order.linkedQuoteCode) return order;
-        const quote = supplierQuotes.find((q) => q.id === order.linkedQuoteId);
-        return quote ? { ...order, linkedQuoteCode: quote.quoteCode } : order;
-      }),
-    [supplierOrders, supplierQuotes],
-  );
-
-  const enrichedQuotes = useMemo(
-    () =>
-      quotes.map((quote) => {
-        if (!quote.linkedOfferId || quote.linkedOfferCode) return quote;
-        const offer = clientOffers.find((o) => o.id === quote.linkedOfferId);
-        return offer ? { ...quote, linkedOfferCode: offer.offerCode } : quote;
-      }),
-    [quotes, clientOffers],
-  );
-
-  const enrichedSupplierQuotes = useMemo(
-    () =>
-      supplierQuotes.map((quote) => {
-        if (!quote.linkedOfferId || quote.linkedOfferCode) return quote;
-        const offer = supplierOffers.find((o) => o.id === quote.linkedOfferId);
-        return offer ? { ...quote, linkedOfferCode: offer.offerCode } : quote;
-      }),
-    [supplierQuotes, supplierOffers],
-  );
-
-  const enrichedClientOffers = useMemo(
-    () =>
-      clientOffers.map((offer) => {
-        if (!offer.linkedQuoteId || offer.linkedQuoteCode) return offer;
-        const quote = quotes.find((q) => q.id === offer.linkedQuoteId);
-        return quote ? { ...offer, linkedQuoteCode: quote.quoteCode } : offer;
-      }),
-    [clientOffers, quotes],
-  );
-
-  const enrichedSupplierOffers = useMemo(
-    () =>
-      supplierOffers.map((offer) => {
-        if (!offer.linkedQuoteId || offer.linkedQuoteCode) return offer;
-        const quote = supplierQuotes.find((q) => q.id === offer.linkedQuoteId);
-        return quote ? { ...offer, linkedQuoteCode: quote.quoteCode } : offer;
-      }),
-    [supplierOffers, supplierQuotes],
-  );
 
   const isRouteAccessible = useMemo(() => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
@@ -884,10 +814,9 @@ const App: React.FC = () => {
     if (
       activeView !== 'sales/client-quotes' &&
       activeView !== 'sales/client-offers' &&
-      activeView !== 'accounting/clients-orders' &&
-      quoteFilterId
+      clientQuoteFilterId
     ) {
-      React.startTransition(() => setQuoteFilterId(null));
+      React.startTransition(() => setClientQuoteFilterId(null));
     }
     if (
       activeView !== 'sales/supplier-quotes' &&
@@ -897,7 +826,7 @@ const App: React.FC = () => {
     ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
     }
-  }, [activeView, quoteFilterId, supplierQuoteFilterId]);
+  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -934,6 +863,15 @@ const App: React.FC = () => {
       React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, [activeView, currentUser, viewingUserId]);
+
+  useEffect(() => {
+    if (activeView !== 'sales/client-offers' && activeView !== 'accounting/clients-orders') {
+      setClientOfferFilterId(null);
+    }
+    if (activeView !== 'sales/supplier-offers') {
+      setSupplierOfferFilterId(null);
+    }
+  }, [activeView]);
 
   // Check for existing token on mount
   useEffect(() => {
@@ -2180,6 +2118,46 @@ const App: React.FC = () => {
     }
   };
 
+  const refreshClientQuoteFlow = async () => {
+    const [quotesData, offersData, ordersData] = await Promise.all([
+      api.quotes.list(),
+      api.clientOffers.list(),
+      api.clientsOrders.list(),
+    ]);
+    setQuotes(quotesData);
+    setClientOffers(offersData);
+    setClientsOrders(ordersData);
+  };
+
+  const refreshClientOrderFlow = async () => {
+    const [ordersData, invoicesData] = await Promise.all([
+      api.clientsOrders.list(),
+      api.invoices.list(),
+    ]);
+    setClientsOrders(ordersData);
+    setInvoices(invoicesData);
+  };
+
+  const refreshSupplierQuoteFlow = async () => {
+    const [quotesData, offersData, ordersData] = await Promise.all([
+      api.supplierQuotes.list(),
+      api.supplierOffers.list(),
+      api.supplierOrders.list(),
+    ]);
+    setSupplierQuotes(quotesData);
+    setSupplierOffers(offersData);
+    setSupplierOrders(ordersData);
+  };
+
+  const refreshSupplierOrderFlow = async () => {
+    const [ordersData, invoicesData] = await Promise.all([
+      api.supplierOrders.list(),
+      api.supplierInvoices.list(),
+    ]);
+    setSupplierOrders(ordersData);
+    setSupplierInvoices(invoicesData);
+  };
+
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
@@ -2207,7 +2185,10 @@ const App: React.FC = () => {
         : updates;
 
       const updated = await api.quotes.update(id, updatesWithRestore);
-      setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)));
+      if (clientQuoteFilterId === id) {
+        setClientQuoteFilterId(updated.id);
+      }
+      await refreshClientQuoteFlow();
     } catch (err) {
       console.error('Failed to update quote:', err);
     }
@@ -2225,7 +2206,10 @@ const App: React.FC = () => {
   const handleUpdateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       const updated = await api.clientOffers.update(id, updates);
-      setClientOffers((prev) => prev.map((offer) => (offer.id === id ? updated : offer)));
+      if (clientOfferFilterId === id) {
+        setClientOfferFilterId(updated.id);
+      }
+      await refreshClientQuoteFlow();
     } catch (err) {
       console.error('Failed to update client offer:', err);
       throw err;
@@ -2250,7 +2234,7 @@ const App: React.FC = () => {
   const handleCreateClientOfferFromQuote = async (quote: Quote) => {
     try {
       const offer = await api.clientOffers.create({
-        offerCode: `${quote.quoteCode}-OF`,
+        id: `${quote.id}-OF`,
         linkedQuoteId: quote.id,
         clientId: quote.clientId,
         clientName: quote.clientName,
@@ -2280,8 +2264,8 @@ const App: React.FC = () => {
 
   const handleUpdateClientsOrder = async (id: string, updates: Partial<ClientsOrder>) => {
     try {
-      const updated = await api.clientsOrders.update(id, updates);
-      setClientsOrders(clientsOrders.map((o) => (o.id === id ? updated : o)));
+      await api.clientsOrders.update(id, updates);
+      await refreshClientOrderFlow();
 
       // When an order is confirmed, projects are auto-created on the backend
       // Refresh the projects list to reflect the new projects
@@ -2305,16 +2289,11 @@ const App: React.FC = () => {
 
   const handleCreateClientsOrderFromOffer = async (offer: ClientOffer) => {
     try {
-      // Look up the quote to get the quote code
-      const linkedQuote = quotes.find((q) => q.id === offer.linkedQuoteId);
-      const linkedQuoteCode = linkedQuote?.quoteCode;
-
       const orderData: Partial<ClientsOrder> = {
         clientId: offer.clientId,
         clientName: offer.clientName,
         status: 'draft',
         linkedQuoteId: offer.linkedQuoteId,
-        linkedQuoteCode,
         linkedOfferId: offer.id,
         paymentTerms: offer.paymentTerms,
         items: offer.items.map((item) => ({
@@ -2358,8 +2337,8 @@ const App: React.FC = () => {
 
   const handleUpdateInvoice = async (id: string, updates: Partial<Invoice>) => {
     try {
-      const updated = await api.invoices.update(id, updates);
-      setInvoices(invoices.map((i) => (i.id === id ? updated : i)));
+      await api.invoices.update(id, updates);
+      setInvoices(await api.invoices.list());
     } catch (err) {
       console.error('Failed to update invoice:', err);
     }
@@ -2413,7 +2392,10 @@ const App: React.FC = () => {
   const handleUpdateSupplierQuote = async (id: string, updates: Partial<SupplierQuote>) => {
     try {
       const updated = await api.supplierQuotes.update(id, updates);
-      setSupplierQuotes(supplierQuotes.map((q) => (q.id === id ? updated : q)));
+      if (supplierQuoteFilterId === id) {
+        setSupplierQuoteFilterId(updated.id);
+      }
+      await refreshSupplierQuoteFlow();
     } catch (err) {
       console.error('Failed to update supplier quote:', err);
     }
@@ -2431,7 +2413,10 @@ const App: React.FC = () => {
   const handleUpdateSupplierOffer = async (id: string, updates: Partial<SupplierOffer>) => {
     try {
       const updated = await api.supplierOffers.update(id, updates);
-      setSupplierOffers((prev) => prev.map((offer) => (offer.id === id ? updated : offer)));
+      if (supplierOfferFilterId === id) {
+        setSupplierOfferFilterId(updated.id);
+      }
+      await refreshSupplierQuoteFlow();
     } catch (err) {
       console.error('Failed to update supplier offer:', err);
       throw err;
@@ -2456,7 +2441,7 @@ const App: React.FC = () => {
   const handleCreateSupplierOfferFromQuote = async (quote: SupplierQuote) => {
     try {
       const offer = await api.supplierOffers.create({
-        offerCode: `${quote.quoteCode || quote.purchaseOrderNumber}-OF`,
+        id: `${quote.id}-OF`,
         linkedQuoteId: quote.id,
         supplierId: quote.supplierId,
         supplierName: quote.supplierName,
@@ -2487,8 +2472,8 @@ const App: React.FC = () => {
 
   const handleUpdateSupplierOrder = async (id: string, updates: Partial<SupplierSaleOrder>) => {
     try {
-      const updated = await api.supplierOrders.update(id, updates);
-      setSupplierOrders((prev) => prev.map((order) => (order.id === id ? updated : order)));
+      await api.supplierOrders.update(id, updates);
+      await refreshSupplierOrderFlow();
     } catch (err) {
       console.error('Failed to update supplier order:', err);
       throw err;
@@ -2537,8 +2522,8 @@ const App: React.FC = () => {
 
   const handleUpdateSupplierInvoice = async (id: string, updates: Partial<SupplierInvoice>) => {
     try {
-      const updated = await api.supplierInvoices.update(id, updates);
-      setSupplierInvoices((prev) => prev.map((invoice) => (invoice.id === id ? updated : invoice)));
+      await api.supplierInvoices.update(id, updates);
+      setSupplierInvoices(await api.supplierInvoices.list());
     } catch (err) {
       console.error('Failed to update supplier invoice:', err);
       throw err;
@@ -3197,7 +3182,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
               activeView === 'sales/client-quotes' && (
                 <ClientQuotesView
-                  quotes={enrichedQuotes}
+                  quotes={quotes}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3205,20 +3190,20 @@ const App: React.FC = () => {
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}
-                  offers={enrichedClientOffers}
-                  onViewOffer={() => setActiveView('sales/client-offers')}
-                  quoteFilterId={quoteFilterId}
+                  offers={clientOffers}
+                  onViewOffer={(offerId) => {
+                    setClientQuoteFilterId(null);
+                    setClientOfferFilterId(offerId);
+                    setActiveView('sales/client-offers');
+                  }}
+                  quoteFilterId={clientQuoteFilterId}
                   quoteIdsWithOffers={quoteIdsWithOffers}
-                  quoteIdsWithOrders={quoteIdsWithOrders}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
                   onViewOffers={(quoteId) => {
-                    setQuoteFilterId(quoteId);
+                    setClientOfferFilterId(null);
+                    setClientQuoteFilterId(quoteId);
                     setActiveView('sales/client-offers');
-                  }}
-                  onViewOrder={(quoteId) => {
-                    setQuoteFilterId(quoteId);
-                    setActiveView('accounting/clients-orders');
                   }}
                 />
               )}
@@ -3226,7 +3211,7 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']) &&
               activeView === 'sales/client-offers' && (
                 <ClientOffersView
-                  offers={enrichedClientOffers}
+                  offers={clientOffers}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
@@ -3235,37 +3220,39 @@ const App: React.FC = () => {
                   onDeleteOffer={handleDeleteClientOffer}
                   onCreateClientsOrder={handleCreateClientsOrderFromOffer}
                   onViewQuote={(quoteId) => {
-                    setQuoteFilterId(quoteId);
+                    setClientOfferFilterId(null);
+                    setClientQuoteFilterId(quoteId);
                     setActiveView('sales/client-quotes');
                   }}
                   currency={generalSettings.currency}
-                  quoteFilterId={quoteFilterId}
+                  quoteFilterId={clientQuoteFilterId}
+                  offerFilterId={clientOfferFilterId}
                 />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-quotes']) &&
               activeView === 'sales/supplier-quotes' && (
                 <SupplierQuotesView
-                  quotes={enrichedSupplierQuotes}
+                  quotes={supplierQuotes}
                   suppliers={suppliers}
                   products={products}
                   onAddQuote={addSupplierQuote}
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}
                   onCreateOffer={handleCreateSupplierOfferFromQuote}
-                  offers={enrichedSupplierOffers}
+                  offers={supplierOffers}
                   quoteFilterId={supplierQuoteFilterId}
                   quoteIdsWithOffers={supplierQuoteIdsWithOffers}
-                  quoteIdsWithOrders={supplierQuoteIdsWithOrders}
-                  onViewOffer={() => setActiveView('sales/supplier-offers')}
-                  currency={generalSettings.currency}
-                  onViewOffers={(quoteId) => {
-                    setSupplierQuoteFilterId(quoteId);
+                  onViewOffer={(offerId) => {
+                    setSupplierQuoteFilterId(null);
+                    setSupplierOfferFilterId(offerId);
                     setActiveView('sales/supplier-offers');
                   }}
-                  onViewOrder={(quoteId) => {
+                  currency={generalSettings.currency}
+                  onViewOffers={(quoteId) => {
+                    setSupplierOfferFilterId(null);
                     setSupplierQuoteFilterId(quoteId);
-                    setActiveView('accounting/supplier-orders');
+                    setActiveView('sales/supplier-offers');
                   }}
                 />
               )}
@@ -3273,18 +3260,20 @@ const App: React.FC = () => {
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-offers']) &&
               activeView === 'sales/supplier-offers' && (
                 <SupplierOffersView
-                  offers={enrichedSupplierOffers}
+                  offers={supplierOffers}
                   suppliers={suppliers}
                   products={products}
                   onUpdateOffer={handleUpdateSupplierOffer}
                   onDeleteOffer={handleDeleteSupplierOffer}
                   onCreateOrder={handleCreateSupplierOrderFromOffer}
                   onViewQuote={(quoteId) => {
+                    setSupplierOfferFilterId(null);
                     setSupplierQuoteFilterId(quoteId);
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}
                   quoteFilterId={supplierQuoteFilterId}
+                  offerFilterId={supplierOfferFilterId}
                 />
               )}
 
@@ -3294,18 +3283,19 @@ const App: React.FC = () => {
             ) &&
               activeView === 'accounting/clients-orders' && (
                 <ClientsOrdersView
-                  orders={enrichedClientsOrders}
+                  orders={clientsOrders}
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   currency={generalSettings.currency}
-                  onViewQuote={(quoteId) => {
-                    setQuoteFilterId(quoteId);
-                    setActiveView('sales/client-quotes');
+                  onViewOffer={(offerId) => {
+                    setClientQuoteFilterId(null);
+                    setClientOfferFilterId(offerId);
+                    setActiveView('sales/client-offers');
                   }}
-                  quoteFilterId={quoteFilterId}
+                  offerFilterId={clientOfferFilterId}
                 />
               )}
 
@@ -3333,7 +3323,7 @@ const App: React.FC = () => {
             ) &&
               activeView === 'accounting/supplier-orders' && (
                 <SupplierOrdersView
-                  orders={enrichedSupplierOrders}
+                  orders={supplierOrders}
                   suppliers={suppliers}
                   products={products}
                   orderIdsWithInvoices={orderIdsWithInvoices}
@@ -3342,6 +3332,7 @@ const App: React.FC = () => {
                   onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
                   onViewQuote={(quoteId) => {
                     setSupplierQuoteFilterId(quoteId);
+                    setSupplierOfferFilterId(null);
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}

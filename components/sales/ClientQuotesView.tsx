@@ -29,10 +29,8 @@ export interface ClientQuotesViewProps {
   onViewOffer?: (offerId: string) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
-  quoteIdsWithOrders?: Set<string>;
   quoteOfferStatuses?: Record<string, ClientOffer['status']>;
   onViewOffers?: (quoteId: string) => void;
-  onViewOrder?: (quoteId: string) => void;
   currency: string;
   offers?: ClientOffer[];
 }
@@ -54,10 +52,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onViewOffer,
   quoteFilterId,
   quoteIdsWithOffers,
-  quoteIdsWithOrders,
   quoteOfferStatuses,
   onViewOffers,
-  onViewOrder,
   currency,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = [],
@@ -82,11 +78,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   );
 
   const filteredQuotes = useMemo(() => {
-    if (quoteFilterId) {
-      return quotes.filter((q) => q.id === quoteFilterId);
-    }
     return quotes;
-  }, [quotes, quoteFilterId]);
+  }, [quotes]);
+
+  const tableInitialFilterState = useMemo(() => {
+    if (quoteFilterId) {
+      return { id: [quoteFilterId] };
+    }
+    return undefined;
+  }, [quoteFilterId]);
 
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -201,7 +201,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   // Form State
   const [formData, setFormData] = useState<Partial<Quote>>({
-    quoteCode: '',
+    id: '',
     clientId: '',
     clientName: '',
     items: [],
@@ -223,7 +223,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     setEditingQuote(null);
     setPendingClientChange(null);
     setFormData({
-      quoteCode: '',
+      id: '',
       clientId: '',
       clientName: '',
       items: [],
@@ -243,7 +243,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     // Ensure expirationDate is in YYYY-MM-DD format for the date input
     const formattedDate = quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '';
     setFormData({
-      quoteCode: quote.quoteCode,
+      id: quote.id,
       clientId: quote.clientId,
       clientName: quote.clientName,
       items: quote.items,
@@ -271,8 +271,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       newErrors.clientId = t('sales:clientQuotes.errors.clientRequired');
     }
 
-    if (!formData.quoteCode?.trim()) {
-      newErrors.quoteCode = t('sales:clientQuotes.errors.quoteCodeRequired', {
+    if (!formData.id?.trim()) {
+      newErrors.id = t('sales:clientQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
     }
@@ -638,10 +638,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     () => [
       {
         header: t('sales:clientQuotes.quoteCodeColumn'),
-        accessorKey: 'quoteCode',
+        accessorKey: 'id',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-slate-700">{row.quoteCode}</span>,
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
       },
       {
         header: t('sales:clientQuotes.clientColumn'),
@@ -745,7 +745,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         cell: ({ row }) => {
           const expired = isQuoteExpired(row);
           const hasOffer = hasOfferForQuote(row);
-          const hasOrder = quoteIdsWithOrders?.has(row.id);
           const offerStatus = getOfferStatusForQuote(row);
           const history = isHistoryRow(row);
 
@@ -780,23 +779,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
           return (
             <div className="flex justify-end gap-2">
-              {onViewOrder && hasOrder && (
-                <Tooltip
-                  label={t('accounting:clientsOrders.viewOrder', { defaultValue: 'View order' })}
-                >
-                  {() => (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewOrder(row.id);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-file-invoice"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              )}
               <Tooltip
                 label={
                   history
@@ -981,8 +963,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       onUpdateQuote,
       confirmDelete,
       openEditModal,
-      quoteIdsWithOrders,
-      onViewOrder,
     ],
   );
 
@@ -1032,7 +1012,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('sales:clientQuotes.linkedOfferInfo', {
-                        number: editingQuote.linkedOfferCode || editingQuote.linkedOfferId,
+                        number: editingQuote.linkedOfferId,
                         defaultValue: 'Offer #{{number}}',
                       })}
                     </div>
@@ -1084,13 +1064,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.quoteCode || ''}
+                    value={formData.id || ''}
                     onChange={(e) => {
-                      setFormData({ ...formData, quoteCode: e.target.value });
-                      if (errors.quoteCode) {
+                      setFormData({ ...formData, id: e.target.value });
+                      if (errors.id) {
                         setErrors((prev) => {
                           const next = { ...prev };
-                          delete next.quoteCode;
+                          delete next.id;
                           return next;
                         });
                       }
@@ -1098,11 +1078,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     placeholder="Q0000"
                     disabled={isReadOnly}
                     className={`w-full rounded-xl border ${
-                      errors.quoteCode ? 'border-red-300' : 'border-slate-200'
+                      errors.id ? 'border-red-300' : 'border-slate-200'
                     } bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed`}
                   />
-                  {errors.quoteCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
+                  {errors.id && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
               </div>
@@ -1676,16 +1656,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       {/* Search and Filters */}
 
       <StandardTable<Quote>
-        title={
-          quoteFilterId
-            ? t('sales:clientQuotes.activeQuotesFiltered', {
-                defaultValue: 'Active Quotes for Quote',
-              })
-            : t('sales:clientQuotes.activeQuotes')
-        }
+        title={t('sales:clientQuotes.activeQuotes')}
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
+        initialFilterState={tableInitialFilterState}
         onRowClick={(row) => {
           // Allow viewing/editing for all quotes except those in history (expired/denied with special handling)
           // Accepted and denied quotes open in read-only mode via isReadOnly flag

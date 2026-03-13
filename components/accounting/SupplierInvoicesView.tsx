@@ -86,7 +86,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     linkedSaleId: '',
     supplierId: '',
     supplierName: '',
-    invoiceNumber: '',
+    id: '',
     issueDate: getLocalDateString(),
     dueDate: addDaysToDateOnly(getLocalDateString(), 30),
     status: 'draft',
@@ -184,10 +184,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     () => [
       {
         header: t('accounting:supplierInvoices.invoiceNumber'),
-        id: 'invoiceNumber',
-        accessorFn: (row: SupplierInvoice) => row.invoiceNumber,
+        id: 'id',
+        accessorFn: (row: SupplierInvoice) => row.id,
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
+          <span className="font-bold text-slate-700">{row.id}</span>
         ),
       },
       {
@@ -351,9 +351,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     <input
                       type="text"
                       required
-                      value={formData.invoiceNumber || ''}
+                      value={formData.id || ''}
                       onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, invoiceNumber: event.target.value }))
+                        setFormData((prev) => ({ ...prev, id: event.target.value }))
                       }
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
                       placeholder="INV-XXXX"
@@ -699,7 +699,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 })}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                {invoiceToDelete?.supplierName} · {invoiceToDelete?.invoiceNumber}
+                {invoiceToDelete?.supplierName} · {invoiceToDelete?.id}
               </p>
             </div>
             <div className="flex gap-3 pt-2">

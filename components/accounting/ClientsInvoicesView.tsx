@@ -82,7 +82,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     return {
       clientId: '',
       clientName: '',
-      invoiceNumber: '',
+      id: '',
       items: [],
       issueDate,
       dueDate: addDaysToDateOnly(issueDate, 30),
@@ -116,7 +116,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     [activeSpecialBids, formData.clientId],
   );
 
-  const generateInvoiceNumber = () => {
+  const generateInvoiceId = () => {
     const year = new Date().getFullYear();
     const count = invoices.length + 1;
     return `INV-${year}-${count.toString().padStart(4, '0')}`;
@@ -181,7 +181,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     setFormData({
       clientId: '',
       clientName: '',
-      invoiceNumber: generateInvoiceNumber(),
+      id: generateInvoiceId(),
       items: [],
       issueDate,
       dueDate: addDaysToDateOnly(issueDate, 30),
@@ -355,8 +355,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
     const nextErrors: Record<string, string> = {};
     if (!formData.clientId) nextErrors.clientId = t('accounting:clientsInvoices.clientRequired');
-    if (!formData.invoiceNumber) {
-      nextErrors.invoiceNumber = t('accounting:clientsInvoices.invoiceNumberRequired');
+    if (!formData.id) {
+      nextErrors.id = t('accounting:clientsInvoices.invoiceNumberRequired');
     }
     if (!formData.issueDate) {
       nextErrors.issueDate = t('accounting:clientsInvoices.issueDateRequired');
@@ -423,12 +423,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     () => [
       {
         header: t('accounting:clientsInvoices.invoiceNumber'),
-        id: 'invoiceNumber',
-        accessorFn: (row: Invoice) => row.invoiceNumber,
+        id: 'id',
+        accessorFn: (row: Invoice) => row.id,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-slate-700">{row.invoiceNumber}</span>
+          <span className="font-bold text-slate-700">{row.id}</span>
         ),
       },
       {
@@ -590,17 +590,13 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <input
                       type="text"
                       required
-                      value={formData.invoiceNumber}
-                      onChange={(event) =>
-                        setFormData({ ...formData, invoiceNumber: event.target.value })
-                      }
+                      value={formData.id || ''}
+                      onChange={(event) => setFormData({ ...formData, id: event.target.value })}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-praetor"
                       placeholder="INV-YYYY-XXXX"
                     />
-                    {errors.invoiceNumber && (
-                      <p className="ml-1 text-[10px] font-bold text-red-500">
-                        {errors.invoiceNumber}
-                      </p>
+                    {errors.id && (
+                      <p className="ml-1 text-[10px] font-bold text-red-500">{errors.id}</p>
                     )}
                   </div>
                   <div className="space-y-1.5">
@@ -1018,7 +1014,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
           </h3>
           <p className="text-sm text-slate-500">
             {t('accounting:clientsInvoices.deleteMessage', {
-              invoiceNumber: invoiceToDelete?.invoiceNumber || '',
+              invoiceNumber: invoiceToDelete?.id || '',
             })}
           </p>
           <div className="flex gap-3 pt-2">

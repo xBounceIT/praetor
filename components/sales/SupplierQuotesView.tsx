@@ -77,9 +77,7 @@ export interface SupplierQuotesViewProps {
   onCreateOffer?: (quote: SupplierQuote) => void | Promise<void>;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
-  quoteIdsWithOrders?: Set<string>;
   onViewOffers?: (quoteId: string) => void;
-  onViewOrder?: (quoteId: string) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
   offers?: SupplierOffer[];
@@ -95,9 +93,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onCreateOffer,
   quoteFilterId,
   quoteIdsWithOffers,
-  quoteIdsWithOrders,
   onViewOffers,
-  onViewOrder,
   onViewOffer,
   currency,
 }) => {
@@ -126,11 +122,15 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   );
 
   const filteredQuotes = useMemo(() => {
-    if (quoteFilterId) {
-      return quotes.filter((q) => q.id === quoteFilterId);
-    }
     return quotes;
-  }, [quotes, quoteFilterId]);
+  }, [quotes]);
+
+  const tableInitialFilterState = useMemo(() => {
+    if (quoteFilterId) {
+      return { id: [quoteFilterId] };
+    }
+    return undefined;
+  }, [quoteFilterId]);
 
   const [editingQuote, setEditingQuote] = useState<SupplierQuote | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
@@ -140,8 +140,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [formData, setFormData] = useState<Partial<SupplierQuote>>({
     supplierId: '',
     supplierName: '',
-    quoteCode: '',
-    purchaseOrderNumber: '',
+    id: '',
     items: [],
     paymentTerms: 'immediate',
     discount: 0,
@@ -181,8 +180,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     setFormData({
       supplierId: '',
       supplierName: '',
-      quoteCode: '',
-      purchaseOrderNumber: '',
+      id: '',
       items: [],
       paymentTerms: 'immediate',
       discount: 0,
@@ -198,8 +196,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     setEditingQuote(quote);
     setFormData({
       ...quote,
-      quoteCode: quote.quoteCode || quote.purchaseOrderNumber || '',
-      purchaseOrderNumber: quote.quoteCode || quote.purchaseOrderNumber || '',
       expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
     });
     setErrors({});
@@ -282,15 +278,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     () => [
       {
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
-        id: 'quoteCode',
-        accessorFn: (row) => row.quoteCode || row.purchaseOrderNumber || '',
+        accessorKey: 'id',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => (
-          <span className="font-bold text-slate-700">
-            {row.quoteCode || row.purchaseOrderNumber}
-          </span>
-        ),
+        cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
       },
       {
         header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
@@ -380,7 +371,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          const hasOrder = quoteIdsWithOrders?.has(row.id);
           const hasOffer = hasOfferForQuote(row);
           const history = isHistoryRow(row);
 
@@ -408,29 +398,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
-                        // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
-                        onViewOffer(row.linkedOfferId!);
+                        onViewOffer(row.linkedOfferId as string);
                       }}
                       className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
                     >
                       <i className="fa-solid fa-link"></i>
-                    </button>
-                  )}
-                </Tooltip>
-              )}
-              {onViewOrder && hasOrder && (
-                <Tooltip
-                  label={t('accounting:supplierOrders.viewOrder', { defaultValue: 'View order' })}
-                >
-                  {() => (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onViewOrder(row.id);
-                      }}
-                      className="p-2 rounded-lg transition-all text-slate-400 hover:text-praetor hover:bg-slate-100"
-                    >
-                      <i className="fa-solid fa-file-invoice"></i>
                     </button>
                   )}
                 </Tooltip>
@@ -576,8 +548,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       onViewOffer,
       openEditModal,
       products,
-      quoteIdsWithOrders,
-      onViewOrder,
       t,
       isHistoryRow,
       hasOfferForQuote,
@@ -593,8 +563,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         defaultValue: 'Supplier is required',
       });
     }
-    if (!formData.quoteCode?.trim()) {
-      nextErrors.quoteCode = t('sales:supplierQuotes.errors.quoteCodeRequired', {
+    if (!formData.id?.trim()) {
+      nextErrors.id = t('sales:supplierQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
     }
@@ -611,8 +581,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
-      quoteCode: formData.quoteCode,
-      purchaseOrderNumber: formData.quoteCode,
       discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
       items: (formData.items || []).map((item) => ({
         ...item,
@@ -679,7 +647,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     </div>
                     <div className="text-xs text-praetor">
                       {t('sales:supplierQuotes.linkedOfferInfo', {
-                        number: editingQuote.linkedOfferCode || editingQuote.linkedOfferId,
+                        number: editingQuote.linkedOfferId,
                         defaultValue: 'Offer #{{number}}',
                       })}
                     </div>
@@ -738,19 +706,25 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.quoteCode || ''}
+                    value={formData.id || ''}
                     disabled={isReadOnly}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       setFormData((prev) => ({
                         ...prev,
-                        quoteCode: event.target.value,
-                        purchaseOrderNumber: event.target.value,
-                      }))
-                    }
-                    className={`${inputClassName} ${errors.quoteCode ? 'border-red-300' : ''}`}
+                        id: event.target.value,
+                      }));
+                      if (errors.id) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.id;
+                          return next;
+                        });
+                      }
+                    }}
+                    className={`${inputClassName} ${errors.id ? 'border-red-300' : ''}`}
                   />
-                  {errors.quoteCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.quoteCode}</p>
+                  {errors.id && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
               </div>
@@ -1090,7 +1064,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           <h3 className="text-lg font-black text-slate-800">
             {t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
           </h3>
-          <p className="text-sm text-slate-500">{quoteToDelete?.quoteCode}</p>
+          <p className="text-sm text-slate-500">{quoteToDelete?.id}</p>
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}
@@ -1136,13 +1110,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       </div>
 
       <StandardTable<SupplierQuote>
-        title={
-          quoteFilterId
-            ? t('sales:supplierQuotes.activeQuotesFiltered', {
-                defaultValue: 'Active Quotes for Quote',
-              })
-            : t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })
-        }
+        title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
@@ -1162,6 +1130,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             ? `bg-slate-50 text-slate-400 hover:bg-slate-100 ${cursorClass}`
             : `hover:bg-slate-50/50 ${cursorClass}`;
         }}
+        initialFilterState={tableInitialFilterState}
       />
     </div>
   );

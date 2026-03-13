@@ -46,7 +46,6 @@ const orderSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    orderNumber: { type: ['string', 'null'] },
     linkedQuoteId: { type: ['string', 'null'] },
     linkedOfferId: { type: 'string' },
     supplierId: { type: 'string' },
@@ -89,6 +88,7 @@ const itemBodySchema = {
 const createBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     linkedOfferId: { type: 'string' },
     supplierId: { type: 'string' },
@@ -105,6 +105,7 @@ const createBodySchema = {
 const updateBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     items: { type: 'array', items: itemBodySchema },
@@ -176,12 +177,12 @@ const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) =>
   return normalizedItems;
 };
 
-const generateSupplierOrderNumber = async () => {
+const generateSupplierOrderId = async () => {
   const year = new Date().getFullYear();
   const result = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(order_number, '-', 3) AS INTEGER)), 0) as "maxSequence"
+    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
      FROM supplier_sales
-     WHERE order_number ~ $1`,
+     WHERE id ~ $1`,
     [`^SORD-${year}-[0-9]+$`],
   );
   const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
@@ -211,7 +212,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const ordersResult = await query(
         `SELECT
             id,
-            order_number as "orderNumber",
             linked_quote_id as "linkedQuoteId",
             linked_offer_id as "linkedOfferId",
             supplier_id as "supplierId",
@@ -272,6 +272,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
+        id: nextId,
         linkedQuoteId,
         linkedOfferId,
         supplierId,
@@ -282,6 +283,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status,
         notes,
       } = request.body as {
+        id?: unknown;
         linkedQuoteId?: unknown;
         linkedOfferId: unknown;
         supplierId: unknown;
@@ -301,6 +303,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
@@ -337,17 +341,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
-      const orderId = 'ss-' + Date.now();
-      const orderNumber = await generateSupplierOrderNumber();
+      const orderId = nextIdResult.value || (await generateSupplierOrderId());
       let createdOrderResult: Awaited<ReturnType<typeof query>>;
       try {
         createdOrderResult = await query(
           `INSERT INTO supplier_sales
-            (id, order_number, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            (id, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING
               id,
-              order_number as "orderNumber",
               linked_quote_id as "linkedQuoteId",
               linked_offer_id as "linkedOfferId",
               supplier_id as "supplierId",
@@ -360,7 +362,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
             orderId,
-            orderNumber,
             offerResult.rows[0].linkedQuoteId || null,
             linkedOfferIdResult.value,
             supplierIdResult.value,
@@ -373,6 +374,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       } catch (error) {
         const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'supplier_sales_pkey' ||
+            databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Order ID already exists' });
+        }
         if (
           databaseError.code === '23505' &&
           (databaseError.constraint === 'idx_supplier_sales_linked_offer_id' ||
@@ -439,19 +447,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { supplierId, supplierName, items, paymentTerms, discount, status, notes } =
-        request.body as {
-          supplierId?: unknown;
-          supplierName?: unknown;
-          items?: SupplierOrderItemInput[] | unknown;
-          paymentTerms?: unknown;
-          discount?: unknown;
-          status?: unknown;
-          notes?: unknown;
-        };
+      const {
+        id: nextId,
+        supplierId,
+        supplierName,
+        items,
+        paymentTerms,
+        discount,
+        status,
+        notes,
+      } = request.body as {
+        id?: unknown;
+        supplierId?: unknown;
+        supplierName?: unknown;
+        items?: SupplierOrderItemInput[] | unknown;
+        paymentTerms?: unknown;
+        discount?: unknown;
+        status?: unknown;
+        notes?: unknown;
+      };
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      let nextIdValue = nextId;
+      if (nextId !== undefined) {
+        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+        nextIdValue = nextIdResult.value;
+        if (nextIdResult.value) {
+          const existingIdResult = await query(
+            'SELECT id FROM supplier_sales WHERE id = $1 AND id <> $2',
+            [nextIdResult.value, idResult.value],
+          );
+          if (existingIdResult.rows.length > 0) {
+            return reply.code(409).send({ error: 'Order ID already exists' });
+          }
+        }
+      }
 
       const existingOrderResult = await query(
         `SELECT id, linked_offer_id as "linkedOfferId",
@@ -465,15 +498,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const existingOrder = existingOrderResult.rows[0];
 
-      const isStatusChangeOnly =
-        status !== undefined &&
-        supplierId === undefined &&
-        supplierName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        discount === undefined &&
-        notes === undefined;
-      if (existingOrder.status !== 'draft' && !isStatusChangeOnly) {
+      const hasLockedFieldUpdates =
+        supplierId !== undefined ||
+        supplierName !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        discount !== undefined ||
+        notes !== undefined;
+      if (existingOrder.status !== 'draft' && hasLockedFieldUpdates) {
         return reply.code(409).send({
           error: 'Non-draft orders are read-only',
           currentStatus: existingOrder.status,
@@ -525,43 +557,59 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
-      const updatedOrderResult = await query(
-        `UPDATE supplier_sales
-         SET supplier_id = COALESCE($1, supplier_id),
-             supplier_name = COALESCE($2, supplier_name),
-             payment_terms = COALESCE($3, payment_terms),
-             discount = COALESCE($4, discount),
-             status = COALESCE($5, status),
-             notes = COALESCE($6, notes),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $7
-         RETURNING
-            id,
-            order_number as "orderNumber",
-            linked_quote_id as "linkedQuoteId",
-            linked_offer_id as "linkedOfferId",
-            supplier_id as "supplierId",
-            supplier_name as "supplierName",
-            payment_terms as "paymentTerms",
-            discount,
+      let updatedOrderResult: Awaited<ReturnType<typeof query>>;
+      try {
+        updatedOrderResult = await query(
+          `UPDATE supplier_sales
+           SET id = COALESCE($1, id),
+               supplier_id = COALESCE($2, supplier_id),
+               supplier_name = COALESCE($3, supplier_name),
+               payment_terms = COALESCE($4, payment_terms),
+               discount = COALESCE($5, discount),
+               status = COALESCE($6, status),
+               notes = COALESCE($7, notes),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $8
+           RETURNING
+              id,
+              linked_quote_id as "linkedQuoteId",
+              linked_offer_id as "linkedOfferId",
+              supplier_id as "supplierId",
+              supplier_name as "supplierName",
+              payment_terms as "paymentTerms",
+              discount,
+              status,
+              notes,
+              EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+              EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+          [
+            nextIdValue,
+            supplierIdValue,
+            supplierNameValue,
+            paymentTerms,
+            discountValue,
             status,
             notes,
-            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
-        [
-          supplierIdValue,
-          supplierNameValue,
-          paymentTerms,
-          discountValue,
-          status,
-          notes,
-          idResult.value,
-        ],
-      );
+            idResult.value,
+          ],
+        );
+      } catch (error) {
+        const databaseError = error as DatabaseError;
+        if (
+          databaseError.code === '23505' &&
+          (databaseError.constraint === 'supplier_sales_pkey' ||
+            databaseError.detail?.includes('(id)'))
+        ) {
+          return reply.code(409).send({ error: 'Order ID already exists' });
+        }
+        throw error;
+      }
 
       if (updatedOrderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
       }
+
+      const updatedOrderId = String(updatedOrderResult.rows[0].id);
 
       let updatedItems: unknown[] = [];
       if (items !== undefined) {
@@ -570,7 +618,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         const normalizedItems = normalizeItems(items, reply);
         if (!normalizedItems) return;
-        await query('DELETE FROM supplier_sale_items WHERE sale_id = $1', [idResult.value]);
+        await query('DELETE FROM supplier_sale_items WHERE sale_id = $1', [updatedOrderId]);
         for (const item of normalizedItems) {
           const itemId = 'ssi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
           const itemResult = await query(
@@ -589,7 +637,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                note`,
             [
               itemId,
-              idResult.value,
+              updatedOrderId,
               item.productId,
               item.productName,
               item.quantity,
@@ -615,7 +663,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               note
            FROM supplier_sale_items
            WHERE sale_id = $1`,
-          [idResult.value],
+          [updatedOrderId],
         );
         updatedItems = itemsResult.rows;
       }
