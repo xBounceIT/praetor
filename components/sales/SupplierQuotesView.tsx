@@ -848,18 +848,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.discount', { defaultValue: 'Disc %' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                    </div>
+                  </div>
+                  <div className="w-24 shrink-0 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">
+                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                   </div>
                   <div className="w-10 shrink-0" />
                 </div>
@@ -896,7 +896,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="col-span-6 md:col-span-2">
+                            <div className="col-span-6 md:col-span-3">
                               <div className="flex items-center gap-1.5">
                                 <ValidatedNumberInput
                                   value={item.quantity}
@@ -916,31 +916,36 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="col-span-6 md:col-span-2">
-                              <ValidatedNumberInput
-                                value={item.unitPrice}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                                }
-                                disabled={isReadOnly}
-                                className={`${itemInputClassName} text-center`}
-                              />
+                            <div className="col-span-6 md:col-span-3">
+                              <div className="flex items-center gap-1.5">
+                                <ValidatedNumberInput
+                                  value={item.unitPrice}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                  }
+                                  disabled={isReadOnly}
+                                  className={`${itemInputClassName} flex-1`}
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+                                  {currency}
+                                </span>
+                              </div>
                             </div>
-                            <div className="col-span-4 md:col-span-1">
+                            <div className="col-span-4 md:col-span-2">
                               <ValidatedNumberInput
                                 value={item.discount || 0}
                                 onValueChange={(value) =>
                                   updateItem(index, 'discount', value === '' ? 0 : Number(value))
                                 }
                                 disabled={isReadOnly}
-                                className={`${itemInputClassName} text-center`}
+                                className={itemInputClassName}
                               />
                             </div>
-                            <div className="col-span-4 md:col-span-2 flex items-center justify-center">
-                              <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
-                                {lineTotal.toFixed(2)} {currency}
-                              </span>
-                            </div>
+                          </div>
+                          <div className="w-24 shrink-0 flex items-center justify-end">
+                            <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
+                              {lineTotal.toFixed(2)} {currency}
+                            </span>
                           </div>
                           <button
                             type="button"
