@@ -2,14 +2,15 @@ services:
   # Developer compose (builds images from local source).
   # PostgreSQL Database
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: praetor-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-praetor}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
       POSTGRES_DB: ${POSTGRES_DB:-praetor}
+      PGDATA: /var/lib/postgresql/18/docker
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./server/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     expose:
       - '5432'
