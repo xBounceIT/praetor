@@ -208,6 +208,9 @@
     "discount": "Discount %",
     "status": "Status",
     "total": "Total",
+    "subtotal": "Subtotal",
+    "discountAmount": "Discount",
+    "taxRate": "Tax ({{rate}}%)",
     "notes": "Notes",
     "actionsColumn": "Actions",
     "deleteTitle": "Delete supplier quote?",
@@ -221,6 +224,7 @@
     "createOffer": "Create offer",
     "linkedOffer": "Linked to offer",
     "offerAlreadyExists": "An offer for this quote already exists.",
+    "restoreQuote": "Restore quote",
     "errors": {
       "supplierRequired": "Supplier is required",
       "quoteCodeRequired": "Quote Code is required",

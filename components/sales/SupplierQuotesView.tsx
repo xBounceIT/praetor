@@ -35,22 +35,36 @@ const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknow
   { id: '365gg', name: t('crm:paymentTerms.365gg') },
 ];
 
+interface TotalsBreakdown {
+  subtotal: number;
+  discountAmount: number;
+  totalTax: number;
+  taxGroups: Record<number, number>;
+  total: number;
+}
+
 const calculateTotals = (
   items: SupplierQuoteItem[],
   globalDiscount: number,
   products: Product[],
-) => {
+): TotalsBreakdown => {
   let subtotal = 0;
-  let totalTax = 0;
+  const taxGroups: Record<number, number> = {};
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
     const product = products.find((candidate) => candidate.id === item.productId);
-    totalTax += lineNet * (1 - globalDiscount / 100) * (Number(product?.taxRate ?? 0) / 100);
+    const taxRate = Number(product?.taxRate ?? 0);
+    const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
+    const taxAmount = lineNetAfterGlobal * (taxRate / 100);
+    taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
   });
-  return subtotal - subtotal * (globalDiscount / 100) + totalTax;
+  const discountAmount = subtotal * (globalDiscount / 100);
+  const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
+  const total = subtotal - discountAmount + totalTax;
+  return { subtotal, discountAmount, totalTax, taxGroups, total };
 };
 
 export interface SupplierQuotesViewProps {
@@ -82,8 +96,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   onViewOffers,
   onViewOffer,
   currency,
-  // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for API compatibility
-  offers = [],
 }) => {
   const { t } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -152,7 +164,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [hasOfferForQuote],
   );
 
-  const totalAmount = calculateTotals(
+  const totalsBreakdown = calculateTotals(
     formData.items || [],
     Number(formData.discount || 0),
     products,
@@ -250,6 +262,18 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     }));
   }, [editingQuote?.id, isReadOnly]);
 
+  const removeItem = useCallback(
+    (index: number) => {
+      if (isReadOnly) return;
+      setFormData((prev) => {
+        const items = [...(prev.items || [])];
+        items.splice(index, 1);
+        return { ...prev, items };
+      });
+    },
+    [isReadOnly],
+  );
+
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
@@ -262,23 +286,64 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
         accessorKey: 'supplierName',
-        cell: ({ row }) => <div className="font-bold text-slate-800">{row.supplierName}</div>,
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div className={history ? 'font-bold text-slate-400' : 'font-bold text-slate-800'}>
+              {row.supplierName}
+            </div>
+          );
+        },
       },
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculateTotals(row.items, row.discount, products),
+        accessorFn: (row) => calculateTotals(row.items, row.discount, products).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const history = isHistoryRow(row);
+          const { total } = calculateTotals(row.items, row.discount, products);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
             >
-              {calculateTotals(row.items, row.discount, products).toFixed(2)} {currency}
+              {total.toFixed(2)} {currency}
             </span>
+          );
+        },
+      },
+      {
+        header: t('sales:supplierQuotes.paymentTerms', { defaultValue: 'Payment Terms' }),
+        accessorKey: 'paymentTerms',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-semibold ${history ? 'text-slate-400' : 'text-slate-600'}`}
+            >
+              {row.paymentTerms === 'immediate'
+                ? t('sales:clientQuotes.immediatePayment')
+                : row.paymentTerms}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('sales:supplierQuotes.expirationDate', { defaultValue: 'Expiration Date' }),
+        accessorKey: 'expirationDate',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[9rem]',
+        filterFormat: (value) => (value ? formatDateOnlyForLocale(String(value)) : '—'),
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div className={`text-sm ${history ? 'text-slate-400' : 'text-slate-600'}`}>
+              {row.expirationDate ? formatDateOnlyForLocale(row.expirationDate) : '—'}
+            </div>
           );
         },
       },
@@ -287,6 +352,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         accessorKey: 'status',
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
+        filterFormat: (value) => getStatusLabel(String(value)),
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
@@ -444,6 +510,31 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
+              {history && (
+                <Tooltip
+                  label={
+                    hasOffer
+                      ? t('sales:supplierQuotes.offerAlreadyExists', {
+                          defaultValue: 'An offer for this quote already exists.',
+                        })
+                      : t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })
+                  }
+                >
+                  {() => (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (hasOffer) return;
+                        onUpdateQuote(row.id, { status: 'draft' });
+                      }}
+                      disabled={hasOffer}
+                      className={`p-2 rounded-lg transition-all ${hasOffer ? 'cursor-not-allowed opacity-50 text-slate-400' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
+                    >
+                      <i className="fa-solid fa-rotate-left"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
             </div>
           );
         },
@@ -508,7 +599,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -734,96 +825,134 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="px-3 mb-1">
-                  <div className="grid grid-cols-12 gap-3">
+                <div className="hidden md:flex gap-3 px-3 mb-1 items-center">
+                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
                     <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:supplierQuotes.discount', { defaultValue: 'Discount %' })}
-                    </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                      {t('sales:supplierQuotes.discount', { defaultValue: 'Disc %' })}
                     </div>
                   </div>
+                  <div className="w-24 shrink-0 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">
+                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                  </div>
+                  <div className="w-10 shrink-0" />
                 </div>
               )}
 
               {formData.items && formData.items.length > 0 ? (
                 <div className="space-y-3">
-                  {formData.items.map((item, index) => (
-                    <div
-                      key={item.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2"
-                    >
-                      <div className="grid grid-cols-12 gap-3 items-center">
-                        <div className="col-span-12 md:col-span-4">
-                          <CustomSelect
-                            options={activeProducts.map((product) => ({
-                              id: product.id,
-                              name: product.name,
-                            }))}
-                            value={item.productId}
-                            onChange={(value) => updateItem(index, 'productId', value as string)}
-                            placeholder={t('sales:supplierQuotes.selectProduct', {
-                              defaultValue: 'Select product',
-                            })}
-                            searchable={true}
+                  {formData.items.map((item, index) => {
+                    const lineSubtotal = item.quantity * item.unitPrice;
+                    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+                    const lineTotal = lineSubtotal - lineDiscount;
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-3"
+                      >
+                        <div className="flex gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-12 md:col-span-4">
+                              <CustomSelect
+                                options={activeProducts.map((product) => ({
+                                  id: product.id,
+                                  name: product.name,
+                                }))}
+                                value={item.productId}
+                                onChange={(value) =>
+                                  updateItem(index, 'productId', value as string)
+                                }
+                                placeholder={t('sales:supplierQuotes.selectProduct', {
+                                  defaultValue: 'Select product',
+                                })}
+                                searchable={true}
+                                disabled={isReadOnly}
+                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                              />
+                            </div>
+                            <div className="col-span-6 md:col-span-3">
+                              <div className="flex items-center gap-1.5">
+                                <ValidatedNumberInput
+                                  value={item.quantity}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+                                  }
+                                  disabled={isReadOnly}
+                                  className={`${itemInputClassName} text-center flex-1`}
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+                                  {`/ ${
+                                    products.find((p) => p.id === item.productId)?.costUnit ===
+                                    'hours'
+                                      ? t('crm:internalListing.hour')
+                                      : t('crm:internalListing.unit')
+                                  }`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="col-span-6 md:col-span-3">
+                              <div className="flex items-center gap-1.5">
+                                <ValidatedNumberInput
+                                  value={item.unitPrice}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+                                  }
+                                  disabled={isReadOnly}
+                                  className={`${itemInputClassName} flex-1`}
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+                                  {currency}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="col-span-4 md:col-span-2">
+                              <ValidatedNumberInput
+                                value={item.discount || 0}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'discount', value === '' ? 0 : Number(value))
+                                }
+                                disabled={isReadOnly}
+                                className={itemInputClassName}
+                              />
+                            </div>
+                          </div>
+                          <div className="w-24 shrink-0 flex items-center justify-end">
+                            <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
+                              {lineTotal.toFixed(2)} {currency}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
                             disabled={isReadOnly}
-                            buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                          />
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
                         </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <ValidatedNumberInput
-                            value={item.quantity}
-                            onValueChange={(value) =>
-                              updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                            }
-                            disabled={isReadOnly}
-                            className={`${itemInputClassName} text-center`}
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <ValidatedNumberInput
-                            value={item.unitPrice}
-                            onValueChange={(value) =>
-                              updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
-                            }
-                            disabled={isReadOnly}
-                            className={`${itemInputClassName} text-center`}
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <ValidatedNumberInput
-                            value={item.discount || 0}
-                            onValueChange={(value) =>
-                              updateItem(index, 'discount', value === '' ? 0 : Number(value))
-                            }
-                            disabled={isReadOnly}
-                            className={`${itemInputClassName} text-center`}
-                          />
-                        </div>
-                        <div className="col-span-6 md:col-span-2">
+                        <div>
                           <input
                             type="text"
                             value={item.note || ''}
                             disabled={isReadOnly}
                             onChange={(event) => updateItem(index, 'note', event.target.value)}
                             placeholder={t('form:placeholderNotes', {
-                              defaultValue: 'Optional notes...',
+                              defaultValue: 'Notes',
                             })}
                             className={itemInputClassName}
                           />
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 text-slate-400 text-sm">
@@ -850,7 +979,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, notes: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -859,12 +988,46 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                 </h4>
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {totalsBreakdown.subtotal.toFixed(2)} {currency}
+                  </span>
+                </div>
+                {Number(formData.discount || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('sales:supplierQuotes.discountAmount', {
+                        defaultValue: 'Discount',
+                      })}{' '}
+                      ({formData.discount}%)
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{totalsBreakdown.discountAmount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                )}
+                {Object.entries(totalsBreakdown.taxGroups).map(([rate, amount]) => (
+                  <div key={rate} className="flex justify-between text-xs">
+                    <span className="font-semibold text-slate-500">
+                      {t('sales:supplierQuotes.taxRate', {
+                        rate,
+                        defaultValue: 'Tax {{rate}}%',
+                      })}
+                    </span>
+                    <span className="font-semibold text-slate-700">
+                      {amount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                ))}
                 <div className="flex justify-between border-t border-slate-200 pt-3">
                   <span className="text-lg font-black text-slate-800">
                     {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                   </span>
                   <span className="text-lg font-black text-praetor">
-                    {totalAmount.toFixed(2)} {currency}
+                    {totalsBreakdown.total.toFixed(2)} {currency}
                   </span>
                 </div>
               </div>
@@ -951,6 +1114,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         data={filteredQuotes}
         columns={columns}
         defaultRowsPerPage={5}
+        onRowClick={(row) => {
+          const canOpenModal =
+            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
+          if (canOpenModal) {
+            openEditModal(row);
+          }
+        }}
+        rowClassName={(row) => {
+          const history = isHistoryRow(row);
+          const canOpenModal =
+            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
+          const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
+          return history
+            ? `bg-slate-50 text-slate-400 hover:bg-slate-100 ${cursorClass}`
+            : `hover:bg-slate-50/50 ${cursorClass}`;
+        }}
         initialFilterState={tableInitialFilterState}
       />
     </div>
