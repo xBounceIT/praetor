@@ -1008,52 +1008,48 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                 </h4>
-                {formData.items && formData.items.length > 0 && (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
-                      </span>
-                      <span className="text-sm font-bold text-slate-700">
-                        {totalsBreakdown.subtotal.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                    {Number(formData.discount || 0) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm font-bold text-slate-500">
-                          {t('sales:supplierQuotes.discountAmount', {
-                            defaultValue: 'Discount',
-                          })}{' '}
-                          ({formData.discount}%)
-                        </span>
-                        <span className="text-sm font-bold text-amber-600">
-                          -{totalsBreakdown.discountAmount.toFixed(2)} {currency}
-                        </span>
-                      </div>
-                    )}
-                    {Object.entries(totalsBreakdown.taxGroups).map(([rate, amount]) => (
-                      <div key={rate} className="flex justify-between text-xs">
-                        <span className="font-semibold text-slate-500">
-                          {t('sales:supplierQuotes.taxRate', {
-                            rate,
-                            defaultValue: 'Tax {{rate}}%',
-                          })}
-                        </span>
-                        <span className="font-semibold text-slate-700">
-                          {amount.toFixed(2)} {currency}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between border-t border-slate-200 pt-3">
-                      <span className="text-lg font-black text-slate-800">
-                        {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                      </span>
-                      <span className="text-lg font-black text-praetor">
-                        {totalsBreakdown.total.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                  </>
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {totalsBreakdown.subtotal.toFixed(2)} {currency}
+                  </span>
+                </div>
+                {Number(formData.discount || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('sales:supplierQuotes.discountAmount', {
+                        defaultValue: 'Discount',
+                      })}{' '}
+                      ({formData.discount}%)
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{totalsBreakdown.discountAmount.toFixed(2)} {currency}
+                    </span>
+                  </div>
                 )}
+                {Object.entries(totalsBreakdown.taxGroups).map(([rate, amount]) => (
+                  <div key={rate} className="flex justify-between text-xs">
+                    <span className="font-semibold text-slate-500">
+                      {t('sales:supplierQuotes.taxRate', {
+                        rate,
+                        defaultValue: 'Tax {{rate}}%',
+                      })}
+                    </span>
+                    <span className="font-semibold text-slate-700">
+                      {amount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-slate-200 pt-3">
+                  <span className="text-lg font-black text-slate-800">
+                    {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+                  </span>
+                  <span className="text-lg font-black text-praetor">
+                    {totalsBreakdown.total.toFixed(2)} {currency}
+                  </span>
+                </div>
               </div>
             </div>
 
