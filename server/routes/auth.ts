@@ -61,27 +61,21 @@ const loginResponseSchema = {
 } as const;
 
 const getAvailableRolesForUser = async (userId: string) => {
-  try {
-    const result = await query(
-      `SELECT r.id, r.name, r.is_system, r.is_admin
-         FROM user_roles ur
-         JOIN roles r ON r.id = ur.role_id
-        WHERE ur.user_id = $1
-        ORDER BY r.name`,
-      [userId],
-    );
+  const result = await query(
+    `SELECT r.id, r.name, r.is_system, r.is_admin
+       FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = $1
+      ORDER BY r.name`,
+    [userId],
+  );
 
-    return result.rows.map((r) => ({
-      id: r.id as string,
-      name: r.name as string,
-      isSystem: !!r.is_system,
-      isAdmin: !!r.is_admin,
-    }));
-  } catch (err) {
-    const e = err as { code?: string };
-    if (e.code === '42P01') return []; // undefined_table during startup migrations
-    throw err;
-  }
+  return result.rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    isSystem: !!r.is_system,
+    isAdmin: !!r.is_admin,
+  }));
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -264,20 +258,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const userId = request.user?.id;
       if (!userId) return reply.code(401).send({ error: 'Authentication required' });
 
-      try {
-        const membership = await query(
-          'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
-          [userId, roleIdResult.value],
-        );
-        if (membership.rows.length === 0) {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
-      } catch (err) {
-        const e = err as { code?: string };
-        if (e.code === '42P01') {
-          return reply.code(403).send({ error: 'Insufficient permissions' });
-        }
-        throw err;
+      const membership = await query(
+        'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
+        [userId, roleIdResult.value],
+      );
+      if (membership.rows.length === 0) {
+        return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
       const permissions = await getRolePermissions(roleIdResult.value);

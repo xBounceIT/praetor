@@ -70,19 +70,12 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
     const effectiveRole = decoded.activeRole ?? user.role;
 
-    // Validate role membership via user_roles if the table exists.
-    // During startup migrations, user_roles may not exist yet; skip validation in that case.
-    try {
-      const membership = await query(
-        'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
-        [user.id, effectiveRole],
-      );
-      if (membership.rows.length === 0) {
-        return reply.code(403).send({ error: 'Invalid or expired token' });
-      }
-    } catch (err) {
-      const e = err as { code?: string };
-      if (e.code !== '42P01') throw err; // undefined_table
+    const membership = await query(
+      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2 LIMIT 1',
+      [user.id, effectiveRole],
+    );
+    if (membership.rows.length === 0) {
+      return reply.code(403).send({ error: 'Invalid or expired token' });
     }
 
     const permissions = await getRolePermissions(effectiveRole);

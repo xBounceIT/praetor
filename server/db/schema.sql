@@ -360,6 +360,9 @@ DROP INDEX IF EXISTS idx_clients_vat_number_unique;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_fiscal_code_unique
     ON clients (LOWER(fiscal_code))
     WHERE fiscal_code IS NOT NULL AND fiscal_code <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_client_code_unique
+    ON clients (client_code)
+    WHERE client_code IS NOT NULL AND client_code <> '';
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
@@ -476,12 +479,23 @@ CREATE TABLE IF NOT EXISTS settings (
     user_id VARCHAR(50) UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     full_name VARCHAR(255),
     email VARCHAR(255),
+    language VARCHAR(10) DEFAULT 'auto' CHECK (language IN ('en', 'it', 'auto')),
     daily_goal DECIMAL(4, 2) DEFAULT 8.00,
     start_of_week VARCHAR(10) DEFAULT 'Monday' CHECK (start_of_week IN ('Monday', 'Sunday')),
     compact_view BOOLEAN DEFAULT FALSE,
     treat_saturday_as_holiday BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'auto';
+
+DO $$
+BEGIN
+    ALTER TABLE settings DROP CONSTRAINT IF EXISTS settings_language_check;
+    ALTER TABLE settings ADD CONSTRAINT settings_language_check
+        CHECK (language IN ('en', 'it', 'auto'));
+    ALTER TABLE settings ALTER COLUMN language SET DEFAULT 'auto';
+END $$;
 
 -- LDAP administration table (single row)
 CREATE TABLE IF NOT EXISTS ldap_config (
