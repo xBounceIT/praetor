@@ -59,6 +59,10 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+The bundled database now targets fresh PostgreSQL 18 installs and pins `PGDATA` to the
+official PG18 container layout. Do not point this compose file at an existing PostgreSQL 17
+data volume.
+
 The compose setup defaults backend `TRUST_PROXY=1` for the bundled Caddy -> API hop.
 Set `DEMO_SEEDING=true` in `.env` when you want the stack to provision the canonical demo users and demo business data.
 That refresh flow is intended for demo and test stacks, owns the canonical demo namespace, and supports reused Docker volumes.
@@ -81,6 +85,10 @@ cp deploy/.env.customer.example .env
 docker compose --env-file .env -f deploy/docker-compose.customer.yml pull
 docker compose --env-file .env -f deploy/docker-compose.customer.yml up -d
 ```
+
+This deployment defaults to PostgreSQL 18 for fresh installs only. The documented `pull` and
+`up -d` flow is an application rollout path, not an in-place PostgreSQL major-version upgrade
+procedure for an existing volume.
 
 That deployment also defaults backend `TRUST_PROXY=1`; override it if your proxy chain differs.
 
