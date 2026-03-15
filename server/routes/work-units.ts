@@ -98,7 +98,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('administration.work_units.view')],
+      onRequest: [authenticateToken, requirePermission('hr.work_units.view')],
       schema: {
         tags: ['work-units'],
         summary: 'List work units',
@@ -110,7 +110,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
       let result: Awaited<ReturnType<typeof query>>;
-      if (hasPermission(request, 'administration.work_units_all.view')) {
+      if (hasPermission(request, 'hr.work_units_all.view')) {
         result = await query(`
                 SELECT w.*,
                     (
@@ -158,11 +158,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // POST / - Create work unit (Admin only)
+  // POST / - Create work unit
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requirePermission('administration.work_units.create')],
+      onRequest: [authenticateToken, requirePermission('hr.work_units.create')],
       schema: {
         tags: ['work-units'],
         summary: 'Create work unit',
@@ -236,11 +236,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // PUT /:id - Update work unit (Admin only)
+  // PUT /:id - Update work unit
   fastify.put(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('administration.work_units.update')],
+      onRequest: [authenticateToken, requirePermission('hr.work_units.update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit',
@@ -381,11 +381,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // DELETE /:id - Delete work unit (Admin only)
+  // DELETE /:id - Delete work unit
   fastify.delete(
     '/:id',
     {
-      onRequest: [authenticateToken, requirePermission('administration.work_units.delete')],
+      onRequest: [authenticateToken, requirePermission('hr.work_units.delete')],
       schema: {
         tags: ['work-units'],
         summary: 'Delete work unit',
@@ -426,7 +426,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('administration.work_units.view')],
+      onRequest: [authenticateToken, requirePermission('hr.work_units.view')],
       schema: {
         tags: ['work-units'],
         summary: 'Get users in work unit',
@@ -443,7 +443,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check permissions
-      if (!hasPermission(request, 'administration.work_units_all.view')) {
+      if (!hasPermission(request, 'hr.work_units_all.view')) {
         // Check if user is a manager of this unit
         const check = await query(
           'SELECT 1 FROM work_unit_managers WHERE work_unit_id = $1 AND user_id = $2',
@@ -468,11 +468,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // POST /:id/users - Update users in work unit (Admin only)
+  // POST /:id/users - Update users in work unit
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('administration.work_units.update')],
+      onRequest: [authenticateToken, requirePermission('hr.work_units.update')],
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit users',

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS roles (
 INSERT INTO roles (id, name, is_system, is_admin)
 VALUES
     ('admin', 'Admin', TRUE, TRUE),
+    ('top_manager', 'Top Manager', TRUE, FALSE),
     ('manager', 'Manager', TRUE, FALSE),
     ('user', 'User', TRUE, FALSE)
 ON CONFLICT DO NOTHING;
@@ -39,7 +40,6 @@ BEGIN
             ('manager', 'crm.clients.create'),
             ('manager', 'crm.clients.update'),
             ('manager', 'crm.clients.delete'),
-            ('manager', 'crm.clients_all.view'),
             ('manager', 'crm.suppliers.view'),
             ('manager', 'crm.suppliers.create'),
             ('manager', 'crm.suppliers.update'),
@@ -167,6 +167,15 @@ WHERE rp.role_id = r.id
 
 -- Migration: Remove deprecated Finances module permissions.
 DELETE FROM role_permissions WHERE permission LIKE 'finances.%';
+
+-- Migration: Manager is scoped to assigned clients, projects, and tasks.
+DELETE FROM role_permissions
+WHERE role_id = 'manager'
+  AND permission IN (
+    'crm.clients_all.view',
+    'projects.manage_all.view',
+    'projects.tasks_all.view'
+  );
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -423,25 +432,67 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_duration DECIMAL(10, 2) DE
 CREATE TABLE IF NOT EXISTS user_clients (
     user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
     client_id VARCHAR(50) REFERENCES clients(id) ON DELETE CASCADE,
+    assignment_source VARCHAR(20) NOT NULL DEFAULT 'manual',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, client_id)
 );
+
+ALTER TABLE user_clients ADD COLUMN IF NOT EXISTS assignment_source VARCHAR(20) DEFAULT 'manual';
+UPDATE user_clients SET assignment_source = 'manual' WHERE assignment_source IS NULL;
+ALTER TABLE user_clients ALTER COLUMN assignment_source SET NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'user_clients_assignment_source_check'
+    ) THEN
+        ALTER TABLE user_clients ADD CONSTRAINT user_clients_assignment_source_check
+            CHECK (assignment_source IN ('manual', 'top_manager_auto'));
+    END IF;
+END $$;
 
 -- User-Project associations
 CREATE TABLE IF NOT EXISTS user_projects (
     user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
     project_id VARCHAR(50) REFERENCES projects(id) ON DELETE CASCADE,
+    assignment_source VARCHAR(20) NOT NULL DEFAULT 'manual',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, project_id)
 );
+
+ALTER TABLE user_projects ADD COLUMN IF NOT EXISTS assignment_source VARCHAR(20) DEFAULT 'manual';
+UPDATE user_projects SET assignment_source = 'manual' WHERE assignment_source IS NULL;
+ALTER TABLE user_projects ALTER COLUMN assignment_source SET NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'user_projects_assignment_source_check'
+    ) THEN
+        ALTER TABLE user_projects ADD CONSTRAINT user_projects_assignment_source_check
+            CHECK (assignment_source IN ('manual', 'top_manager_auto'));
+    END IF;
+END $$;
 
 -- User-Task associations
 CREATE TABLE IF NOT EXISTS user_tasks (
     user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
     task_id VARCHAR(50) REFERENCES tasks(id) ON DELETE CASCADE,
+    assignment_source VARCHAR(20) NOT NULL DEFAULT 'manual',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, task_id)
 );
+
+ALTER TABLE user_tasks ADD COLUMN IF NOT EXISTS assignment_source VARCHAR(20) DEFAULT 'manual';
+UPDATE user_tasks SET assignment_source = 'manual' WHERE assignment_source IS NULL;
+ALTER TABLE user_tasks ALTER COLUMN assignment_source SET NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'user_tasks_assignment_source_check'
+    ) THEN
+        ALTER TABLE user_tasks ADD CONSTRAINT user_tasks_assignment_source_check
+            CHECK (assignment_source IN ('manual', 'top_manager_auto'));
+    END IF;
+END $$;
 
 -- Time entries table
 CREATE TABLE IF NOT EXISTS time_entries (
@@ -1291,11 +1342,37 @@ VALUES
     ('manager', 'hr.costs.update')
 ON CONFLICT DO NOTHING;
 
+-- Seed employee assignment permissions for manager role
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'hr.employee_assignments.update')
+ON CONFLICT DO NOTHING;
+
 -- Seed Reports permissions for manager role (safe for existing installations)
 INSERT INTO role_permissions (role_id, permission)
 VALUES
     ('manager', 'reports.ai_reporting.view'),
     ('manager', 'reports.ai_reporting.create')
+ON CONFLICT DO NOTHING;
+
+-- Seed Top Manager from the scoped manager baseline, then add its extra visibility/control.
+INSERT INTO role_permissions (role_id, permission)
+SELECT 'top_manager', permission
+FROM role_permissions
+WHERE role_id = 'manager'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('top_manager', 'timesheets.tracker_all.view'),
+    ('top_manager', 'crm.clients_all.view'),
+    ('top_manager', 'projects.manage_all.view'),
+    ('top_manager', 'projects.tasks_all.view'),
+    ('top_manager', 'hr.work_units.view'),
+    ('top_manager', 'hr.work_units.create'),
+    ('top_manager', 'hr.work_units.update'),
+    ('top_manager', 'hr.work_units.delete'),
+    ('top_manager', 'hr.work_units_all.view')
 ON CONFLICT DO NOTHING;
 
 -- Migration: Merge reports.ai_reporting_ai.create into reports.ai_reporting.create

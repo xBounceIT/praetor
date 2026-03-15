@@ -5,6 +5,12 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
+  assignClientToTopManagers,
+  assignClientToUser,
+  assignProjectToTopManagers,
+  assignProjectToUser,
+} from '../utils/top-manager-assignments.ts';
+import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -1149,6 +1155,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 false,
               ],
             );
+
+            if (request.user?.id) {
+              await assignClientToUser(request.user.id, orderResult.rows[0].clientId);
+              await assignProjectToUser(request.user.id, projectId);
+            }
+            await assignClientToTopManagers(orderResult.rows[0].clientId);
+            await assignProjectToTopManagers(projectId);
           }
         }
 

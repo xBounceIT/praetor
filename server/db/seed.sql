@@ -9,14 +9,15 @@
 INSERT INTO users (id, name, username, password_hash, role, avatar_initials) VALUES
     ('u1', 'Admin User', 'admin', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'admin', 'AD'),
     ('u2', 'Manager User', 'manager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'manager', 'MG'),
-    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US')
+    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US'),
+    ('u9', 'Top Manager', 'topmanager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'top_manager', 'TM')
 ON CONFLICT DO NOTHING;
 
 -- Ensure default users have matching rows in user_roles
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, u.role
 FROM users u
-WHERE u.id IN ('u1', 'u2', 'u3')
+WHERE u.id IN ('u1', 'u2', 'u3', 'u9')
 ON CONFLICT DO NOTHING;
 
 -- Lightweight defaults kept for compatibility with existing frontend constants
@@ -41,7 +42,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO settings (user_id, full_name, email) VALUES
     ('u1', 'Admin User', 'admin@example.com'),
     ('u2', 'Manager User', 'manager@example.com'),
-    ('u3', 'Standard User', 'user@example.com')
+    ('u3', 'Standard User', 'user@example.com'),
+    ('u9', 'Top Manager', 'topmanager@example.com')
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Refreshable demo dataset.
@@ -1276,7 +1278,10 @@ INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES
     ('dm_wu_01', 'u2'),
     ('dm_wu_02', 'u4'),
     ('dm_wu_03', 'u2'),
-    ('dm_wu_03', 'u4')
+    ('dm_wu_03', 'u4'),
+    ('dm_wu_01', 'u9'),
+    ('dm_wu_02', 'u9'),
+    ('dm_wu_03', 'u9')
 ON CONFLICT (work_unit_id, user_id) DO NOTHING;
 
 INSERT INTO user_work_units (user_id, work_unit_id) VALUES
@@ -1290,8 +1295,74 @@ INSERT INTO user_work_units (user_id, work_unit_id) VALUES
     ('u2', 'dm_wu_03'),
     ('u4', 'dm_wu_03'),
     ('u5', 'dm_wu_03'),
-    ('u7', 'dm_wu_03')
+    ('u7', 'dm_wu_03'),
+    ('u9', 'dm_wu_01'),
+    ('u9', 'dm_wu_02'),
+    ('u9', 'dm_wu_03')
 ON CONFLICT (user_id, work_unit_id) DO NOTHING;
+
+INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES
+    ('u2', 'c1',        'manual'),
+    ('u2', 'c2',        'manual'),
+    ('u2', 'dm_cli_01', 'manual'),
+    ('u3', 'c1',        'manual'),
+    ('u3', 'dm_cli_01', 'manual'),
+    ('u4', 'c1',        'manual'),
+    ('u4', 'c2',        'manual'),
+    ('u4', 'dm_cli_01', 'manual'),
+    ('u5', 'c1',        'manual'),
+    ('u5', 'dm_cli_01', 'manual'),
+    ('u6', 'c1',        'manual'),
+    ('u6', 'dm_cli_01', 'manual'),
+    ('u7', 'c2',        'manual'),
+    ('u8', 'c2',        'manual')
+ON CONFLICT (user_id, client_id) DO NOTHING;
+
+INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES
+    ('u2', 'p1',        'manual'),
+    ('u2', 'p2',        'manual'),
+    ('u2', 'p3',        'manual'),
+    ('u2', 'dm_proj_01','manual'),
+    ('u2', 'dm_proj_02','manual'),
+    ('u3', 'p1',        'manual'),
+    ('u3', 'p2',        'manual'),
+    ('u3', 'dm_proj_02','manual'),
+    ('u4', 'p1',        'manual'),
+    ('u4', 'p2',        'manual'),
+    ('u4', 'p3',        'manual'),
+    ('u4', 'dm_proj_01','manual'),
+    ('u4', 'dm_proj_02','manual'),
+    ('u5', 'p1',        'manual'),
+    ('u5', 'p2',        'manual'),
+    ('u5', 'dm_proj_02','manual'),
+    ('u6', 'p1',        'manual'),
+    ('u6', 'p2',        'manual'),
+    ('u6', 'dm_proj_01','manual'),
+    ('u7', 'p3',        'manual'),
+    ('u8', 'p3',        'manual')
+ON CONFLICT (user_id, project_id) DO NOTHING;
+
+INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES
+    ('u2', 't1', 'manual'),
+    ('u2', 't2', 'manual'),
+    ('u2', 't3', 'manual'),
+    ('u2', 't4', 'manual'),
+    ('u3', 't1', 'manual'),
+    ('u3', 't2', 'manual'),
+    ('u3', 't3', 'manual'),
+    ('u4', 't1', 'manual'),
+    ('u4', 't2', 'manual'),
+    ('u4', 't3', 'manual'),
+    ('u4', 't4', 'manual'),
+    ('u5', 't1', 'manual'),
+    ('u5', 't2', 'manual'),
+    ('u5', 't3', 'manual'),
+    ('u6', 't1', 'manual'),
+    ('u6', 't2', 'manual'),
+    ('u6', 't3', 'manual'),
+    ('u7', 't4', 'manual'),
+    ('u8', 't4', 'manual')
+ON CONFLICT (user_id, task_id) DO NOTHING;
 
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,

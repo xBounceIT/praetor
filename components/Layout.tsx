@@ -30,13 +30,12 @@ const moduleRoutes: Record<string, View[]> = {
     'accounting/supplier-orders',
     'accounting/supplier-invoices',
   ],
-  hr: ['hr/internal', 'hr/external'],
+  hr: ['hr/internal', 'hr/external', 'hr/work-units'],
   reports: ['reports/ai-reporting'],
   administration: [
     'administration/authentication',
     'administration/general',
     'administration/user-management',
-    'administration/work-units',
     'administration/roles',
     'administration/email',
     'administration/logs',
@@ -429,6 +428,18 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
               />
             )}
+            {canAccessView('hr/work-units') && (
+              <NavItem
+                icon="fa-sitemap"
+                label={t('routes.workUnits')}
+                active={activeView === 'hr/work-units'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('hr/work-units');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
           </>
         );
       case 'projects':
@@ -498,19 +509,6 @@ const Layout: React.FC<LayoutProps> = ({
                 isCollapsed={isCollapsed}
                 onClick={() => {
                   onViewChange('administration/user-management');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-
-            {canAccessView('administration/work-units') && (
-              <NavItem
-                icon="fa-sitemap"
-                label={t('routes.workUnits')}
-                active={activeView === 'administration/work-units'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('administration/work-units');
                   setIsMobileMenuOpen(false);
                 }}
               />

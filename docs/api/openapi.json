@@ -837,6 +837,9 @@
                       "username": {
                         "type": "string"
                       },
+                      "email": {
+                        "type": "string"
+                      },
                       "role": {
                         "type": "string"
                       },
@@ -856,17 +859,26 @@
                           "internal",
                           "external"
                         ]
+                      },
+                      "hasTopManagerRole": {
+                        "type": "boolean"
+                      },
+                      "isAdminOnly": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
                       "id",
                       "name",
                       "username",
+                      "email",
                       "role",
                       "avatarInitials",
                       "costPerHour",
                       "isDisabled",
-                      "employeeType"
+                      "employeeType",
+                      "hasTopManagerRole",
+                      "isAdminOnly"
                     ]
                   }
                 }
@@ -1006,6 +1018,9 @@
                   "role": {
                     "type": "string"
                   },
+                  "email": {
+                    "type": "string"
+                  },
                   "costPerHour": {
                     "type": "number"
                   },
@@ -1043,6 +1058,9 @@
                     "username": {
                       "type": "string"
                     },
+                    "email": {
+                      "type": "string"
+                    },
                     "role": {
                       "type": "string"
                     },
@@ -1062,17 +1080,26 @@
                         "internal",
                         "external"
                       ]
+                    },
+                    "hasTopManagerRole": {
+                      "type": "boolean"
+                    },
+                    "isAdminOnly": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "id",
                     "name",
                     "username",
+                    "email",
                     "role",
                     "avatarInitials",
                     "costPerHour",
                     "isDisabled",
-                    "employeeType"
+                    "employeeType",
+                    "hasTopManagerRole",
+                    "isAdminOnly"
                   ]
                 }
               }
@@ -1320,6 +1347,9 @@
                   },
                   "role": {
                     "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
                   }
                 }
               }
@@ -1353,6 +1383,9 @@
                     "username": {
                       "type": "string"
                     },
+                    "email": {
+                      "type": "string"
+                    },
                     "role": {
                       "type": "string"
                     },
@@ -1372,17 +1405,26 @@
                         "internal",
                         "external"
                       ]
+                    },
+                    "hasTopManagerRole": {
+                      "type": "boolean"
+                    },
+                    "isAdminOnly": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "id",
                     "name",
                     "username",
+                    "email",
                     "role",
                     "avatarInitials",
                     "costPerHour",
                     "isDisabled",
-                    "employeeType"
+                    "employeeType",
+                    "hasTopManagerRole",
+                    "isAdminOnly"
                   ]
                 }
               }
@@ -22253,6 +22295,26 @@
         "summary": "List system audit logs",
         "tags": [
           "logs"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "in": "query",
+            "name": "startDate",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "in": "query",
+            "name": "endDate",
+            "required": false
+          }
         ],
         "responses": {
           "200": {

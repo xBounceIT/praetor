@@ -16,6 +16,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { assignClientToTopManagers, assignClientToUser } from '../utils/top-manager-assignments.ts';
 import {
   badRequest,
   optionalEmail,
@@ -469,6 +470,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const c = created.rows[0];
 
+        if (request.user?.id) {
+          await assignClientToUser(request.user.id, id);
+        }
+        await assignClientToTopManagers(id);
         await bumpNamespaceVersion('clients');
         await logAudit({
           request,

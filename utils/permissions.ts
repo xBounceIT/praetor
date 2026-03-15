@@ -18,6 +18,7 @@ export type PermissionDefinition = {
 
 const getModuleId = (resource: string) => resource.split('.')[0];
 const ADMINISTRATION_MODULE = 'administration';
+export const TOP_MANAGER_ROLE_ID = 'top_manager';
 
 export const ALWAYS_GRANTED_MODULES: string[] = ['docs', 'settings', 'notifications'];
 export const ROLE_EDITOR_EXCLUDED_MODULES = [...ALWAYS_GRANTED_MODULES, ADMINISTRATION_MODULE];
@@ -61,6 +62,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.internal', actions: CRUD, module: 'hr' },
   { id: 'hr.external', actions: CRUD, module: 'hr' },
   { id: 'hr.costs', actions: VIEW_UPDATE, module: 'hr' },
+  { id: 'hr.employee_assignments', actions: ['update'], module: 'hr' },
+  { id: 'hr.work_units', actions: CRUD, module: 'hr' },
+  { id: 'hr.work_units_all', actions: VIEW_ONLY, isScope: true, module: 'hr' },
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'], module: 'reports' },
@@ -71,13 +75,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'administration.user_management', actions: CRUD, module: 'administration' },
   {
     id: 'administration.user_management_all',
-    actions: VIEW_ONLY,
-    isScope: true,
-    module: 'administration',
-  },
-  { id: 'administration.work_units', actions: CRUD, module: 'administration' },
-  {
-    id: 'administration.work_units_all',
     actions: VIEW_ONLY,
     isScope: true,
     module: 'administration',
@@ -107,6 +104,9 @@ export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.fi
   def.id.startsWith('administration.'),
 ).flatMap((def) => buildPermissions(def.id, def.actions));
 
+export const isTopManagerOnlyPermission = (permission: string) =>
+  permission.startsWith('hr.work_units.') || permission.startsWith('hr.work_units_all.');
+
 export const formatPermissionLabel = (resource: string) => {
   const parts = resource.split('.');
   const resourceName = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
@@ -135,7 +135,6 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'administration/authentication': buildPermission('administration.authentication', 'view'),
   'administration/general': buildPermission('administration.general', 'view'),
   'administration/user-management': buildPermission('administration.user_management', 'view'),
-  'administration/work-units': buildPermission('administration.work_units', 'view'),
   'administration/email': buildPermission('administration.email', 'view'),
   'administration/roles': buildPermission('administration.roles', 'view'),
   'administration/logs': buildPermission('administration.logs', 'view'),
@@ -156,6 +155,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'projects/tasks': buildPermission('projects.tasks', 'view'),
   'hr/internal': buildPermission('hr.internal', 'view'),
   'hr/external': buildPermission('hr.external', 'view'),
+  'hr/work-units': buildPermission('hr.work_units', 'view'),
   'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
   settings: buildPermission('settings', 'view'),
   'docs/api': buildPermission('docs.api', 'view'),
