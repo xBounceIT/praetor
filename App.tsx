@@ -2923,9 +2923,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddUser = async (name: string, username: string, password: string, role: string) => {
+  const handleAddUser = async (
+    name: string,
+    username: string,
+    password: string,
+    role: string,
+    email?: string,
+  ) => {
     try {
-      const user = await api.users.create(name, username, password, role);
+      const user = await api.users.create(name, username, password, role, email);
       setUsers([...users, user]);
       return { success: true };
     } catch (err) {

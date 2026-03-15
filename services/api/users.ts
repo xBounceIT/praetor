@@ -10,11 +10,12 @@ export const usersApi = {
     username: string,
     password: string,
     role: string,
+    email?: string,
     costPerHour?: number,
   ): Promise<User> =>
     fetchApi<User>('/users', {
       method: 'POST',
-      body: JSON.stringify({ name, username, password, role, costPerHour }),
+      body: JSON.stringify({ name, username, password, role, email, costPerHour }),
     }).then(normalizeUser),
 
   delete: (id: string): Promise<void> => fetchApi(`/users/${id}`, { method: 'DELETE' }),

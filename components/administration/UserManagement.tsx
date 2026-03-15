@@ -21,6 +21,7 @@ export interface UserManagementProps {
     username: string,
     password: string,
     role: string,
+    email?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
@@ -47,6 +48,40 @@ const UserManagement: React.FC<UserManagementProps> = ({
 }) => {
   const { t } = useTranslation(['hr', 'common']);
 
+  const isValidEmail = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || /\s/.test(trimmed)) return false;
+
+    const atIndex = trimmed.indexOf('@');
+    if (atIndex <= 0 || atIndex !== trimmed.lastIndexOf('@')) return false;
+
+    const localPart = trimmed.slice(0, atIndex);
+    const domainPart = trimmed.slice(atIndex + 1);
+    if (!localPart || !domainPart) return false;
+    if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
+    if (localPart.includes('..') || domainPart.includes('..')) return false;
+    if (!domainPart.includes('.')) return false;
+
+    const domainLabels = domainPart.split('.');
+    if (domainLabels.some((label) => !label)) return false;
+    if (domainLabels.some((label) => label.startsWith('-') || label.endsWith('-'))) return false;
+
+    return true;
+  };
+
+  const splitFullName = (fullName: string) => {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      return { firstName: '', surname: '' };
+    }
+
+    const [firstName, ...surnameParts] = trimmed.split(/\s+/);
+    return { firstName, surname: surnameParts.join(' ') };
+  };
+
+  const buildFullName = (firstName: string, surname: string) =>
+    `${firstName.trim()} ${surname.trim()}`.trim();
+
   const roleOptions = React.useMemo(
     () =>
       roles.length
@@ -65,6 +100,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const [newFirstName, setNewFirstName] = useState('');
   const [newSurname, setNewSurname] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
@@ -101,7 +137,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editSurname, setEditSurname] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<string>('');
   const [editAssignedRoleIds, setEditAssignedRoleIds] = useState<string[]>([]);
   const [editPrimaryRoleId, setEditPrimaryRoleId] = useState<string>('');
@@ -109,6 +147,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [initialEditPrimaryRoleId, setInitialEditPrimaryRoleId] = useState<string>('');
   const [isLoadingEditRoles, setIsLoadingEditRoles] = useState(false);
   const [editRolesError, setEditRolesError] = useState('');
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
   const [userSearch, setUserSearch] = useState('');
@@ -151,6 +190,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
     const newErrors: Record<string, string> = {};
     if (!newFirstName?.trim()) newErrors.firstName = t('common:validation.nameRequired');
     if (!newSurname?.trim()) newErrors.surname = t('common:validation.surnameRequired');
+    if (newEmail.trim() && !isValidEmail(newEmail)) {
+      newErrors.email = t('common:validation.invalidEmail');
+    }
     if (!newUsername?.trim()) newErrors.username = t('common:validation.usernameRequired');
     if (!newPassword?.trim()) newErrors.password = t('common:validation.passwordRequired');
 
@@ -159,11 +201,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
 
-    const fullName = `${newFirstName.trim()} ${newSurname.trim()}`;
-    const result = await onAddUser(fullName, newUsername, newPassword, newRole);
+    const fullName = buildFullName(newFirstName, newSurname);
+    const result = await onAddUser(
+      fullName,
+      newUsername.trim(),
+      newPassword,
+      newRole,
+      newEmail.trim(),
+    );
     if (!result.success) {
       if (result.error?.includes('Username already exists')) {
         setFormErrors({ username: t('common:validation.usernameAlreadyExists') || result.error });
+      } else if (result.error?.toLowerCase().includes('email')) {
+        setFormErrors({ email: t('common:validation.invalidEmail') || result.error });
       } else {
         setFormErrors({ general: result.error || t('common:messages.errorOccurred') });
       }
@@ -172,6 +222,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
     setNewFirstName('');
     setNewSurname('');
+    setNewEmail('');
     setNewUsername('');
     setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
@@ -183,6 +234,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setIsCreateModalOpen(false);
     setNewFirstName('');
     setNewSurname('');
+    setNewEmail('');
     setNewUsername('');
     setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
@@ -378,11 +430,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
   };
 
   const handleEdit = (user: User) => {
+    const { firstName, surname } = splitFullName(user.name);
     setEditingUser(user);
-    setEditName(user.name);
+    setEditFirstName(firstName);
+    setEditSurname(surname);
+    setEditEmail(user.email || '');
     setEditRole(user.role);
     setEditCostPerHour(user.costPerHour?.toString() || '0');
     setEditIsDisabled(!!user.isDisabled);
+    setEditFormErrors({});
 
     // Multi-role edit state (admin-only in practice because roles are admin-scoped)
     setEditRolesError('');
@@ -420,6 +476,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
       });
   };
 
+  const closeEditModal = () => {
+    setEditingUser(null);
+    setEditRolesError('');
+    setEditFormErrors({});
+  };
+
   const sameStringSet = (a: string[], b: string[]) => {
     if (a.length !== b.length) return false;
     const as = new Set(a);
@@ -429,8 +491,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const saveEdit = async () => {
     if (editingUser) {
+      const newErrors: Record<string, string> = {};
+      if (!editFirstName.trim()) newErrors.firstName = t('common:validation.nameRequired');
+      if (!editSurname.trim()) newErrors.surname = t('common:validation.surnameRequired');
+      if (editEmail.trim() && !isValidEmail(editEmail)) {
+        newErrors.email = t('common:validation.invalidEmail');
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setEditFormErrors(newErrors);
+        return;
+      }
+
       const updates: Partial<User> = {
-        name: editName,
+        name: buildFullName(editFirstName, editSurname),
+        email: editEmail.trim(),
         isDisabled: editIsDisabled,
       };
 
@@ -476,7 +551,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       }
 
       onUpdateUser(editingUser?.id, updates);
-      setEditingUser(null);
+      closeEditModal();
     }
   };
 
@@ -491,7 +566,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       editPrimaryRoleId !== initialEditPrimaryRoleId);
   const hasEditChanges =
     !!editingUser &&
-    (editName !== editingUser.name ||
+    (buildFullName(editFirstName, editSurname) !== editingUser.name ||
+      editEmail.trim() !== (editingUser.email || '') ||
       editIsDisabled !== !!editingUser.isDisabled ||
       (canViewCosts &&
         canUpdateUsers &&
@@ -685,8 +761,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       </Modal>
 
       {/* Edit User Modal */}
-      <Modal isOpen={!!editingUser} onClose={() => setEditingUser(null)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+      <Modal isOpen={!!editingUser} onClose={closeEditModal}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
@@ -696,16 +772,72 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </div>
 
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    {t('hr:workforce.name')}
+                  </label>
+                  <input
+                    type="text"
+                    value={editFirstName}
+                    onChange={(e) => {
+                      setEditFirstName(e.target.value);
+                      if (editFormErrors.firstName) {
+                        setEditFormErrors((prev) => ({ ...prev, firstName: '' }));
+                      }
+                    }}
+                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.firstName ? 'border-red-400' : 'border-slate-200'
+                    }`}
+                  />
+                  {editFormErrors.firstName && (
+                    <p className="text-xs text-red-500 mt-1">{editFormErrors.firstName}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    {t('hr:workforce.surname')}
+                  </label>
+                  <input
+                    type="text"
+                    value={editSurname}
+                    onChange={(e) => {
+                      setEditSurname(e.target.value);
+                      if (editFormErrors.surname) {
+                        setEditFormErrors((prev) => ({ ...prev, surname: '' }));
+                      }
+                    }}
+                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.surname ? 'border-red-400' : 'border-slate-200'
+                    }`}
+                  />
+                  {editFormErrors.surname && (
+                    <p className="text-xs text-red-500 mt-1">{editFormErrors.surname}</p>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  {t('hr:workforce.fullName')}
+                  {t('common:labels.email')}
                 </label>
                 <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => {
+                    setEditEmail(e.target.value);
+                    if (editFormErrors.email) {
+                      setEditFormErrors((prev) => ({ ...prev, email: '' }));
+                    }
+                  }}
+                  placeholder="e.g. alice.smith@example.com"
+                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                    editFormErrors.email ? 'border-red-400' : 'border-slate-200'
+                  }`}
                 />
+                {editFormErrors.email && (
+                  <p className="text-xs text-red-500 mt-1">{editFormErrors.email}</p>
+                )}
               </div>
 
               {canUpdateUsers && (
@@ -834,15 +966,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setEditingUser(null)}
+                onClick={closeEditModal}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 onClick={saveEdit}
-                disabled={!editName || !hasEditChanges}
-                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!editName || !hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                disabled={!hasEditChanges}
+                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
               >
                 {t('hr:workforce.saveChanges')}
               </button>
@@ -922,6 +1054,26 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.surname}</p>
                   )}
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('common:labels.email')}
+                </label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    if (formErrors.email || formErrors.general) {
+                      setFormErrors({ ...formErrors, email: '', general: '' });
+                    }
+                  }}
+                  placeholder="e.g. alice.smith@example.com"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.email && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
