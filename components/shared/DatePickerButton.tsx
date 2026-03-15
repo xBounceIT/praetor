@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { getLocalDateString } from '../../utils/date';
 import Calendar from './Calendar';
 
@@ -23,6 +24,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   disabled = false,
   className = '',
 }) => {
+  const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyles, setDropdownStyles] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,7 +103,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
       month: 'short',
       year: 'numeric',
     });
-    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    const timeStr = `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
     return `${dateStr} ${timeStr}`;
   };
 
@@ -191,7 +193,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
               <div className="mt-3 pt-3 border-t border-slate-100">
                 <div className="flex items-center gap-3">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    Time
+                    {t('labels.time')}
                   </label>
                   <div className="flex items-center gap-1">
                     <input
@@ -222,7 +224,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
                       onClick={handleApply}
                       className="px-4 py-1.5 text-sm font-bold bg-praetor text-white rounded-lg hover:opacity-90 transition-opacity"
                     >
-                      Apply
+                      {t('buttons.apply')}
                     </button>
                   </div>
                 </div>

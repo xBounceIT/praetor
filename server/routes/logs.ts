@@ -85,12 +85,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (startDate) {
         params.push(new Date(startDate));
-        conditions.push(`al.created_at >= $${params.length}`);
+        conditions.push(`al.created_at >= $${params.length}::timestamptz`);
       }
 
       if (endDate) {
         params.push(new Date(endDate));
-        conditions.push(`al.created_at <= $${params.length}`);
+        conditions.push(`al.created_at <= $${params.length}::timestamptz`);
       }
 
       if (conditions.length > 0) {
