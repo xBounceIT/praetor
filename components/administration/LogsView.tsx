@@ -32,7 +32,10 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
 
   const targetLabel = row.details?.targetLabel;
   if (targetLabel) {
-    return `${verbLabel.toLowerCase()} ${targetLabel}`;
+    const entityLabel = t(`logs.operations.entities.${entityKey}`, {
+      defaultValue: humanizeToken(entityKey),
+    });
+    return `${verbLabel.toLowerCase()} ${entityLabel}: ${targetLabel}`;
   }
 
   const entityLabel = t(`logs.operations.entities.${entityKey}`, {
