@@ -109,8 +109,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editRolesError, setEditRolesError] = useState('');
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
-  const [activeSearch, setActiveSearch] = useState('');
-  const [disabledSearch, setDisabledSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [activeCurrentPage, setActiveCurrentPage] = useState(1);
   const [activeRowsPerPage, setActiveRowsPerPage] = useState(() => {
     const saved = localStorage.getItem('praetor_workforce_active_rowsPerPage');
@@ -170,6 +170,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setNewUsername('');
     setNewPassword('password');
     setNewRole(roleOptions[0]?.id || '');
+    setIsCreateModalOpen(false);
+  };
+
+  const closeCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setNewName('');
+    setNewUsername('');
+    setNewPassword('password');
+    setNewRole(roleOptions[0]?.id || '');
+    setFormErrors({});
   };
 
   const handleActiveRowsPerPageChange = (val: string) => {
@@ -607,17 +617,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const activeUsersTotal = users.filter((user) => !user.isDisabled);
   const disabledUsersTotal = users.filter((user) => user.isDisabled);
-  const activeSearchValue = activeSearch.trim().toLowerCase();
-  const disabledSearchValue = disabledSearch.trim().toLowerCase();
+  const userSearchValue = userSearch.trim().toLowerCase();
   const matchesUserSearch = (user: User, term: string) => {
     if (!term) return true;
     return user.name.toLowerCase().includes(term) || user.username.toLowerCase().includes(term);
   };
   const activeUsersFiltered = activeUsersTotal.filter((user) =>
-    matchesUserSearch(user, activeSearchValue),
+    matchesUserSearch(user, userSearchValue),
   );
   const disabledUsersFiltered = disabledUsersTotal.filter((user) =>
-    matchesUserSearch(user, disabledSearchValue),
+    matchesUserSearch(user, userSearchValue),
   );
 
   const activeTotalPages = Math.ceil(activeUsersFiltered.length / activeRowsPerPage);
@@ -833,118 +842,143 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </div>
         </div>
       </Modal>
+      {/* Create User Modal */}
       {canCreateUsers && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <i className="fa-solid fa-user-plus text-praetor"></i>
-            {t('hr:workforce.createNewUser')}
-          </h3>
-          <form
-            onSubmit={handleSubmit}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"
-          >
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {t('hr:workforce.name')}
-              </label>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value);
-                  if (!newUsername) setNewUsername(e.target.value.toLowerCase());
-                  if (formErrors.name || formErrors.general) {
-                    setFormErrors({ ...formErrors, name: '', general: '' });
-                  }
-                }}
-                placeholder="e.g. Alice Smith"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
-                {formErrors.name || ''}
-              </p>
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {t('hr:workforce.username')}
-              </label>
-              <input
-                type="text"
-                value={newUsername}
-                onChange={(e) => {
-                  setNewUsername(e.target.value);
-                  if (formErrors.username || formErrors.general) {
-                    setFormErrors({ ...formErrors, username: '', general: '' });
-                  }
-                }}
-                placeholder="e.g. alice"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
-                {formErrors.username || ''}
-              </p>
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {t('hr:workforce.password')}
-              </label>
-              <input
-                type="text"
-                value={newPassword}
-                onChange={(e) => {
-                  setNewPassword(e.target.value);
-                  if (formErrors.password || formErrors.general) {
-                    setFormErrors({ ...formErrors, password: '', general: '' });
-                  }
-                }}
-                placeholder="Password"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
-                {formErrors.password || ''}
-              </p>
-            </div>
-            <div className="lg:col-span-1">
-              <CustomSelect
-                label={t('hr:workforce.role')}
-                options={roleOptions}
-                value={newRole}
-                onChange={(val) => setNewRole(val as string)}
-                buttonClassName="py-2 text-sm"
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4"></p>
-            </div>
-            <div className="lg:col-span-1">
+        <Modal isOpen={isCreateModalOpen} onClose={closeCreateModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                  <i className="fa-solid fa-user-plus"></i>
+                </div>
+                {t('hr:workforce.createNewUser')}
+              </h3>
               <button
-                type="submit"
-                className="w-full px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-800 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                onClick={closeCreateModal}
+                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
               >
-                <i className="fa-solid fa-plus"></i> {t('common:buttons.add')}
+                <i className="fa-solid fa-xmark text-lg"></i>
               </button>
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4"></p>
             </div>
-          </form>
-          {formErrors.general && (
-            <p className="mt-3 text-xs font-bold text-red-500">{formErrors.general}</p>
-          )}
-        </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('hr:workforce.name')}
+                </label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => {
+                    setNewName(e.target.value);
+                    if (!newUsername) setNewUsername(e.target.value.toLowerCase());
+                    if (formErrors.name || formErrors.general) {
+                      setFormErrors({ ...formErrors, name: '', general: '' });
+                    }
+                  }}
+                  placeholder="e.g. Alice Smith"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.name && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.name}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('hr:workforce.username')}
+                </label>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => {
+                    setNewUsername(e.target.value);
+                    if (formErrors.username || formErrors.general) {
+                      setFormErrors({ ...formErrors, username: '', general: '' });
+                    }
+                  }}
+                  placeholder="e.g. alice"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.username && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.username}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('hr:workforce.password')}
+                </label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (formErrors.password || formErrors.general) {
+                      setFormErrors({ ...formErrors, password: '', general: '' });
+                    }
+                  }}
+                  placeholder="Password"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.password && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.password}</p>
+                )}
+              </div>
+              <div>
+                <CustomSelect
+                  label={t('hr:workforce.role')}
+                  options={roleOptions}
+                  value={newRole}
+                  onChange={(val) => setNewRole(val as string)}
+                  buttonClassName="py-3 text-sm"
+                />
+              </div>
+              {formErrors.general && (
+                <p className="text-xs font-bold text-red-500">{formErrors.general}</p>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                >
+                  {t('common:buttons.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-slate-800 transition-colors active:scale-95"
+                >
+                  {t('common:buttons.add')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Modal>
       )}
+
+      {/* Page header: search + add button */}
+      <div className="flex justify-between items-center gap-4">
+        <div className="relative">
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input
+            type="text"
+            placeholder={t('hr:workforce.searchUsers')}
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+            className="w-64 pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
+          />
+        </div>
+        {canCreateUsers && (
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i> {t('hr:workforce.addUser')}
+          </button>
+        )}
+      </div>
 
       <StandardTable
         title={t('hr:workforce.activeUsers')}
         totalCount={activeUsersFiltered.length}
-        headerExtras={
-          <div className="relative">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-            <input
-              type="text"
-              placeholder={t('hr:workforce.searchActiveUsers')}
-              value={activeSearch}
-              onChange={(e) => setActiveSearch(e.target.value)}
-              className="w-56 pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-praetor outline-none"
-            />
-          </div>
-        }
         footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
         footer={
           <>
@@ -1165,18 +1199,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
           totalCount={disabledUsersFiltered.length}
           totalLabel="DISABLED"
           containerClassName="border-dashed bg-slate-50"
-          headerExtras={
-            <div className="relative">
-              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-              <input
-                type="text"
-                placeholder={t('hr:workforce.searchDisabledUsers')}
-                value={disabledSearch}
-                onChange={(e) => setDisabledSearch(e.target.value)}
-                className="w-56 pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-praetor outline-none"
-              />
-            </div>
-          }
           footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
           footer={
             <>

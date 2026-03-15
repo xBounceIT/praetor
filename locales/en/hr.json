@@ -46,6 +46,7 @@
     "you": "You",
     "user": "User",
     "actions": "Actions",
+    "searchUsers": "Search users...",
     "searchActiveUsers": "Search active users...",
     "searchDisabledUsers": "Search disabled users...",
     "filterByClient": "Filter by Client",
