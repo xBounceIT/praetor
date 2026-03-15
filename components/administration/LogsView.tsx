@@ -3,10 +3,8 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api';
-import type { AuditLogDetails, AuditLogEntry } from '../../types';
+import type { AuditLogEntry } from '../../types';
 import StandardTable, { type Column } from '../shared/StandardTable';
-
-const DETAIL_SEPARATOR = ' | ';
 
 const humanizeToken = (value: string) =>
   value
@@ -16,29 +14,16 @@ const humanizeToken = (value: string) =>
     .trim()
     .toLowerCase();
 
-const formatCountDetails = (details: AuditLogDetails | null, t: TFunction) => {
-  if (!details?.counts) return [];
-
-  return Object.entries(details.counts)
-    .filter(([, count]) => typeof count === 'number' && Number.isFinite(count))
-    .map(([key, count]) =>
-      t(`logs.operations.counts.${key}`, {
-        count,
-        defaultValue: `${count} ${humanizeToken(key)}`,
-      }),
-    );
-};
-
 const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
   const customKey = `logs.operations.custom.${row.action}`;
   const customLabel = t(customKey);
   if (customLabel !== customKey) {
-    return `${row.userName} ${customLabel.toLowerCase()}`;
+    return customLabel.toLowerCase();
   }
 
   const [entityKey, verbKey] = row.action.split('.');
   if (!entityKey || !verbKey) {
-    return `${row.userName} ${humanizeToken(row.action)}`;
+    return humanizeToken(row.action);
   }
 
   const verbLabel = t(`logs.operations.verbs.${verbKey}`, {
@@ -47,50 +32,13 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
 
   const targetLabel = row.details?.targetLabel;
   if (targetLabel) {
-    return `${row.userName} ${verbLabel.toLowerCase()} ${targetLabel}`;
+    return `${verbLabel.toLowerCase()} ${targetLabel}`;
   }
 
   const entityLabel = t(`logs.operations.entities.${entityKey}`, {
     defaultValue: humanizeToken(entityKey),
   });
-  return `${row.userName} ${verbLabel.toLowerCase()} ${entityLabel}`;
-};
-
-const formatOperationSecondary = (row: AuditLogEntry, t: TFunction) => {
-  const detailSegments: string[] = [];
-  const detail = row.details;
-
-  // Only show secondaryLabel in context, targetLabel is now in primary
-  if (detail?.secondaryLabel) {
-    detailSegments.push(detail.secondaryLabel);
-  }
-
-  if (detail?.changedFields && detail.changedFields.length > 0) {
-    detailSegments.push(
-      t('logs.operations.details.changedFields', {
-        fields: detail.changedFields.map(humanizeToken).join(', '),
-      }),
-    );
-  }
-
-  detailSegments.push(...formatCountDetails(detail, t));
-
-  if (detail?.fromValue || detail?.toValue) {
-    detailSegments.push(
-      t('logs.operations.details.fromTo', {
-        from: detail.fromValue || '...',
-        to: detail.toValue || '...',
-      }),
-    );
-  }
-
-  return detailSegments.join(DETAIL_SEPARATOR);
-};
-
-const formatOperationText = (row: AuditLogEntry, t: TFunction) => {
-  const primary = formatOperationPrimary(row, t);
-  const secondary = formatOperationSecondary(row, t);
-  return secondary ? `${primary} ${DETAIL_SEPARATOR} ${secondary}` : primary;
+  return `${verbLabel.toLowerCase()} ${entityLabel}`;
 };
 
 const LogsView: React.FC = () => {
@@ -140,30 +88,14 @@ const LogsView: React.FC = () => {
   const columns = useMemo<Column<AuditLogEntry>[]>(
     () => [
       {
-        header: t('logs.columns.user'),
-        accessorKey: 'userName',
-        disableFiltering: true,
-      },
-      {
         header: t('logs.columns.username'),
         accessorKey: 'username',
       },
       {
         header: t('logs.columns.operation'),
         id: 'operation',
-        accessorFn: (row) => formatOperationText(row, t),
+        accessorFn: (row) => formatOperationPrimary(row, t),
         className: 'min-w-[18rem]',
-        cell: ({ row }) => {
-          const primary = formatOperationPrimary(row, t);
-          const secondary = formatOperationSecondary(row, t);
-
-          return (
-            <div className="max-w-[28rem] whitespace-normal leading-snug">
-              <div className="font-semibold text-slate-700">{primary}</div>
-              {secondary && <div className="mt-1 text-xs text-slate-500">{secondary}</div>}
-            </div>
-          );
-        },
       },
       {
         header: t('logs.columns.ip'),
