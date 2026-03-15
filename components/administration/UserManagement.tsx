@@ -7,6 +7,7 @@ import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -31,6 +32,8 @@ export interface UserManagementProps {
   roles: Role[];
   currency: string;
 }
+
+const USERS_ROWS_PER_PAGE_STORAGE_KEY = 'praetor_workforce_users_rowsPerPage';
 
 const UserManagement: React.FC<UserManagementProps> = ({
   users,
@@ -152,14 +155,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editIsDisabled, setEditIsDisabled] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [activeCurrentPage, setActiveCurrentPage] = useState(1);
-  const [activeRowsPerPage, setActiveRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_workforce_active_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-  const [disabledCurrentPage, setDisabledCurrentPage] = useState(1);
-  const [disabledRowsPerPage, setDisabledRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_workforce_disabled_rowsPerPage');
+  const [usersCurrentPage, setUsersCurrentPage] = useState(1);
+  const [usersRowsPerPage, setUsersRowsPerPage] = useState(() => {
+    const saved = localStorage.getItem(USERS_ROWS_PER_PAGE_STORAGE_KEY);
     return saved ? parseInt(saved, 10) : 5;
   });
 
@@ -242,27 +240,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setFormErrors({});
   };
 
-  const handleActiveRowsPerPageChange = (val: string) => {
+  const handleUsersRowsPerPageChange = (val: string) => {
     const value = parseInt(val, 10);
-    setActiveRowsPerPage(value);
-    localStorage.setItem('praetor_workforce_active_rowsPerPage', value.toString());
-    setActiveCurrentPage(1);
+    setUsersRowsPerPage(value);
+    localStorage.setItem(USERS_ROWS_PER_PAGE_STORAGE_KEY, value.toString());
+    setUsersCurrentPage(1);
   };
-
-  const handleDisabledRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setDisabledRowsPerPage(value);
-    localStorage.setItem('praetor_workforce_disabled_rowsPerPage', value.toString());
-    setDisabledCurrentPage(1);
-  };
-
-  React.useEffect(() => {
-    setActiveCurrentPage(1);
-  }, []);
-
-  React.useEffect(() => {
-    setDisabledCurrentPage(1);
-  }, []);
 
   React.useEffect(() => {
     if (filterClientId === 'all' || filterProjectId === 'all') return;
@@ -699,33 +682,57 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
 
-  const activeUsersTotal = users.filter((user) => !user.isDisabled);
-  const disabledUsersTotal = users.filter((user) => user.isDisabled);
   const userSearchValue = userSearch.trim().toLowerCase();
   const matchesUserSearch = (user: User, term: string) => {
     if (!term) return true;
-    return user.name.toLowerCase().includes(term) || user.username.toLowerCase().includes(term);
+    return (
+      user.name.toLowerCase().includes(term) ||
+      user.username.toLowerCase().includes(term) ||
+      (user.email?.toLowerCase() || '').includes(term)
+    );
   };
-  const activeUsersFiltered = activeUsersTotal.filter((user) =>
-    matchesUserSearch(user, userSearchValue),
-  );
-  const disabledUsersFiltered = disabledUsersTotal.filter((user) =>
-    matchesUserSearch(user, userSearchValue),
-  );
+  const usersFiltered = [...users]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    .filter((user) => matchesUserSearch(user, userSearchValue));
 
-  const activeTotalPages = Math.ceil(activeUsersFiltered.length / activeRowsPerPage);
-  const activeStartIndex = (activeCurrentPage - 1) * activeRowsPerPage;
-  const activeUsers = activeUsersFiltered.slice(
-    activeStartIndex,
-    activeStartIndex + activeRowsPerPage,
-  );
+  const usersTotalPages = Math.ceil(usersFiltered.length / usersRowsPerPage);
 
-  const disabledTotalPages = Math.ceil(disabledUsersFiltered.length / disabledRowsPerPage);
-  const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-  const disabledUsers = disabledUsersFiltered.slice(
-    disabledStartIndex,
-    disabledStartIndex + disabledRowsPerPage,
-  );
+  React.useEffect(() => {
+    if (usersTotalPages === 0) {
+      if (usersCurrentPage !== 1) {
+        setUsersCurrentPage(1);
+      }
+      return;
+    }
+
+    if (usersCurrentPage > usersTotalPages) {
+      setUsersCurrentPage(usersTotalPages);
+    }
+  }, [usersCurrentPage, usersTotalPages]);
+
+  const usersStartIndex = (usersCurrentPage - 1) * usersRowsPerPage;
+  const paginatedUsers = usersFiltered.slice(usersStartIndex, usersStartIndex + usersRowsPerPage);
+  const emptyEmailLabel = t('common:common.none');
+  const noUsersFoundLabel = t('hr:workforce.noUsers');
+  const getUserStatusLabel = (user: User) =>
+    user.isDisabled ? t('common:common.disabled') : t('common:common.active');
+  const getRolePresentation = (user: User) => {
+    const role = roleLookup.get(user.role);
+    const isAdminRole = role?.isAdmin || user.role === 'admin';
+    const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
+
+    return {
+      roleBadgeClass: isAdminRole
+        ? 'bg-slate-800 text-white border-slate-700'
+        : isManagerRole
+          ? 'bg-blue-50 text-blue-700 border-blue-200'
+          : role?.isSystem
+            ? 'bg-slate-100 text-slate-600 border-slate-200'
+            : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      roleIcon: isAdminRole ? 'fa-shield-halved' : isManagerRole ? 'fa-briefcase' : 'fa-user',
+      roleName: role?.name || user.role,
+    };
+  };
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -1156,7 +1163,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
             type="text"
             placeholder={t('hr:workforce.searchUsers')}
             value={userSearch}
-            onChange={(e) => setUserSearch(e.target.value)}
+            onChange={(e) => {
+              setUserSearch(e.target.value);
+              setUsersCurrentPage(1);
+            }}
             className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
           />
         </div>
@@ -1171,8 +1181,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       </div>
 
       <StandardTable
-        title={t('hr:workforce.activeUsers')}
-        totalCount={activeUsersFiltered.length}
+        title={t('hr:workforce.title')}
+        totalCount={usersFiltered.length}
         footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
         footer={
           <>
@@ -1187,36 +1197,36 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   { id: '20', name: '20' },
                   { id: '50', name: '50' },
                 ]}
-                value={activeRowsPerPage.toString()}
-                onChange={(val) => handleActiveRowsPerPageChange(val as string)}
+                value={usersRowsPerPage.toString()}
+                onChange={(val) => handleUsersRowsPerPageChange(val as string)}
                 className="w-20"
                 buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
                 searchable={false}
               />
               <span className="text-xs font-bold text-slate-400 ml-2">
                 {t('common:pagination.showing', {
-                  start: activeUsers.length > 0 ? activeStartIndex + 1 : 0,
-                  end: Math.min(activeStartIndex + activeRowsPerPage, activeUsersFiltered.length),
-                  total: activeUsersFiltered.length,
+                  start: paginatedUsers.length > 0 ? usersStartIndex + 1 : 0,
+                  end: Math.min(usersStartIndex + usersRowsPerPage, usersFiltered.length),
+                  total: usersFiltered.length,
                 })}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setActiveCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={activeCurrentPage === 1}
+                onClick={() => setUsersCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={usersCurrentPage === 1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-left text-xs"></i>
               </button>
               <div className="flex items-center gap-1">
-                {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map((page) => (
+                {Array.from({ length: usersTotalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
-                    onClick={() => setActiveCurrentPage(page)}
+                    onClick={() => setUsersCurrentPage(page)}
                     className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      activeCurrentPage === page
+                      usersCurrentPage === page
                         ? 'bg-praetor text-white shadow-md shadow-slate-200'
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
@@ -1226,8 +1236,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 ))}
               </div>
               <button
-                onClick={() => setActiveCurrentPage((prev) => Math.min(activeTotalPages, prev + 1))}
-                disabled={activeCurrentPage === activeTotalPages || activeTotalPages === 0}
+                onClick={() => setUsersCurrentPage((prev) => Math.min(usersTotalPages, prev + 1))}
+                disabled={usersCurrentPage === usersTotalPages || usersTotalPages === 0}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-right text-xs"></i>
@@ -1246,7 +1256,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 {t('hr:workforce.username')}
               </th>
               <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('common:labels.email')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 {t('hr:workforce.role')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('common:labels.status')}
               </th>
               <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
                 {t('hr:workforce.actions')}
@@ -1254,29 +1270,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {activeUsers.map((user) => {
+            {paginatedUsers.map((user) => {
               const canEdit = canUpdateUsers;
-              const role = roleLookup.get(user.role);
-              const isAdminRole = role?.isAdmin || user.role === 'admin';
-              const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
-              const roleBadgeClass = isAdminRole
-                ? 'bg-slate-800 text-white border-slate-700'
-                : isManagerRole
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : role?.isSystem
-                    ? 'bg-slate-100 text-slate-600 border-slate-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-              const roleIcon = isAdminRole
-                ? 'fa-shield-halved'
-                : isManagerRole
-                  ? 'fa-briefcase'
-                  : 'fa-user';
+              const { roleBadgeClass, roleIcon, roleName } = getRolePresentation(user);
 
               return (
                 <tr
                   key={user.id}
                   onClick={() => canEdit && handleEdit(user)}
-                  className={`group hover:bg-slate-50 transition-colors ${canEdit ? 'cursor-pointer' : ''}`}
+                  className={`group hover:bg-slate-50 transition-colors ${
+                    user.isDisabled
+                      ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0'
+                      : ''
+                  } ${canEdit ? 'cursor-pointer' : ''}`}
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -1284,11 +1290,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         {user.avatarInitials}
                       </div>
                       <span className="font-bold text-slate-800">{user.name}</span>
-                      {user.isDisabled && (
-                        <span className="text-[10px] bg-red-100 px-2 py-0.5 rounded text-red-600 font-bold uppercase border border-red-200">
-                          {t('hr:workforce.disabled')}
-                        </span>
-                      )}
                       {user.id === currentUserId && (
                         <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
                           {t('hr:workforce.you')}
@@ -1300,12 +1301,27 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <span className="text-sm text-slate-600 font-mono">{user.username}</span>
                   </td>
                   <td className="px-6 py-4">
+                    {user.email ? (
+                      <span className="text-sm font-medium text-slate-600 break-all">
+                        {user.email}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium text-slate-400">{emptyEmailLabel}</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
                     >
                       <i className={`fa-solid ${roleIcon}`}></i>
-                      {role?.name || user.role}
+                      {roleName}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge
+                      type={user.isDisabled ? 'disabled' : 'active'}
+                      label={getUserStatusLabel(user)}
+                    />
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -1339,20 +1355,36 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               </button>
                             )}
                           </Tooltip>
-                          <Tooltip label={t('hr:workforce.disableUser')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateUser(user.id, { isDisabled: true });
-                                }}
-                                disabled={user.id === currentUserId}
-                                className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
-                              >
-                                <i className="fa-solid fa-ban"></i>
-                              </button>
-                            )}
-                          </Tooltip>
+                          {user.isDisabled ? (
+                            <Tooltip label={t('hr:workforce.reEnableUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateUser(user.id, { isDisabled: false });
+                                  }}
+                                  className="text-slate-400 hover:text-praetor transition-colors p-2 rounded-lg"
+                                >
+                                  <i className="fa-solid fa-rotate-left"></i>
+                                </button>
+                              )}
+                            </Tooltip>
+                          ) : (
+                            <Tooltip label={t('hr:workforce.disableUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateUser(user.id, { isDisabled: true });
+                                  }}
+                                  disabled={user.id === currentUserId}
+                                  className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
+                                >
+                                  <i className="fa-solid fa-ban"></i>
+                                </button>
+                              )}
+                            </Tooltip>
+                          )}
                         </>
                       )}
                       {canDeleteUsers && (
@@ -1376,243 +1408,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </tr>
               );
             })}
-            {activeUsers.length === 0 && (
+            {paginatedUsers.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-sm font-bold text-slate-400">
-                  {t('hr:workforce.noActiveUsers')}
+                <td colSpan={6} className="px-6 py-10 text-center text-sm font-bold text-slate-400">
+                  {noUsersFoundLabel}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </StandardTable>
-
-      {disabledUsersTotal.length > 0 && (
-        <StandardTable
-          title={t('hr:workforce.disabledUsers')}
-          totalCount={disabledUsersFiltered.length}
-          totalLabel="DISABLED"
-          containerClassName="border-dashed bg-slate-50"
-          footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-          footer={
-            <>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-500">
-                  {t('common:labels.rowsPerPage')}:
-                </span>
-                <CustomSelect
-                  options={[
-                    { id: '5', name: '5' },
-                    { id: '10', name: '10' },
-                    { id: '20', name: '20' },
-                    { id: '50', name: '50' },
-                  ]}
-                  value={disabledRowsPerPage.toString()}
-                  onChange={(val) => handleDisabledRowsPerPageChange(val as string)}
-                  className="w-20"
-                  buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                  searchable={false}
-                />
-                <span className="text-xs font-bold text-slate-400 ml-2">
-                  {t('common:pagination.showing', {
-                    start: disabledUsers.length > 0 ? disabledStartIndex + 1 : 0,
-                    end: Math.min(
-                      disabledStartIndex + disabledRowsPerPage,
-                      disabledUsersFiltered.length,
-                    ),
-                    total: disabledUsersFiltered.length,
-                  })}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDisabledCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={disabledCurrentPage === 1}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-left text-xs"></i>
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setDisabledCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                        disabledCurrentPage === page
-                          ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                          : 'text-slate-500 hover:bg-slate-100'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() =>
-                    setDisabledCurrentPage((prev) => Math.min(disabledTotalPages, prev + 1))
-                  }
-                  disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-right text-xs"></i>
-                </button>
-              </div>
-            </>
-          }
-        >
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  User
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  Username
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {disabledUsers.map((user) => {
-                const canEdit = canUpdateUsers;
-                const role = roleLookup.get(user.role);
-                const isAdminRole = role?.isAdmin || user.role === 'admin';
-                const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
-                const roleBadgeClass = isAdminRole
-                  ? 'bg-slate-800 text-white border-slate-700'
-                  : isManagerRole
-                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                    : role?.isSystem
-                      ? 'bg-slate-100 text-slate-600 border-slate-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                const roleIcon = isAdminRole
-                  ? 'fa-shield-halved'
-                  : isManagerRole
-                    ? 'fa-briefcase'
-                    : 'fa-user';
-                return (
-                  <tr
-                    key={user.id}
-                    onClick={() => canEdit && handleEdit(user)}
-                    className={`group hover:bg-slate-50 transition-colors opacity-60 grayscale hover:opacity-100 hover:grayscale-0 ${canEdit ? 'cursor-pointer' : ''}`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 text-praetor flex items-center justify-center text-xs font-bold">
-                          {user.avatarInitials}
-                        </div>
-                        <span className="font-bold text-slate-800">{user.name}</span>
-                        {user.isDisabled && (
-                          <span className="text-[10px] bg-red-100 px-2 py-0.5 rounded text-red-600 font-bold uppercase border border-red-200">
-                            {t('hr:workforce.disabled')}
-                          </span>
-                        )}
-                        {user.id === currentUserId && (
-                          <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
-                            {t('hr:workforce.you')}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-600 font-mono">{user.username}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
-                      >
-                        <i className={`fa-solid ${roleIcon}`}></i>
-                        {role?.name || user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {canManageAssignments && (
-                          <Tooltip label={t('hr:workforce.manageAssignments')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openAssignments(user.id);
-                                }}
-                                className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-link"></i>
-                              </button>
-                            )}
-                          </Tooltip>
-                        )}
-                        {canUpdateUsers && (
-                          <>
-                            <Tooltip label={t('hr:workforce.editUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit(user);
-                                  }}
-                                  className="text-slate-400 hover:text-praetor transition-colors p-2"
-                                >
-                                  <i className="fa-solid fa-user-pen"></i>
-                                </button>
-                              )}
-                            </Tooltip>
-                            <Tooltip label={t('hr:workforce.reEnableUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUpdateUser(user.id, { isDisabled: false });
-                                  }}
-                                  className="text-slate-400 hover:text-praetor transition-colors p-2"
-                                >
-                                  <i className="fa-solid fa-rotate-left"></i>
-                                </button>
-                              )}
-                            </Tooltip>
-                          </>
-                        )}
-                        {canDeleteUsers && (
-                          <Tooltip label={t('hr:workforce.deleteUser')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  confirmDelete(user);
-                                }}
-                                disabled={user.id === currentUserId}
-                                className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-trash-can"></i>
-                              </button>
-                            )}
-                          </Tooltip>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {disabledUsers.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-6 py-10 text-center text-sm font-bold text-slate-400"
-                  >
-                    {t('hr:workforce.noDisabledUsers')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </StandardTable>
-      )}
 
       {/* Assignment Modal */}
       <Modal
