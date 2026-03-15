@@ -268,7 +268,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  FROM users u
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-                 WHERE ${conditions.join(' OR ')}
+                 WHERE (${conditions.join(' OR ')})
+                   AND NOT EXISTS (SELECT 1 FROM user_roles ur_tm WHERE ur_tm.user_id = u.id AND ur_tm.role_id = $2)
                  ORDER BY u.name`,
               [request.user.id, TOP_MANAGER_ROLE_ID],
             );
