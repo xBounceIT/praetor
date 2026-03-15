@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { logAudit } from '../utils/audit.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -532,7 +532,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           createdItems.push(itemResult.rows[0]);
         }
 
-        await logAudit({ request, action: 'supplier_invoice.created', entityType: 'supplier_invoice', entityId: resolvedInvoiceId });
+        await logAudit({
+          request,
+          action: 'supplier_invoice.created',
+          entityType: 'supplier_invoice',
+          entityId: resolvedInvoiceId,
+        });
         return reply.code(201).send(formatInvoiceResponse(invoiceResult.rows[0], createdItems));
       } catch (error) {
         const databaseError = error as DatabaseError;
@@ -759,8 +764,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const updatedInvoiceId = String(invoiceResult.rows[0].id);
 
-        await logAudit({ request, action: 'supplier_invoice.updated', entityType: 'supplier_invoice', entityId: updatedInvoiceId });
-
         let updatedItems: Array<Record<string, unknown>> = [];
         if (items !== undefined) {
           if (!Array.isArray(items) || items.length === 0) {
@@ -819,6 +822,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           updatedItems = itemsResult.rows;
         }
 
+        await logAudit({
+          request,
+          action: 'supplier_invoice.updated',
+          entityType: 'supplier_invoice',
+          entityId: updatedInvoiceId,
+        });
         return formatInvoiceResponse(invoiceResult.rows[0], updatedItems);
       } catch (error) {
         const databaseError = error as DatabaseError;
@@ -861,7 +870,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await query('DELETE FROM supplier_invoices WHERE id = $1', [idResult.value]);
 
-      await logAudit({ request, action: 'supplier_invoice.deleted', entityType: 'supplier_invoice', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'supplier_invoice.deleted',
+        entityType: 'supplier_invoice',
+        entityId: idResult.value,
+      });
       return reply.code(204).send();
     },
   );

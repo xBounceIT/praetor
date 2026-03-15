@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { logAudit } from '../utils/audit.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -364,7 +364,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
-      await logAudit({ request, action: 'supplier_quote.created', entityType: 'supplier_quote', entityId: nextIdResult.value });
+      await logAudit({
+        request,
+        action: 'supplier_quote.created',
+        entityType: 'supplier_quote',
+        entityId: nextIdResult.value,
+      });
       return reply.code(201).send({
         ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -540,8 +545,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedQuoteId = String(quoteResult.rows[0].id);
 
-      await logAudit({ request, action: 'supplier_quote.updated', entityType: 'supplier_quote', entityId: updatedQuoteId });
-
       let updatedItems = [];
       if (items) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -627,6 +630,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
+      await logAudit({
+        request,
+        action: 'supplier_quote.updated',
+        entityType: 'supplier_quote',
+        entityId: updatedQuoteId,
+      });
       return {
         ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
@@ -669,7 +678,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
       }
 
-      await logAudit({ request, action: 'supplier_quote.deleted', entityType: 'supplier_quote', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'supplier_quote.deleted',
+        entityType: 'supplier_quote',
+        entityId: idResult.value,
+      });
       return reply.code(204).send();
     },
   );

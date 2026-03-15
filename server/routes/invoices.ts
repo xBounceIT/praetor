@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { logAudit } from '../utils/audit.ts';
+import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -567,7 +567,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
-      await logAudit({ request, action: 'invoice.created', entityType: 'invoice', entityId: invoiceId });
+      await logAudit({
+        request,
+        action: 'invoice.created',
+        entityType: 'invoice',
+        entityId: invoiceId,
+      });
       const invoice = invoiceResult.rows[0];
       return reply
         .code(201)
@@ -771,8 +776,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedInvoiceId = String(invoiceResult.rows[0].id);
 
-      await logAudit({ request, action: 'invoice.updated', entityType: 'invoice', entityId: updatedInvoiceId });
-
       // If items are provided, update them
       let updatedItems = [];
       if (items) {
@@ -845,6 +848,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoice = invoiceResult.rows[0];
+      await logAudit({
+        request,
+        action: 'invoice.updated',
+        entityType: 'invoice',
+        entityId: updatedInvoiceId,
+      });
       return formatInvoiceResponse(
         invoice as Record<string, unknown>,
         updatedItems as Record<string, unknown>[],
@@ -882,7 +891,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(404).send({ error: 'Invoice not found' });
         }
 
-        await logAudit({ request, action: 'invoice.deleted', entityType: 'invoice', entityId: idResult.value });
+        await logAudit({
+          request,
+          action: 'invoice.deleted',
+          entityType: 'invoice',
+          entityId: idResult.value,
+        });
         return reply.code(204).send();
       } catch (err) {
         console.error('DELETE INVOICE ERROR:', err);

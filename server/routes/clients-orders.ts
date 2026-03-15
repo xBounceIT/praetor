@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { logAudit } from '../utils/audit.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
@@ -540,7 +540,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      await logAudit({ request, action: 'client_order.created', entityType: 'client_order', entityId: orderId });
+      await logAudit({
+        request,
+        action: 'client_order.created',
+        entityType: 'client_order',
+        entityId: orderId,
+      });
       return reply.code(201).send({
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -989,8 +994,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOrderId = String(orderResult.rows[0].id);
 
-      await logAudit({ request, action: 'client_order.updated', entityType: 'client_order', entityId: updatedOrderId });
-
       // If items are provided, update them
       let updatedItems: ReturnType<typeof normalizeClientOrderItemRow>[] = [];
       if (isSourceLinkedOrder) {
@@ -1186,6 +1189,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      await logAudit({
+        request,
+        action: 'client_order.updated',
+        entityType: 'client_order',
+        entityId: updatedOrderId,
+      });
       return {
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
@@ -1233,7 +1242,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Items will be deleted automatically via CASCADE
       await query('DELETE FROM sales WHERE id = $1', [idResult.value]);
 
-      await logAudit({ request, action: 'client_order.deleted', entityType: 'client_order', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'client_order.deleted',
+        entityType: 'client_order',
+        entityId: idResult.value,
+      });
       return reply.code(204).send();
     },
   );
