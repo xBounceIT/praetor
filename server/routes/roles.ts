@@ -16,6 +16,7 @@ import {
   ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
   isPermissionKnown,
   normalizePermission,
+  TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
 import { badRequest, ensureArrayOfStrings, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -102,8 +103,13 @@ const mapRoleRow = async (row: {
 const isForbiddenAdministrationPermissionForNonAdmin = (permission: string) =>
   permission.startsWith('administration.') || permission.startsWith('configuration.');
 
+const isTopManagerOnlyPermission = (permission: string) => permission.startsWith('hr.work_units.');
+
 const findForbiddenAdministrationPermission = (permissions: string[]) =>
   permissions.find(isForbiddenAdministrationPermissionForNonAdmin);
+
+const findForbiddenTopManagerOnlyPermission = (roleId: string, permissions: string[]) =>
+  roleId === TOP_MANAGER_ROLE_ID ? undefined : permissions.find(isTopManagerOnlyPermission);
 
 const normalizeSubmittedPermissions = (permissions: string[]) =>
   Array.from(new Set(permissions.map((permission) => normalizePermission(permission))));
@@ -183,8 +189,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           `Non-admin roles cannot include administration permissions: ${forbiddenPermission}`,
         );
       }
-
       const id = `role-${randomUUID()}`;
+
+      const forbiddenTopManagerPermission = findForbiddenTopManagerOnlyPermission(
+        id,
+        normalizedPermissions,
+      );
+      if (forbiddenTopManagerPermission) {
+        return badRequest(
+          reply,
+          `Only the Top Manager role can include work unit permissions: ${forbiddenTopManagerPermission}`,
+        );
+      }
 
       try {
         await query('BEGIN');
@@ -362,6 +378,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(
           reply,
           `Non-admin roles cannot include administration permissions: ${forbiddenPermission}`,
+        );
+      }
+      const forbiddenTopManagerPermission = findForbiddenTopManagerOnlyPermission(
+        idResult.value,
+        normalizedPermissions,
+      );
+      if (forbiddenTopManagerPermission) {
+        return badRequest(
+          reply,
+          `Only the Top Manager role can include work unit permissions: ${forbiddenTopManagerPermission}`,
         );
       }
 

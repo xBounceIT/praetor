@@ -58,7 +58,9 @@
     "hr": {
       "internal": "Internal",
       "external": "External",
-      "costs": "Costs"
+      "costs": "Costs",
+      "work_units": "Work Units",
+      "work_units_all": "Work Units (All)"
     },
     "reports": {
       "ai_reporting": "AI Reporting"

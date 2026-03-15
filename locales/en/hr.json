@@ -106,7 +106,7 @@
     "noWorkUnitsCreated": "No work units created yet",
     "noWorkUnitsCreatedDescription": "Use the \"New Work Unit\" button above to start organizing your teams.",
     "noWorkUnitsAssigned": "No work units assigned",
-    "noWorkUnitsAssignedDescription": "You are not assigned to any work units. Please contact an administrator for assistance.",
+    "noWorkUnitsAssignedDescription": "You are not assigned to any work units. Please contact a top manager for assistance.",
     "noManagersAssigned": "No managers assigned",
     "users": "users",
     "noUsersFound": "No users found matching your search.",
@@ -114,6 +114,7 @@
   },
   "roles": {
     "admin": "Administrator",
+    "top_manager": "Top Manager",
     "manager": "Manager",
     "user": "User"
   },

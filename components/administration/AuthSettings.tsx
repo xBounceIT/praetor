@@ -56,6 +56,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
     ? roles.map((role) => ({ id: role.id, name: role.name }))
     : [
         { id: 'admin', name: t('roles.admin', 'Admin') },
+        { id: 'top_manager', name: t('roles.top_manager', 'Top Manager') },
         { id: 'manager', name: t('roles.manager', 'Manager') },
         { id: 'user', name: t('roles.user', 'User') },
       ];

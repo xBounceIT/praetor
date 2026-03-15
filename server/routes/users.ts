@@ -18,6 +18,11 @@ import {
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
+  MANUAL_ASSIGNMENT_SOURCE,
+  syncTopManagerAssignmentsForUser,
+  userHasTopManagerRole,
+} from '../utils/top-manager-assignments.ts';
+import {
   badRequest,
   ensureArrayOfStrings,
   optionalArrayOfStrings,
@@ -144,7 +149,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'timesheets.tracker.view',
           'projects.manage.view',
           'projects.tasks.view',
-          'administration.work_units.view',
+          'hr.work_units.view',
         ),
       ],
       schema: {
@@ -159,11 +164,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
+      const canViewAllUsers =
+        hasPermission(request, 'administration.user_management_all.view') ||
+        hasPermission(request, 'hr.work_units_all.view');
       const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
       const canViewManagedUsers =
         hasPermission(request, 'timesheets.tracker.view') ||
-        hasPermission(request, 'administration.work_units.view') ||
+        hasPermission(request, 'hr.work_units.view') ||
         canViewUserManagement;
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
@@ -358,7 +365,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [id, roleValue],
         );
 
+        if (roleValue === 'top_manager') {
+          await syncTopManagerAssignmentsForUser(id);
+        }
+
         await bumpNamespaceVersion('users');
+        if (roleValue === 'top_manager') {
+          await bumpNamespaceVersion('clients');
+          await bumpNamespaceVersion('projects');
+          await bumpNamespaceVersion('tasks');
+        }
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -592,6 +608,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let result: Awaited<ReturnType<typeof query>>;
+      const hadTopManagerRole =
+        role !== undefined ? await userHasTopManagerRole(idResult.value) : false;
       if (role !== undefined) {
         // If role changes via the legacy endpoint, reset assigned roles to this single primary role.
         try {
@@ -613,6 +631,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           await query('ROLLBACK');
           throw err;
         }
+
+        await syncTopManagerAssignmentsForUser(idResult.value);
       } else {
         values.push(idResult.value);
         result = await query(
@@ -628,6 +648,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const u = result.rows[0];
 
       await bumpNamespaceVersion('users');
+      if (role !== undefined && (hadTopManagerRole || roleValue === 'top_manager')) {
+        await bumpNamespaceVersion('clients');
+        await bumpNamespaceVersion('projects');
+        await bumpNamespaceVersion('tasks');
+      }
       return {
         id: u.id,
         name: u.name,
@@ -724,6 +749,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const userExists = await query('SELECT 1 FROM users WHERE id = $1', [idResult.value]);
       if (userExists.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+      const hadTopManagerRole = await userHasTopManagerRole(idResult.value);
 
       const roleCheck = await query('SELECT id FROM roles WHERE id = ANY($1::varchar[])', [
         roleIdsResult.value,
@@ -751,7 +777,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
+      await syncTopManagerAssignmentsForUser(idResult.value);
       await bumpNamespaceVersion('users');
+      if (hadTopManagerRole || roleIdsResult.value.includes('top_manager')) {
+        await bumpNamespaceVersion('clients');
+        await bumpNamespaceVersion('projects');
+        await bumpNamespaceVersion('tasks');
+      }
       return { roleIds: roleIdsResult.value, primaryRoleId: primaryRoleIdResult.value };
     },
   );
@@ -874,6 +906,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!taskIdsResult.ok)
         return badRequest(reply, (taskIdsResult as { ok: false; message: string }).message);
 
+      if (await userHasTopManagerRole(idResult.value)) {
+        return reply.code(409).send({
+          error: 'Top Manager assignments are managed automatically and cannot be edited manually',
+        });
+      }
+
       try {
         await query('BEGIN');
 
@@ -883,8 +921,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           for (const clientId of (clientIdsResult as { ok: true; value: string[] | null }).value ||
             []) {
             await query(
-              'INSERT INTO user_clients (user_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-              [idResult.value, clientId],
+              'INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+              [idResult.value, clientId, MANUAL_ASSIGNMENT_SOURCE],
             );
           }
         }
@@ -895,8 +933,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           for (const projectId of (projectIdsResult as { ok: true; value: string[] | null })
             .value || []) {
             await query(
-              'INSERT INTO user_projects (user_id, project_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-              [idResult.value, projectId],
+              'INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+              [idResult.value, projectId, MANUAL_ASSIGNMENT_SOURCE],
             );
           }
         }
@@ -907,8 +945,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           for (const taskId of (taskIdsResult as { ok: true; value: string[] | null }).value ||
             []) {
             await query(
-              'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-              [idResult.value, taskId],
+              'INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+              [idResult.value, taskId, MANUAL_ASSIGNMENT_SOURCE],
             );
           }
         }

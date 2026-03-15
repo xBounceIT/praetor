@@ -174,18 +174,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   const managerOptions = users.map((u) => ({ id: u.id, name: u.name }));
 
-  const canCreateWorkUnits = hasPermission(
-    permissions,
-    buildPermission('administration.work_units', 'create'),
-  );
-  const canUpdateWorkUnits = hasPermission(
-    permissions,
-    buildPermission('administration.work_units', 'update'),
-  );
-  const canDeleteWorkUnits = hasPermission(
-    permissions,
-    buildPermission('administration.work_units', 'delete'),
-  );
+  const canCreateWorkUnits = hasPermission(permissions, buildPermission('hr.work_units', 'create'));
+  const canUpdateWorkUnits = hasPermission(permissions, buildPermission('hr.work_units', 'update'));
+  const canDeleteWorkUnits = hasPermission(permissions, buildPermission('hr.work_units', 'delete'));
   const canManageMembers = canUpdateWorkUnits;
 
   return (

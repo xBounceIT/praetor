@@ -106,7 +106,7 @@
     "noWorkUnitsCreated": "Nessuna unità di lavoro creata ancora",
     "noWorkUnitsCreatedDescription": "Usa il pulsante \"Nuova Unità di Lavoro\" sopra per iniziare a organizzare i tuoi team.",
     "noWorkUnitsAssigned": "Nessuna unità di lavoro assegnata",
-    "noWorkUnitsAssignedDescription": "Non sei assegnato a nessuna unità di lavoro. Contatta un amministratore per assistenza.",
+    "noWorkUnitsAssignedDescription": "Non sei assegnato a nessuna unità di lavoro. Contatta un top manager per assistenza.",
     "noManagersAssigned": "Nessun manager assegnato",
     "users": "utenti",
     "noUsersFound": "Nessun utente trovato corrispondente alla tua ricerca.",
@@ -114,6 +114,7 @@
   },
   "roles": {
     "admin": "Amministratore",
+    "top_manager": "Top Manager",
     "manager": "Manager",
     "user": "Utente"
   },

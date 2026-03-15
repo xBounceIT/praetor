@@ -17,6 +17,14 @@ import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
+  assignClientToTopManagers,
+  assignClientToUser,
+  assignProjectToTopManagers,
+  assignProjectToUser,
+  assignTaskToTopManagers,
+  assignTaskToUser,
+} from '../utils/top-manager-assignments.ts';
+import {
   badRequest,
   optionalDateString,
   optionalLocalizedNonNegativeNumber,
@@ -243,6 +251,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ],
         );
 
+        const projectResult = await query('SELECT client_id FROM projects WHERE id = $1', [
+          projectIdResult.value,
+        ]);
+        const clientId = projectResult.rows[0]?.client_id as string | undefined;
+
+        if (request.user?.id) {
+          if (clientId) {
+            await assignClientToUser(request.user.id, clientId);
+          }
+          await assignProjectToUser(request.user.id, projectIdResult.value);
+          await assignTaskToUser(request.user.id, id);
+        }
+        if (clientId) {
+          await assignClientToTopManagers(clientId);
+        }
+        await assignProjectToTopManagers(projectIdResult.value);
+        await assignTaskToTopManagers(id);
         await bumpNamespaceVersion('tasks');
         return reply.code(201).send({
           id,

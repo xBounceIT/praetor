@@ -16,6 +16,8 @@ export type PermissionDefinition = {
   isScope?: boolean;
 };
 
+export const TOP_MANAGER_ROLE_ID = 'top_manager';
+
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets
   { id: 'timesheets.tracker', actions: CRUD },
@@ -55,6 +57,8 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.internal', actions: CRUD },
   { id: 'hr.external', actions: CRUD },
   { id: 'hr.costs', actions: VIEW_UPDATE },
+  { id: 'hr.work_units', actions: CRUD },
+  { id: 'hr.work_units_all', actions: VIEW_ONLY, isScope: true },
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'] },
@@ -64,8 +68,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'administration.general', actions: VIEW_UPDATE },
   { id: 'administration.user_management', actions: CRUD },
   { id: 'administration.user_management_all', actions: VIEW_ONLY, isScope: true },
-  { id: 'administration.work_units', actions: CRUD },
-  { id: 'administration.work_units_all', actions: VIEW_ONLY, isScope: true },
   { id: 'administration.email', actions: VIEW_UPDATE },
   { id: 'administration.roles', actions: CRUD },
   { id: 'administration.logs', actions: VIEW_ONLY },
@@ -115,6 +117,39 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('timesheets.tracker', CRUD),
     ...buildPermissions('timesheets.recurring', CRUD),
     ...buildPermissions('crm.clients', CRUD),
+    ...buildPermissions('crm.suppliers', CRUD),
+    buildPermission('crm.suppliers_all', 'view'),
+    ...buildPermissions('sales.client_quotes', CRUD),
+    ...buildPermissions('sales.client_offers', CRUD),
+    ...buildPermissions('sales.supplier_quotes', CRUD),
+    ...buildPermissions('sales.supplier_offers', CRUD),
+    ...buildPermissions('catalog.internal_listing', CRUD),
+    ...buildPermissions('catalog.external_listing', CRUD),
+    ...buildPermissions('catalog.special_bids', CRUD),
+    ...buildPermissions('accounting.clients_orders', CRUD),
+    ...buildPermissions('accounting.clients_invoices', CRUD),
+    ...buildPermissions('accounting.supplier_orders', CRUD),
+    ...buildPermissions('accounting.supplier_invoices', CRUD),
+    ...buildPermissions('projects.manage', CRUD),
+    ...buildPermissions('projects.tasks', CRUD),
+    ...buildPermissions('hr.internal', CRUD),
+    ...buildPermissions('hr.external', CRUD),
+    ...buildPermissions('hr.costs', VIEW_UPDATE),
+    buildPermission('reports.ai_reporting', 'view'),
+    buildPermission('reports.ai_reporting', 'create'),
+    buildPermission('settings', 'view'),
+    buildPermission('settings', 'update'),
+    buildPermission('docs.api', 'view'),
+    buildPermission('docs.frontend', 'view'),
+    buildPermission('notifications', 'view'),
+    buildPermission('notifications', 'update'),
+    buildPermission('notifications', 'delete'),
+  ],
+  [TOP_MANAGER_ROLE_ID]: [
+    ...buildPermissions('timesheets.tracker', CRUD),
+    ...buildPermissions('timesheets.recurring', CRUD),
+    buildPermission('timesheets.tracker_all', 'view'),
+    ...buildPermissions('crm.clients', CRUD),
     buildPermission('crm.clients_all', 'view'),
     ...buildPermissions('crm.suppliers', CRUD),
     buildPermission('crm.suppliers_all', 'view'),
@@ -136,6 +171,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('hr.internal', CRUD),
     ...buildPermissions('hr.external', CRUD),
     ...buildPermissions('hr.costs', VIEW_UPDATE),
+    ...buildPermissions('hr.work_units', CRUD),
+    buildPermission('hr.work_units_all', 'view'),
     buildPermission('reports.ai_reporting', 'view'),
     buildPermission('reports.ai_reporting', 'create'),
     buildPermission('settings', 'view'),
@@ -156,7 +193,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     buildPermission('docs.api', 'view'),
     buildPermission('docs.frontend', 'view'),
   ],
-  admin: ALL_PERMISSIONS,
+  admin: Array.from(
+    new Set([
+      ...ADMINISTRATION_PERMISSIONS,
+      ...ADMIN_BASE_PERMISSIONS,
+      ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
+    ]),
+  ),
 };
 
 export const isPermissionKnown = (permission: string) =>
