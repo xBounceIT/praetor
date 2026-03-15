@@ -242,13 +242,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           } else {
             const conditions: string[] = ['u.id = $1'];
             if (canViewManagedUsers) {
+              // Work unit JOIN already captures all users (including internal/external)
+              // in managed work units, so no need for standalone employee_type conditions
               conditions.push('wum.user_id = $1');
-            }
-            if (canViewInternal) {
-              conditions.push("u.employee_type = 'internal'");
-            }
-            if (canViewExternal) {
-              conditions.push("u.employee_type = 'external'");
+            } else {
+              if (canViewInternal) {
+                conditions.push("u.employee_type = 'internal'");
+              }
+              if (canViewExternal) {
+                conditions.push("u.employee_type = 'external'");
+              }
             }
 
             result = await query(

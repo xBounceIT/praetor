@@ -1301,6 +1301,69 @@ INSERT INTO user_work_units (user_id, work_unit_id) VALUES
     ('u9', 'dm_wu_03')
 ON CONFLICT (user_id, work_unit_id) DO NOTHING;
 
+INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES
+    ('u2', 'c1',        'manual'),
+    ('u2', 'c2',        'manual'),
+    ('u2', 'dm_cli_01', 'manual'),
+    ('u3', 'c1',        'manual'),
+    ('u3', 'dm_cli_01', 'manual'),
+    ('u4', 'c1',        'manual'),
+    ('u4', 'c2',        'manual'),
+    ('u4', 'dm_cli_01', 'manual'),
+    ('u5', 'c1',        'manual'),
+    ('u5', 'dm_cli_01', 'manual'),
+    ('u6', 'c1',        'manual'),
+    ('u6', 'dm_cli_01', 'manual'),
+    ('u7', 'c2',        'manual'),
+    ('u8', 'c2',        'manual')
+ON CONFLICT (user_id, client_id) DO NOTHING;
+
+INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES
+    ('u2', 'p1',        'manual'),
+    ('u2', 'p2',        'manual'),
+    ('u2', 'p3',        'manual'),
+    ('u2', 'dm_proj_01','manual'),
+    ('u2', 'dm_proj_02','manual'),
+    ('u3', 'p1',        'manual'),
+    ('u3', 'p2',        'manual'),
+    ('u3', 'dm_proj_02','manual'),
+    ('u4', 'p1',        'manual'),
+    ('u4', 'p2',        'manual'),
+    ('u4', 'p3',        'manual'),
+    ('u4', 'dm_proj_01','manual'),
+    ('u4', 'dm_proj_02','manual'),
+    ('u5', 'p1',        'manual'),
+    ('u5', 'p2',        'manual'),
+    ('u5', 'dm_proj_02','manual'),
+    ('u6', 'p1',        'manual'),
+    ('u6', 'p2',        'manual'),
+    ('u6', 'dm_proj_01','manual'),
+    ('u7', 'p3',        'manual'),
+    ('u8', 'p3',        'manual')
+ON CONFLICT (user_id, project_id) DO NOTHING;
+
+INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES
+    ('u2', 't1', 'manual'),
+    ('u2', 't2', 'manual'),
+    ('u2', 't3', 'manual'),
+    ('u2', 't4', 'manual'),
+    ('u3', 't1', 'manual'),
+    ('u3', 't2', 'manual'),
+    ('u3', 't3', 'manual'),
+    ('u4', 't1', 'manual'),
+    ('u4', 't2', 'manual'),
+    ('u4', 't3', 'manual'),
+    ('u4', 't4', 'manual'),
+    ('u5', 't1', 'manual'),
+    ('u5', 't2', 'manual'),
+    ('u5', 't3', 'manual'),
+    ('u6', 't1', 'manual'),
+    ('u6', 't2', 'manual'),
+    ('u6', 't3', 'manual'),
+    ('u7', 't4', 'manual'),
+    ('u8', 't4', 'manual')
+ON CONFLICT (user_id, task_id) DO NOTHING;
+
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,
     task, notes, duration, hourly_cost, is_placeholder, location
