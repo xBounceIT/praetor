@@ -32,31 +32,37 @@ const formatCountDetails = (details: AuditLogDetails | null, t: TFunction) => {
 const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
   const customKey = `logs.operations.custom.${row.action}`;
   const customLabel = t(customKey);
-  if (customLabel !== customKey) return customLabel;
+  if (customLabel !== customKey) {
+    return `${row.userName} ${customLabel.toLowerCase()}`;
+  }
 
   const [entityKey, verbKey] = row.action.split('.');
   if (!entityKey || !verbKey) {
-    return humanizeToken(row.action);
+    return `${row.userName} ${humanizeToken(row.action)}`;
   }
 
   const verbLabel = t(`logs.operations.verbs.${verbKey}`, {
     defaultValue: humanizeToken(verbKey),
   });
+
+  const targetLabel = row.details?.targetLabel;
+  if (targetLabel) {
+    return `${row.userName} ${verbLabel.toLowerCase()} ${targetLabel}`;
+  }
+
   const entityLabel = t(`logs.operations.entities.${entityKey}`, {
     defaultValue: humanizeToken(entityKey),
   });
-  return `${verbLabel} ${entityLabel}`;
+  return `${row.userName} ${verbLabel.toLowerCase()} ${entityLabel}`;
 };
 
 const formatOperationSecondary = (row: AuditLogEntry, t: TFunction) => {
   const detailSegments: string[] = [];
   const detail = row.details;
 
-  const targetContext = [detail?.targetLabel, detail?.secondaryLabel].filter(
-    (value): value is string => Boolean(value),
-  );
-  if (targetContext.length > 0) {
-    detailSegments.push(targetContext.join(DETAIL_SEPARATOR));
+  // Only show secondaryLabel in context, targetLabel is now in primary
+  if (detail?.secondaryLabel) {
+    detailSegments.push(detail.secondaryLabel);
   }
 
   if (detail?.changedFields && detail.changedFields.length > 0) {

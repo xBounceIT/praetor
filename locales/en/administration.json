@@ -110,6 +110,8 @@
         "created": "Created",
         "updated": "Updated",
         "deleted": "Deleted",
+        "disabled": "Disabled",
+        "enabled": "Enabled",
         "users_updated": "Updated users",
         "roles_updated": "Updated roles",
         "assignments_updated": "Updated assignments",
