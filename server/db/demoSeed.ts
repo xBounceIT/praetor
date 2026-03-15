@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
 import { bumpNamespaceVersion } from '../services/cache.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
+import { syncTopManagerAssignmentsForUser } from '../utils/top-manager-assignments.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
   DEMO_CACHE_NAMESPACES,
@@ -794,6 +795,12 @@ export const runDemoSeedRefresh = async ({
 
     await client.query('COMMIT');
     inTransaction = false;
+
+    for (const user of DEMO_USERS) {
+      if (user.role === 'top_manager') {
+        await syncTopManagerAssignmentsForUser(user.id);
+      }
+    }
   } catch (err) {
     if (inTransaction) {
       await client.query('ROLLBACK');

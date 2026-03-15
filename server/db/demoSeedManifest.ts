@@ -78,6 +78,16 @@ export const DEMO_USERS = [
     email: 'lmoretti@example.com',
     costPerHour: 35.0,
   },
+  {
+    id: 'u9',
+    name: 'Top Manager',
+    username: 'topmanager',
+    role: 'top_manager',
+    avatarInitials: 'TM',
+    fullName: 'Top Manager',
+    email: 'topmanager@example.com',
+    costPerHour: 75.0,
+  },
 ] as const;
 
 export const DEMO_USER_IDS = DEMO_USERS.map((user) => user.id);
@@ -233,6 +243,9 @@ export const DEMO_WORK_UNIT_MANAGERS = [
   { workUnitId: 'dm_wu_02', userId: 'u4' },
   { workUnitId: 'dm_wu_03', userId: 'u2' },
   { workUnitId: 'dm_wu_03', userId: 'u4' },
+  { workUnitId: 'dm_wu_01', userId: 'u9' },
+  { workUnitId: 'dm_wu_02', userId: 'u9' },
+  { workUnitId: 'dm_wu_03', userId: 'u9' },
 ] as const;
 
 export const DEMO_USER_WORK_UNITS = [
@@ -247,6 +260,9 @@ export const DEMO_USER_WORK_UNITS = [
   { userId: 'u4', workUnitId: 'dm_wu_03' },
   { userId: 'u5', workUnitId: 'dm_wu_03' },
   { userId: 'u7', workUnitId: 'dm_wu_03' },
+  { userId: 'u9', workUnitId: 'dm_wu_01' },
+  { userId: 'u9', workUnitId: 'dm_wu_02' },
+  { userId: 'u9', workUnitId: 'dm_wu_03' },
 ] as const;
 
 export const DEMO_TIME_ENTRY_IDS = rangeIds('dm_te_', 25);

@@ -9,14 +9,15 @@
 INSERT INTO users (id, name, username, password_hash, role, avatar_initials) VALUES
     ('u1', 'Admin User', 'admin', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'admin', 'AD'),
     ('u2', 'Manager User', 'manager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'manager', 'MG'),
-    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US')
+    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US'),
+    ('u9', 'Top Manager', 'topmanager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'top_manager', 'TM')
 ON CONFLICT DO NOTHING;
 
 -- Ensure default users have matching rows in user_roles
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, u.role
 FROM users u
-WHERE u.id IN ('u1', 'u2', 'u3')
+WHERE u.id IN ('u1', 'u2', 'u3', 'u9')
 ON CONFLICT DO NOTHING;
 
 -- Lightweight defaults kept for compatibility with existing frontend constants
@@ -41,7 +42,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO settings (user_id, full_name, email) VALUES
     ('u1', 'Admin User', 'admin@example.com'),
     ('u2', 'Manager User', 'manager@example.com'),
-    ('u3', 'Standard User', 'user@example.com')
+    ('u3', 'Standard User', 'user@example.com'),
+    ('u9', 'Top Manager', 'topmanager@example.com')
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Refreshable demo dataset.
