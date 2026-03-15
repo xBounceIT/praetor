@@ -183,6 +183,7 @@ const LogsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
   const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
@@ -213,6 +214,7 @@ const LogsView: React.FC = () => {
 
   const handleTimeRangeChange = useCallback((value: string | string[]) => {
     const range = (Array.isArray(value) ? value[0] : value) as TimeRange;
+    setSelectedPreset(range);
     const { start, end } = getPresetRange(range);
     setStartDate(start);
     setEndDate(end);
@@ -220,10 +222,12 @@ const LogsView: React.FC = () => {
 
   const handleStartDateChange = useCallback((date: Date) => {
     setStartDate(date);
+    setSelectedPreset(null);
   }, []);
 
   const handleEndDateChange = useCallback((date: Date) => {
     setEndDate(date);
+    setSelectedPreset(null);
   }, []);
 
   const handleStartDateClear = useCallback(() => {
@@ -231,12 +235,14 @@ const LogsView: React.FC = () => {
     date.setDate(date.getDate() - 7);
     date.setHours(0, 0, 0, 0);
     setStartDate(date);
+    setSelectedPreset(null);
   }, []);
 
   const handleEndDateClear = useCallback(() => {
     const date = new Date();
     date.setHours(23, 59, 59, 999);
     setEndDate(date);
+    setSelectedPreset(null);
   }, []);
 
   const loadAuditLogs = useCallback(async () => {
@@ -305,13 +311,15 @@ const LogsView: React.FC = () => {
 
   const detectedRange = useMemo(() => detectTimeRange(startDate, endDate), [startDate, endDate]);
 
+  const dropdownValue = selectedPreset ?? detectedRange ?? '';
+
   const refreshButton = (
     <div className="flex items-center gap-3">
       <CustomSelect
         options={timeRangeOptions}
-        value={detectedRange ?? ''}
+        value={dropdownValue}
         onChange={handleTimeRangeChange}
-        displayValue={detectedRange ? undefined : t('logs.timeRanges.custom')}
+        displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
         buttonClassName="h-10 px-3"
       />
       <DatePickerButton
