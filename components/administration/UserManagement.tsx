@@ -998,14 +998,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
       {/* Page header: search + add button */}
       <div className="flex justify-between items-center gap-4">
-        <div className="relative">
+        <div className="relative flex-1">
           <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
           <input
             type="text"
             placeholder={t('hr:workforce.searchUsers')}
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
-            className="w-64 pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
+            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
           />
         </div>
         {canCreateUsers && (
