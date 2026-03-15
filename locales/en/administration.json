@@ -167,7 +167,21 @@
     },
     "filters": {
       "startDate": "Start",
-      "endDate": "End"
+      "endDate": "End",
+      "timeRange": "Time range"
+    },
+    "timeRanges": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7Days": "Last 7 days",
+      "last30Days": "Last 30 days",
+      "last90Days": "Last 90 days",
+      "thisWeek": "This week",
+      "lastWeek": "Last week",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "custom": "Custom"
     }
   }
 }

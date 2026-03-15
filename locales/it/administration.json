@@ -167,7 +167,21 @@
     },
     "filters": {
       "startDate": "Inizio",
-      "endDate": "Fine"
+      "endDate": "Fine",
+      "timeRange": "Intervallo"
+    },
+    "timeRanges": {
+      "today": "Oggi",
+      "yesterday": "Ieri",
+      "last7Days": "Ultimi 7 giorni",
+      "last30Days": "Ultimi 30 giorni",
+      "last90Days": "Ultimi 90 giorni",
+      "thisWeek": "Questa settimana",
+      "lastWeek": "Settimana scorsa",
+      "thisMonth": "Questo mese",
+      "lastMonth": "Mese scorso",
+      "thisYear": "Quest'anno",
+      "custom": "Personalizzato"
     }
   }
 }
