@@ -2719,13 +2719,16 @@ const App: React.FC = () => {
   const handleUpdateUserRoles = async (id: string, roleIds: string[], primaryRoleId: string) => {
     try {
       const updated = await api.users.updateRoles(id, roleIds, primaryRoleId);
+      const hasTopManagerRole = roleIds.includes(TOP_MANAGER_ROLE_ID);
+      const isAdminOnly = roleIds.length === 1 && roleIds.includes('admin');
       setUsers((currentUsers) =>
         currentUsers.map((u) =>
           u.id === id
             ? {
                 ...u,
                 role: updated.primaryRoleId,
-                hasTopManagerRole: roleIds.includes(TOP_MANAGER_ROLE_ID),
+                hasTopManagerRole,
+                isAdminOnly,
               }
             : u,
         ),
