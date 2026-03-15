@@ -63,6 +63,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     const filtered = users.filter(
       (u) =>
         !u.isDisabled &&
+        !u.isAdminOnly &&
         (u.employeeType === 'internal' || u.employeeType === 'app_user' || !u.employeeType),
     );
 

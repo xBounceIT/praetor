@@ -47,6 +47,7 @@ export const normalizeClient = (c: Client): Client => ({
 export const normalizeUser = (u: User): User => ({
   ...u,
   hasTopManagerRole: !!u.hasTopManagerRole,
+  isAdminOnly: !!u.isAdminOnly,
   permissions: u.permissions || [],
   costPerHour: u.costPerHour ? Number(u.costPerHour) : 0,
   employeeType: u.employeeType || 'app_user',

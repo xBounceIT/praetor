@@ -15,6 +15,7 @@ export interface User {
   name: string;
   role: UserRole;
   hasTopManagerRole?: boolean;
+  isAdminOnly?: boolean;
   permissions?: Permission[];
   availableRoles?: RoleSummary[];
   avatarInitials: string;
