@@ -83,20 +83,105 @@
   },
   "logs": {
     "title": "Logs",
-    "subtitle": "Monitor system access through audit logs.",
+    "subtitle": "Monitor system operations and access through audit logs.",
     "tabs": {
       "audit": "Audit"
     },
     "columns": {
       "user": "User",
       "username": "Username",
+      "operation": "Operation",
       "ip": "IP",
       "timestamp": "Timestamp"
     },
     "loading": "Loading logs...",
     "empty": "No access entries found.",
+    "operations": {
+      "custom": {
+        "user": {
+          "login": "Signed in",
+          "role_switched": "Switched role"
+        },
+        "ldap": {
+          "synced": "Synced LDAP users"
+        }
+      },
+      "verbs": {
+        "created": "Created",
+        "updated": "Updated",
+        "deleted": "Deleted",
+        "disabled": "Disabled",
+        "enabled": "Enabled",
+        "role_changed": "Changed role",
+        "users_assigned": "Assigned users",
+        "users_updated": "Updated users",
+        "roles_updated": "Updated roles",
+        "assignments_updated": "Updated assignments",
+        "permissions_updated": "Updated permissions",
+        "synced": "Synced",
+        "login": "Signed in",
+        "role_switched": "Switched role"
+      },
+      "entities": {
+        "client": "client",
+        "client_offer": "client offer",
+        "client_order": "client order",
+        "client_quote": "client quote",
+        "email_config": "email configuration",
+        "invoice": "invoice",
+        "ldap": "LDAP",
+        "ldap_config": "LDAP configuration",
+        "product": "product",
+        "project": "project",
+        "role": "role",
+        "settings": "settings",
+        "special_bid": "special bid",
+        "supplier": "supplier",
+        "supplier_invoice": "supplier invoice",
+        "supplier_offer": "supplier offer",
+        "supplier_order": "supplier order",
+        "supplier_quote": "supplier quote",
+        "task": "task",
+        "user": "user",
+        "work_unit": "work unit"
+      },
+      "details": {
+        "changedFields": "Changed: {{fields}}",
+        "fromTo": "{{from}} -> {{to}}"
+      },
+      "counts": {
+        "users": "{{count}} users",
+        "roles": "{{count}} roles",
+        "permissions": "{{count}} permissions",
+        "clients": "{{count}} clients",
+        "projects": "{{count}} projects",
+        "tasks": "{{count}} tasks",
+        "managers": "{{count}} managers",
+        "mappings": "{{count}} mappings",
+        "synced": "{{count}} synced",
+        "created": "{{count}} created"
+      }
+    },
     "errors": {
       "loadFailed": "Unable to load audit logs."
+    },
+    "filters": {
+      "startDate": "Start",
+      "endDate": "End",
+      "timeRange": "Time range"
+    },
+    "timeRanges": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7Days": "Last 7 days",
+      "last30Days": "Last 30 days",
+      "last90Days": "Last 90 days",
+      "thisWeek": "This week",
+      "lastWeek": "Last week",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "custom": "Custom"
     }
   }
 }

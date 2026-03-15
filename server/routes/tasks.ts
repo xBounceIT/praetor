@@ -13,6 +13,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -244,6 +245,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         await bumpNamespaceVersion('tasks');
+        await logAudit({
+          request,
+          action: 'task.created',
+          entityType: 'task',
+          entityId: id,
+          details: {
+            targetLabel: nameResult.value,
+            secondaryLabel: projectIdResult.value,
+          },
+        });
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -355,7 +366,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const t = result.rows[0];
+      const isDisabledChanged = isDisabled !== undefined;
+      const changedFields = [
+        name !== undefined ? 'name' : null,
+        description !== undefined ? 'description' : null,
+        isRecurring !== undefined ? 'isRecurring' : null,
+        recurrencePattern !== undefined ? 'recurrencePattern' : null,
+        recurrenceStart !== undefined ? 'recurrenceStart' : null,
+        recurrenceEnd !== undefined ? 'recurrenceEnd' : null,
+        (request.body as { recurrenceDuration?: number }).recurrenceDuration !== undefined
+          ? 'recurrenceDuration'
+          : null,
+        isDisabledChanged ? 'isDisabled' : null,
+      ].filter((field): field is string => field !== null);
+
+      // Determine specific action based on what changed
+      let action = 'task.updated';
+      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+        action = isDisabled ? 'task.disabled' : 'task.enabled';
+      }
+
       await bumpNamespaceVersion('tasks');
+      await logAudit({
+        request,
+        action,
+        entityType: 'task',
+        entityId: idResult.value,
+        details: {
+          targetLabel: t.name as string,
+          secondaryLabel: t.project_id as string,
+        },
+      });
       return {
         id: t.id,
         name: t.name,
@@ -392,12 +433,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [idResult.value]);
+      const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id, name, project_id', [
+        idResult.value,
+      ]);
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
       await bumpNamespaceVersion('tasks');
+      await logAudit({
+        request,
+        action: 'task.deleted',
+        entityType: 'task',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: result.rows[0].project_id as string,
+        },
+      });
       return { message: 'Task deleted' };
     },
   );
@@ -453,6 +506,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
       const validUserIds = userIdsResult.value;
+      const taskResult = await query('SELECT name, project_id FROM tasks WHERE id = $1', [
+        idResult.value,
+      ]);
+      if (taskResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Task not found' });
+      }
 
       try {
         await query('BEGIN');
@@ -469,6 +528,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         await query('COMMIT');
         await bumpNamespaceVersion('tasks');
+        await logAudit({
+          request,
+          action: 'task.users_assigned',
+          entityType: 'task',
+          entityId: idResult.value,
+          details: {
+            targetLabel: taskResult.rows[0].name as string,
+            counts: { users: validUserIds.length },
+          },
+        });
         return { message: 'Task assignments updated' };
       } catch (err) {
         await query('ROLLBACK');

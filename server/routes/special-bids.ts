@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -309,6 +310,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ],
           );
 
+          await logAudit({
+            request,
+            action: 'special_bid.created',
+            entityType: 'special_bid',
+            entityId: id,
+            details: {
+              targetLabel: result.rows[0].bidCode as string,
+              secondaryLabel: [result.rows[0].clientName, result.rows[0].productName]
+                .filter((value): value is string => typeof value === 'string' && value.length > 0)
+                .join(' / '),
+            },
+          });
           return reply.code(201).send(result.rows[0]);
         } catch (error) {
           // Check for unique constraint violation (PostgreSQL error code 23505)
@@ -566,6 +579,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Special bid not found' });
       }
 
+      await logAudit({
+        request,
+        action: 'special_bid.updated',
+        entityType: 'special_bid',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].bidCode as string,
+          secondaryLabel: [result.rows[0].clientName, result.rows[0].productName]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .join(' / '),
+        },
+      });
       return result.rows[0];
     },
   );
@@ -588,14 +613,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as unknown as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query('DELETE FROM special_bids WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        `DELETE FROM special_bids
+         WHERE id = $1
+         RETURNING id, bid_code as "bidCode", client_name as "clientName", product_name as "productName"`,
+        [idResult.value],
+      );
 
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Special bid not found' });
       }
 
+      await logAudit({
+        request,
+        action: 'special_bid.deleted',
+        entityType: 'special_bid',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].bidCode as string,
+          secondaryLabel: [result.rows[0].clientName, result.rows[0].productName]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .join(' / '),
+        },
+      });
       return reply.code(204).send();
     },
   );

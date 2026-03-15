@@ -241,16 +241,23 @@ BEGIN
 END $$;
 
 
--- Audit logs table (successful system access)
+-- Audit logs table (system access and operation tracking)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id VARCHAR(50) PRIMARY KEY,
     user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action VARCHAR(100) NOT NULL DEFAULT 'user.login',
+    entity_type VARCHAR(50),
+    entity_id VARCHAR(100),
     ip_address VARCHAR(255) NOT NULL,
+    details JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details JSONB;
+
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 
 -- Work Units table
 CREATE TABLE IF NOT EXISTS work_units (

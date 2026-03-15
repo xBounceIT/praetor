@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -363,6 +364,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
+      await logAudit({
+        request,
+        action: 'supplier_quote.created',
+        entityType: 'supplier_quote',
+        entityId: nextIdResult.value,
+        details: {
+          targetLabel: nextIdResult.value,
+          secondaryLabel: supplierNameResult.value,
+        },
+      });
       return reply.code(201).send({
         ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -623,6 +634,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
+      await logAudit({
+        request,
+        action: 'supplier_quote.updated',
+        entityType: 'supplier_quote',
+        entityId: updatedQuoteId,
+        details: {
+          targetLabel: updatedQuoteId,
+          secondaryLabel: String(quoteResult.rows[0].supplierName ?? ''),
+        },
+      });
       return {
         ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
@@ -657,14 +678,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .code(409)
           .send({ error: 'Cannot delete a quote once an offer has been created from it' });
       }
-      const result = await query('DELETE FROM supplier_quotes WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        'DELETE FROM supplier_quotes WHERE id = $1 RETURNING id, supplier_name as "supplierName"',
+        [idResult.value],
+      );
 
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
       }
 
+      await logAudit({
+        request,
+        action: 'supplier_quote.deleted',
+        entityType: 'supplier_quote',
+        entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(result.rows[0].supplierName ?? ''),
+        },
+      });
       return reply.code(204).send();
     },
   );

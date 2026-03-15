@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -408,6 +409,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
+      await logAudit({
+        request,
+        action: 'supplier_offer.created',
+        entityType: 'supplier_offer',
+        entityId: nextIdResult.value,
+        details: {
+          targetLabel: nextIdResult.value,
+          secondaryLabel: supplierNameResult.value,
+        },
+      });
       return reply.code(201).send({
         ...normalizeSupplierOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -678,6 +689,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(updatedOfferResult.rows[0].status ?? existingOffer.status);
+      const didStatusChange = status !== undefined && existingOffer.status !== nextStatus;
+      await logAudit({
+        request,
+        action: 'supplier_offer.updated',
+        entityType: 'supplier_offer',
+        entityId: updatedOfferId,
+        details: {
+          targetLabel: updatedOfferId,
+          secondaryLabel: String(updatedOfferResult.rows[0].supplierName ?? ''),
+          fromValue: didStatusChange ? String(existingOffer.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
+      });
       return {
         ...normalizeSupplierOfferRow(updatedOfferResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
@@ -714,9 +742,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
       }
 
-      const offerResult = await query('SELECT id, status FROM supplier_offers WHERE id = $1', [
-        idResult.value,
-      ]);
+      const offerResult = await query(
+        'SELECT id, status, supplier_name as "supplierName" FROM supplier_offers WHERE id = $1',
+        [idResult.value],
+      );
       if (offerResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
@@ -724,6 +753,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Only draft offers can be deleted' });
       }
 
+      await logAudit({
+        request,
+        action: 'supplier_offer.deleted',
+        entityType: 'supplier_offer',
+        entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(offerResult.rows[0].supplierName ?? ''),
+        },
+      });
       await query('DELETE FROM supplier_offers WHERE id = $1', [idResult.value]);
       return reply.code(204).send();
     },

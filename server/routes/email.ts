@@ -1,8 +1,9 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import emailService from '../services/email.ts';
+import { logAudit } from '../utils/audit.ts';
 import { encrypt } from '../utils/crypto.ts';
 
 const emailConfigSchema = {
@@ -137,7 +138,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request, _reply) => {
+    async (request: FastifyRequest, _reply) => {
       const {
         enabled,
         smtpHost,
@@ -197,6 +198,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       await emailService.loadConfig();
 
       const c = result.rows[0];
+      await logAudit({
+        request,
+        action: 'email_config.updated',
+        entityType: 'email_config',
+        details: {
+          secondaryLabel:
+            (typeof c.from_email === 'string' && c.from_email.length > 0
+              ? c.from_email
+              : c.smtp_host) || undefined,
+        },
+      });
       return {
         enabled: c.enabled,
         smtpHost: c.smtp_host || '',

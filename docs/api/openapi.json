@@ -7883,9 +7883,6 @@
                       "id": {
                         "type": "string"
                       },
-                      "quoteCode": {
-                        "type": "string"
-                      },
                       "linkedOfferId": {
                         "type": [
                           "null",
@@ -8011,7 +8008,6 @@
                     },
                     "required": [
                       "id",
-                      "quoteCode",
                       "clientId",
                       "clientName",
                       "discount",
@@ -8147,7 +8143,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "quoteCode": {
+                  "id": {
                     "type": "string"
                   },
                   "clientId": {
@@ -8227,7 +8223,7 @@
                   }
                 },
                 "required": [
-                  "quoteCode",
+                  "id",
                   "clientId",
                   "clientName",
                   "items",
@@ -8247,9 +8243,6 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
-                    },
-                    "quoteCode": {
                       "type": "string"
                     },
                     "linkedOfferId": {
@@ -8377,7 +8370,6 @@
                   },
                   "required": [
                     "id",
-                    "quoteCode",
                     "clientId",
                     "clientName",
                     "discount",
@@ -8496,7 +8488,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "quoteCode": {
+                  "id": {
                     "type": "string"
                   },
                   "clientId": {
@@ -8601,9 +8593,6 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
-                    },
-                    "quoteCode": {
                       "type": "string"
                     },
                     "linkedOfferId": {
@@ -8731,7 +8720,6 @@
                   },
                   "required": [
                     "id",
-                    "quoteCode",
                     "clientId",
                     "clientName",
                     "discount",
@@ -8968,9 +8956,6 @@
                       "id": {
                         "type": "string"
                       },
-                      "offerCode": {
-                        "type": "string"
-                      },
                       "linkedQuoteId": {
                         "type": "string"
                       },
@@ -9092,7 +9077,6 @@
                     },
                     "required": [
                       "id",
-                      "offerCode",
                       "linkedQuoteId",
                       "clientId",
                       "clientName",
@@ -9228,7 +9212,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "offerCode": {
+                  "id": {
                     "type": "string"
                   },
                   "linkedQuoteId": {
@@ -9310,7 +9294,7 @@
                   }
                 },
                 "required": [
-                  "offerCode",
+                  "id",
                   "linkedQuoteId",
                   "clientId",
                   "clientName",
@@ -9331,9 +9315,6 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
-                    },
-                    "offerCode": {
                       "type": "string"
                     },
                     "linkedQuoteId": {
@@ -9457,7 +9438,6 @@
                   },
                   "required": [
                     "id",
-                    "offerCode",
                     "linkedQuoteId",
                     "clientId",
                     "clientName",
@@ -9576,7 +9556,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "offerCode": {
+                  "id": {
                     "type": "string"
                   },
                   "clientId": {
@@ -9677,9 +9657,6 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
-                    },
-                    "offerCode": {
                       "type": "string"
                     },
                     "linkedQuoteId": {
@@ -9803,7 +9780,6 @@
                   },
                   "required": [
                     "id",
-                    "offerCode",
                     "linkedQuoteId",
                     "clientId",
                     "clientName",
@@ -11331,6 +11307,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "linkedQuoteId": {
                     "type": "string"
                   },
@@ -11669,6 +11648,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "linkedOfferId": {
                     "type": "string"
                   },
@@ -12138,9 +12120,6 @@
                       "clientName": {
                         "type": "string"
                       },
-                      "invoiceNumber": {
-                        "type": "string"
-                      },
                       "issueDate": {
                         "type": "string",
                         "format": "date"
@@ -12193,8 +12172,21 @@
                                 "string"
                               ]
                             },
+                            "specialBidId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
                             "description": {
                               "type": "string"
+                            },
+                            "unitOfMeasure": {
+                              "type": "string",
+                              "enum": [
+                                "unit",
+                                "hours"
+                              ]
                             },
                             "quantity": {
                               "type": "number"
@@ -12213,6 +12205,7 @@
                             "id",
                             "invoiceId",
                             "description",
+                            "unitOfMeasure",
                             "quantity",
                             "unitPrice",
                             "taxRate",
@@ -12225,7 +12218,6 @@
                       "id",
                       "clientId",
                       "clientName",
-                      "invoiceNumber",
                       "issueDate",
                       "dueDate",
                       "status",
@@ -12363,6 +12355,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "linkedSaleId": {
                     "type": "string"
                   },
@@ -12370,9 +12365,6 @@
                     "type": "string"
                   },
                   "clientName": {
-                    "type": "string"
-                  },
-                  "invoiceNumber": {
                     "type": "string"
                   },
                   "issueDate": {
@@ -12409,8 +12401,21 @@
                         "productId": {
                           "type": "string"
                         },
+                        "specialBidId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "description": {
                           "type": "string"
+                        },
+                        "unitOfMeasure": {
+                          "type": "string",
+                          "enum": [
+                            "unit",
+                            "hours"
+                          ]
                         },
                         "quantity": {
                           "type": "number"
@@ -12427,6 +12432,7 @@
                       },
                       "required": [
                         "description",
+                        "unitOfMeasure",
                         "quantity",
                         "unitPrice",
                         "taxRate"
@@ -12437,7 +12443,6 @@
                 "required": [
                   "clientId",
                   "clientName",
-                  "invoiceNumber",
                   "issueDate",
                   "dueDate",
                   "items"
@@ -12468,9 +12473,6 @@
                       "type": "string"
                     },
                     "clientName": {
-                      "type": "string"
-                    },
-                    "invoiceNumber": {
                       "type": "string"
                     },
                     "issueDate": {
@@ -12525,8 +12527,21 @@
                               "string"
                             ]
                           },
+                          "specialBidId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
                           "description": {
                             "type": "string"
+                          },
+                          "unitOfMeasure": {
+                            "type": "string",
+                            "enum": [
+                              "unit",
+                              "hours"
+                            ]
                           },
                           "quantity": {
                             "type": "number"
@@ -12545,6 +12560,7 @@
                           "id",
                           "invoiceId",
                           "description",
+                          "unitOfMeasure",
                           "quantity",
                           "unitPrice",
                           "taxRate",
@@ -12557,7 +12573,6 @@
                     "id",
                     "clientId",
                     "clientName",
-                    "invoiceNumber",
                     "issueDate",
                     "dueDate",
                     "status",
@@ -12678,13 +12693,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "clientId": {
                     "type": "string"
                   },
                   "clientName": {
-                    "type": "string"
-                  },
-                  "invoiceNumber": {
                     "type": "string"
                   },
                   "issueDate": {
@@ -12721,8 +12736,21 @@
                         "productId": {
                           "type": "string"
                         },
+                        "specialBidId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "description": {
                           "type": "string"
+                        },
+                        "unitOfMeasure": {
+                          "type": "string",
+                          "enum": [
+                            "unit",
+                            "hours"
+                          ]
                         },
                         "quantity": {
                           "type": "number"
@@ -12739,6 +12767,7 @@
                       },
                       "required": [
                         "description",
+                        "unitOfMeasure",
                         "quantity",
                         "unitPrice",
                         "taxRate"
@@ -12781,9 +12810,6 @@
                       "type": "string"
                     },
                     "clientName": {
-                      "type": "string"
-                    },
-                    "invoiceNumber": {
                       "type": "string"
                     },
                     "issueDate": {
@@ -12838,8 +12864,21 @@
                               "string"
                             ]
                           },
+                          "specialBidId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
                           "description": {
                             "type": "string"
+                          },
+                          "unitOfMeasure": {
+                            "type": "string",
+                            "enum": [
+                              "unit",
+                              "hours"
+                            ]
                           },
                           "quantity": {
                             "type": "number"
@@ -12858,6 +12897,7 @@
                           "id",
                           "invoiceId",
                           "description",
+                          "unitOfMeasure",
                           "quantity",
                           "unitPrice",
                           "taxRate",
@@ -12870,7 +12910,6 @@
                     "id",
                     "clientId",
                     "clientName",
-                    "invoiceNumber",
                     "issueDate",
                     "dueDate",
                     "status",
@@ -13885,12 +13924,6 @@
                       "supplierName": {
                         "type": "string"
                       },
-                      "quoteCode": {
-                        "type": "string"
-                      },
-                      "purchaseOrderNumber": {
-                        "type": "string"
-                      },
                       "paymentTerms": {
                         "type": [
                           "null",
@@ -13979,8 +14012,6 @@
                       "id",
                       "supplierId",
                       "supplierName",
-                      "quoteCode",
-                      "purchaseOrderNumber",
                       "discount",
                       "status",
                       "createdAt",
@@ -14113,16 +14144,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
                   "supplierName": {
-                    "type": "string"
-                  },
-                  "quoteCode": {
-                    "type": "string"
-                  },
-                  "purchaseOrderNumber": {
                     "type": "string"
                   },
                   "items": {
@@ -14174,6 +14202,7 @@
                   }
                 },
                 "required": [
+                  "id",
                   "supplierId",
                   "supplierName",
                   "items",
@@ -14199,12 +14228,6 @@
                       "type": "string"
                     },
                     "supplierName": {
-                      "type": "string"
-                    },
-                    "quoteCode": {
-                      "type": "string"
-                    },
-                    "purchaseOrderNumber": {
                       "type": "string"
                     },
                     "paymentTerms": {
@@ -14295,8 +14318,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "quoteCode",
-                    "purchaseOrderNumber",
                     "discount",
                     "status",
                     "createdAt",
@@ -14412,16 +14433,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
                   "supplierName": {
-                    "type": "string"
-                  },
-                  "quoteCode": {
-                    "type": "string"
-                  },
-                  "purchaseOrderNumber": {
                     "type": "string"
                   },
                   "items": {
@@ -14501,12 +14519,6 @@
                       "type": "string"
                     },
                     "supplierName": {
-                      "type": "string"
-                    },
-                    "quoteCode": {
-                      "type": "string"
-                    },
-                    "purchaseOrderNumber": {
                       "type": "string"
                     },
                     "paymentTerms": {
@@ -14597,8 +14609,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "quoteCode",
-                    "purchaseOrderNumber",
                     "discount",
                     "status",
                     "createdAt",
@@ -14832,9 +14842,6 @@
                       "id": {
                         "type": "string"
                       },
-                      "offerCode": {
-                        "type": "string"
-                      },
                       "linkedQuoteId": {
                         "type": "string"
                       },
@@ -14933,7 +14940,6 @@
                     },
                     "required": [
                       "id",
-                      "offerCode",
                       "linkedQuoteId",
                       "supplierId",
                       "supplierName",
@@ -15069,7 +15075,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "offerCode": {
+                  "id": {
                     "type": "string"
                   },
                   "linkedQuoteId": {
@@ -15133,7 +15139,7 @@
                   }
                 },
                 "required": [
-                  "offerCode",
+                  "id",
                   "linkedQuoteId",
                   "supplierId",
                   "supplierName",
@@ -15154,9 +15160,6 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
-                    },
-                    "offerCode": {
                       "type": "string"
                     },
                     "linkedQuoteId": {
@@ -15257,7 +15260,6 @@
                   },
                   "required": [
                     "id",
-                    "offerCode",
                     "linkedQuoteId",
                     "supplierId",
                     "supplierName",
@@ -15376,7 +15378,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "offerCode": {
+                  "id": {
                     "type": "string"
                   },
                   "supplierId": {
@@ -15459,9 +15461,6 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
-                    },
-                    "offerCode": {
                       "type": "string"
                     },
                     "linkedQuoteId": {
@@ -15562,7 +15561,6 @@
                   },
                   "required": [
                     "id",
-                    "offerCode",
                     "linkedQuoteId",
                     "supplierId",
                     "supplierName",
@@ -16025,6 +16023,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "linkedQuoteId": {
                     "type": "string"
                   },
@@ -16315,6 +16316,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
@@ -16732,9 +16736,6 @@
                       "supplierName": {
                         "type": "string"
                       },
-                      "invoiceNumber": {
-                        "type": "string"
-                      },
                       "issueDate": {
                         "type": "string",
                         "format": "date"
@@ -16819,7 +16820,6 @@
                       "id",
                       "supplierId",
                       "supplierName",
-                      "invoiceNumber",
                       "issueDate",
                       "dueDate",
                       "status",
@@ -16957,6 +16957,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "linkedSaleId": {
                     "type": "string"
                   },
@@ -16964,9 +16967,6 @@
                     "type": "string"
                   },
                   "supplierName": {
-                    "type": "string"
-                  },
-                  "invoiceNumber": {
                     "type": "string"
                   },
                   "issueDate": {
@@ -17063,9 +17063,6 @@
                     "supplierName": {
                       "type": "string"
                     },
-                    "invoiceNumber": {
-                      "type": "string"
-                    },
                     "issueDate": {
                       "type": "string",
                       "format": "date"
@@ -17150,7 +17147,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "invoiceNumber",
                     "issueDate",
                     "dueDate",
                     "status",
@@ -17271,13 +17267,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
                   "supplierName": {
-                    "type": "string"
-                  },
-                  "invoiceNumber": {
                     "type": "string"
                   },
                   "issueDate": {
@@ -17376,9 +17372,6 @@
                     "supplierName": {
                       "type": "string"
                     },
-                    "invoiceNumber": {
-                      "type": "string"
-                    },
                     "issueDate": {
                       "type": "string",
                       "format": "date"
@@ -17463,7 +17456,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "invoiceNumber",
                     "issueDate",
                     "dueDate",
                     "status",
@@ -17708,12 +17700,6 @@
                       "supplierName": {
                         "type": "string"
                       },
-                      "quoteCode": {
-                        "type": "string"
-                      },
-                      "purchaseOrderNumber": {
-                        "type": "string"
-                      },
                       "paymentTerms": {
                         "type": [
                           "null",
@@ -17802,8 +17788,6 @@
                       "id",
                       "supplierId",
                       "supplierName",
-                      "quoteCode",
-                      "purchaseOrderNumber",
                       "discount",
                       "status",
                       "createdAt",
@@ -17936,16 +17920,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
                   "supplierName": {
-                    "type": "string"
-                  },
-                  "quoteCode": {
-                    "type": "string"
-                  },
-                  "purchaseOrderNumber": {
                     "type": "string"
                   },
                   "items": {
@@ -17997,6 +17978,7 @@
                   }
                 },
                 "required": [
+                  "id",
                   "supplierId",
                   "supplierName",
                   "items",
@@ -18022,12 +18004,6 @@
                       "type": "string"
                     },
                     "supplierName": {
-                      "type": "string"
-                    },
-                    "quoteCode": {
-                      "type": "string"
-                    },
-                    "purchaseOrderNumber": {
                       "type": "string"
                     },
                     "paymentTerms": {
@@ -18118,8 +18094,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "quoteCode",
-                    "purchaseOrderNumber",
                     "discount",
                     "status",
                     "createdAt",
@@ -18235,16 +18209,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "id": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
                   "supplierName": {
-                    "type": "string"
-                  },
-                  "quoteCode": {
-                    "type": "string"
-                  },
-                  "purchaseOrderNumber": {
                     "type": "string"
                   },
                   "items": {
@@ -18324,12 +18295,6 @@
                       "type": "string"
                     },
                     "supplierName": {
-                      "type": "string"
-                    },
-                    "quoteCode": {
-                      "type": "string"
-                    },
-                    "purchaseOrderNumber": {
                       "type": "string"
                     },
                     "paymentTerms": {
@@ -18420,8 +18385,6 @@
                     "id",
                     "supplierId",
                     "supplierName",
-                    "quoteCode",
-                    "purchaseOrderNumber",
                     "discount",
                     "status",
                     "createdAt",
@@ -18655,6 +18618,9 @@
                       "id": {
                         "type": "string"
                       },
+                      "bidCode": {
+                        "type": "string"
+                      },
                       "clientId": {
                         "type": "string"
                       },
@@ -18691,6 +18657,7 @@
                     },
                     "required": [
                       "id",
+                      "bidCode",
                       "clientId",
                       "clientName",
                       "productId",
@@ -18827,6 +18794,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "bidCode": {
+                    "type": "string"
+                  },
                   "clientId": {
                     "type": "string"
                   },
@@ -18879,6 +18849,9 @@
                     "id": {
                       "type": "string"
                     },
+                    "bidCode": {
+                      "type": "string"
+                    },
                     "clientId": {
                       "type": "string"
                     },
@@ -18915,6 +18888,7 @@
                   },
                   "required": [
                     "id",
+                    "bidCode",
                     "clientId",
                     "clientName",
                     "productId",
@@ -19034,6 +19008,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "bidCode": {
+                    "type": "string"
+                  },
                   "clientId": {
                     "type": "string"
                   },
@@ -19086,6 +19063,9 @@
                     "id": {
                       "type": "string"
                     },
+                    "bidCode": {
+                      "type": "string"
+                    },
                     "clientId": {
                       "type": "string"
                     },
@@ -19122,6 +19102,7 @@
                   },
                   "required": [
                     "id",
+                    "bidCode",
                     "clientId",
                     "clientName",
                     "productId",
@@ -22269,7 +22250,7 @@
     },
     "/api/logs/audit": {
       "get": {
-        "summary": "List system access audit logs",
+        "summary": "List system audit logs",
         "tags": [
           "logs"
         ],
@@ -22295,11 +22276,63 @@
                       "username": {
                         "type": "string"
                       },
+                      "action": {
+                        "type": "string"
+                      },
+                      "entityType": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "entityId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "ipAddress": {
                         "type": "string"
                       },
                       "createdAt": {
                         "type": "number"
+                      },
+                      "details": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "targetLabel": {
+                                "type": "string"
+                              },
+                              "secondaryLabel": {
+                                "type": "string"
+                              },
+                              "changedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "counts": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "number"
+                                }
+                              },
+                              "fromValue": {
+                                "type": "string"
+                              },
+                              "toValue": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -22307,6 +22340,7 @@
                       "userId",
                       "userName",
                       "username",
+                      "action",
                       "ipAddress",
                       "createdAt"
                     ]
