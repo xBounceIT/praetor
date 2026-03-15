@@ -127,6 +127,10 @@ const userRolesUpdateBodySchema = {
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
 
+const canViewUserEmails = (request: FastifyRequest) =>
+  hasPermission(request, 'administration.user_management_all.view') ||
+  hasPermission(request, 'administration.user_management.view');
+
 interface DatabaseError extends Error {
   code?: string;
   constraint?: string;
@@ -174,7 +178,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
       const canViewCosts = hasPermission(request, 'hr.costs.view');
-      const canViewUserEmails = canViewAllUsers || canViewUserManagement;
+      const canRevealUserEmails = canViewUserEmails(request);
 
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
@@ -224,7 +228,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id: u.id,
             name: u.name,
             username: u.username,
-            email: canViewUserEmails ? u.email : '',
+            email: canRevealUserEmails ? u.email : '',
             role: u.role,
             avatarInitials: u.avatar_initials,
             costPerHour: canViewCosts ? parseFloat(u.cost_per_hour || 0) : 0,
@@ -697,6 +701,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const u = responseResult.rows[0];
+      const canRevealUserEmails = canViewUserEmails(request);
 
       await bumpNamespaceVersion('users');
       if (name !== undefined || email !== undefined) {
@@ -706,7 +711,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id: u.id,
         name: u.name,
         username: u.username,
-        email: u.email,
+        email: canRevealUserEmails ? u.email : '',
         role: u.role,
         avatarInitials: u.avatar_initials,
         costPerHour: hasPermission(request, 'hr.costs.view') ? parseFloat(u.cost_per_hour || 0) : 0,

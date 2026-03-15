@@ -475,8 +475,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const saveEdit = async () => {
     if (editingUser) {
       const newErrors: Record<string, string> = {};
+      const originalHasSurname = !!splitFullName(editingUser.name).surname.trim();
       if (!editFirstName.trim()) newErrors.firstName = t('common:validation.nameRequired');
-      if (!editSurname.trim()) newErrors.surname = t('common:validation.surnameRequired');
+      if (originalHasSurname && !editSurname.trim()) {
+        newErrors.surname = t('common:validation.surnameRequired');
+      }
       if (editEmail.trim() && !isValidEmail(editEmail)) {
         newErrors.email = t('common:validation.invalidEmail');
       }
