@@ -323,13 +323,6 @@ const LogsView: React.FC = () => {
 
   const refreshButton = (
     <div className="flex items-center gap-3">
-      <CustomSelect
-        options={timeRangeOptions}
-        value={dropdownValue}
-        onChange={handleTimeRangeChange}
-        displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-        buttonClassName="h-10 px-3 text-sm font-semibold !bg-white"
-      />
       <DatePickerButton
         label={t('logs.filters.startDate')}
         value={startDate}
@@ -342,6 +335,13 @@ const LogsView: React.FC = () => {
         value={endDate}
         onChange={handleEndDateChange}
         onClear={handleEndDateClear}
+      />
+      <CustomSelect
+        options={timeRangeOptions}
+        value={dropdownValue}
+        onChange={handleTimeRangeChange}
+        displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
+        buttonClassName="h-10 px-3 text-sm font-semibold !bg-white"
       />
       <button
         type="button"
