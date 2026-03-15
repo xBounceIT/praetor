@@ -183,7 +183,6 @@ const LogsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [timeRange, setTimeRange] = useState<TimeRange>('last7Days');
   const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
@@ -214,54 +213,31 @@ const LogsView: React.FC = () => {
 
   const handleTimeRangeChange = useCallback((value: string | string[]) => {
     const range = (Array.isArray(value) ? value[0] : value) as TimeRange;
-    setTimeRange(range);
     const { start, end } = getPresetRange(range);
     setStartDate(start);
     setEndDate(end);
   }, []);
 
-  const handleStartDateChange = useCallback(
-    (date: Date) => {
-      setStartDate(date);
-      const detected = detectTimeRange(date, endDate);
-      if (detected) {
-        setTimeRange(detected);
-      }
-    },
-    [endDate],
-  );
+  const handleStartDateChange = useCallback((date: Date) => {
+    setStartDate(date);
+  }, []);
 
-  const handleEndDateChange = useCallback(
-    (date: Date) => {
-      setEndDate(date);
-      const detected = detectTimeRange(startDate, date);
-      if (detected) {
-        setTimeRange(detected);
-      }
-    },
-    [startDate],
-  );
+  const handleEndDateChange = useCallback((date: Date) => {
+    setEndDate(date);
+  }, []);
 
   const handleStartDateClear = useCallback(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
     date.setHours(0, 0, 0, 0);
     setStartDate(date);
-    const detected = detectTimeRange(date, endDate);
-    if (detected) {
-      setTimeRange(detected);
-    }
-  }, [endDate]);
+  }, []);
 
   const handleEndDateClear = useCallback(() => {
     const date = new Date();
     date.setHours(23, 59, 59, 999);
     setEndDate(date);
-    const detected = detectTimeRange(startDate, date);
-    if (detected) {
-      setTimeRange(detected);
-    }
-  }, [startDate]);
+  }, []);
 
   const loadAuditLogs = useCallback(async () => {
     setError('');
@@ -333,9 +309,8 @@ const LogsView: React.FC = () => {
     <div className="flex items-center gap-3">
       <CustomSelect
         options={timeRangeOptions}
-        value={detectedRange ?? timeRange}
+        value={detectedRange ?? ''}
         onChange={handleTimeRangeChange}
-        label={t('logs.filters.timeRange')}
         displayValue={detectedRange ? undefined : t('logs.timeRanges.custom')}
         buttonClassName="h-10 px-3"
       />
