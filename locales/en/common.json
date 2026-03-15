@@ -97,6 +97,7 @@
     "invalidUrl": "Please enter a valid URL",
     "selectOption": "Please select an option",
     "nameRequired": "Name is required",
+    "surnameRequired": "Surname is required",
     "usernameRequired": "Username is required",
     "usernameAlreadyExists": "This username already exists",
     "passwordRequired": "Password is required",

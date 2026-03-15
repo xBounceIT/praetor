@@ -21,6 +21,7 @@ import {
   badRequest,
   ensureArrayOfStrings,
   optionalArrayOfStrings,
+  optionalEmail,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   requireNonEmptyString,
@@ -41,6 +42,7 @@ const userSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     username: { type: 'string' },
+    email: { type: 'string' },
     role: { type: 'string' },
     avatarInitials: { type: 'string' },
     costPerHour: { type: 'number' },
@@ -51,6 +53,7 @@ const userSchema = {
     'id',
     'name',
     'username',
+    'email',
     'role',
     'avatarInitials',
     'costPerHour',
@@ -66,6 +69,7 @@ const userCreateBodySchema = {
     username: { type: 'string' },
     password: { type: 'string' },
     role: { type: 'string' },
+    email: { type: 'string' },
     costPerHour: { type: 'number' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
   },
@@ -79,6 +83,7 @@ const userUpdateBodySchema = {
     isDisabled: { type: 'boolean' },
     costPerHour: { type: 'number' },
     role: { type: 'string' },
+    email: { type: 'string' },
   },
 } as const;
 
@@ -121,6 +126,10 @@ const userRolesUpdateBodySchema = {
 
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
+
+const canViewUserEmails = (request: FastifyRequest) =>
+  hasPermission(request, 'administration.user_management_all.view') ||
+  hasPermission(request, 'administration.user_management.view');
 
 interface DatabaseError extends Error {
   code?: string;
@@ -169,12 +178,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
       const canViewCosts = hasPermission(request, 'hr.costs.view');
+      const canRevealUserEmails = canViewUserEmails(request);
 
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
-        ? `v=2:scope=all:costs=${canViewCosts ? 1 : 0}`
-        : `v=2:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
+        ? `v=3:scope=all:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`
+        : `v=3:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`;
 
       const { status, value } = await cacheGetSetJson(
         'users',
@@ -184,7 +194,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           let result: Awaited<ReturnType<typeof query>>;
           if (canViewAllUsers) {
             result = await query(
-              'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
+              `SELECT u.id, u.name, u.username, COALESCE(s.email, '') AS email, u.role,
+                      u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
+                 FROM users u
+                 LEFT JOIN settings s ON s.user_id = u.id
+                 ORDER BY u.name`,
             );
           } else {
             const conditions: string[] = ['u.id = $1'];
@@ -199,8 +213,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
 
             result = await query(
-              `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
+              `SELECT DISTINCT u.id, u.name, u.username, COALESCE(s.email, '') AS email, u.role,
+                              u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
                  FROM users u
+                 LEFT JOIN settings s ON s.user_id = u.id
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE ${conditions.join(' OR ')}
@@ -212,6 +228,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id: u.id,
             name: u.name,
             username: u.username,
+            email: canRevealUserEmails ? u.email : '',
             role: u.role,
             avatarInitials: u.avatar_initials,
             costPerHour: canViewCosts ? parseFloat(u.cost_per_hour || 0) : 0,
@@ -250,11 +267,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name, username, password, role, costPerHour, employeeType } = request.body as {
+      const { name, username, password, role, email, costPerHour, employeeType } = request.body as {
         name: string;
         username?: string;
         password?: string;
         role?: string;
+        email?: string;
         costPerHour?: number;
         employeeType?: string;
       };
@@ -286,6 +304,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      const emailResult = optionalEmail(email, 'email');
+      if (!emailResult.ok)
+        return badRequest(reply, (emailResult as { ok: false; message: string }).message);
 
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
@@ -358,11 +380,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [id, roleValue],
         );
 
+        await query(
+          `INSERT INTO settings (user_id, full_name, email)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id) DO UPDATE SET
+             full_name = EXCLUDED.full_name,
+             email = EXCLUDED.email,
+             updated_at = CURRENT_TIMESTAMP`,
+          [id, nameResult.value, emailResult.value || ''],
+        );
+
         await bumpNamespaceVersion('users');
         return reply.code(201).send({
           id,
           name: nameResult.value,
           username: usernameValue,
+          email: emailResult.value || '',
           role: roleValue,
           avatarInitials,
           costPerHour: costPerHourResult.value || 0,
@@ -471,8 +504,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { name, isDisabled, costPerHour, role } = request.body as {
+      const { name, email, isDisabled, costPerHour, role } = request.body as {
         name?: string;
+        email?: string;
         isDisabled?: boolean;
         costPerHour?: number;
         role?: string;
@@ -490,6 +524,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
         if (!costPerHourResult.ok)
           return badRequest(reply, (costPerHourResult as { ok: false; message: string }).message);
+      }
+
+      if (email !== undefined) {
+        const emailResult = optionalEmail(email, 'email');
+        if (!emailResult.ok)
+          return badRequest(reply, (emailResult as { ok: false; message: string }).message);
       }
 
       const targetUserResult = await query(
@@ -587,12 +627,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(roleValue);
       }
 
-      if (updates.length === 0) {
+      if (updates.length === 0 && email === undefined) {
         return badRequest(reply, 'No fields to update');
       }
 
       let result: Awaited<ReturnType<typeof query>>;
-      if (role !== undefined) {
+      if (updates.length === 0) {
+        result = await query(
+          `SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type
+             FROM users
+            WHERE id = $1`,
+          [idResult.value],
+        );
+      } else if (role !== undefined) {
         // If role changes via the legacy endpoint, reset assigned roles to this single primary role.
         try {
           await query('BEGIN');
@@ -625,13 +672,46 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const u = result.rows[0];
+      if (name !== undefined || email !== undefined) {
+        const emailResult = optionalEmail(email, 'email') as { ok: true; value: string | null };
+        await query(
+          `INSERT INTO settings (user_id, full_name, email)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id) DO UPDATE SET
+             full_name = CASE WHEN $4 THEN EXCLUDED.full_name ELSE settings.full_name END,
+             email = CASE WHEN $5 THEN EXCLUDED.email ELSE settings.email END,
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            idResult.value,
+            name ?? null,
+            emailResult.value,
+            name !== undefined,
+            email !== undefined,
+          ],
+        );
+      }
+
+      const responseResult = await query(
+        `SELECT u.id, u.name, u.username, COALESCE(s.email, '') AS email, u.role,
+                u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
+           FROM users u
+           LEFT JOIN settings s ON s.user_id = u.id
+          WHERE u.id = $1`,
+        [idResult.value],
+      );
+
+      const u = responseResult.rows[0];
+      const canRevealUserEmails = canViewUserEmails(request);
 
       await bumpNamespaceVersion('users');
+      if (name !== undefined || email !== undefined) {
+        await bumpNamespaceVersion(`settings:user:${idResult.value}`);
+      }
       return {
         id: u.id,
         name: u.name,
         username: u.username,
+        email: canRevealUserEmails ? u.email : '',
         role: u.role,
         avatarInitials: u.avatar_initials,
         costPerHour: hasPermission(request, 'hr.costs.view') ? parseFloat(u.cost_per_hour || 0) : 0,
