@@ -237,8 +237,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
-        ? `v=4:scope=all:costs=${canViewCosts ? 1 : 0}`
-        : `v=4:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
+        ? `v=5:scope=all:costs=${canViewCosts ? 1 : 0}`
+        : `v=5:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
 
       const { status, value } = await cacheGetSetJson(
         'users',
@@ -276,16 +276,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           } else {
             const conditions: string[] = ['u.id = $1'];
             if (canViewManagedUsers) {
-              // Work unit JOIN already captures all users (including internal/external)
-              // in managed work units, so no need for standalone employee_type conditions
               conditions.push('wum.user_id = $1');
-            } else {
-              if (canViewInternal) {
-                conditions.push("u.employee_type = 'internal'");
-              }
-              if (canViewExternal) {
-                conditions.push("u.employee_type = 'external'");
-              }
+            }
+            if (canViewInternal) {
+              conditions.push("u.employee_type = 'internal'");
+            }
+            if (canViewExternal) {
+              conditions.push("u.employee_type = 'external'");
             }
 
             result = await query(
