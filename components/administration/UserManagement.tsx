@@ -65,7 +65,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('password');
+  const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -168,7 +168,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
     setNewName('');
     setNewUsername('');
-    setNewPassword('password');
+    setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
     setIsCreateModalOpen(false);
   };
@@ -177,7 +177,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setIsCreateModalOpen(false);
     setNewName('');
     setNewUsername('');
-    setNewPassword('password');
+    setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
     setFormErrors({});
   };
