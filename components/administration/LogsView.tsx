@@ -328,7 +328,7 @@ const LogsView: React.FC = () => {
         value={dropdownValue}
         onChange={handleTimeRangeChange}
         displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-        buttonClassName="h-10 px-3"
+        buttonClassName="h-10 px-3 text-sm font-semibold !bg-white"
       />
       <DatePickerButton
         label={t('logs.filters.startDate')}
@@ -336,6 +336,7 @@ const LogsView: React.FC = () => {
         onChange={handleStartDateChange}
         onClear={handleStartDateClear}
       />
+      <i className="fa-solid fa-arrow-right text-slate-300 text-sm" />
       <DatePickerButton
         label={t('logs.filters.endDate')}
         value={endDate}
@@ -346,7 +347,7 @@ const LogsView: React.FC = () => {
         type="button"
         onClick={handleRefreshLogs}
         disabled={loading || isRefreshing}
-        className="h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        className="h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <i className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'}`} />
         {t('common:buttons.refresh')}
