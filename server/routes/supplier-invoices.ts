@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -531,6 +532,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           createdItems.push(itemResult.rows[0]);
         }
 
+        await logAudit({
+          request,
+          action: 'supplier_invoice.created',
+          entityType: 'supplier_invoice',
+          entityId: resolvedInvoiceId,
+          details: {
+            targetLabel: resolvedInvoiceId,
+            secondaryLabel: supplierNameResult.value,
+          },
+        });
         return reply.code(201).send(formatInvoiceResponse(invoiceResult.rows[0], createdItems));
       } catch (error) {
         const databaseError = error as DatabaseError;
@@ -815,6 +826,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           updatedItems = itemsResult.rows;
         }
 
+        const nextStatus =
+          typeof status === 'string'
+            ? status
+            : String(invoiceResult.rows[0].status ?? existingInvoice.status);
+        const didStatusChange = status !== undefined && existingInvoice.status !== nextStatus;
+        await logAudit({
+          request,
+          action: 'supplier_invoice.updated',
+          entityType: 'supplier_invoice',
+          entityId: updatedInvoiceId,
+          details: {
+            targetLabel: updatedInvoiceId,
+            secondaryLabel: String(invoiceResult.rows[0].supplierName ?? ''),
+            fromValue: didStatusChange ? String(existingInvoice.status) : undefined,
+            toValue: didStatusChange ? nextStatus : undefined,
+          },
+        });
         return formatInvoiceResponse(invoiceResult.rows[0], updatedItems);
       } catch (error) {
         const databaseError = error as DatabaseError;
@@ -845,9 +873,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const invoiceResult = await query('SELECT id, status FROM supplier_invoices WHERE id = $1', [
-        idResult.value,
-      ]);
+      const invoiceResult = await query(
+        'SELECT id, status, supplier_name as "supplierName" FROM supplier_invoices WHERE id = $1',
+        [idResult.value],
+      );
       if (invoiceResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Invoice not found' });
       }
@@ -857,6 +886,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await query('DELETE FROM supplier_invoices WHERE id = $1', [idResult.value]);
 
+      await logAudit({
+        request,
+        action: 'supplier_invoice.deleted',
+        entityType: 'supplier_invoice',
+        entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(invoiceResult.rows[0].supplierName ?? ''),
+        },
+      });
       return reply.code(204).send();
     },
   );

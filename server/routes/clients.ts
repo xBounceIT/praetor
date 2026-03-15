@@ -13,6 +13,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { assignClientToTopManagers, assignClientToUser } from '../utils/top-manager-assignments.ts';
@@ -474,6 +475,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         await assignClientToTopManagers(id);
         await bumpNamespaceVersion('clients');
+        await logAudit({
+          request,
+          action: 'client.created',
+          entityType: 'client',
+          entityId: id,
+          details: {
+            targetLabel: c.name as string,
+            secondaryLabel: (c.client_code as string | null) ?? undefined,
+          },
+        });
         return reply.code(201).send(mapClientRow(c));
       } catch (err) {
         const error = err as DatabaseError;
@@ -739,8 +750,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const c = result.rows[0];
+        const isDisabledChanged = Object.hasOwn(body, 'isDisabled');
+        const isDisabledValue = isDisabledChanged
+          ? (body as { isDisabled?: boolean }).isDisabled
+          : undefined;
+
+        const changedFields = [
+          hasName ? 'name' : null,
+          isDisabledChanged ? 'isDisabled' : null,
+          Object.hasOwn(body, 'type') ? 'type' : null,
+          Object.hasOwn(body, 'contactName') ? 'contactName' : null,
+          hasClientCode ? 'clientCode' : null,
+          Object.hasOwn(body, 'email') ? 'email' : null,
+          Object.hasOwn(body, 'phone') ? 'phone' : null,
+          Object.hasOwn(body, 'address') ? 'address' : null,
+          hasDescription ? 'description' : null,
+          hasAtecoCode ? 'atecoCode' : null,
+          hasWebsite ? 'website' : null,
+          hasSector ? 'sector' : null,
+          hasNumberOfEmployees ? 'numberOfEmployees' : null,
+          hasRevenue ? 'revenue' : null,
+          hasFiscalCode || hasVatNumber || hasTaxCode ? 'fiscalCode' : null,
+          hasOfficeCountRange ? 'officeCountRange' : null,
+        ].filter((field): field is string => field !== null);
+
+        // Determine specific action based on what changed
+        let action = 'client.updated';
+        if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+          action = isDisabledValue ? 'client.disabled' : 'client.enabled';
+        }
 
         await bumpNamespaceVersion('clients');
+        await logAudit({
+          request,
+          action,
+          entityType: 'client',
+          entityId: idResult.value,
+          details: {
+            targetLabel: c.name as string,
+            secondaryLabel: (c.client_code as string | null) ?? undefined,
+          },
+        });
         return mapClientRow(c);
       } catch (err) {
         const error = err as DatabaseError;
@@ -780,14 +830,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query('DELETE FROM clients WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        'DELETE FROM clients WHERE id = $1 RETURNING id, name, client_code',
+        [idResult.value],
+      );
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Client not found' });
       }
 
       await bumpNamespaceVersion('clients');
+      await logAudit({
+        request,
+        action: 'client.deleted',
+        entityType: 'client',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: (result.rows[0].client_code as string | null) ?? undefined,
+        },
+      });
       return { message: 'Client deleted' };
     },
   );

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   assignClientToTopManagers,
@@ -545,6 +546,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
+      await logAudit({
+        request,
+        action: 'client_order.created',
+        entityType: 'client_order',
+        entityId: orderId,
+        details: {
+          targetLabel: orderId,
+          secondaryLabel: clientNameResult.value,
+        },
+      });
       return reply.code(201).send({
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -1195,6 +1206,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(orderResult.rows[0].status ?? existingOrder.status);
+      const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
+      await logAudit({
+        request,
+        action: 'client_order.updated',
+        entityType: 'client_order',
+        entityId: updatedOrderId,
+        details: {
+          targetLabel: updatedOrderId,
+          secondaryLabel: String(orderResult.rows[0].clientName ?? ''),
+          fromValue: didStatusChange ? String(existingOrder.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
+      });
       return {
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
@@ -1223,9 +1251,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check if order exists and is in draft status
-      const orderResult = await query('SELECT id, status FROM sales WHERE id = $1', [
-        idResult.value,
-      ]);
+      const orderResult = await query(
+        'SELECT id, status, client_name as "clientName" FROM sales WHERE id = $1',
+        [idResult.value],
+      );
 
       if (orderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
@@ -1242,6 +1271,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Items will be deleted automatically via CASCADE
       await query('DELETE FROM sales WHERE id = $1', [idResult.value]);
 
+      await logAudit({
+        request,
+        action: 'client_order.deleted',
+        entityType: 'client_order',
+        entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(order.clientName ?? ''),
+        },
+      });
       return reply.code(204).send();
     },
   );

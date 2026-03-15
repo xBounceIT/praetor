@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -566,6 +567,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
+      await logAudit({
+        request,
+        action: 'invoice.created',
+        entityType: 'invoice',
+        entityId: invoiceId,
+        details: {
+          targetLabel: invoiceId,
+          secondaryLabel: clientNameResult.value,
+        },
+      });
       const invoice = invoiceResult.rows[0];
       return reply
         .code(201)
@@ -841,6 +852,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoice = invoiceResult.rows[0];
+      await logAudit({
+        request,
+        action: 'invoice.updated',
+        entityType: 'invoice',
+        entityId: updatedInvoiceId,
+        details: {
+          targetLabel: updatedInvoiceId,
+          secondaryLabel: String(invoice.clientName),
+        },
+      });
       return formatInvoiceResponse(
         invoice as Record<string, unknown>,
         updatedItems as Record<string, unknown>[],
@@ -870,14 +891,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Invoice items will be deleted automatically via CASCADE
       try {
-        const result = await query('DELETE FROM invoices WHERE id = $1 RETURNING id', [
-          idResult.value,
-        ]);
+        const result = await query(
+          'DELETE FROM invoices WHERE id = $1 RETURNING id, client_name as "clientName"',
+          [idResult.value],
+        );
 
         if (result.rows.length === 0) {
           return reply.code(404).send({ error: 'Invoice not found' });
         }
 
+        await logAudit({
+          request,
+          action: 'invoice.deleted',
+          entityType: 'invoice',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: String(result.rows[0].clientName ?? ''),
+          },
+        });
         return reply.code(204).send();
       } catch (err) {
         console.error('DELETE INVOICE ERROR:', err);

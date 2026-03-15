@@ -20,6 +20,7 @@ export interface User {
   availableRoles?: RoleSummary[];
   avatarInitials: string;
   username: string;
+  email?: string;
   password?: string;
   costPerHour?: number;
   isDisabled?: boolean;
@@ -399,8 +400,21 @@ export interface AuditLogEntry {
   userId: string;
   userName: string;
   username: string;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
   ipAddress: string;
   createdAt: number;
+  details: AuditLogDetails | null;
+}
+
+export interface AuditLogDetails {
+  targetLabel?: string;
+  secondaryLabel?: string;
+  changedFields?: string[];
+  counts?: Record<string, number>;
+  fromValue?: string;
+  toValue?: string;
 }
 
 export interface ReportChatMessage {

@@ -9,6 +9,7 @@ import {
   shouldBypassCache,
   TTL_SETTINGS_SECONDS,
 } from '../services/cache.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
   optionalEnum,
@@ -261,6 +262,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const s = result.rows[0];
       await bumpNamespaceVersion('general-settings');
+      await logAudit({
+        request,
+        action: 'settings.updated',
+        entityType: 'settings',
+        details: {
+          secondaryLabel: (s.ai_provider as string | null) ?? undefined,
+        },
+      });
       return {
         currency: s.currency,
         dailyLimit: parseFloat(s.daily_limit),

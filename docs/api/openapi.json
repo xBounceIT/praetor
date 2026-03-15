@@ -837,6 +837,9 @@
                       "username": {
                         "type": "string"
                       },
+                      "email": {
+                        "type": "string"
+                      },
                       "role": {
                         "type": "string"
                       },
@@ -868,6 +871,7 @@
                       "id",
                       "name",
                       "username",
+                      "email",
                       "role",
                       "avatarInitials",
                       "costPerHour",
@@ -1014,6 +1018,9 @@
                   "role": {
                     "type": "string"
                   },
+                  "email": {
+                    "type": "string"
+                  },
                   "costPerHour": {
                     "type": "number"
                   },
@@ -1051,6 +1058,9 @@
                     "username": {
                       "type": "string"
                     },
+                    "email": {
+                      "type": "string"
+                    },
                     "role": {
                       "type": "string"
                     },
@@ -1082,6 +1092,7 @@
                     "id",
                     "name",
                     "username",
+                    "email",
                     "role",
                     "avatarInitials",
                     "costPerHour",
@@ -1336,6 +1347,9 @@
                   },
                   "role": {
                     "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
                   }
                 }
               }
@@ -1369,6 +1383,9 @@
                     "username": {
                       "type": "string"
                     },
+                    "email": {
+                      "type": "string"
+                    },
                     "role": {
                       "type": "string"
                     },
@@ -1400,6 +1417,7 @@
                     "id",
                     "name",
                     "username",
+                    "email",
                     "role",
                     "avatarInitials",
                     "costPerHour",
@@ -22274,9 +22292,29 @@
     },
     "/api/logs/audit": {
       "get": {
-        "summary": "List system access audit logs",
+        "summary": "List system audit logs",
         "tags": [
           "logs"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "in": "query",
+            "name": "startDate",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "in": "query",
+            "name": "endDate",
+            "required": false
+          }
         ],
         "responses": {
           "200": {
@@ -22300,11 +22338,63 @@
                       "username": {
                         "type": "string"
                       },
+                      "action": {
+                        "type": "string"
+                      },
+                      "entityType": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "entityId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "ipAddress": {
                         "type": "string"
                       },
                       "createdAt": {
                         "type": "number"
+                      },
+                      "details": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "targetLabel": {
+                                "type": "string"
+                              },
+                              "secondaryLabel": {
+                                "type": "string"
+                              },
+                              "changedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "counts": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "number"
+                                }
+                              },
+                              "fromValue": {
+                                "type": "string"
+                              },
+                              "toValue": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -22312,6 +22402,7 @@
                       "userId",
                       "userName",
                       "username",
+                      "action",
                       "ipAddress",
                       "createdAt"
                     ]

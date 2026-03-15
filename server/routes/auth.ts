@@ -1,9 +1,9 @@
 import bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, generateToken } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
@@ -153,19 +153,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const token = generateToken(user.id, Date.now(), user.role);
       const permissions = await getRolePermissions(user.role);
 
-      try {
-        await query('INSERT INTO audit_logs (id, user_id, ip_address) VALUES ($1, $2, $3)', [
-          `audit-${randomUUID()}`,
-          user.id,
-          request.ip || 'unknown',
-        ]);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        fastify.log.error(
-          { userId: user.id, errorMessage },
-          'Audit log insert failed during login',
-        );
-      }
+      await logAudit({
+        request,
+        action: 'user.login',
+        entityType: 'user',
+        entityId: user.id,
+        details: {
+          targetLabel: user.name as string,
+          secondaryLabel: user.role as string,
+        },
+        userId: user.id,
+      });
       const availableRoles = await getAvailableRolesForUser(user.id);
       const effectiveAvailableRoles =
         availableRoles.length > 0
@@ -285,6 +283,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleIdResult.value,
       );
       reply.header('x-auth-token', token);
+
+      await logAudit({
+        request,
+        action: 'user.role_switched',
+        entityType: 'user',
+        entityId: userId,
+        details: {
+          targetLabel: request.user?.name,
+          secondaryLabel: request.user?.username,
+          fromValue: request.user?.role,
+          toValue: roleIdResult.value,
+        },
+      });
 
       return {
         token,

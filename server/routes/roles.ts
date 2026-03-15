@@ -10,6 +10,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   ADMIN_BASE_PERMISSIONS,
   ADMINISTRATION_PERMISSIONS,
@@ -228,6 +229,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id,
       ]);
       const role = await mapRoleRow(roleRow.rows[0]);
+      await logAudit({
+        request,
+        action: 'role.created',
+        entityType: 'role',
+        entityId: id,
+        details: {
+          targetLabel: role.name,
+          counts:
+            permissionsResult.value.length > 0
+              ? { permissions: permissionsResult.value.length }
+              : undefined,
+        },
+      });
       return reply.code(201).send(role);
     },
   );
@@ -258,9 +272,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const roleResult = await query('SELECT id, is_system, is_admin FROM roles WHERE id = $1', [
-        idResult.value,
-      ]);
+      const roleResult = await query(
+        'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
+        [idResult.value],
+      );
       if (roleResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Role not found' });
       }
@@ -272,6 +287,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await query('UPDATE roles SET name = $1 WHERE id = $2', [nameResult.value, idResult.value]);
       await bumpNamespaceVersion('roles');
+      await logAudit({
+        request,
+        action: 'role.updated',
+        entityType: 'role',
+        entityId: idResult.value,
+        details: {
+          targetLabel: nameResult.value,
+          fromValue: roleRow.name as string,
+          toValue: nameResult.value,
+        },
+      });
 
       const updatedRoleResult = await query(
         'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
@@ -302,9 +328,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const roleResult = await query('SELECT id, is_system, is_admin FROM roles WHERE id = $1', [
-        idResult.value,
-      ]);
+      const roleResult = await query(
+        'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
+        [idResult.value],
+      );
       if (roleResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Role not found' });
       }
@@ -323,6 +350,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await query('DELETE FROM roles WHERE id = $1', [idResult.value]);
       await bumpNamespaceVersion('roles');
+      await logAudit({
+        request,
+        action: 'role.deleted',
+        entityType: 'role',
+        entityId: idResult.value,
+        details: {
+          targetLabel: roleRow.name as string,
+        },
+      });
       return { message: 'Role deleted' };
     },
   );
@@ -363,7 +399,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, `Unknown permission: ${invalidPermission}`);
       }
 
-      const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [
+      const roleResult = await query('SELECT id, name, is_admin FROM roles WHERE id = $1', [
         idResult.value,
       ]);
       if (roleResult.rows.length === 0) {
@@ -411,6 +447,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [idResult.value],
       );
       const updatedRole = await mapRoleRow(updatedRoleResult.rows[0]);
+      await logAudit({
+        request,
+        action: 'role.permissions_updated',
+        entityType: 'role',
+        entityId: idResult.value,
+        details: {
+          targetLabel: updatedRole.name,
+          counts: { permissions: normalizedPermissions.length },
+        },
+      });
       return reply.send(updatedRole);
     },
   );

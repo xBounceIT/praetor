@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -521,6 +522,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(normalizeOfferItemRow(itemResult.rows[0] as Record<string, unknown>));
       }
 
+      await logAudit({
+        request,
+        action: 'client_offer.created',
+        entityType: 'client_offer',
+        entityId: nextIdResult.value,
+        details: {
+          targetLabel: nextIdResult.value,
+          secondaryLabel: clientNameResult.value,
+        },
+      });
       return reply.code(201).send({
         ...normalizeOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -799,6 +810,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(updatedOfferResult.rows[0].status ?? existingOffer.status);
+      const didStatusChange = status !== undefined && existingOffer.status !== nextStatus;
+      await logAudit({
+        request,
+        action: 'client_offer.updated',
+        entityType: 'client_offer',
+        entityId: updatedOfferId,
+        details: {
+          targetLabel: updatedOfferId,
+          secondaryLabel: String(updatedOfferResult.rows[0].clientName ?? ''),
+          fromValue: didStatusChange ? String(existingOffer.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
+      });
+
       return {
         ...normalizeOfferRow(updatedOfferResult.rows[0] as Record<string, unknown>),
         items: updatedItems,
@@ -835,9 +864,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
       }
 
-      const offerResult = await query('SELECT id, status FROM customer_offers WHERE id = $1', [
-        idResult.value,
-      ]);
+      const offerResult = await query(
+        'SELECT id, status, client_name as "clientName" FROM customer_offers WHERE id = $1',
+        [idResult.value],
+      );
       if (offerResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
@@ -845,6 +875,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Only draft offers can be deleted' });
       }
 
+      await logAudit({
+        request,
+        action: 'client_offer.deleted',
+        entityType: 'client_offer',
+        entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(offerResult.rows[0].clientName ?? ''),
+        },
+      });
       await query('DELETE FROM customer_offers WHERE id = $1', [idResult.value]);
       return reply.code(204).send();
     },

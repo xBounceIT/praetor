@@ -15,6 +15,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -27,6 +28,7 @@ import {
   badRequest,
   ensureArrayOfStrings,
   optionalArrayOfStrings,
+  optionalEmail,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   requireNonEmptyString,
@@ -49,6 +51,7 @@ const userSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     username: { type: 'string' },
+    email: { type: 'string' },
     role: { type: 'string' },
     avatarInitials: { type: 'string' },
     costPerHour: { type: 'number' },
@@ -61,6 +64,7 @@ const userSchema = {
     'id',
     'name',
     'username',
+    'email',
     'role',
     'avatarInitials',
     'costPerHour',
@@ -78,6 +82,7 @@ const userCreateBodySchema = {
     username: { type: 'string' },
     password: { type: 'string' },
     role: { type: 'string' },
+    email: { type: 'string' },
     costPerHour: { type: 'number' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
   },
@@ -91,6 +96,7 @@ const userUpdateBodySchema = {
     isDisabled: { type: 'boolean' },
     costPerHour: { type: 'number' },
     role: { type: 'string' },
+    email: { type: 'string' },
   },
 } as const;
 
@@ -134,29 +140,15 @@ const userRolesUpdateBodySchema = {
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
 
-const userIsAdminOnly = async (userId: string) => {
-  const result = await query(
-    `SELECT 1
-       FROM users u
-      WHERE u.id = $1
-        AND u.role = $2
-        AND NOT EXISTS (
-          SELECT 1
-            FROM user_roles ur
-           WHERE ur.user_id = u.id
-             AND ur.role_id <> $2
-        )
-      LIMIT 1`,
-    [userId, ADMIN_ROLE_ID],
-  );
-
-  return result.rows.length > 0;
-};
+const canViewUserEmails = (request: FastifyRequest) =>
+  hasPermission(request, 'administration.user_management_all.view') ||
+  hasPermission(request, 'administration.user_management.view');
 
 type UserRow = {
   id: string;
   name: string;
   username: string;
+  email?: string | null;
   role: string;
   avatar_initials: string | null;
   cost_per_hour: string | number | null;
@@ -169,12 +161,14 @@ type UserRow = {
 const mapUserResponse = (
   user: UserRow,
   canViewCosts: boolean,
+  canRevealUserEmails: boolean,
   hasTopManagerRole = Boolean(user.has_top_manager_role),
   isAdminOnly = Boolean(user.is_admin_only),
 ) => ({
   id: user.id,
   name: user.name,
   username: user.username,
+  email: canRevealUserEmails ? (user.email ?? '') : '',
   role: user.role,
   avatarInitials: user.avatar_initials ?? '',
   costPerHour: canViewCosts ? parseFloat(String(user.cost_per_hour || 0)) : 0,
@@ -233,12 +227,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
       const canViewCosts = hasPermission(request, 'hr.costs.view');
+      const canRevealUserEmails = canViewUserEmails(request);
 
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
-        ? `v=5:scope=all:costs=${canViewCosts ? 1 : 0}`
-        : `v=5:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
+        ? `v=6:scope=all:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`
+        : `v=6:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`;
 
       const { status, value } = await cacheGetSetJson(
         'users',
@@ -251,6 +246,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               `SELECT u.id,
                       u.name,
                       u.username,
+                      COALESCE(s.email, '') AS email,
                       u.role,
                       u.avatar_initials,
                       u.cost_per_hour,
@@ -270,6 +266,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         )
                       ) AS is_admin_only
                  FROM users u
+                 LEFT JOIN settings s ON s.user_id = u.id
                  ORDER BY u.name`,
               [TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
             );
@@ -289,6 +286,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               `SELECT DISTINCT u.id,
                                u.name,
                                u.username,
+                               COALESCE(s.email, '') AS email,
                                u.role,
                                u.avatar_initials,
                                u.cost_per_hour,
@@ -309,6 +307,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                                  )
                                ) AS is_admin_only
                  FROM users u
+                 LEFT JOIN settings s ON s.user_id = u.id
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE (${conditions.join(' OR ')})
@@ -317,7 +316,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               [request.user.id, TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
             );
           }
-          return result.rows.map((u) => mapUserResponse(u as UserRow, canViewCosts));
+          return result.rows.map((u) =>
+            mapUserResponse(u as UserRow, canViewCosts, canRevealUserEmails),
+          );
         },
         { bypass },
       );
@@ -350,11 +351,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name, username, password, role, costPerHour, employeeType } = request.body as {
+      const { name, username, password, role, email, costPerHour, employeeType } = request.body as {
         name: string;
         username?: string;
         password?: string;
         role?: string;
+        email?: string;
         costPerHour?: number;
         employeeType?: string;
       };
@@ -386,6 +388,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      const emailResult = optionalEmail(email, 'email');
+      if (!emailResult.ok)
+        return badRequest(reply, (emailResult as { ok: false; message: string }).message);
 
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
@@ -458,20 +464,41 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [id, roleValue],
         );
 
-        if (roleValue === 'top_manager') {
+        await query(
+          `INSERT INTO settings (user_id, full_name, email)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id) DO UPDATE SET
+             full_name = EXCLUDED.full_name,
+             email = EXCLUDED.email,
+             updated_at = CURRENT_TIMESTAMP`,
+          [id, nameResult.value, emailResult.value || ''],
+        );
+
+        if (roleValue === TOP_MANAGER_ROLE_ID) {
           await syncTopManagerAssignmentsForUser(id);
         }
 
         await bumpNamespaceVersion('users');
-        if (roleValue === 'top_manager') {
+        if (roleValue === TOP_MANAGER_ROLE_ID) {
           await bumpNamespaceVersion('clients');
           await bumpNamespaceVersion('projects');
           await bumpNamespaceVersion('tasks');
         }
+        await logAudit({
+          request,
+          action: 'user.created',
+          entityType: 'user',
+          entityId: id,
+          details: {
+            targetLabel: nameResult.value,
+            secondaryLabel: usernameValue,
+          },
+        });
         return reply.code(201).send({
           id,
           name: nameResult.value,
           username: usernameValue,
+          email: canViewUserEmails(request) ? emailResult.value || '' : '',
           role: roleValue,
           avatarInitials,
           costPerHour: costPerHourResult.value || 0,
@@ -521,7 +548,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Check the user's employee type
-      const userCheck = await query('SELECT employee_type FROM users WHERE id = $1', [id]);
+      const userCheck = await query(
+        'SELECT name, username, employee_type FROM users WHERE id = $1',
+        [id],
+      );
       if (userCheck.rows.length === 0) {
         return reply.code(404).send({ error: 'User not found' });
       }
@@ -553,6 +583,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('users');
+      await logAudit({
+        request,
+        action: 'user.deleted',
+        entityType: 'user',
+        entityId: id,
+        details: {
+          targetLabel: userCheck.rows[0].name as string,
+          secondaryLabel: userCheck.rows[0].username as string,
+        },
+      });
       return { message: 'User deleted' };
     },
   );
@@ -582,8 +622,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { name, isDisabled, costPerHour, role } = request.body as {
+      const { name, email, isDisabled, costPerHour, role } = request.body as {
         name?: string;
+        email?: string;
         isDisabled?: boolean;
         costPerHour?: number;
         role?: string;
@@ -603,8 +644,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, (costPerHourResult as { ok: false; message: string }).message);
       }
 
+      if (email !== undefined) {
+        const emailResult = optionalEmail(email, 'email');
+        if (!emailResult.ok)
+          return badRequest(reply, (emailResult as { ok: false; message: string }).message);
+      }
+
       const targetUserResult = await query(
-        'SELECT id, role, employee_type FROM users WHERE id = $1',
+        'SELECT id, name, username, role, employee_type FROM users WHERE id = $1',
         [idResult.value],
       );
       if (targetUserResult.rows.length === 0) {
@@ -612,6 +659,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const targetEmployeeType = targetUserResult.rows[0].employee_type || 'app_user';
+      const currentRole = targetUserResult.rows[0].role as string;
+      const currentName = targetUserResult.rows[0].name as string;
+      const currentUsername = targetUserResult.rows[0].username as string;
 
       if (targetEmployeeType === 'app_user') {
         if (!hasPermission(request, 'administration.user_management.update')) {
@@ -698,14 +748,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(roleValue);
       }
 
-      if (updates.length === 0) {
+      if (updates.length === 0 && email === undefined) {
         return badRequest(reply, 'No fields to update');
       }
 
       let result: Awaited<ReturnType<typeof query>>;
       const hadTopManagerRole =
         role !== undefined ? await userHasTopManagerRole(idResult.value) : false;
-      if (role !== undefined) {
+      if (updates.length === 0) {
+        result = await query(
+          `SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type
+             FROM users
+            WHERE id = $1`,
+          [idResult.value],
+        );
+      } else if (role !== undefined) {
         // If role changes via the legacy endpoint, reset assigned roles to this single primary role.
         try {
           await query('BEGIN');
@@ -740,26 +797,93 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const u = result.rows[0] as UserRow;
-      const hasTopManagerRole =
-        role !== undefined
-          ? roleValue === TOP_MANAGER_ROLE_ID
-          : await userHasTopManagerRole(idResult.value);
-      const isAdminOnly =
-        role !== undefined ? roleValue === ADMIN_ROLE_ID : await userIsAdminOnly(idResult.value);
+      const changedFields = [
+        name !== undefined ? 'name' : null,
+        email !== undefined ? 'email' : null,
+        isDisabled !== undefined ? 'isDisabled' : null,
+        costPerHour !== undefined && hasPermission(request, 'hr.costs.update')
+          ? 'costPerHour'
+          : null,
+        role !== undefined ? 'role' : null,
+      ].filter((field): field is string => field !== null);
+
+      // Determine specific action based on what changed
+      let action = 'user.updated';
+      if (changedFields.length === 1) {
+        if (changedFields[0] === 'isDisabled') {
+          action = isDisabled ? 'user.disabled' : 'user.enabled';
+        } else if (changedFields[0] === 'role') {
+          action = 'user.role_changed';
+        }
+      }
+
+      if (name !== undefined || email !== undefined) {
+        const emailResult = optionalEmail(email, 'email') as { ok: true; value: string | null };
+        await query(
+          `INSERT INTO settings (user_id, full_name, email)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id) DO UPDATE SET
+             full_name = CASE WHEN $4 THEN EXCLUDED.full_name ELSE settings.full_name END,
+             email = CASE WHEN $5 THEN EXCLUDED.email ELSE settings.email END,
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            idResult.value,
+            name ?? null,
+            emailResult.value,
+            name !== undefined,
+            email !== undefined,
+          ],
+        );
+      }
+
+      const responseResult = await query(
+        `SELECT u.id, u.name, u.username, COALESCE(s.email, '') AS email, u.role,
+                u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type,
+                EXISTS (
+                  SELECT 1
+                  FROM user_roles ur
+                  WHERE ur.user_id = u.id AND ur.role_id = $2
+                ) AS has_top_manager_role,
+                (
+                  u.role = $3
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM user_roles ur_admin_only
+                    WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> $3
+                  )
+                ) AS is_admin_only
+           FROM users u
+           LEFT JOIN settings s ON s.user_id = u.id
+          WHERE u.id = $1`,
+        [idResult.value, TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
+      );
+
+      const u = responseResult.rows[0] as UserRow;
+      const canRevealUserEmails = canViewUserEmails(request);
 
       await bumpNamespaceVersion('users');
-      if (role !== undefined && (hadTopManagerRole || roleValue === 'top_manager')) {
+      if (name !== undefined || email !== undefined) {
+        await bumpNamespaceVersion(`settings:user:${idResult.value}`);
+      }
+      if (role !== undefined && (hadTopManagerRole || roleValue === TOP_MANAGER_ROLE_ID)) {
         await bumpNamespaceVersion('clients');
         await bumpNamespaceVersion('projects');
         await bumpNamespaceVersion('tasks');
       }
-      return mapUserResponse(
-        u,
-        hasPermission(request, 'hr.costs.view'),
-        hasTopManagerRole,
-        isAdminOnly,
-      );
+      await logAudit({
+        request,
+        action,
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: (u.name as string) || currentName,
+          secondaryLabel: (u.username as string) || currentUsername,
+          changedFields: changedFields.length > 0 ? changedFields : undefined,
+          fromValue: role !== undefined ? currentRole : undefined,
+          toValue: role !== undefined ? String(u.role) : undefined,
+        },
+      });
+      return mapUserResponse(u, hasPermission(request, 'hr.costs.view'), canRevealUserEmails);
     },
   );
 
@@ -844,7 +968,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'primaryRoleId must be included in roleIds');
       }
 
-      const userExists = await query('SELECT 1 FROM users WHERE id = $1', [idResult.value]);
+      const userExists = await query('SELECT name, username FROM users WHERE id = $1', [
+        idResult.value,
+      ]);
       if (userExists.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
       const hadTopManagerRole = await userHasTopManagerRole(idResult.value);
 
@@ -876,11 +1002,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await syncTopManagerAssignmentsForUser(idResult.value);
       await bumpNamespaceVersion('users');
-      if (hadTopManagerRole || roleIdsResult.value.includes('top_manager')) {
+      if (hadTopManagerRole || roleIdsResult.value.includes(TOP_MANAGER_ROLE_ID)) {
         await bumpNamespaceVersion('clients');
         await bumpNamespaceVersion('projects');
         await bumpNamespaceVersion('tasks');
       }
+      await logAudit({
+        request,
+        action: 'user.roles_updated',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: userExists.rows[0].name as string,
+          secondaryLabel: userExists.rows[0].username as string,
+          counts: getAuditCounts({ roles: roleIdsResult.value.length }),
+          toValue: primaryRoleIdResult.value,
+        },
+      });
       return { roleIds: roleIdsResult.value, primaryRoleId: primaryRoleIdResult.value };
     },
   );
@@ -1007,6 +1145,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!taskIdsResult.ok)
         return badRequest(reply, (taskIdsResult as { ok: false; message: string }).message);
 
+      const targetUser = await query('SELECT name, username FROM users WHERE id = $1', [
+        idResult.value,
+      ]);
+      if (targetUser.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+
       if (await userHasTopManagerRole(idResult.value)) {
         return reply.code(409).send({
           error: 'Top Manager assignments are managed automatically and cannot be edited manually',
@@ -1056,6 +1199,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (clientIds) await bumpNamespaceVersion('clients');
         if (projectIds) await bumpNamespaceVersion('projects');
         if (taskIds) await bumpNamespaceVersion('tasks');
+        await logAudit({
+          request,
+          action: 'user.assignments_updated',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: {
+            targetLabel: targetUser.rows[0].name as string,
+            secondaryLabel: targetUser.rows[0].username as string,
+            counts: getAuditCounts({
+              clients: clientIds
+                ? ((clientIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+                : undefined,
+              projects: projectIds
+                ? ((projectIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+                : undefined,
+              tasks: taskIds
+                ? ((taskIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+                : undefined,
+            }),
+          },
+        });
         return { message: 'Assignments updated' };
       } catch (err) {
         await query('ROLLBACK');
