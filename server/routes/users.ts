@@ -857,12 +857,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const canViewAllUsers = hasPermission(request, 'administration.user_management_all.view');
+      const canViewAllUsers =
+        hasPermission(request, 'administration.user_management_all.view') ||
+        hasPermission(request, 'hr.work_units_all.view');
       const canViewAssignments =
         request.user?.id === id ||
         hasPermission(request, 'administration.user_management.view') ||
         hasPermission(request, 'administration.user_management.update') ||
-        hasPermission(request, 'timesheets.tracker.view');
+        hasPermission(request, 'timesheets.tracker.view') ||
+        hasPermission(request, 'hr.employee_assignments.update');
 
       if (!canViewAssignments) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
@@ -900,11 +903,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // POST /:id/assignments - Update user assignments (manager only)
+  // POST /:id/assignments - Update user assignments
   fastify.post(
     '/:id/assignments',
     {
-      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      onRequest: [authenticateToken, requirePermission('hr.employee_assignments.update')],
       schema: {
         tags: ['users'],
         summary: 'Update user assignments',
@@ -926,10 +929,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (
-        !hasPermission(request, 'administration.user_management_all.view') &&
-        idResult.value !== request.user?.id
-      ) {
+      const canViewAllUsers =
+        hasPermission(request, 'administration.user_management_all.view') ||
+        hasPermission(request, 'hr.work_units_all.view');
+
+      if (!canViewAllUsers && idResult.value !== request.user?.id) {
         const managedCheck = await query(
           `SELECT 1
              FROM user_work_units uw

@@ -59,6 +59,7 @@
       "internal": "Internal",
       "external": "External",
       "costs": "Costs",
+      "employee_assignments": "Employee Assignments",
       "work_units": "Work Units",
       "work_units_all": "Work Units (All)"
     },

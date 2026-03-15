@@ -57,6 +57,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.internal', actions: CRUD },
   { id: 'hr.external', actions: CRUD },
   { id: 'hr.costs', actions: VIEW_UPDATE },
+  { id: 'hr.employee_assignments', actions: ['update'] },
   { id: 'hr.work_units', actions: CRUD },
   { id: 'hr.work_units_all', actions: VIEW_ONLY, isScope: true },
 
@@ -138,6 +139,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('hr.internal', CRUD),
     ...buildPermissions('hr.external', CRUD),
     ...buildPermissions('hr.costs', VIEW_UPDATE),
+    buildPermission('hr.employee_assignments', 'update'),
     buildPermission('reports.ai_reporting', 'view'),
     buildPermission('reports.ai_reporting', 'create'),
     buildPermission('settings', 'view'),
@@ -174,6 +176,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('hr.internal', CRUD),
     ...buildPermissions('hr.external', CRUD),
     ...buildPermissions('hr.costs', VIEW_UPDATE),
+    buildPermission('hr.employee_assignments', 'update'),
     ...buildPermissions('hr.work_units', CRUD),
     buildPermission('hr.work_units_all', 'view'),
     buildPermission('reports.ai_reporting', 'view'),

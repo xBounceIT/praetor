@@ -1333,6 +1333,12 @@ VALUES
     ('manager', 'hr.costs.update')
 ON CONFLICT DO NOTHING;
 
+-- Seed employee assignment permissions for manager role
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'hr.employee_assignments.update')
+ON CONFLICT DO NOTHING;
+
 -- Seed Reports permissions for manager role (safe for existing installations)
 INSERT INTO role_permissions (role_id, permission)
 VALUES

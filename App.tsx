@@ -1164,6 +1164,10 @@ const App: React.FC = () => {
           buildPermission('hr.work_units', 'view'),
           buildPermission('hr.work_units_all', 'view'),
         ]);
+        const canManageEmployeeAssignments = hasPermission(
+          permissions,
+          buildPermission('hr.employee_assignments', 'update'),
+        );
         const canViewUserManagement = hasAnyPermission(permissions, [
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
@@ -1261,6 +1265,24 @@ const App: React.FC = () => {
                 load: () => api.workUnits.list(),
                 apply: (data) => setWorkUnits(data as WorkUnit[]),
               },
+              {
+                dataset: 'clients',
+                enabled: canManageEmployeeAssignments && canListClients,
+                load: () => api.clients.list(),
+                apply: (data) => setClients(data as Client[]),
+              },
+              {
+                dataset: 'projects',
+                enabled: canManageEmployeeAssignments && canListProjects,
+                load: () => api.projects.list(),
+                apply: (data) => setProjects(data as Project[]),
+              },
+              {
+                dataset: 'tasks',
+                enabled: canManageEmployeeAssignments && canListTasks,
+                load: () => api.tasks.list(),
+                apply: (data) => setProjectTasks(data as ProjectTask[]),
+              },
             ]);
             await loadOptionalDataset(
               module,
@@ -1273,7 +1295,6 @@ const App: React.FC = () => {
           case 'administration': {
             if (!canViewConfiguration) return;
             const shouldLoadUsers = canViewUserManagement;
-            const shouldLoadAssignments = canViewUserManagement;
             const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
 
             failedDatasets = await loadDatasets(module, [
@@ -1282,24 +1303,6 @@ const App: React.FC = () => {
                 enabled: shouldLoadUsers && canListUsers,
                 load: () => api.users.list(),
                 apply: (data) => setUsers(data as User[]),
-              },
-              {
-                dataset: 'clients',
-                enabled: shouldLoadAssignments && canListClients,
-                load: () => api.clients.list(),
-                apply: (data) => setClients(data as Client[]),
-              },
-              {
-                dataset: 'projects',
-                enabled: shouldLoadAssignments && canListProjects,
-                load: () => api.projects.list(),
-                apply: (data) => setProjects(data as Project[]),
-              },
-              {
-                dataset: 'tasks',
-                enabled: shouldLoadAssignments && canListTasks,
-                load: () => api.tasks.list(),
-                apply: (data) => setProjectTasks(data as ProjectTask[]),
               },
             ]);
 
@@ -1626,6 +1629,7 @@ const App: React.FC = () => {
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
           buildPermission('administration.user_management_all', 'view'),
+          buildPermission('hr.employee_assignments', 'update'),
           buildPermission('timesheets.tracker', 'view'),
           buildPermission('timesheets.tracker_all', 'view'),
         ]);
@@ -3375,6 +3379,9 @@ const App: React.FC = () => {
               activeView === 'hr/internal' && (
                 <InternalEmployeesView
                   users={users}
+                  clients={clients}
+                  projects={projects}
+                  tasks={projectTasks}
                   onAddEmployee={addInternalEmployee}
                   onUpdateEmployee={handleUpdateEmployee}
                   onDeleteEmployee={handleDeleteEmployee}
@@ -3387,6 +3394,9 @@ const App: React.FC = () => {
               activeView === 'hr/external' && (
                 <ExternalEmployeesView
                   users={users}
+                  clients={clients}
+                  projects={projects}
+                  tasks={projectTasks}
                   onAddEmployee={addExternalEmployee}
                   onUpdateEmployee={handleUpdateEmployee}
                   onDeleteEmployee={handleDeleteEmployee}
@@ -3434,9 +3444,6 @@ const App: React.FC = () => {
               activeView === 'administration/user-management' && (
                 <UserManagement
                   users={users}
-                  clients={clients}
-                  projects={projects}
-                  tasks={projectTasks}
                   onAddUser={handleAddUser}
                   onDeleteUser={handleDeleteUser}
                   onUpdateUser={handleUpdateUser}

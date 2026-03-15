@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
-import type { Client, Project, ProjectTask, Role, User } from '../../types';
+import type { Role, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
@@ -13,9 +13,6 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface UserManagementProps {
   users: User[];
-  clients: Client[];
-  projects: Project[];
-  tasks: ProjectTask[];
   onAddUser: (
     name: string,
     username: string,
@@ -33,9 +30,6 @@ export interface UserManagementProps {
 
 const UserManagement: React.FC<UserManagementProps> = ({
   users,
-  clients,
-  projects,
-  tasks,
   onAddUser,
   onDeleteUser,
   onUpdateUser,
@@ -69,33 +63,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [newPassword, setNewPassword] = useState('password');
   const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  const [managingUserId, setManagingUserId] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<{
-    clientIds: string[];
-    projectIds: string[];
-    taskIds: string[];
-  }>({
-    clientIds: [],
-    projectIds: [],
-    taskIds: [],
-  });
-  const [initialAssignments, setInitialAssignments] = useState<{
-    clientIds: string[];
-    projectIds: string[];
-    taskIds: string[];
-  }>({
-    clientIds: [],
-    projectIds: [],
-    taskIds: [],
-  });
-  const [clientSearch, setClientSearch] = useState('');
-  const [projectSearch, setProjectSearch] = useState('');
-  const [taskSearch, setTaskSearch] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
-  const [filterProjectId, setFilterProjectId] = useState('all');
-
-  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
@@ -136,7 +103,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
     buildPermission('administration.user_management', 'delete'),
   );
   const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
-  const canManageAssignments = canUpdateUsers;
   React.useEffect(() => {
     if (!newRole && roleOptions[0]?.id) {
       setNewRole(roleOptions[0].id);
@@ -194,157 +160,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
   React.useEffect(() => {
     setDisabledCurrentPage(1);
   }, []);
-
-  React.useEffect(() => {
-    if (filterClientId === 'all' || filterProjectId === 'all') return;
-    const selectedProject = projects.find((project) => project.id === filterProjectId);
-    if (!selectedProject || selectedProject.clientId !== filterClientId) {
-      setFilterProjectId('all');
-    }
-  }, [filterClientId, filterProjectId, projects]);
-
-  const userHasTopManagerAssignment = (user?: User | null) =>
-    !!user && (user.hasTopManagerRole || user.role === TOP_MANAGER_ROLE_ID);
-
-  const openAssignments = async (userId: string) => {
-    const targetUser = users.find((user) => user.id === userId);
-    if (!canManageAssignments || userHasTopManagerAssignment(targetUser)) return;
-    setManagingUserId(userId);
-    setIsLoadingAssignments(true);
-    try {
-      const data = await usersApi.getAssignments(userId);
-      setAssignments(data);
-      setInitialAssignments(JSON.parse(JSON.stringify(data))); // Deep clone for comparison
-    } catch (err) {
-      console.error('Failed to load assignments', err);
-    } finally {
-      setIsLoadingAssignments(false);
-    }
-  };
-
-  const closeAssignments = () => {
-    setManagingUserId(null);
-    setAssignments({ clientIds: [], projectIds: [], taskIds: [] });
-    setClientSearch('');
-    setProjectSearch('');
-    setTaskSearch('');
-    setFilterClientId('all');
-    setFilterProjectId('all');
-  };
-
-  const saveAssignments = async () => {
-    if (!managingUserId || !canManageAssignments) return;
-    try {
-      await usersApi.updateAssignments(
-        managingUserId,
-        assignments.clientIds,
-        assignments.projectIds,
-        assignments.taskIds,
-      );
-      closeAssignments();
-    } catch (err) {
-      console.error('Failed to save assignments', err);
-      alert((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
-    }
-  };
-
-  const toggleAssignment = (type: 'client' | 'project' | 'task', id: string) => {
-    if (!canManageAssignments) return;
-    setAssignments((prev) => {
-      const list =
-        type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
-      const isAdding = !list.includes(id);
-      const newList = isAdding ? [...list, id] : list.filter((item) => item !== id);
-
-      let newClientIds = prev.clientIds;
-      let newProjectIds = prev.projectIds;
-      let newTaskIds = prev.taskIds;
-
-      if (type === 'task') {
-        newTaskIds = newList;
-        if (isAdding) {
-          const task = tasks.find((t) => t.id === id);
-          if (task) {
-            const project = projects.find((p) => p.id === task.projectId);
-            if (project && !newProjectIds.includes(project.id)) {
-              newProjectIds = [...newProjectIds, project.id];
-            }
-            if (project) {
-              const client = clients.find((c) => c.id === project.clientId);
-              if (client && !newClientIds.includes(client.id)) {
-                newClientIds = [...newClientIds, client.id];
-              }
-            }
-          }
-        } else {
-          const task = tasks.find((t) => t.id === id);
-          if (newTaskIds.length === 0) {
-            newProjectIds = [];
-            newClientIds = [];
-          } else if (task) {
-            const project = projects.find((p) => p.id === task.projectId);
-            if (project) {
-              const hasTaskForProject = newTaskIds.some((taskId) => {
-                const remainingTask = tasks.find((t) => t.id === taskId);
-                return remainingTask?.projectId === project.id;
-              });
-
-              if (!hasTaskForProject) {
-                newProjectIds = newProjectIds.filter((projectId) => projectId !== project.id);
-              }
-
-              const client = clients.find((c) => c.id === project.clientId);
-              if (client) {
-                const hasProjectForClient = newProjectIds.some((projectId) => {
-                  const remainingProject = projects.find((p) => p.id === projectId);
-                  return remainingProject?.clientId === client.id;
-                });
-
-                if (!hasProjectForClient) {
-                  newClientIds = newClientIds.filter((clientId) => clientId !== client.id);
-                }
-              }
-            }
-          }
-        }
-      } else if (type === 'project') {
-        newProjectIds = newList;
-        const project = projects.find((p) => p.id === id);
-        if (project) {
-          if (isAdding) {
-            if (!newClientIds.includes(project.clientId)) {
-              newClientIds = [...newClientIds, project.clientId];
-            }
-          } else {
-            const hasProjectForClient = newProjectIds.some((projectId) => {
-              const remainingProject = projects.find((p) => p.id === projectId);
-              return remainingProject?.clientId === project.clientId;
-            });
-
-            const hasTaskForClient = newTaskIds.some((taskId) => {
-              const remainingTask = tasks.find((t) => t.id === taskId);
-              const remainingProject = remainingTask
-                ? projects.find((p) => p.id === remainingTask.projectId)
-                : null;
-              return remainingProject?.clientId === project.clientId;
-            });
-
-            if (!hasProjectForClient && !hasTaskForClient) {
-              newClientIds = newClientIds.filter((clientId) => clientId !== project.clientId);
-            }
-          }
-        }
-      } else {
-        newClientIds = newList;
-      }
-
-      return {
-        clientIds: newClientIds,
-        projectIds: newProjectIds,
-        taskIds: newTaskIds,
-      };
-    });
-  };
 
   const confirmDelete = (user: User) => {
     setUserToDelete(user);
@@ -467,7 +282,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
     }
   };
 
-  const managingUser = users.find((u) => u.id === managingUserId);
   const isEditingSelf = editingUser?.id === currentUserId;
   const canEditRole = canUpdateUsers && !isEditingSelf;
   const canEditAssignedRoles = canUpdateUsers && !isEditingSelf && roles.length > 0;
@@ -485,130 +299,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
         parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
       (canEditRole && editRole !== editingUser.role) ||
       hasAssignedRoleChanges);
-
-  const filteredProjectsForFilter =
-    filterClientId === 'all'
-      ? projects
-      : projects.filter((project) => project.clientId === filterClientId);
-
-  const clientFilterOptions = [
-    { id: 'all', name: t('hr:workforce.allClients') },
-    ...clients.map((client) => ({ id: client.id, name: client.name })),
-  ];
-
-  const projectFilterOptions = [
-    { id: 'all', name: t('hr:workforce.allProjects') },
-    ...filteredProjectsForFilter.map((project) => ({ id: project.id, name: project.name })),
-  ];
-
-  // Synchronized Filtering Logic
-  const getFilteredData = () => {
-    const searchClient = clientSearch.toLowerCase();
-    const searchProject = projectSearch.toLowerCase();
-    const searchTask = taskSearch.toLowerCase();
-    const selectedClientFilter = filterClientId !== 'all' ? filterClientId : null;
-    const selectedProjectFilter = filterProjectId !== 'all' ? filterProjectId : null;
-
-    // 1. Visible Tasks
-    const visibleTasks = tasks.filter((t) => {
-      if (selectedProjectFilter && t.projectId !== selectedProjectFilter) return false;
-      // Must match task search
-      if (searchTask && !t.name.toLowerCase().includes(searchTask)) return false;
-
-      const project = projects.find((p) => p.id === t.projectId);
-      if (!project) return false;
-
-      if (selectedClientFilter && project.clientId !== selectedClientFilter) return false;
-
-      // Must match project search (via parent project)
-      if (searchProject && !project.name.toLowerCase().includes(searchProject)) return false;
-
-      const client = clients.find((c) => c.id === project.clientId);
-      if (!client) return false;
-
-      // Must match client search (via grandparent client)
-      if (searchClient && !client.name.toLowerCase().includes(searchClient)) return false;
-
-      return true;
-    });
-
-    // 2. Visible Projects
-    const visibleProjects = projects.filter((p) => {
-      if (selectedProjectFilter && p.id !== selectedProjectFilter) return false;
-      if (selectedClientFilter && p.clientId !== selectedClientFilter) return false;
-      // Must match project search
-      if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
-
-      const client = clients.find((c) => c.id === p.clientId);
-      if (!client) return false;
-
-      // Must match client search (via parent client)
-      if (searchClient && !client.name.toLowerCase().includes(searchClient)) return false;
-
-      // If task search is active, project must contain at least one matching task
-      if (searchTask) {
-        const hasMatchingTask = tasks.some(
-          (t) => t.projectId === p.id && t.name.toLowerCase().includes(searchTask),
-        );
-        if (!hasMatchingTask) return false;
-      }
-
-      return true;
-    });
-
-    // 3. Visible Clients
-    const visibleClients = clients.filter((c) => {
-      if (selectedClientFilter && c.id !== selectedClientFilter) return false;
-
-      if (selectedProjectFilter) {
-        const selectedProject = projects.find((project) => project.id === selectedProjectFilter);
-        if (!selectedProject || selectedProject.clientId !== c.id) return false;
-      }
-      // Must match client search
-      if (searchClient && !c.name.toLowerCase().includes(searchClient)) return false;
-
-      // If project or task search is active, client must have at least one valid descendant path
-      if (searchProject || searchTask) {
-        const hasMatchingPath = projects.some((p) => {
-          if (p.clientId !== c.id) return false;
-
-          if (selectedProjectFilter && p.id !== selectedProjectFilter) return false;
-
-          if (searchProject && !p.name.toLowerCase().includes(searchProject)) return false;
-
-          if (searchTask) {
-            return tasks.some(
-              (t) => t.projectId === p.id && t.name.toLowerCase().includes(searchTask),
-            );
-          }
-
-          return true;
-        });
-
-        if (!hasMatchingPath) return false;
-      }
-
-      return true;
-    });
-
-    // Debug logging
-    console.log('UserManagement Debug:', {
-      clientsCount: clients.length,
-      projectsCount: projects.length,
-      tasksCount: tasks.length,
-      visibleClientsCount: visibleClients.length,
-      visibleProjectsCount: visibleProjects.length,
-      visibleTasksCount: visibleTasks.length,
-      filterClientId,
-      filterProjectId,
-      clientSearch,
-      assignments,
-    });
-
-    return { visibleClients, visibleProjects, visibleTasks };
-  };
-
-  const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
 
   const activeUsersTotal = users.filter((user) => !user.isDisabled);
   const disabledUsersTotal = users.filter((user) => user.isDisabled);
@@ -1035,7 +725,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
               const canEdit = canUpdateUsers;
               const role = roleLookup.get(user.role);
               const isAdminRole = role?.isAdmin || user.role === 'admin';
-              const isTopManagerAssigned = userHasTopManagerAssignment(user);
               const isTopManagerRole =
                 role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
               const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
@@ -1093,21 +782,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {canManageAssignments && !isTopManagerAssigned && (
-                        <Tooltip label={t('hr:workforce.manageAssignments')}>
-                          {() => (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openAssignments(user.id);
-                              }}
-                              className="text-slate-400 hover:text-praetor transition-colors p-2"
-                            >
-                              <i className="fa-solid fa-link"></i>
-                            </button>
-                          )}
-                        </Tooltip>
-                      )}
                       {canUpdateUsers && (
                         <>
                           <Tooltip label={t('hr:workforce.editUser')}>
@@ -1279,7 +953,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 const canEdit = canUpdateUsers;
                 const role = roleLookup.get(user.role);
                 const isAdminRole = role?.isAdmin || user.role === 'admin';
-                const isTopManagerAssigned = userHasTopManagerAssignment(user);
                 const isTopManagerRole =
                   role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
                 const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
@@ -1336,21 +1009,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {canManageAssignments && !isTopManagerAssigned && (
-                          <Tooltip label={t('hr:workforce.manageAssignments')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openAssignments(user.id);
-                                }}
-                                className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-link"></i>
-                              </button>
-                            )}
-                          </Tooltip>
-                        )}
                         {canUpdateUsers && (
                           <>
                             <Tooltip label={t('hr:workforce.editUser')}>
@@ -1416,264 +1074,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </table>
         </StandardTable>
       )}
-
-      {/* Assignment Modal */}
-      <Modal
-        isOpen={!!managingUserId}
-        onClose={closeAssignments}
-        zIndex={50}
-        backdropClass="bg-slate-900/50 backdrop-blur-sm"
-      >
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-            <h3 className="font-bold text-lg text-slate-800">
-              {t('hr:workforce.manageAccess', { name: managingUser?.name })}
-            </h3>
-            <button
-              onClick={closeAssignments}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-xl"></i>
-            </button>
-          </div>
-
-          <div className="p-6 overflow-y-auto flex-1">
-            {isLoadingAssignments ? (
-              <div className="flex items-center justify-center py-12">
-                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <CustomSelect
-                    options={clientFilterOptions}
-                    value={filterClientId}
-                    onChange={(val) => setFilterClientId(val as string)}
-                    placeholder={t('hr:workforce.filterByClient')}
-                    searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
-                  />
-                  <CustomSelect
-                    options={projectFilterOptions}
-                    value={filterProjectId}
-                    onChange={(val) => setFilterProjectId(val as string)}
-                    placeholder={t('hr:workforce.filterByProject')}
-                    searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 shadow-sm"
-                    disabled={projectFilterOptions.length === 1}
-                  />
-                </div>
-
-                <div
-                  className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
-                >
-                  {/* Clients Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                          {t('hr:workforce.clients')}
-                        </h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                          {assignments.clientIds.length}
-                        </span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={t('hr:workforce.searchClients')}
-                        value={clientSearch}
-                        onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      {visibleClients.map((client) => (
-                        <label
-                          key={client.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            assignments.clientIds.includes(client.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="relative flex items-center justify-center shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={assignments.clientIds.includes(client.id)}
-                              onChange={() => toggleAssignment('client', client.id)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                              <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                              ></div>
-                            </div>
-                          </div>
-                          <span
-                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                          >
-                            {client.name}
-                          </span>
-                        </label>
-                      ))}
-                      {clients.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
-                          {t('hr:workforce.noClientsFound')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Projects Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                          Projects
-                        </h4>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                          {assignments.projectIds.length}
-                        </span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Search projects..."
-                        value={projectSearch}
-                        onChange={(e) => setProjectSearch(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      {visibleProjects.map((project) => (
-                        <label
-                          key={project.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            assignments.projectIds.includes(project.id)
-                              ? 'bg-slate-50 border-slate-300 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="relative flex items-center justify-center shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={assignments.projectIds.includes(project.id)}
-                              onChange={() => toggleAssignment('project', project.id)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                              <div
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                              ></div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col">
-                            <span
-                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                            >
-                              {project.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {clients.find((c) => c.id === project.clientId)?.name ||
-                                t('hr:workforce.unknownClient')}
-                            </span>
-                          </div>
-                        </label>
-                      ))}
-                      {projects.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
-                          {t('hr:workforce.noProjectsFound')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {canManageAssignments && (
-                    <div className="space-y-3">
-                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-slate-100 mb-2">
-                        <div className="flex items-center justify-between py-2">
-                          <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">
-                            Tasks
-                          </h4>
-                          <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                            {assignments.taskIds.length}
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Search tasks..."
-                          value={taskSearch}
-                          onChange={(e) => setTaskSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        {visibleTasks.map((task) => {
-                          const project = projects.find((p) => p.id === task.projectId);
-                          return (
-                            <label
-                              key={task.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                assignments.taskIds.includes(task.id)
-                                  ? 'bg-slate-50 border-slate-300 shadow-sm'
-                                  : 'bg-white border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="relative flex items-center justify-center shrink-0">
-                                <input
-                                  type="checkbox"
-                                  checked={assignments.taskIds.includes(task.id)}
-                                  onChange={() => toggleAssignment('task', task.id)}
-                                  className="sr-only peer"
-                                />
-                                <div className="w-5 h-5 rounded-full border-2 border-slate-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
-                                  <div
-                                    className={`w-2 h-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-slate-200 scale-0 opacity-0'}`}
-                                  ></div>
-                                </div>
-                              </div>
-                              <div className="flex flex-col">
-                                <span
-                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-slate-900' : 'text-slate-600'}`}
-                                >
-                                  {task.name}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {project?.name || t('hr:workforce.unknownProject')}
-                                </span>
-                              </div>
-                            </label>
-                          );
-                        })}
-                        {tasks.length === 0 && (
-                          <p className="text-xs text-slate-400 italic">
-                            {t('hr:workforce.noTasksFound')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-            <button
-              onClick={closeAssignments}
-              className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              onClick={saveAssignments}
-              disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-praetor text-white hover:bg-slate-800'}`}
-            >
-              {t('hr:workforce.saveAssignments')}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };

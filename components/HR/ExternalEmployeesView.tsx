@@ -1,15 +1,19 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { User } from '../../types';
-import { buildPermission, hasPermission } from '../../utils/permissions';
+import type { Client, Project, ProjectTask, User } from '../../types';
+import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
 
 export interface ExternalEmployeesViewProps {
   users: User[];
+  clients: Client[];
+  projects: Project[];
+  tasks: ProjectTask[];
   onAddEmployee: (
     name: string,
     costPerHour?: number,
@@ -27,6 +31,9 @@ const getSurname = (name: string): string => {
 
 const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   users,
+  clients,
+  projects,
+  tasks,
   onAddEmployee,
   onUpdateEmployee,
   onDeleteEmployee,
@@ -34,10 +41,18 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   permissions,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
+  const canCreateEmployees = hasPermission(permissions, buildPermission('hr.external', 'create'));
+  const canUpdateEmployees = hasPermission(permissions, buildPermission('hr.external', 'update'));
+  const canDeleteEmployees = hasPermission(permissions, buildPermission('hr.external', 'delete'));
   const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
   const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs', 'update'));
+  const canManageEmployeeAssignments = hasPermission(
+    permissions,
+    buildPermission('hr.employee_assignments', 'update'),
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
+  const [managingEmployee, setManagingEmployee] = useState<User | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<User | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,6 +75,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   });
 
   const openAddModal = () => {
+    if (!canCreateEmployees) return;
     setEditingEmployee(null);
     setFormData({
       name: '',
@@ -70,6 +86,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   };
 
   const openEditModal = (employee: User) => {
+    if (!canUpdateEmployees) return;
     setEditingEmployee(employee);
     setFormData({
       name: employee.name || '',
@@ -81,6 +98,9 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (editingEmployee && !canUpdateEmployees) return;
+    if (!editingEmployee && !canCreateEmployees) return;
 
     const newErrors: Record<string, string> = {};
     if (!formData.name?.trim()) {
@@ -96,15 +116,20 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
 
     try {
       if (editingEmployee) {
-        onUpdateEmployee(editingEmployee.id, {
+        const updates: Partial<User> = {
           name: formData.name.trim(),
-          costPerHour: formData.costPerHour ? parseFloat(formData.costPerHour) : 0,
-        });
+        };
+
+        if (canUpdateCosts) {
+          updates.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
+        }
+
+        onUpdateEmployee(editingEmployee.id, updates);
         setIsModalOpen(false);
       } else {
         const result = await onAddEmployee(
           formData.name.trim(),
-          formData.costPerHour ? parseFloat(formData.costPerHour) : undefined,
+          canUpdateCosts && formData.costPerHour ? parseFloat(formData.costPerHour) : undefined,
         );
         if (result.success) {
           setIsModalOpen(false);
@@ -176,26 +201,44 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
       id: 'actions',
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Tooltip label={t('externalEmployees.editEmployee')}>
-            {() => (
-              <button
-                onClick={() => openEditModal(row)}
-                className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
-              >
-                <i className="fa-solid fa-pen-to-square"></i>
-              </button>
+          {canManageEmployeeAssignments &&
+            !row.hasTopManagerRole &&
+            row.role !== TOP_MANAGER_ROLE_ID && (
+              <Tooltip label={t('workforce.manageAssignments')}>
+                {() => (
+                  <button
+                    onClick={() => setManagingEmployee(row)}
+                    className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                  >
+                    <i className="fa-solid fa-link"></i>
+                  </button>
+                )}
+              </Tooltip>
             )}
-          </Tooltip>
-          <Tooltip label={t('common:buttons.delete')}>
-            {() => (
-              <button
-                onClick={() => confirmDelete(row)}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <i className="fa-solid fa-trash"></i>
-              </button>
-            )}
-          </Tooltip>
+          {canUpdateEmployees && (
+            <Tooltip label={t('externalEmployees.editEmployee')}>
+              {() => (
+                <button
+                  onClick={() => openEditModal(row)}
+                  className="p-2 text-slate-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
+              )}
+            </Tooltip>
+          )}
+          {canDeleteEmployees && (
+            <Tooltip label={t('common:buttons.delete')}>
+              {() => (
+                <button
+                  onClick={() => confirmDelete(row)}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <i className="fa-solid fa-trash"></i>
+                </button>
+              )}
+            </Tooltip>
+          )}
         </div>
       ),
       disableSorting: true,
@@ -341,13 +384,15 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
           <h2 className="text-2xl font-black text-slate-800">{t('externalEmployees.title')}</h2>
           <p className="text-slate-500">{t('externalEmployees.subtitle')}</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
-        >
-          <i className="fa-solid fa-plus"></i>
-          {t('externalEmployees.addEmployee')}
-        </button>
+        {canCreateEmployees && (
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-2 px-5 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-praetor/90 transition-colors shadow-lg shadow-praetor/20"
+          >
+            <i className="fa-solid fa-plus"></i>
+            {t('externalEmployees.addEmployee')}
+          </button>
+        )}
       </div>
 
       {/* External Employees Table */}
@@ -356,6 +401,15 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
         data={externalEmployees}
         columns={columns}
         emptyState={<EmptyState />}
+      />
+
+      <EmployeeAssignmentsModal
+        user={managingEmployee}
+        clients={clients}
+        projects={projects}
+        tasks={tasks}
+        isOpen={!!managingEmployee}
+        onClose={() => setManagingEmployee(null)}
       />
     </div>
   );
