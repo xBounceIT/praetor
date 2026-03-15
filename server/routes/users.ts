@@ -387,7 +387,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              full_name = EXCLUDED.full_name,
              email = EXCLUDED.email,
              updated_at = CURRENT_TIMESTAMP`,
-          [id, nameResult.value, emailResult.value],
+          [id, nameResult.value, emailResult.value || ''],
         );
 
         await bumpNamespaceVersion('users');
