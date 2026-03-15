@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api';
 import type { AuditLogEntry } from '../../types';
@@ -183,6 +183,7 @@ const LogsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const initialLoadRef = useRef(true);
   const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
   const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
@@ -258,9 +259,16 @@ const LogsView: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
-      await loadAuditLogs();
-      setLoading(false);
+      if (initialLoadRef.current) {
+        setLoading(true);
+        await loadAuditLogs();
+        setLoading(false);
+        initialLoadRef.current = false;
+      } else {
+        setIsRefreshing(true);
+        await loadAuditLogs();
+        setIsRefreshing(false);
+      }
     };
 
     void load();
