@@ -77,7 +77,7 @@ const getPresetRange = (range: TimeRange): { start: Date; end: Date } => {
     case 'lastWeek': {
       const endOfLastWeek = new Date(today);
       const dayOfWeek = endOfLastWeek.getDay();
-      const diff = endOfLastWeek.getDate() - dayOfWeek;
+      const diff = endOfLastWeek.getDate() - (dayOfWeek === 0 ? 7 : dayOfWeek);
       endOfLastWeek.setDate(diff);
       const startOfLastWeek = new Date(endOfLastWeek);
       startOfLastWeek.setDate(startOfLastWeek.getDate() - 6);
@@ -185,17 +185,8 @@ const LogsView: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const initialLoadRef = useRef(true);
   const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
-  const [startDate, setStartDate] = useState<Date>(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 7);
-    date.setHours(0, 0, 0, 0);
-    return date;
-  });
-  const [endDate, setEndDate] = useState<Date>(() => {
-    const date = new Date();
-    date.setHours(23, 59, 59, 999);
-    return date;
-  });
+  const [startDate, setStartDate] = useState<Date>(() => getPresetRange('last7Days').start);
+  const [endDate, setEndDate] = useState<Date>(() => getPresetRange('last7Days').end);
 
   const timeRangeOptions = useMemo(
     () => [
