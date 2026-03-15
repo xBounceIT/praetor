@@ -97,6 +97,7 @@
     "invalidUrl": "Inserisci un URL valido",
     "selectOption": "Seleziona un'opzione",
     "nameRequired": "Il nome è obbligatorio",
+    "surnameRequired": "Il cognome è obbligatorio",
     "usernameRequired": "Il nome utente è obbligatorio",
     "usernameAlreadyExists": "Questo nome utente esiste già",
     "passwordRequired": "La password è obbligatoria",

@@ -34,6 +34,7 @@
     "manageAccess": "Manage Access: {{name}}",
     "disabled": "Disabled",
     "name": "Name",
+    "surname": "Surname",
     "saveChanges": "Save Changes",
     "yesDelete": "Yes, Delete",
     "disableUser": "Disable User",

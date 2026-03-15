@@ -34,6 +34,7 @@
     "manageAccess": "Gestisci Accesso: {{name}}",
     "disabled": "Disabilitato",
     "name": "Nome",
+    "surname": "Cognome",
     "saveChanges": "Salva Modifiche",
     "yesDelete": "Sì, Elimina",
     "disableUser": "Disabilita Utente",

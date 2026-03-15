@@ -63,10 +63,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
     return new Map(roles.map((role) => [role.id, role]));
   }, [roles]);
 
-  const [newName, setNewName] = useState('');
+  const [newFirstName, setNewFirstName] = useState('');
+  const [newSurname, setNewSurname] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
+  const usernameManuallyEdited = React.useRef(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
@@ -147,7 +149,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setFormErrors({});
 
     const newErrors: Record<string, string> = {};
-    if (!newName?.trim()) newErrors.name = t('common:validation.nameRequired');
+    if (!newFirstName?.trim()) newErrors.firstName = t('common:validation.nameRequired');
+    if (!newSurname?.trim()) newErrors.surname = t('common:validation.surnameRequired');
     if (!newUsername?.trim()) newErrors.username = t('common:validation.usernameRequired');
     if (!newPassword?.trim()) newErrors.password = t('common:validation.passwordRequired');
 
@@ -156,7 +159,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
 
-    const result = await onAddUser(newName, newUsername, newPassword, newRole);
+    const fullName = `${newFirstName.trim()} ${newSurname.trim()}`;
+    const result = await onAddUser(fullName, newUsername, newPassword, newRole);
     if (!result.success) {
       if (result.error?.includes('Username already exists')) {
         setFormErrors({ username: t('common:validation.usernameAlreadyExists') || result.error });
@@ -166,19 +170,23 @@ const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
 
-    setNewName('');
+    setNewFirstName('');
+    setNewSurname('');
     setNewUsername('');
     setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
+    usernameManuallyEdited.current = false;
     setIsCreateModalOpen(false);
   };
 
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
-    setNewName('');
+    setNewFirstName('');
+    setNewSurname('');
     setNewUsername('');
     setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
+    usernameManuallyEdited.current = false;
     setFormErrors({});
   };
 
@@ -861,26 +869,59 @@ const UserManagement: React.FC<UserManagementProps> = ({
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
-                  {t('hr:workforce.name')}
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => {
-                    setNewName(e.target.value);
-                    if (!newUsername) setNewUsername(e.target.value.toLowerCase());
-                    if (formErrors.name || formErrors.general) {
-                      setFormErrors({ ...formErrors, name: '', general: '' });
-                    }
-                  }}
-                  placeholder="e.g. Alice Smith"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
-                />
-                {formErrors.name && (
-                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.name}</p>
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                    {t('hr:workforce.name')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newFirstName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewFirstName(val);
+                      if (!usernameManuallyEdited.current) {
+                        const surname = newSurname.trim().toLowerCase().replace(/\s+/g, '');
+                        const first = val.trim().toLowerCase().replace(/\s+/g, '');
+                        setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
+                      }
+                      if (formErrors.firstName || formErrors.general) {
+                        setFormErrors({ ...formErrors, firstName: '', general: '' });
+                      }
+                    }}
+                    placeholder="e.g. Alice"
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  />
+                  {formErrors.firstName && (
+                    <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.firstName}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                    {t('hr:workforce.surname')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newSurname}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewSurname(val);
+                      if (!usernameManuallyEdited.current) {
+                        const first = newFirstName.trim().toLowerCase().replace(/\s+/g, '');
+                        const surname = val.trim().toLowerCase().replace(/\s+/g, '');
+                        setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
+                      }
+                      if (formErrors.surname || formErrors.general) {
+                        setFormErrors({ ...formErrors, surname: '', general: '' });
+                      }
+                    }}
+                    placeholder="e.g. Smith"
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  />
+                  {formErrors.surname && (
+                    <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.surname}</p>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
@@ -890,12 +931,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   type="text"
                   value={newUsername}
                   onChange={(e) => {
+                    usernameManuallyEdited.current = true;
                     setNewUsername(e.target.value);
                     if (formErrors.username || formErrors.general) {
                       setFormErrors({ ...formErrors, username: '', general: '' });
                     }
                   }}
-                  placeholder="e.g. alice"
+                  placeholder="e.g. alice.smith"
                   className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
                 />
                 {formErrors.username && (
