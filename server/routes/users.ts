@@ -183,7 +183,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
-      const keySuffix = canViewAllUsers
         ? `v=3:scope=all:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`
         : `v=3:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`;
 
