@@ -96,6 +96,68 @@
     },
     "loading": "Caricamento log in corso...",
     "empty": "Nessun accesso registrato.",
+    "operations": {
+      "custom": {
+        "user": {
+          "login": "Accesso effettuato",
+          "role_switched": "Ruolo cambiato"
+        },
+        "ldap": {
+          "synced": "Sincronizzati gli utenti LDAP"
+        }
+      },
+      "verbs": {
+        "created": "Creato",
+        "updated": "Aggiornato",
+        "deleted": "Eliminato",
+        "users_updated": "Utenti aggiornati",
+        "roles_updated": "Ruoli aggiornati",
+        "assignments_updated": "Assegnazioni aggiornate",
+        "permissions_updated": "Permessi aggiornati",
+        "synced": "Sincronizzato",
+        "login": "Accesso effettuato",
+        "role_switched": "Ruolo cambiato"
+      },
+      "entities": {
+        "client": "cliente",
+        "client_offer": "offerta cliente",
+        "client_order": "ordine cliente",
+        "client_quote": "preventivo cliente",
+        "email_config": "configurazione email",
+        "invoice": "fattura",
+        "ldap": "LDAP",
+        "ldap_config": "configurazione LDAP",
+        "product": "prodotto",
+        "project": "progetto",
+        "role": "ruolo",
+        "settings": "impostazioni",
+        "special_bid": "offerta speciale",
+        "supplier": "fornitore",
+        "supplier_invoice": "fattura fornitore",
+        "supplier_offer": "offerta fornitore",
+        "supplier_order": "ordine fornitore",
+        "supplier_quote": "preventivo fornitore",
+        "task": "attività",
+        "user": "utente",
+        "work_unit": "unità di lavoro"
+      },
+      "details": {
+        "changedFields": "Modificati: {{fields}}",
+        "fromTo": "{{from}} -> {{to}}"
+      },
+      "counts": {
+        "users": "{{count}} utenti",
+        "roles": "{{count}} ruoli",
+        "permissions": "{{count}} permessi",
+        "clients": "{{count}} clienti",
+        "projects": "{{count}} progetti",
+        "tasks": "{{count}} attività",
+        "managers": "{{count}} responsabili",
+        "mappings": "{{count}} mappature",
+        "synced": "{{count}} sincronizzati",
+        "created": "{{count}} creati"
+      }
+    },
     "errors": {
       "loadFailed": "Impossibile caricare i log di audit."
     }

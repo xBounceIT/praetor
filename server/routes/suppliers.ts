@@ -210,7 +210,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ],
       );
 
-      await logAudit({ request, action: 'supplier.created', entityType: 'supplier', entityId: id });
+      await logAudit({
+        request,
+        action: 'supplier.created',
+        entityType: 'supplier',
+        entityId: id,
+        details: {
+          targetLabel: nameResult.value,
+          secondaryLabel: supplierCodeResult.value ?? undefined,
+        },
+      });
       return reply.code(201).send({
         id,
         name: nameResult.value,
@@ -245,19 +254,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const {
-        name,
-        isDisabled,
-        supplierCode,
-        contactName,
-        email,
-        phone,
-        address,
-        vatNumber,
-        taxCode,
-        paymentTerms,
-        notes,
-      } = request.body as {
+      const body = request.body as {
         name?: string;
         isDisabled?: boolean;
         supplierCode?: string;
@@ -270,6 +267,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms?: string;
         notes?: string;
       };
+      const {
+        name,
+        isDisabled,
+        supplierCode,
+        contactName,
+        email,
+        phone,
+        address,
+        vatNumber,
+        taxCode,
+        paymentTerms,
+        notes,
+      } = body;
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -341,8 +351,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Supplier not found' });
       }
 
+      const changedFields = [
+        Object.hasOwn(body, 'name') ? 'name' : null,
+        Object.hasOwn(body, 'isDisabled') ? 'isDisabled' : null,
+        Object.hasOwn(body, 'supplierCode') ? 'supplierCode' : null,
+        Object.hasOwn(body, 'contactName') ? 'contactName' : null,
+        Object.hasOwn(body, 'email') ? 'email' : null,
+        Object.hasOwn(body, 'phone') ? 'phone' : null,
+        Object.hasOwn(body, 'address') ? 'address' : null,
+        Object.hasOwn(body, 'vatNumber') ? 'vatNumber' : null,
+        Object.hasOwn(body, 'taxCode') ? 'taxCode' : null,
+        Object.hasOwn(body, 'paymentTerms') ? 'paymentTerms' : null,
+        Object.hasOwn(body, 'notes') ? 'notes' : null,
+      ].filter((field): field is string => field !== null);
+
       const s = result.rows[0];
-      await logAudit({ request, action: 'supplier.updated', entityType: 'supplier', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'supplier.updated',
+        entityType: 'supplier',
+        entityId: idResult.value,
+        details: {
+          targetLabel: s.name as string,
+          secondaryLabel: (s.supplier_code as string | null) ?? undefined,
+          changedFields,
+        },
+      });
       return {
         id: s.id,
         name: s.name,
@@ -378,15 +412,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const result = await query('DELETE FROM suppliers WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        'DELETE FROM suppliers WHERE id = $1 RETURNING id, name, supplier_code',
+        [idResult.value],
+      );
 
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Supplier not found' });
       }
 
-      await logAudit({ request, action: 'supplier.deleted', entityType: 'supplier', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'supplier.deleted',
+        entityType: 'supplier',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: (result.rows[0].supplier_code as string | null) ?? undefined,
+        },
+      });
       return reply.code(204).send();
     },
   );

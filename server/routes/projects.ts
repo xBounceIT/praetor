@@ -13,8 +13,8 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
-import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { logAudit } from '../utils/audit.ts';
+import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString, validateHexColor } from '../utils/validation.ts';
 
@@ -185,7 +185,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         await bumpNamespaceVersion('projects');
-        await logAudit({ request, action: 'project.created', entityType: 'project', entityId: id });
+        await logAudit({
+          request,
+          action: 'project.created',
+          entityType: 'project',
+          entityId: id,
+          details: {
+            targetLabel: nameResult.value,
+            secondaryLabel: clientIdResult.value,
+          },
+        });
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -225,15 +234,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const result = await query('DELETE FROM projects WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        'DELETE FROM projects WHERE id = $1 RETURNING id, name, client_id',
+        [idResult.value],
+      );
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Project not found' });
       }
 
       await bumpNamespaceVersion('projects');
-      await logAudit({ request, action: 'project.deleted', entityType: 'project', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'project.deleted',
+        entityType: 'project',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: result.rows[0].client_id as string,
+        },
+      });
       return { message: 'Project deleted' };
     },
   );
@@ -256,13 +275,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { name, clientId, description, color, isDisabled } = request.body as {
+      const body = request.body as {
         name?: string;
         clientId?: string;
         description?: string;
         color?: string;
         isDisabled?: boolean;
       };
+      const { name, clientId, description, color, isDisabled } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (color !== undefined && color !== null && color !== '') {
@@ -297,8 +317,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const updated = result.rows[0];
 
+        const changedFields = [
+          Object.hasOwn(body, 'name') ? 'name' : null,
+          Object.hasOwn(body, 'clientId') ? 'clientId' : null,
+          Object.hasOwn(body, 'description') ? 'description' : null,
+          Object.hasOwn(body, 'color') ? 'color' : null,
+          Object.hasOwn(body, 'isDisabled') ? 'isDisabled' : null,
+        ].filter((field): field is string => field !== null);
+
         await bumpNamespaceVersion('projects');
-        await logAudit({ request, action: 'project.updated', entityType: 'project', entityId: idResult.value });
+        await logAudit({
+          request,
+          action: 'project.updated',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: {
+            targetLabel: updated.name as string,
+            secondaryLabel: updated.client_id as string,
+            changedFields,
+          },
+        });
         return {
           id: updated.id,
           name: updated.name,

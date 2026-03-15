@@ -572,6 +572,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'invoice.created',
         entityType: 'invoice',
         entityId: invoiceId,
+        details: {
+          targetLabel: invoiceId,
+          secondaryLabel: clientNameResult.value,
+        },
       });
       const invoice = invoiceResult.rows[0];
       return reply
@@ -848,11 +852,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoice = invoiceResult.rows[0];
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        clientId: clientId !== undefined,
+        clientName: clientName !== undefined,
+        issueDate: issueDate !== undefined,
+        dueDate: dueDate !== undefined,
+        status: status !== undefined,
+        subtotal: subtotal !== undefined,
+        taxAmount: taxAmount !== undefined,
+        total: total !== undefined,
+        amountPaid: amountPaid !== undefined,
+        notes: notes !== undefined,
+        items: items !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
       await logAudit({
         request,
         action: 'invoice.updated',
         entityType: 'invoice',
         entityId: updatedInvoiceId,
+        details: {
+          targetLabel: updatedInvoiceId,
+          secondaryLabel: String(invoice.clientName),
+          changedFields,
+        },
       });
       return formatInvoiceResponse(
         invoice as Record<string, unknown>,
@@ -883,9 +906,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Invoice items will be deleted automatically via CASCADE
       try {
-        const result = await query('DELETE FROM invoices WHERE id = $1 RETURNING id', [
-          idResult.value,
-        ]);
+        const result = await query(
+          'DELETE FROM invoices WHERE id = $1 RETURNING id, client_name as "clientName"',
+          [idResult.value],
+        );
 
         if (result.rows.length === 0) {
           return reply.code(404).send({ error: 'Invoice not found' });
@@ -896,6 +920,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action: 'invoice.deleted',
           entityType: 'invoice',
           entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: String(result.rows[0].clientName ?? ''),
+          },
         });
         return reply.code(204).send();
       } catch (err) {

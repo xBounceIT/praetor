@@ -249,8 +249,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     entity_type VARCHAR(50),
     entity_id VARCHAR(100),
     ip_address VARCHAR(255) NOT NULL,
+    details JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);

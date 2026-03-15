@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
-import { logAudit } from '../utils/audit.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
@@ -249,7 +249,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const c = result.rows[0];
-      await logAudit({ request, action: 'ldap_config.updated', entityType: 'ldap_config' });
+      await logAudit({
+        request,
+        action: 'ldap_config.updated',
+        entityType: 'ldap_config',
+        details: {
+          secondaryLabel: (c.server_url as string | null) ?? undefined,
+          changedFields: getAuditChangedFields(request.body as Record<string, unknown>),
+        },
+      });
       return {
         enabled: c.enabled,
         serverUrl: c.server_url,
@@ -281,7 +289,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, _reply: FastifyReply) => {
       const ldapService = (await import('../services/ldap.ts')).default;
       const stats = await ldapService.syncUsers();
-      await logAudit({ request, action: 'ldap.synced', entityType: 'ldap_config' });
+      await logAudit({
+        request,
+        action: 'ldap.synced',
+        entityType: 'ldap_config',
+        details: {
+          secondaryLabel:
+            typeof stats.reason === 'string' && stats.reason.length > 0 ? stats.reason : undefined,
+          counts: getAuditCounts({
+            synced: stats.synced,
+            created: stats.created,
+          }),
+        },
+      });
       return { success: true, ...stats };
     },
   );

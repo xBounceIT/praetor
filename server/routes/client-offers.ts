@@ -527,6 +527,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'client_offer.created',
         entityType: 'client_offer',
         entityId: nextIdResult.value,
+        details: {
+          targetLabel: nextIdResult.value,
+          secondaryLabel: clientNameResult.value,
+        },
       });
       return reply.code(201).send({
         ...normalizeOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
@@ -806,11 +810,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        clientId: clientId !== undefined,
+        clientName: clientName !== undefined,
+        items: items !== undefined,
+        paymentTerms: paymentTerms !== undefined,
+        discount: discount !== undefined,
+        status: status !== undefined,
+        expirationDate: expirationDate !== undefined,
+        notes: notes !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(updatedOfferResult.rows[0].status ?? existingOffer.status);
+      const didStatusChange = status !== undefined && existingOffer.status !== nextStatus;
       await logAudit({
         request,
         action: 'client_offer.updated',
         entityType: 'client_offer',
         entityId: updatedOfferId,
+        details: {
+          targetLabel: updatedOfferId,
+          secondaryLabel: String(updatedOfferResult.rows[0].clientName ?? ''),
+          changedFields,
+          fromValue: didStatusChange ? String(existingOffer.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
       });
 
       return {
@@ -849,9 +876,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
       }
 
-      const offerResult = await query('SELECT id, status FROM customer_offers WHERE id = $1', [
-        idResult.value,
-      ]);
+      const offerResult = await query(
+        'SELECT id, status, client_name as "clientName" FROM customer_offers WHERE id = $1',
+        [idResult.value],
+      );
       if (offerResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
@@ -864,6 +892,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'client_offer.deleted',
         entityType: 'client_offer',
         entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(offerResult.rows[0].clientName ?? ''),
+        },
       });
       await query('DELETE FROM customer_offers WHERE id = $1', [idResult.value]);
       return reply.code(204).send();

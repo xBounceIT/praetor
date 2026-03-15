@@ -15,8 +15,8 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -360,7 +360,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         await bumpNamespaceVersion('users');
-        await logAudit({ request, action: 'user.created', entityType: 'user', entityId: id });
+        await logAudit({
+          request,
+          action: 'user.created',
+          entityType: 'user',
+          entityId: id,
+          details: {
+            targetLabel: nameResult.value,
+            secondaryLabel: usernameValue,
+          },
+        });
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -412,7 +421,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Check the user's employee type
-      const userCheck = await query('SELECT employee_type FROM users WHERE id = $1', [id]);
+      const userCheck = await query(
+        'SELECT name, username, employee_type FROM users WHERE id = $1',
+        [id],
+      );
       if (userCheck.rows.length === 0) {
         return reply.code(404).send({ error: 'User not found' });
       }
@@ -444,7 +456,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('users');
-      await logAudit({ request, action: 'user.deleted', entityType: 'user', entityId: id });
+      await logAudit({
+        request,
+        action: 'user.deleted',
+        entityType: 'user',
+        entityId: id,
+        details: {
+          targetLabel: userCheck.rows[0].name as string,
+          secondaryLabel: userCheck.rows[0].username as string,
+        },
+      });
       return { message: 'User deleted' };
     },
   );
@@ -496,7 +517,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const targetUserResult = await query(
-        'SELECT id, role, employee_type FROM users WHERE id = $1',
+        'SELECT id, name, username, role, employee_type FROM users WHERE id = $1',
         [idResult.value],
       );
       if (targetUserResult.rows.length === 0) {
@@ -504,6 +525,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const targetEmployeeType = targetUserResult.rows[0].employee_type || 'app_user';
+      const currentRole = targetUserResult.rows[0].role as string;
+      const currentName = targetUserResult.rows[0].name as string;
+      const currentUsername = targetUserResult.rows[0].username as string;
 
       if (targetEmployeeType === 'app_user') {
         if (!hasPermission(request, 'administration.user_management.update')) {
@@ -629,9 +653,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const u = result.rows[0];
+      const changedFields = [
+        name !== undefined ? 'name' : null,
+        isDisabled !== undefined ? 'isDisabled' : null,
+        costPerHour !== undefined && hasPermission(request, 'hr.costs.update')
+          ? 'costPerHour'
+          : null,
+        role !== undefined ? 'role' : null,
+      ].filter((field): field is string => field !== null);
 
       await bumpNamespaceVersion('users');
-      await logAudit({ request, action: 'user.updated', entityType: 'user', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'user.updated',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: (u.name as string) || currentName,
+          secondaryLabel: (u.username as string) || currentUsername,
+          changedFields,
+          fromValue: role !== undefined ? currentRole : undefined,
+          toValue: role !== undefined ? String(u.role) : undefined,
+        },
+      });
       return {
         id: u.id,
         name: u.name,
@@ -726,7 +770,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'primaryRoleId must be included in roleIds');
       }
 
-      const userExists = await query('SELECT 1 FROM users WHERE id = $1', [idResult.value]);
+      const userExists = await query('SELECT name, username FROM users WHERE id = $1', [
+        idResult.value,
+      ]);
       if (userExists.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
 
       const roleCheck = await query('SELECT id FROM roles WHERE id = ANY($1::varchar[])', [
@@ -756,7 +802,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('users');
-      await logAudit({ request, action: 'user.roles_updated', entityType: 'user', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'user.roles_updated',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: userExists.rows[0].name as string,
+          secondaryLabel: userExists.rows[0].username as string,
+          counts: { roles: roleIdsResult.value.length },
+          toValue: primaryRoleIdResult.value,
+        },
+      });
       return { roleIds: roleIdsResult.value, primaryRoleId: primaryRoleIdResult.value };
     },
   );
@@ -879,6 +936,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!taskIdsResult.ok)
         return badRequest(reply, (taskIdsResult as { ok: false; message: string }).message);
 
+      const targetUser = await query('SELECT name, username FROM users WHERE id = $1', [
+        idResult.value,
+      ]);
+      if (targetUser.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+
       try {
         await query('BEGIN');
 
@@ -922,7 +984,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (clientIds) await bumpNamespaceVersion('clients');
         if (projectIds) await bumpNamespaceVersion('projects');
         if (taskIds) await bumpNamespaceVersion('tasks');
-        await logAudit({ request, action: 'user.assignments_updated', entityType: 'user', entityId: idResult.value });
+        await logAudit({
+          request,
+          action: 'user.assignments_updated',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: {
+            targetLabel: targetUser.rows[0].name as string,
+            secondaryLabel: targetUser.rows[0].username as string,
+            counts: getAuditCounts({
+              clients: clientIds
+                ? ((clientIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+                : undefined,
+              projects: projectIds
+                ? ((projectIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+                : undefined,
+              tasks: taskIds
+                ? ((taskIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+                : undefined,
+            }),
+          },
+        });
         return { message: 'Assignments updated' };
       } catch (err) {
         await query('ROLLBACK');

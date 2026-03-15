@@ -708,6 +708,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action: 'client_quote.created',
           entityType: 'client_quote',
           entityId: nextIdResult.value,
+          details: {
+            targetLabel: nextIdResult.value,
+            secondaryLabel: clientNameResult.value,
+          },
         });
         return reply.code(201).send({
           ...normalizedQuote,
@@ -1134,12 +1138,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        clientId: clientId !== undefined,
+        clientName: clientName !== undefined,
+        items: items !== undefined,
+        paymentTerms: paymentTerms !== undefined,
+        discount: discount !== undefined,
+        status: status !== undefined,
+        expirationDate: expirationDate !== undefined,
+        notes: notes !== undefined,
+        isExpired: isExpiredOverride !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
+      const nextStatus = typeof status === 'string' ? status : normalizedQuote.status;
+      const didStatusChange = status !== undefined && currentStatus !== nextStatus;
 
       await logAudit({
         request,
         action: 'client_quote.updated',
         entityType: 'client_quote',
         entityId: updatedQuoteId,
+        details: {
+          targetLabel: updatedQuoteId,
+          secondaryLabel: normalizedQuote.clientName,
+          changedFields,
+          fromValue: didStatusChange ? String(currentStatus) : undefined,
+          toValue: didStatusChange ? String(nextStatus) : undefined,
+        },
       });
       return {
         ...normalizedQuote,
@@ -1182,7 +1207,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete a quote once an offer has been created from it' });
       }
 
-      const statusResult = await query('SELECT status FROM quotes WHERE id = $1', [idResult.value]);
+      const statusResult = await query(
+        'SELECT status, client_name as "clientName" FROM quotes WHERE id = $1',
+        [idResult.value],
+      );
       if (statusResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Quote not found' });
       }
@@ -1198,6 +1226,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'client_quote.deleted',
         entityType: 'client_quote',
         entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(statusResult.rows[0].clientName ?? ''),
+        },
       });
       return reply.code(204).send();
     },

@@ -290,7 +290,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('products');
-      await logAudit({ request, action: 'product.created', entityType: 'product', entityId: id });
+      await logAudit({
+        request,
+        action: 'product.created',
+        entityType: 'product',
+        entityId: id,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: result.rows[0].productCode as string,
+        },
+      });
       return reply.code(201).send(result.rows[0]);
     },
   );
@@ -522,8 +531,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      const changedFields = [
+        body.name !== undefined ? 'name' : null,
+        body.productCode !== undefined ? 'productCode' : null,
+        body.description !== undefined ? 'description' : null,
+        body.costo !== undefined ? 'costo' : null,
+        body.molPercentage !== undefined ? 'molPercentage' : null,
+        body.category !== undefined ? 'category' : null,
+        body.subcategory !== undefined ? 'subcategory' : null,
+        body.taxRate !== undefined ? 'taxRate' : null,
+        body.type !== undefined ? 'type' : null,
+        body.costUnit !== undefined ? 'costUnit' : null,
+        body.isDisabled !== undefined ? 'isDisabled' : null,
+        body.supplierId !== undefined ? 'supplierId' : null,
+      ].filter((field): field is string => field !== null);
+
       await bumpNamespaceVersion('products');
-      await logAudit({ request, action: 'product.updated', entityType: 'product', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'product.updated',
+        entityType: 'product',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: result.rows[0].productCode as string,
+          changedFields,
+        },
+      });
       return result.rows[0];
     },
   );
@@ -550,16 +584,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        'DELETE FROM products WHERE id = $1 RETURNING id, name, product_code as "productCode"',
+        [idResult.value],
+      );
 
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Product not found' });
       }
 
       await bumpNamespaceVersion('products');
-      await logAudit({ request, action: 'product.deleted', entityType: 'product', entityId: idResult.value });
+      await logAudit({
+        request,
+        action: 'product.deleted',
+        entityType: 'product',
+        entityId: idResult.value,
+        details: {
+          targetLabel: result.rows[0].name as string,
+          secondaryLabel: result.rows[0].productCode as string,
+        },
+      });
       return reply.code(204).send();
     },
   );

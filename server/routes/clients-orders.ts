@@ -545,6 +545,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'client_order.created',
         entityType: 'client_order',
         entityId: orderId,
+        details: {
+          targetLabel: orderId,
+          secondaryLabel: clientNameResult.value,
+        },
       });
       return reply.code(201).send({
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
@@ -1189,11 +1193,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        linkedOfferId: linkedOfferId !== undefined,
+        clientId: clientId !== undefined,
+        clientName: clientName !== undefined,
+        items: items !== undefined,
+        paymentTerms: paymentTerms !== undefined,
+        discount: discount !== undefined,
+        status: status !== undefined,
+        notes: notes !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(orderResult.rows[0].status ?? existingOrder.status);
+      const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
       await logAudit({
         request,
         action: 'client_order.updated',
         entityType: 'client_order',
         entityId: updatedOrderId,
+        details: {
+          targetLabel: updatedOrderId,
+          secondaryLabel: String(orderResult.rows[0].clientName ?? ''),
+          changedFields,
+          fromValue: didStatusChange ? String(existingOrder.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
       });
       return {
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
@@ -1223,9 +1250,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Check if order exists and is in draft status
-      const orderResult = await query('SELECT id, status FROM sales WHERE id = $1', [
-        idResult.value,
-      ]);
+      const orderResult = await query(
+        'SELECT id, status, client_name as "clientName" FROM sales WHERE id = $1',
+        [idResult.value],
+      );
 
       if (orderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
@@ -1247,6 +1275,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'client_order.deleted',
         entityType: 'client_order',
         entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(order.clientName ?? ''),
+        },
       });
       return reply.code(204).send();
     },

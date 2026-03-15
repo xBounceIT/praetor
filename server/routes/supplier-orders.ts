@@ -429,6 +429,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'supplier_order.created',
         entityType: 'supplier_order',
         entityId: orderId,
+        details: {
+          targetLabel: orderId,
+          secondaryLabel: supplierNameResult.value,
+        },
       });
       return reply.code(201).send({
         ...createdOrderResult.rows[0],
@@ -675,11 +679,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        supplierId: supplierId !== undefined,
+        supplierName: supplierName !== undefined,
+        items: items !== undefined,
+        paymentTerms: paymentTerms !== undefined,
+        discount: discount !== undefined,
+        status: status !== undefined,
+        notes: notes !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(updatedOrderResult.rows[0].status ?? existingOrder.status);
+      const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
       await logAudit({
         request,
         action: 'supplier_order.updated',
         entityType: 'supplier_order',
         entityId: updatedOrderId,
+        details: {
+          targetLabel: updatedOrderId,
+          secondaryLabel: String(updatedOrderResult.rows[0].supplierName ?? ''),
+          changedFields,
+          fromValue: didStatusChange ? String(existingOrder.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
       });
       return {
         ...updatedOrderResult.rows[0],
@@ -717,9 +743,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete an order once an invoice has been created from it' });
       }
 
-      const orderResult = await query('SELECT id, status FROM supplier_sales WHERE id = $1', [
-        idResult.value,
-      ]);
+      const orderResult = await query(
+        'SELECT id, status, supplier_name as "supplierName" FROM supplier_sales WHERE id = $1',
+        [idResult.value],
+      );
       if (orderResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Order not found' });
       }
@@ -732,6 +759,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'supplier_order.deleted',
         entityType: 'supplier_order',
         entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(orderResult.rows[0].supplierName ?? ''),
+        },
       });
       await query('DELETE FROM supplier_sales WHERE id = $1', [idResult.value]);
       return reply.code(204).send();

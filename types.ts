@@ -405,6 +405,16 @@ export interface AuditLogEntry {
   entityId: string | null;
   ipAddress: string;
   createdAt: number;
+  details: AuditLogDetails | null;
+}
+
+export interface AuditLogDetails {
+  targetLabel?: string;
+  secondaryLabel?: string;
+  changedFields?: string[];
+  counts?: Record<string, number>;
+  fromValue?: string;
+  toValue?: string;
 }
 
 export interface ReportChatMessage {

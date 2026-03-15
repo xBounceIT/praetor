@@ -414,6 +414,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'supplier_offer.created',
         entityType: 'supplier_offer',
         entityId: nextIdResult.value,
+        details: {
+          targetLabel: nextIdResult.value,
+          secondaryLabel: supplierNameResult.value,
+        },
       });
       return reply.code(201).send({
         ...normalizeSupplierOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
@@ -685,11 +689,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        supplierId: supplierId !== undefined,
+        supplierName: supplierName !== undefined,
+        items: items !== undefined,
+        paymentTerms: paymentTerms !== undefined,
+        discount: discount !== undefined,
+        status: status !== undefined,
+        expirationDate: expirationDate !== undefined,
+        notes: notes !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
+      const nextStatus =
+        typeof status === 'string'
+          ? status
+          : String(updatedOfferResult.rows[0].status ?? existingOffer.status);
+      const didStatusChange = status !== undefined && existingOffer.status !== nextStatus;
       await logAudit({
         request,
         action: 'supplier_offer.updated',
         entityType: 'supplier_offer',
         entityId: updatedOfferId,
+        details: {
+          targetLabel: updatedOfferId,
+          secondaryLabel: String(updatedOfferResult.rows[0].supplierName ?? ''),
+          changedFields,
+          fromValue: didStatusChange ? String(existingOffer.status) : undefined,
+          toValue: didStatusChange ? nextStatus : undefined,
+        },
       });
       return {
         ...normalizeSupplierOfferRow(updatedOfferResult.rows[0] as Record<string, unknown>),
@@ -727,9 +754,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .send({ error: 'Cannot delete an offer once a sale order has been created from it' });
       }
 
-      const offerResult = await query('SELECT id, status FROM supplier_offers WHERE id = $1', [
-        idResult.value,
-      ]);
+      const offerResult = await query(
+        'SELECT id, status, supplier_name as "supplierName" FROM supplier_offers WHERE id = $1',
+        [idResult.value],
+      );
       if (offerResult.rows.length === 0) {
         return reply.code(404).send({ error: 'Offer not found' });
       }
@@ -742,6 +770,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'supplier_offer.deleted',
         entityType: 'supplier_offer',
         entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(offerResult.rows[0].supplierName ?? ''),
+        },
       });
       await query('DELETE FROM supplier_offers WHERE id = $1', [idResult.value]);
       return reply.code(204).send();

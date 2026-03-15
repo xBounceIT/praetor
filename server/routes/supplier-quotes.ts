@@ -369,6 +369,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'supplier_quote.created',
         entityType: 'supplier_quote',
         entityId: nextIdResult.value,
+        details: {
+          targetLabel: nextIdResult.value,
+          secondaryLabel: supplierNameResult.value,
+        },
       });
       return reply.code(201).send({
         ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
@@ -630,11 +634,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
+      const changedFields = Object.entries({
+        id: nextId !== undefined,
+        supplierId: supplierId !== undefined,
+        supplierName: supplierName !== undefined,
+        items: items !== undefined,
+        paymentTerms: paymentTerms !== undefined,
+        discount: discount !== undefined,
+        status: status !== undefined,
+        expirationDate: expirationDate !== undefined,
+        notes: notes !== undefined,
+      }).flatMap(([field, changed]) => (changed ? [field] : []));
       await logAudit({
         request,
         action: 'supplier_quote.updated',
         entityType: 'supplier_quote',
         entityId: updatedQuoteId,
+        details: {
+          targetLabel: updatedQuoteId,
+          secondaryLabel: String(quoteResult.rows[0].supplierName ?? ''),
+          changedFields,
+        },
       });
       return {
         ...normalizeSupplierQuoteRow(quoteResult.rows[0] as Record<string, unknown>),
@@ -670,9 +690,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           .code(409)
           .send({ error: 'Cannot delete a quote once an offer has been created from it' });
       }
-      const result = await query('DELETE FROM supplier_quotes WHERE id = $1 RETURNING id', [
-        idResult.value,
-      ]);
+      const result = await query(
+        'DELETE FROM supplier_quotes WHERE id = $1 RETURNING id, supplier_name as "supplierName"',
+        [idResult.value],
+      );
 
       if (result.rows.length === 0) {
         return reply.code(404).send({ error: 'Supplier quote not found' });
@@ -683,6 +704,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'supplier_quote.deleted',
         entityType: 'supplier_quote',
         entityId: idResult.value,
+        details: {
+          targetLabel: idResult.value,
+          secondaryLabel: String(result.rows[0].supplierName ?? ''),
+        },
       });
       return reply.code(204).send();
     },

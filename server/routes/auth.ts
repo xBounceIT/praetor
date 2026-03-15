@@ -158,6 +158,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'user.login',
         entityType: 'user',
         entityId: user.id,
+        details: {
+          targetLabel: user.name as string,
+          secondaryLabel: user.role as string,
+        },
         userId: user.id,
       });
       const availableRoles = await getAvailableRolesForUser(user.id);
@@ -285,6 +289,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action: 'user.role_switched',
         entityType: 'user',
         entityId: userId,
+        details: {
+          targetLabel: request.user?.name,
+          secondaryLabel: request.user?.username,
+          fromValue: request.user?.role,
+          toValue: roleIdResult.value,
+        },
       });
 
       return {
