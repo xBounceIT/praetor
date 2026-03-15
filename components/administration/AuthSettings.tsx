@@ -50,6 +50,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'ldap'>('ldap');
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(config || DEFAULT_CONFIG);
 
   const roleOptions = roles.length
     ? roles.map((role) => ({ id: role.id, name: role.name }))
@@ -483,7 +484,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({ config, onSave, roles }) =>
             <div className="flex justify-end pt-4">
               <button
                 type="submit"
-                className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95"
+                disabled={!isDirty}
+                className="bg-praetor text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('admin.ldap.saveConfiguration', 'Save Configuration')}
               </button>
