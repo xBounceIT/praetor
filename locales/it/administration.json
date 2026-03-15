@@ -164,6 +164,10 @@
     },
     "errors": {
       "loadFailed": "Impossibile caricare i log di audit."
+    },
+    "filters": {
+      "startDate": "Inizio",
+      "endDate": "Fine"
     }
   }
 }

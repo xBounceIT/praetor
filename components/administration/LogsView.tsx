@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api';
 import type { AuditLogEntry } from '../../types';
+import DatePickerButton from '../shared/DatePickerButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
 
 const humanizeToken = (value: string) =>
@@ -51,17 +52,28 @@ const LogsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [startDate, setStartDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
+  const [endDate, setEndDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    return date;
+  });
 
   const loadAuditLogs = useCallback(async () => {
     setError('');
     try {
-      const data = await logsApi.listAudit();
+      const data = await logsApi.listAudit({ startDate, endDate });
       setRows(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : t('logs.errors.loadFailed');
       setError(message || t('logs.errors.loadFailed'));
     }
-  }, [t]);
+  }, [t, startDate, endDate]);
 
   useEffect(() => {
     const load = async () => {
@@ -117,15 +129,42 @@ const LogsView: React.FC = () => {
   );
 
   const refreshButton = (
-    <button
-      type="button"
-      onClick={handleRefreshLogs}
-      disabled={loading || isRefreshing}
-      className="h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-    >
-      <i className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'}`} />
-      {t('common:buttons.refresh')}
-    </button>
+    <div className="flex items-center gap-3">
+      <DatePickerButton
+        label={t('logs.filters.startDate')}
+        value={startDate}
+        onChange={(date) => {
+          setStartDate(date);
+        }}
+        onClear={() => {
+          const date = new Date();
+          date.setDate(date.getDate() - 7);
+          date.setHours(0, 0, 0, 0);
+          setStartDate(date);
+        }}
+      />
+      <DatePickerButton
+        label={t('logs.filters.endDate')}
+        value={endDate}
+        onChange={(date) => {
+          setEndDate(date);
+        }}
+        onClear={() => {
+          const date = new Date();
+          date.setHours(23, 59, 59, 999);
+          setEndDate(date);
+        }}
+      />
+      <button
+        type="button"
+        onClick={handleRefreshLogs}
+        disabled={loading || isRefreshing}
+        className="h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        <i className={`fa-solid ${isRefreshing ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'}`} />
+        {t('common:buttons.refresh')}
+      </button>
+    </div>
   );
 
   return (

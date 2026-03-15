@@ -38,6 +38,14 @@ const auditLogListSchema = {
   items: auditLogSchema,
 } as const;
 
+const auditLogQuerySchema = {
+  type: 'object',
+  properties: {
+    startDate: { type: 'string', format: 'date-time' },
+    endDate: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
 const parseAuditLogDetails = (value: unknown) => {
   if (!value) return null;
   if (typeof value === 'string') {
@@ -59,20 +67,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['logs'],
         summary: 'List system audit logs',
+        querystring: auditLogQuerySchema,
         response: {
           200: auditLogListSchema,
           ...standardRateLimitedErrorResponses,
         },
       },
     },
-    async (_request: FastifyRequest, _reply: FastifyReply) => {
-      const result = await query(
-        `SELECT al.id, al.user_id, al.action, al.entity_type, al.entity_id, al.ip_address, al.created_at, al.details, u.name, u.username
+    async (request: FastifyRequest, _reply: FastifyReply) => {
+      const { startDate, endDate } = request.query as { startDate?: string; endDate?: string };
+
+      let sql = `SELECT al.id, al.user_id, al.action, al.entity_type, al.entity_id, al.ip_address, al.created_at, al.details, u.name, u.username
          FROM audit_logs al
-         JOIN users u ON u.id = al.user_id
-         ORDER BY al.created_at DESC
-         LIMIT 500`,
-      );
+         JOIN users u ON u.id = al.user_id`;
+      const params: unknown[] = [];
+      const conditions: string[] = [];
+
+      if (startDate) {
+        params.push(new Date(startDate));
+        conditions.push(`al.created_at >= $${params.length}`);
+      }
+
+      if (endDate) {
+        params.push(new Date(endDate));
+        conditions.push(`al.created_at <= $${params.length}`);
+      }
+
+      if (conditions.length > 0) {
+        sql += ` WHERE ${conditions.join(' AND ')}`;
+      }
+
+      sql += ` ORDER BY al.created_at DESC LIMIT 500`;
+
+      const result = await query(sql, params);
 
       return result.rows.map((row) => ({
         id: row.id as string,

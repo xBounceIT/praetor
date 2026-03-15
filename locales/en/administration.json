@@ -164,6 +164,10 @@
     },
     "errors": {
       "loadFailed": "Unable to load audit logs."
+    },
+    "filters": {
+      "startDate": "Start",
+      "endDate": "End"
     }
   }
 }
