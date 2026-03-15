@@ -115,7 +115,16 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
     if (selectedDate) {
       const [year, month, day] = selectedDate.split('-').map(Number);
       const newDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-      onChange(newDate);
+      const hasChanged =
+        !value ||
+        value.getFullYear() !== newDate.getFullYear() ||
+        value.getMonth() !== newDate.getMonth() ||
+        value.getDate() !== newDate.getDate() ||
+        value.getHours() !== newDate.getHours() ||
+        value.getMinutes() !== newDate.getMinutes();
+      if (hasChanged) {
+        onChange(newDate);
+      }
     }
     setIsOpen(false);
   };
