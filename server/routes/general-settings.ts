@@ -9,7 +9,7 @@ import {
   shouldBypassCache,
   TTL_SETTINGS_SECONDS,
 } from '../services/cache.ts';
-import { getAuditChangedFields, logAudit } from '../utils/audit.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
   optionalEnum,
@@ -268,7 +268,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'settings',
         details: {
           secondaryLabel: (s.ai_provider as string | null) ?? undefined,
-          changedFields: getAuditChangedFields(request.body as Record<string, unknown>),
         },
       });
       return {

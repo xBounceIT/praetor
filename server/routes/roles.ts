@@ -279,7 +279,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: nameResult.value,
-          changedFields: ['name'],
           fromValue: roleRow.name as string,
           toValue: nameResult.value,
         },

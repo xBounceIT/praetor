@@ -852,20 +852,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const invoice = invoiceResult.rows[0];
-      const changedFields = Object.entries({
-        id: nextId !== undefined,
-        clientId: clientId !== undefined,
-        clientName: clientName !== undefined,
-        issueDate: issueDate !== undefined,
-        dueDate: dueDate !== undefined,
-        status: status !== undefined,
-        subtotal: subtotal !== undefined,
-        taxAmount: taxAmount !== undefined,
-        total: total !== undefined,
-        amountPaid: amountPaid !== undefined,
-        notes: notes !== undefined,
-        items: items !== undefined,
-      }).flatMap(([field, changed]) => (changed ? [field] : []));
       await logAudit({
         request,
         action: 'invoice.updated',
@@ -874,7 +860,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updatedInvoiceId,
           secondaryLabel: String(invoice.clientName),
-          changedFields,
         },
       });
       return formatInvoiceResponse(

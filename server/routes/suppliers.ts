@@ -366,15 +366,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ].filter((field): field is string => field !== null);
 
       const s = result.rows[0];
+
+      // Determine specific action based on what changed
+      let action = 'supplier.updated';
+      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+        action = body.isDisabled ? 'supplier.disabled' : 'supplier.enabled';
+      }
+
       await logAudit({
         request,
-        action: 'supplier.updated',
+        action,
         entityType: 'supplier',
         entityId: idResult.value,
         details: {
           targetLabel: s.name as string,
           secondaryLabel: (s.supplier_code as string | null) ?? undefined,
-          changedFields,
         },
       });
       return {

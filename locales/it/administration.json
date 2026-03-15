@@ -112,6 +112,8 @@
         "deleted": "Eliminato",
         "disabled": "Disabilitato",
         "enabled": "Abilitato",
+        "role_changed": "Cambiato ruolo",
+        "users_assigned": "Assegnati utenti",
         "users_updated": "Utenti aggiornati",
         "roles_updated": "Ruoli aggiornati",
         "assignments_updated": "Assegnazioni aggiornate",

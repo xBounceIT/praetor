@@ -579,18 +579,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Special bid not found' });
       }
 
-      const changedFields = [
-        bidCode !== undefined ? 'bidCode' : null,
-        clientId !== undefined ? 'clientId' : null,
-        clientName !== undefined ? 'clientName' : null,
-        productId !== undefined ? 'productId' : null,
-        productName !== undefined ? 'productName' : null,
-        unitPrice !== undefined ? 'unitPrice' : null,
-        molPercentage !== undefined ? 'molPercentage' : null,
-        startDate !== undefined ? 'startDate' : null,
-        endDate !== undefined ? 'endDate' : null,
-      ].filter((field): field is string => field !== null);
-
       await logAudit({
         request,
         action: 'special_bid.updated',
@@ -601,7 +589,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: [result.rows[0].clientName, result.rows[0].productName]
             .filter((value): value is string => typeof value === 'string' && value.length > 0)
             .join(' / '),
-          changedFields,
         },
       });
       return result.rows[0];

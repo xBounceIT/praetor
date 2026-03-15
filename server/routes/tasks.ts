@@ -366,6 +366,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const t = result.rows[0];
+      const isDisabledChanged = isDisabled !== undefined;
       const changedFields = [
         name !== undefined ? 'name' : null,
         description !== undefined ? 'description' : null,
@@ -376,18 +377,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         (request.body as { recurrenceDuration?: number }).recurrenceDuration !== undefined
           ? 'recurrenceDuration'
           : null,
-        isDisabled !== undefined ? 'isDisabled' : null,
+        isDisabledChanged ? 'isDisabled' : null,
       ].filter((field): field is string => field !== null);
+
+      // Determine specific action based on what changed
+      let action = 'task.updated';
+      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+        action = isDisabled ? 'task.disabled' : 'task.enabled';
+      }
+
       await bumpNamespaceVersion('tasks');
       await logAudit({
         request,
-        action: 'task.updated',
+        action,
         entityType: 'task',
         entityId: idResult.value,
         details: {
           targetLabel: t.name as string,
           secondaryLabel: t.project_id as string,
-          changedFields,
         },
       });
       return {
@@ -523,12 +530,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await bumpNamespaceVersion('tasks');
         await logAudit({
           request,
-          action: 'task.users_updated',
+          action: 'task.users_assigned',
           entityType: 'task',
           entityId: idResult.value,
           details: {
             targetLabel: taskResult.rows[0].name as string,
-            secondaryLabel: taskResult.rows[0].project_id as string,
             counts: { users: validUserIds.length },
           },
         });

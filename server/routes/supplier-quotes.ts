@@ -634,17 +634,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
-      const changedFields = Object.entries({
-        id: nextId !== undefined,
-        supplierId: supplierId !== undefined,
-        supplierName: supplierName !== undefined,
-        items: items !== undefined,
-        paymentTerms: paymentTerms !== undefined,
-        discount: discount !== undefined,
-        status: status !== undefined,
-        expirationDate: expirationDate !== undefined,
-        notes: notes !== undefined,
-      }).flatMap(([field, changed]) => (changed ? [field] : []));
       await logAudit({
         request,
         action: 'supplier_quote.updated',
@@ -653,7 +642,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updatedQuoteId,
           secondaryLabel: String(quoteResult.rows[0].supplierName ?? ''),
-          changedFields,
         },
       });
       return {

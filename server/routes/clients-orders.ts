@@ -1193,17 +1193,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const changedFields = Object.entries({
-        id: nextId !== undefined,
-        linkedOfferId: linkedOfferId !== undefined,
-        clientId: clientId !== undefined,
-        clientName: clientName !== undefined,
-        items: items !== undefined,
-        paymentTerms: paymentTerms !== undefined,
-        discount: discount !== undefined,
-        status: status !== undefined,
-        notes: notes !== undefined,
-      }).flatMap(([field, changed]) => (changed ? [field] : []));
       const nextStatus =
         typeof status === 'string'
           ? status
@@ -1217,7 +1206,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updatedOrderId,
           secondaryLabel: String(orderResult.rows[0].clientName ?? ''),
-          changedFields,
           fromValue: didStatusChange ? String(existingOrder.status) : undefined,
           toValue: didStatusChange ? nextStatus : undefined,
         },

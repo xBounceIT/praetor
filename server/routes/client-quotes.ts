@@ -1138,18 +1138,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
-      const changedFields = Object.entries({
-        id: nextId !== undefined,
-        clientId: clientId !== undefined,
-        clientName: clientName !== undefined,
-        items: items !== undefined,
-        paymentTerms: paymentTerms !== undefined,
-        discount: discount !== undefined,
-        status: status !== undefined,
-        expirationDate: expirationDate !== undefined,
-        notes: notes !== undefined,
-        isExpired: isExpiredOverride !== undefined,
-      }).flatMap(([field, changed]) => (changed ? [field] : []));
       const nextStatus = typeof status === 'string' ? status : normalizedQuote.status;
       const didStatusChange = status !== undefined && currentStatus !== nextStatus;
 
@@ -1161,7 +1149,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updatedQuoteId,
           secondaryLabel: normalizedQuote.clientName,
-          changedFields,
           fromValue: didStatusChange ? String(currentStatus) : undefined,
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },

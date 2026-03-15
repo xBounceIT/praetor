@@ -662,16 +662,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         role !== undefined ? 'role' : null,
       ].filter((field): field is string => field !== null);
 
+      // Determine specific action based on what changed
+      let action = 'user.updated';
+      if (changedFields.length === 1) {
+        if (changedFields[0] === 'isDisabled') {
+          action = isDisabled ? 'user.disabled' : 'user.enabled';
+        } else if (changedFields[0] === 'role') {
+          action = 'user.role_changed';
+        }
+      }
+
       await bumpNamespaceVersion('users');
       await logAudit({
         request,
-        action: 'user.updated',
+        action,
         entityType: 'user',
         entityId: idResult.value,
         details: {
           targetLabel: (u.name as string) || currentName,
           secondaryLabel: (u.username as string) || currentUsername,
-          changedFields,
           fromValue: role !== undefined ? currentRole : undefined,
           toValue: role !== undefined ? String(u.role) : undefined,
         },

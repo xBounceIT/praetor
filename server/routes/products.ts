@@ -531,6 +531,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      const isDisabledChanged = body.isDisabled !== undefined;
       const changedFields = [
         body.name !== undefined ? 'name' : null,
         body.productCode !== undefined ? 'productCode' : null,
@@ -542,20 +543,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body.taxRate !== undefined ? 'taxRate' : null,
         body.type !== undefined ? 'type' : null,
         body.costUnit !== undefined ? 'costUnit' : null,
-        body.isDisabled !== undefined ? 'isDisabled' : null,
+        isDisabledChanged ? 'isDisabled' : null,
         body.supplierId !== undefined ? 'supplierId' : null,
       ].filter((field): field is string => field !== null);
+
+      // Determine specific action based on what changed
+      let action = 'product.updated';
+      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+        action = body.isDisabled ? 'product.disabled' : 'product.enabled';
+      }
 
       await bumpNamespaceVersion('products');
       await logAudit({
         request,
-        action: 'product.updated',
+        action,
         entityType: 'product',
         entityId: idResult.value,
         details: {
           targetLabel: result.rows[0].name as string,
           secondaryLabel: result.rows[0].productCode as string,
-          changedFields,
         },
       });
       return result.rows[0];

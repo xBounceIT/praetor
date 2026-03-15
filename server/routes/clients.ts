@@ -745,10 +745,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         const c = result.rows[0];
+        const isDisabledChanged = Object.hasOwn(body, 'isDisabled');
+        const isDisabledValue = isDisabledChanged
+          ? (body as { isDisabled?: boolean }).isDisabled
+          : undefined;
 
         const changedFields = [
           hasName ? 'name' : null,
-          Object.hasOwn(body, 'isDisabled') ? 'isDisabled' : null,
+          isDisabledChanged ? 'isDisabled' : null,
           Object.hasOwn(body, 'type') ? 'type' : null,
           Object.hasOwn(body, 'contactName') ? 'contactName' : null,
           hasClientCode ? 'clientCode' : null,
@@ -765,16 +769,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           hasOfficeCountRange ? 'officeCountRange' : null,
         ].filter((field): field is string => field !== null);
 
+        // Determine specific action based on what changed
+        let action = 'client.updated';
+        if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+          action = isDisabledValue ? 'client.disabled' : 'client.enabled';
+        }
+
         await bumpNamespaceVersion('clients');
         await logAudit({
           request,
-          action: 'client.updated',
+          action,
           entityType: 'client',
           entityId: idResult.value,
           details: {
             targetLabel: c.name as string,
             secondaryLabel: (c.client_code as string | null) ?? undefined,
-            changedFields,
           },
         });
         return mapClientRow(c);

@@ -349,14 +349,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           description !== undefined ? 'description' : null,
           isDisabled !== undefined ? 'isDisabled' : null,
         ].filter((field): field is string => field !== null);
+
+        // Determine specific action based on what changed
+        let action = 'work_unit.updated';
+        if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+          action = isDisabled ? 'work_unit.disabled' : 'work_unit.enabled';
+        }
+
         await logAudit({
           request,
-          action: 'work_unit.updated',
+          action,
           entityType: 'work_unit',
           entityId: idResult.value,
           details: {
             targetLabel: w.name as string,
-            changedFields,
             counts: { users: parseInt(w.user_count, 10) },
           },
         });

@@ -317,24 +317,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const updated = result.rows[0];
 
+        const isDisabledChanged = Object.hasOwn(body, 'isDisabled');
         const changedFields = [
           Object.hasOwn(body, 'name') ? 'name' : null,
           Object.hasOwn(body, 'clientId') ? 'clientId' : null,
           Object.hasOwn(body, 'description') ? 'description' : null,
           Object.hasOwn(body, 'color') ? 'color' : null,
-          Object.hasOwn(body, 'isDisabled') ? 'isDisabled' : null,
+          isDisabledChanged ? 'isDisabled' : null,
         ].filter((field): field is string => field !== null);
+
+        // Determine specific action based on what changed
+        let action = 'project.updated';
+        if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+          action = body.isDisabled ? 'project.disabled' : 'project.enabled';
+        }
 
         await bumpNamespaceVersion('projects');
         await logAudit({
           request,
-          action: 'project.updated',
+          action,
           entityType: 'project',
           entityId: idResult.value,
           details: {
             targetLabel: updated.name as string,
             secondaryLabel: updated.client_id as string,
-            changedFields,
           },
         });
         return {

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
+import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -255,7 +255,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'ldap_config',
         details: {
           secondaryLabel: (c.server_url as string | null) ?? undefined,
-          changedFields: getAuditChangedFields(request.body as Record<string, unknown>),
         },
       });
       return {

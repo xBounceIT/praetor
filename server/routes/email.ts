@@ -3,7 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import emailService from '../services/email.ts';
-import { getAuditChangedFields, logAudit } from '../utils/audit.ts';
+import { logAudit } from '../utils/audit.ts';
 import { encrypt } from '../utils/crypto.ts';
 
 const emailConfigSchema = {
@@ -207,7 +207,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             (typeof c.from_email === 'string' && c.from_email.length > 0
               ? c.from_email
               : c.smtp_host) || undefined,
-          changedFields: getAuditChangedFields(request.body as Record<string, unknown>),
         },
       });
       return {
