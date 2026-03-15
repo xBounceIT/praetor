@@ -16,6 +16,7 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
@@ -51,6 +52,7 @@ const userSchema = {
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    hasTopManagerRole: { type: 'boolean' },
   },
   required: [
     'id',
@@ -61,6 +63,7 @@ const userSchema = {
     'costPerHour',
     'isDisabled',
     'employeeType',
+    'hasTopManagerRole',
   ],
 } as const;
 
@@ -127,6 +130,34 @@ const userRolesUpdateBodySchema = {
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
 
+type UserRow = {
+  id: string;
+  name: string;
+  username: string;
+  role: string;
+  avatar_initials: string | null;
+  cost_per_hour: string | number | null;
+  is_disabled: boolean | null;
+  employee_type: string | null;
+  has_top_manager_role?: boolean | null;
+};
+
+const mapUserResponse = (
+  user: UserRow,
+  canViewCosts: boolean,
+  hasTopManagerRole = Boolean(user.has_top_manager_role),
+) => ({
+  id: user.id,
+  name: user.name,
+  username: user.username,
+  role: user.role,
+  avatarInitials: user.avatar_initials ?? '',
+  costPerHour: canViewCosts ? parseFloat(String(user.cost_per_hour || 0)) : 0,
+  isDisabled: !!user.is_disabled,
+  employeeType: user.employee_type || 'app_user',
+  hasTopManagerRole,
+});
+
 interface DatabaseError extends Error {
   code?: string;
   constraint?: string;
@@ -180,8 +211,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const bypass = shouldBypassCache(request);
       const scopeKey = canViewAllUsers ? 'all' : 'filtered';
       const keySuffix = canViewAllUsers
-        ? `v=2:scope=all:costs=${canViewCosts ? 1 : 0}`
-        : `v=2:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
+        ? `v=3:scope=all:costs=${canViewCosts ? 1 : 0}`
+        : `v=3:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}`;
 
       const { status, value } = await cacheGetSetJson(
         'users',
@@ -191,7 +222,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           let result: Awaited<ReturnType<typeof query>>;
           if (canViewAllUsers) {
             result = await query(
-              'SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type FROM users ORDER BY name',
+              `SELECT u.id,
+                      u.name,
+                      u.username,
+                      u.role,
+                      u.avatar_initials,
+                      u.cost_per_hour,
+                      u.is_disabled,
+                      u.employee_type,
+                      EXISTS (
+                        SELECT 1
+                        FROM user_roles ur
+                        WHERE ur.user_id = u.id AND ur.role_id = $1
+                      ) AS has_top_manager_role
+                 FROM users u
+                 ORDER BY u.name`,
+              [TOP_MANAGER_ROLE_ID],
             );
           } else {
             const conditions: string[] = ['u.id = $1'];
@@ -206,25 +252,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
 
             result = await query(
-              `SELECT DISTINCT u.id, u.name, u.username, u.role, u.avatar_initials, u.cost_per_hour, u.is_disabled, u.employee_type
+              `SELECT DISTINCT u.id,
+                               u.name,
+                               u.username,
+                               u.role,
+                               u.avatar_initials,
+                               u.cost_per_hour,
+                               u.is_disabled,
+                               u.employee_type,
+                               EXISTS (
+                                 SELECT 1
+                                 FROM user_roles ur
+                                 WHERE ur.user_id = u.id AND ur.role_id = $2
+                               ) AS has_top_manager_role
                  FROM users u
                  LEFT JOIN user_work_units uw ON u.id = uw.user_id
                  LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
                  WHERE ${conditions.join(' OR ')}
                  ORDER BY u.name`,
-              [request.user.id],
+              [request.user.id, TOP_MANAGER_ROLE_ID],
             );
           }
-          return result.rows.map((u) => ({
-            id: u.id,
-            name: u.name,
-            username: u.username,
-            role: u.role,
-            avatarInitials: u.avatar_initials,
-            costPerHour: canViewCosts ? parseFloat(u.cost_per_hour || 0) : 0,
-            isDisabled: !!u.is_disabled,
-            employeeType: u.employee_type || 'app_user',
-          }));
+          return result.rows.map((u) => mapUserResponse(u as UserRow, canViewCosts));
         },
         { bypass },
       );
@@ -384,6 +433,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           costPerHour: costPerHourResult.value || 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
+          hasTopManagerRole: roleValue === TOP_MANAGER_ROLE_ID,
         });
       } catch (err) {
         const error = err as DatabaseError;
@@ -645,7 +695,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const u = result.rows[0];
+      const u = result.rows[0] as UserRow;
+      const hasTopManagerRole =
+        role !== undefined
+          ? roleValue === TOP_MANAGER_ROLE_ID
+          : await userHasTopManagerRole(idResult.value);
 
       await bumpNamespaceVersion('users');
       if (role !== undefined && (hadTopManagerRole || roleValue === 'top_manager')) {
@@ -653,16 +707,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await bumpNamespaceVersion('projects');
         await bumpNamespaceVersion('tasks');
       }
-      return {
-        id: u.id,
-        name: u.name,
-        username: u.username,
-        role: u.role,
-        avatarInitials: u.avatar_initials,
-        costPerHour: hasPermission(request, 'hr.costs.view') ? parseFloat(u.cost_per_hour || 0) : 0,
-        isDisabled: !!u.is_disabled,
-        employeeType: u.employee_type || 'app_user',
-      };
+      return mapUserResponse(u, hasPermission(request, 'hr.costs.view'), hasTopManagerRole);
     },
   );
 

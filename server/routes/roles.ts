@@ -15,6 +15,7 @@ import {
   ADMINISTRATION_PERMISSIONS,
   ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
   isPermissionKnown,
+  isTopManagerOnlyPermission,
   normalizePermission,
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
@@ -102,8 +103,6 @@ const mapRoleRow = async (row: {
 
 const isForbiddenAdministrationPermissionForNonAdmin = (permission: string) =>
   permission.startsWith('administration.') || permission.startsWith('configuration.');
-
-const isTopManagerOnlyPermission = (permission: string) => permission.startsWith('hr.work_units.');
 
 const findForbiddenAdministrationPermission = (permissions: string[]) =>
   permissions.find(isForbiddenAdministrationPermissionForNonAdmin);

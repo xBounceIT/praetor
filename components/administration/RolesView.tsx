@@ -7,6 +7,7 @@ import {
   buildPermission,
   formatPermissionLabel,
   hasPermission,
+  isTopManagerOnlyPermission,
   PERMISSION_DEFINITIONS,
   type PermissionAction,
   ROLE_EDITOR_EXCLUDED_MODULES,
@@ -53,7 +54,6 @@ const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
 ).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));
 const isAdministrationPermission = (permission: string) =>
   permission.startsWith('administration.') || permission.startsWith('configuration.');
-const isTopManagerOnlyPermission = (permission: string) => permission.startsWith('hr.work_units.');
 const isPermissionEditableForRole = (permission: string, roleId?: string | null) =>
   !isAdministrationPermission(permission) &&
   (!isTopManagerOnlyPermission(permission) || roleId === TOP_MANAGER_ROLE_ID);

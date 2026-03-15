@@ -14,6 +14,7 @@ export interface User {
   id: string;
   name: string;
   role: UserRole;
+  hasTopManagerRole?: boolean;
   permissions?: Permission[];
   availableRoles?: RoleSummary[];
   avatarInitials: string;

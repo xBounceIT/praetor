@@ -203,8 +203,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
     }
   }, [filterClientId, filterProjectId, projects]);
 
+  const userHasTopManagerAssignment = (user?: User | null) =>
+    !!user && (user.hasTopManagerRole || user.role === TOP_MANAGER_ROLE_ID);
+
   const openAssignments = async (userId: string) => {
-    if (!canManageAssignments) return;
+    const targetUser = users.find((user) => user.id === userId);
+    if (!canManageAssignments || userHasTopManagerAssignment(targetUser)) return;
     setManagingUserId(userId);
     setIsLoadingAssignments(true);
     try {
@@ -1031,6 +1035,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               const canEdit = canUpdateUsers;
               const role = roleLookup.get(user.role);
               const isAdminRole = role?.isAdmin || user.role === 'admin';
+              const isTopManagerAssigned = userHasTopManagerAssignment(user);
               const isTopManagerRole =
                 role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
               const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
@@ -1088,7 +1093,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {canManageAssignments && user.role !== TOP_MANAGER_ROLE_ID && (
+                      {canManageAssignments && !isTopManagerAssigned && (
                         <Tooltip label={t('hr:workforce.manageAssignments')}>
                           {() => (
                             <button
@@ -1274,6 +1279,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 const canEdit = canUpdateUsers;
                 const role = roleLookup.get(user.role);
                 const isAdminRole = role?.isAdmin || user.role === 'admin';
+                const isTopManagerAssigned = userHasTopManagerAssignment(user);
                 const isTopManagerRole =
                   role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
                 const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
@@ -1330,7 +1336,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {canManageAssignments && user.role !== TOP_MANAGER_ROLE_ID && (
+                        {canManageAssignments && !isTopManagerAssigned && (
                           <Tooltip label={t('hr:workforce.manageAssignments')}>
                             {() => (
                               <button

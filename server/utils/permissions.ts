@@ -112,6 +112,9 @@ export const normalizePermission = (permission: string): Permission =>
       ? permission.replace('suppliers.quotes.', 'sales.supplier_quotes.')
       : permission) as Permission;
 
+export const isTopManagerOnlyPermission = (permission: string) =>
+  permission.startsWith('hr.work_units.') || permission.startsWith('hr.work_units_all.');
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   manager: [
     ...buildPermissions('timesheets.tracker', CRUD),

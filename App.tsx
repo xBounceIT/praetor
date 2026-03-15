@@ -78,6 +78,7 @@ import {
   buildPermission,
   hasAnyPermission,
   hasPermission,
+  TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
@@ -2714,7 +2715,17 @@ const App: React.FC = () => {
   const handleUpdateUserRoles = async (id: string, roleIds: string[], primaryRoleId: string) => {
     try {
       const updated = await api.users.updateRoles(id, roleIds, primaryRoleId);
-      setUsers(users.map((u) => (u.id === id ? { ...u, role: updated.primaryRoleId } : u)));
+      setUsers((currentUsers) =>
+        currentUsers.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                role: updated.primaryRoleId,
+                hasTopManagerRole: roleIds.includes(TOP_MANAGER_ROLE_ID),
+              }
+            : u,
+        ),
+      );
     } catch (err) {
       console.error('Failed to update user roles:', err);
       alert('Failed to update user roles: ' + (err as Error).message);
