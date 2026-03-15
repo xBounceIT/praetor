@@ -7,9 +7,11 @@ import {
   buildPermission,
   formatPermissionLabel,
   hasPermission,
+  isTopManagerOnlyPermission,
   PERMISSION_DEFINITIONS,
   type PermissionAction,
   ROLE_EDITOR_EXCLUDED_MODULES,
+  TOP_MANAGER_ROLE_ID,
 } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import Modal from '../shared/Modal';
@@ -52,8 +54,11 @@ const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
 ).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));
 const isAdministrationPermission = (permission: string) =>
   permission.startsWith('administration.') || permission.startsWith('configuration.');
-const sanitizeNonAdminRolePermissions = (rolePermissions: string[]) =>
-  rolePermissions.filter((permission) => !isAdministrationPermission(permission));
+const isPermissionEditableForRole = (permission: string, roleId?: string | null) =>
+  !isAdministrationPermission(permission) &&
+  (!isTopManagerOnlyPermission(permission) || roleId === TOP_MANAGER_ROLE_ID);
+const sanitizeEditableRolePermissions = (rolePermissions: string[], roleId?: string | null) =>
+  rolePermissions.filter((permission) => isPermissionEditableForRole(permission, roleId));
 
 const RolesView: React.FC<RolesViewProps> = ({
   roles,
@@ -74,11 +79,20 @@ const RolesView: React.FC<RolesViewProps> = ({
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [activeModuleTab, setActiveModuleTab] = useState<string>('');
 
+  const editableDefinitions = useMemo(() => {
+    return PERMISSION_DEFINITIONS.filter((definition) => {
+      if (ROLE_EDITOR_EXCLUDED_MODULES.includes(definition.module)) return false;
+      if (definition.id.startsWith('hr.work_units') && activeRole?.id !== TOP_MANAGER_ROLE_ID) {
+        return false;
+      }
+      return true;
+    });
+  }, [activeRole?.id]);
+
   const { groupedPermissions, moduleOrder } = useMemo(() => {
     const grouped: Record<string, typeof PERMISSION_DEFINITIONS> = {};
     const order: string[] = [];
-    PERMISSION_DEFINITIONS.forEach((definition) => {
-      if (ROLE_EDITOR_EXCLUDED_MODULES.includes(definition.module)) return;
+    editableDefinitions.forEach((definition) => {
       if (!grouped[definition.module]) {
         grouped[definition.module] = [];
         order.push(definition.module);
@@ -92,7 +106,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       ),
     );
     return { groupedPermissions: grouped, moduleOrder: sortedOrder };
-  }, [t, i18n.language]);
+  }, [editableDefinitions, t, i18n.language]);
 
   const canCreateRoles = hasPermission(
     permissions,
@@ -145,7 +159,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   const openPermissionsModal = (role: Role) => {
     if (!canUpdateRoles || role.isAdmin) return;
     setActiveRole(role);
-    setSelectedPermissions(sanitizeNonAdminRolePermissions(role.permissions || []));
+    setSelectedPermissions(sanitizeEditableRolePermissions(role.permissions || [], role.id));
     setFormErrors({});
     setActiveModuleTab(moduleOrder[0] || '');
     setIsPermissionsOpen(true);
@@ -216,7 +230,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       return;
     }
     try {
-      const sanitizedPermissions = sanitizeNonAdminRolePermissions(selectedPermissions);
+      const sanitizedPermissions = sanitizeEditableRolePermissions(selectedPermissions);
       const finalPermissions = Array.from(
         new Set([...sanitizedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
       );
@@ -250,7 +264,10 @@ const RolesView: React.FC<RolesViewProps> = ({
     setFormErrors({});
     if (!activeRole) return;
     try {
-      const sanitizedPermissions = sanitizeNonAdminRolePermissions(selectedPermissions);
+      const sanitizedPermissions = sanitizeEditableRolePermissions(
+        selectedPermissions,
+        activeRole.id,
+      );
       const finalPermissions = Array.from(
         new Set([...sanitizedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
       );

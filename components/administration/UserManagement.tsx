@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
 import type { Client, Project, ProjectTask, Role, User } from '../../types';
-import { buildPermission, hasPermission } from '../../utils/permissions';
+import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -54,6 +54,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         : [
             { id: 'user', name: t('hr:roles.user') },
             { id: 'manager', name: t('hr:roles.manager') },
+            { id: TOP_MANAGER_ROLE_ID, name: t('hr:roles.top_manager') },
             { id: 'admin', name: t('hr:roles.admin') },
           ],
     [roles, t],
@@ -202,8 +203,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
     }
   }, [filterClientId, filterProjectId, projects]);
 
+  const userHasTopManagerAssignment = (user?: User | null) =>
+    !!user && (user.hasTopManagerRole || user.role === TOP_MANAGER_ROLE_ID);
+
   const openAssignments = async (userId: string) => {
-    if (!canManageAssignments) return;
+    const targetUser = users.find((user) => user.id === userId);
+    if (!canManageAssignments || userHasTopManagerAssignment(targetUser)) return;
     setManagingUserId(userId);
     setIsLoadingAssignments(true);
     try {
@@ -239,7 +244,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       closeAssignments();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      alert(t('hr:workUnits.failedToSaveAssignments'));
+      alert((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
     }
   };
 
@@ -1030,19 +1035,26 @@ const UserManagement: React.FC<UserManagementProps> = ({
               const canEdit = canUpdateUsers;
               const role = roleLookup.get(user.role);
               const isAdminRole = role?.isAdmin || user.role === 'admin';
+              const isTopManagerAssigned = userHasTopManagerAssignment(user);
+              const isTopManagerRole =
+                role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
               const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
               const roleBadgeClass = isAdminRole
                 ? 'bg-slate-800 text-white border-slate-700'
-                : isManagerRole
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : role?.isSystem
-                    ? 'bg-slate-100 text-slate-600 border-slate-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                : isTopManagerRole
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : isManagerRole
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : role?.isSystem
+                      ? 'bg-slate-100 text-slate-600 border-slate-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
               const roleIcon = isAdminRole
                 ? 'fa-shield-halved'
-                : isManagerRole
-                  ? 'fa-briefcase'
-                  : 'fa-user';
+                : isTopManagerRole
+                  ? 'fa-crown'
+                  : isManagerRole
+                    ? 'fa-briefcase'
+                    : 'fa-user';
 
               return (
                 <tr
@@ -1081,7 +1093,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {canManageAssignments && (
+                      {canManageAssignments && !isTopManagerAssigned && (
                         <Tooltip label={t('hr:workforce.manageAssignments')}>
                           {() => (
                             <button
@@ -1267,19 +1279,26 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 const canEdit = canUpdateUsers;
                 const role = roleLookup.get(user.role);
                 const isAdminRole = role?.isAdmin || user.role === 'admin';
+                const isTopManagerAssigned = userHasTopManagerAssignment(user);
+                const isTopManagerRole =
+                  role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
                 const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
                 const roleBadgeClass = isAdminRole
                   ? 'bg-slate-800 text-white border-slate-700'
-                  : isManagerRole
-                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                    : role?.isSystem
-                      ? 'bg-slate-100 text-slate-600 border-slate-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                  : isTopManagerRole
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : isManagerRole
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : role?.isSystem
+                        ? 'bg-slate-100 text-slate-600 border-slate-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200';
                 const roleIcon = isAdminRole
                   ? 'fa-shield-halved'
-                  : isManagerRole
-                    ? 'fa-briefcase'
-                    : 'fa-user';
+                  : isTopManagerRole
+                    ? 'fa-crown'
+                    : isManagerRole
+                      ? 'fa-briefcase'
+                      : 'fa-user';
                 return (
                   <tr
                     key={user.id}
@@ -1317,7 +1336,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {canManageAssignments && (
+                        {canManageAssignments && !isTopManagerAssigned && (
                           <Tooltip label={t('hr:workforce.manageAssignments')}>
                             {() => (
                               <button

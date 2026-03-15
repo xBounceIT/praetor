@@ -14,6 +14,7 @@ export interface User {
   id: string;
   name: string;
   role: UserRole;
+  hasTopManagerRole?: boolean;
   permissions?: Permission[];
   availableRoles?: RoleSummary[];
   avatarInitials: string;
@@ -347,11 +348,10 @@ export type View =
   // Timesheets module
   | 'timesheets/tracker'
   | 'timesheets/recurring'
-  // Administration module (admin/manager)
+  // Administration module
   | 'administration/authentication'
   | 'administration/general'
   | 'administration/user-management'
-  | 'administration/work-units'
   | 'administration/email'
   | 'administration/roles'
   | 'administration/logs'
@@ -372,15 +372,13 @@ export type View =
   | 'accounting/clients-invoices'
   | 'accounting/supplier-orders'
   | 'accounting/supplier-invoices'
-  // HR module (Deprecated/Moved)
-  // | 'hr/workforce'
-  // | 'hr/work-units'
   // Projects module
   | 'projects/manage'
   | 'projects/tasks'
   // HR module
   | 'hr/internal'
   | 'hr/external'
+  | 'hr/work-units'
   // Reports module
   | 'reports/ai-reporting'
   // Standalone

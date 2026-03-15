@@ -78,6 +78,7 @@ import {
   buildPermission,
   hasAnyPermission,
   hasPermission,
+  TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
 import { applyTheme, getTheme } from './utils/theme';
@@ -121,6 +122,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
 const canonicalizeLegacyHash = (hash: string) => {
   if (hash === 'suppliers/manage') return 'crm/suppliers';
   if (hash === 'suppliers/quotes') return 'sales/supplier-quotes';
+  if (hash === 'administration/work-units') return 'hr/work-units';
   return hash;
 };
 
@@ -640,7 +642,6 @@ const App: React.FC = () => {
       'timesheets/tracker',
       'timesheets/recurring',
       'administration/user-management',
-      'administration/work-units',
       'administration/roles',
       'administration/authentication',
       'administration/general',
@@ -666,6 +667,7 @@ const App: React.FC = () => {
       'projects/tasks',
       'hr/internal',
       'hr/external',
+      'hr/work-units',
       // Reports module
       'reports/ai-reporting',
       'settings',
@@ -690,7 +692,6 @@ const App: React.FC = () => {
       'timesheets/tracker',
       'timesheets/recurring',
       'administration/user-management',
-      'administration/work-units',
       'administration/roles',
       'administration/authentication',
       'administration/general',
@@ -716,6 +717,7 @@ const App: React.FC = () => {
       'projects/tasks',
       'hr/internal',
       'hr/external',
+      'hr/work-units',
       // Reports module
       'reports/ai-reporting',
       'settings',
@@ -1019,13 +1021,13 @@ const App: React.FC = () => {
         const canViewHr = hasAnyPermission(permissions, [
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
+          buildPermission('hr.work_units', 'view'),
+          buildPermission('hr.work_units_all', 'view'),
         ]);
         const canViewConfiguration = hasAnyPermission(permissions, [
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management_all', 'view'),
           buildPermission('administration.user_management', 'update'),
-          buildPermission('administration.work_units', 'view'),
-          buildPermission('administration.work_units_all', 'view'),
           buildPermission('administration.roles', 'view'),
           buildPermission('administration.authentication', 'view'),
           buildPermission('administration.general', 'view'),
@@ -1101,7 +1103,7 @@ const App: React.FC = () => {
           buildPermission('timesheets.tracker', 'view'),
           buildPermission('projects.manage', 'view'),
           buildPermission('projects.tasks', 'view'),
-          buildPermission('administration.work_units', 'view'),
+          buildPermission('hr.work_units', 'view'),
         ]);
         const canListQuotes = hasPermission(
           permissions,
@@ -1159,20 +1161,14 @@ const App: React.FC = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         );
         const canListWorkUnits = hasAnyPermission(permissions, [
-          buildPermission('administration.work_units', 'view'),
-          buildPermission('administration.work_units_all', 'view'),
+          buildPermission('hr.work_units', 'view'),
+          buildPermission('hr.work_units_all', 'view'),
         ]);
         const canViewUserManagement = hasAnyPermission(permissions, [
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
           buildPermission('administration.user_management', 'create'),
           buildPermission('administration.user_management_all', 'view'),
-        ]);
-        const canViewWorkUnits = hasAnyPermission(permissions, [
-          buildPermission('administration.work_units', 'view'),
-          buildPermission('administration.work_units', 'update'),
-          buildPermission('administration.work_units', 'create'),
-          buildPermission('administration.work_units_all', 'view'),
         ]);
         const canViewRoles = hasPermission(
           permissions,
@@ -1259,6 +1255,12 @@ const App: React.FC = () => {
                 load: () => api.users.list(),
                 apply: (data) => setUsers(data as User[]),
               },
+              {
+                dataset: 'work units',
+                enabled: canListWorkUnits,
+                load: () => api.workUnits.list(),
+                apply: (data) => setWorkUnits(data as WorkUnit[]),
+              },
             ]);
             await loadOptionalDataset(
               module,
@@ -1270,9 +1272,8 @@ const App: React.FC = () => {
           }
           case 'administration': {
             if (!canViewConfiguration) return;
-            const shouldLoadUsers = canViewUserManagement || canViewWorkUnits;
+            const shouldLoadUsers = canViewUserManagement;
             const shouldLoadAssignments = canViewUserManagement;
-            const shouldLoadWorkUnits = canViewWorkUnits;
             const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
 
             failedDatasets = await loadDatasets(module, [
@@ -1299,12 +1300,6 @@ const App: React.FC = () => {
                 enabled: shouldLoadAssignments && canListTasks,
                 load: () => api.tasks.list(),
                 apply: (data) => setProjectTasks(data as ProjectTask[]),
-              },
-              {
-                dataset: 'work units',
-                enabled: shouldLoadWorkUnits && canListWorkUnits,
-                load: () => api.workUnits.list(),
-                apply: (data) => setWorkUnits(data as WorkUnit[]),
               },
             ]);
 
@@ -2720,7 +2715,17 @@ const App: React.FC = () => {
   const handleUpdateUserRoles = async (id: string, roleIds: string[], primaryRoleId: string) => {
     try {
       const updated = await api.users.updateRoles(id, roleIds, primaryRoleId);
-      setUsers(users.map((u) => (u.id === id ? { ...u, role: updated.primaryRoleId } : u)));
+      setUsers((currentUsers) =>
+        currentUsers.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                role: updated.primaryRoleId,
+                hasTopManagerRole: roleIds.includes(TOP_MANAGER_ROLE_ID),
+              }
+            : u,
+        ),
+      );
     } catch (err) {
       console.error('Failed to update user roles:', err);
       alert('Failed to update user roles: ' + (err as Error).message);
@@ -3443,11 +3448,8 @@ const App: React.FC = () => {
                 />
               )}
 
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['administration/work-units'],
-            ) &&
-              activeView === 'administration/work-units' && (
+            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/work-units']) &&
+              activeView === 'hr/work-units' && (
                 <WorkUnitsView
                   workUnits={workUnits}
                   users={users}

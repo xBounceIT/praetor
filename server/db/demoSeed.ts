@@ -2,7 +2,6 @@ import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
 import { bumpNamespaceVersion } from '../services/cache.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
-import { migrate as assignItemsToManagers } from './assign_items_to_managers.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
   DEMO_CACHE_NAMESPACES,
@@ -817,7 +816,6 @@ export const runDemoSeedRefresh = async ({
   }
 
   try {
-    await assignItemsToManagers();
     const verification = await verifyDemoDataset();
     verificationCountsByTable = verification.verificationCountsByTable;
 
