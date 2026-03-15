@@ -18,6 +18,7 @@ export interface User {
   availableRoles?: RoleSummary[];
   avatarInitials: string;
   username: string;
+  email?: string;
   password?: string;
   costPerHour?: number;
   isDisabled?: boolean;

@@ -93,6 +93,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             );
 
             const s = insertResult.rows[0];
+            await bumpNamespaceVersion('users');
             return {
               fullName: s.full_name,
               email: s.email,
@@ -173,6 +174,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const s = result.rows[0];
+      if (email !== undefined) {
+        await bumpNamespaceVersion('users');
+      }
       await bumpNamespaceVersion(`settings:user:${request.user?.id}`);
       return {
         fullName: s.full_name,

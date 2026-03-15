@@ -7,6 +7,7 @@ import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
+import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -21,6 +22,7 @@ export interface UserManagementProps {
     username: string,
     password: string,
     role: string,
+    email?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   onDeleteUser: (id: string) => void;
   onUpdateUser: (id: string, updates: Partial<User>) => void;
@@ -30,6 +32,8 @@ export interface UserManagementProps {
   roles: Role[];
   currency: string;
 }
+
+const USERS_ROWS_PER_PAGE_STORAGE_KEY = 'praetor_workforce_users_rowsPerPage';
 
 const UserManagement: React.FC<UserManagementProps> = ({
   users,
@@ -47,6 +51,40 @@ const UserManagement: React.FC<UserManagementProps> = ({
 }) => {
   const { t } = useTranslation(['hr', 'common']);
 
+  const isValidEmail = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || /\s/.test(trimmed)) return false;
+
+    const atIndex = trimmed.indexOf('@');
+    if (atIndex <= 0 || atIndex !== trimmed.lastIndexOf('@')) return false;
+
+    const localPart = trimmed.slice(0, atIndex);
+    const domainPart = trimmed.slice(atIndex + 1);
+    if (!localPart || !domainPart) return false;
+    if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
+    if (localPart.includes('..') || domainPart.includes('..')) return false;
+    if (!domainPart.includes('.')) return false;
+
+    const domainLabels = domainPart.split('.');
+    if (domainLabels.some((label) => !label)) return false;
+    if (domainLabels.some((label) => label.startsWith('-') || label.endsWith('-'))) return false;
+
+    return true;
+  };
+
+  const splitFullName = (fullName: string) => {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      return { firstName: '', surname: '' };
+    }
+
+    const [firstName, ...surnameParts] = trimmed.split(/\s+/);
+    return { firstName, surname: surnameParts.join(' ') };
+  };
+
+  const buildFullName = (firstName: string, surname: string) =>
+    `${firstName.trim()} ${surname.trim()}`.trim();
+
   const roleOptions = React.useMemo(
     () =>
       roles.length
@@ -63,10 +101,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
     return new Map(roles.map((role) => [role.id, role]));
   }, [roles]);
 
-  const [newName, setNewName] = useState('');
+  const [newFirstName, setNewFirstName] = useState('');
+  const [newSurname, setNewSurname] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('password');
+  const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
+  const usernameManuallyEdited = React.useRef(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
@@ -99,7 +140,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editSurname, setEditSurname] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<string>('');
   const [editAssignedRoleIds, setEditAssignedRoleIds] = useState<string[]>([]);
   const [editPrimaryRoleId, setEditPrimaryRoleId] = useState<string>('');
@@ -107,18 +150,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [initialEditPrimaryRoleId, setInitialEditPrimaryRoleId] = useState<string>('');
   const [isLoadingEditRoles, setIsLoadingEditRoles] = useState(false);
   const [editRolesError, setEditRolesError] = useState('');
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
-  const [activeSearch, setActiveSearch] = useState('');
-  const [disabledSearch, setDisabledSearch] = useState('');
-  const [activeCurrentPage, setActiveCurrentPage] = useState(1);
-  const [activeRowsPerPage, setActiveRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_workforce_active_rowsPerPage');
-    return saved ? parseInt(saved, 10) : 5;
-  });
-  const [disabledCurrentPage, setDisabledCurrentPage] = useState(1);
-  const [disabledRowsPerPage, setDisabledRowsPerPage] = useState(() => {
-    const saved = localStorage.getItem('praetor_workforce_disabled_rowsPerPage');
+  const [userSearch, setUserSearch] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [usersCurrentPage, setUsersCurrentPage] = useState(1);
+  const [usersRowsPerPage, setUsersRowsPerPage] = useState(() => {
+    const saved = localStorage.getItem(USERS_ROWS_PER_PAGE_STORAGE_KEY);
     return saved ? parseInt(saved, 10) : 5;
   });
 
@@ -147,7 +186,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setFormErrors({});
 
     const newErrors: Record<string, string> = {};
-    if (!newName?.trim()) newErrors.name = t('common:validation.nameRequired');
+    if (!newFirstName?.trim()) newErrors.firstName = t('common:validation.nameRequired');
+    if (!newSurname?.trim()) newErrors.surname = t('common:validation.surnameRequired');
+    if (newEmail.trim() && !isValidEmail(newEmail)) {
+      newErrors.email = t('common:validation.invalidEmail');
+    }
     if (!newUsername?.trim()) newErrors.username = t('common:validation.usernameRequired');
     if (!newPassword?.trim()) newErrors.password = t('common:validation.passwordRequired');
 
@@ -156,43 +199,53 @@ const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
 
-    const result = await onAddUser(newName, newUsername, newPassword, newRole);
+    const fullName = buildFullName(newFirstName, newSurname);
+    const result = await onAddUser(
+      fullName,
+      newUsername.trim(),
+      newPassword,
+      newRole,
+      newEmail.trim(),
+    );
     if (!result.success) {
       if (result.error?.includes('Username already exists')) {
         setFormErrors({ username: t('common:validation.usernameAlreadyExists') || result.error });
+      } else if (result.error?.toLowerCase().includes('email')) {
+        setFormErrors({ email: t('common:validation.invalidEmail') || result.error });
       } else {
         setFormErrors({ general: result.error || t('common:messages.errorOccurred') });
       }
       return;
     }
 
-    setNewName('');
+    setNewFirstName('');
+    setNewSurname('');
+    setNewEmail('');
     setNewUsername('');
-    setNewPassword('password');
+    setNewPassword('');
     setNewRole(roleOptions[0]?.id || '');
+    usernameManuallyEdited.current = false;
+    setIsCreateModalOpen(false);
   };
 
-  const handleActiveRowsPerPageChange = (val: string) => {
+  const closeCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setNewFirstName('');
+    setNewSurname('');
+    setNewEmail('');
+    setNewUsername('');
+    setNewPassword('');
+    setNewRole(roleOptions[0]?.id || '');
+    usernameManuallyEdited.current = false;
+    setFormErrors({});
+  };
+
+  const handleUsersRowsPerPageChange = (val: string) => {
     const value = parseInt(val, 10);
-    setActiveRowsPerPage(value);
-    localStorage.setItem('praetor_workforce_active_rowsPerPage', value.toString());
-    setActiveCurrentPage(1);
+    setUsersRowsPerPage(value);
+    localStorage.setItem(USERS_ROWS_PER_PAGE_STORAGE_KEY, value.toString());
+    setUsersCurrentPage(1);
   };
-
-  const handleDisabledRowsPerPageChange = (val: string) => {
-    const value = parseInt(val, 10);
-    setDisabledRowsPerPage(value);
-    localStorage.setItem('praetor_workforce_disabled_rowsPerPage', value.toString());
-    setDisabledCurrentPage(1);
-  };
-
-  React.useEffect(() => {
-    setActiveCurrentPage(1);
-  }, []);
-
-  React.useEffect(() => {
-    setDisabledCurrentPage(1);
-  }, []);
 
   React.useEffect(() => {
     if (filterClientId === 'all' || filterProjectId === 'all') return;
@@ -360,11 +413,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
   };
 
   const handleEdit = (user: User) => {
+    const { firstName, surname } = splitFullName(user.name);
     setEditingUser(user);
-    setEditName(user.name);
+    setEditFirstName(firstName);
+    setEditSurname(surname);
+    setEditEmail(user.email || '');
     setEditRole(user.role);
     setEditCostPerHour(user.costPerHour?.toString() || '0');
     setEditIsDisabled(!!user.isDisabled);
+    setEditFormErrors({});
 
     // Multi-role edit state (admin-only in practice because roles are admin-scoped)
     setEditRolesError('');
@@ -402,6 +459,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
       });
   };
 
+  const closeEditModal = () => {
+    setEditingUser(null);
+    setEditRolesError('');
+    setEditFormErrors({});
+  };
+
   const sameStringSet = (a: string[], b: string[]) => {
     if (a.length !== b.length) return false;
     const as = new Set(a);
@@ -411,8 +474,24 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const saveEdit = async () => {
     if (editingUser) {
+      const newErrors: Record<string, string> = {};
+      const originalHasSurname = !!splitFullName(editingUser.name).surname.trim();
+      if (!editFirstName.trim()) newErrors.firstName = t('common:validation.nameRequired');
+      if (originalHasSurname && !editSurname.trim()) {
+        newErrors.surname = t('common:validation.surnameRequired');
+      }
+      if (editEmail.trim() && !isValidEmail(editEmail)) {
+        newErrors.email = t('common:validation.invalidEmail');
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setEditFormErrors(newErrors);
+        return;
+      }
+
       const updates: Partial<User> = {
-        name: editName,
+        name: buildFullName(editFirstName, editSurname),
+        email: editEmail.trim(),
         isDisabled: editIsDisabled,
       };
 
@@ -458,7 +537,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       }
 
       onUpdateUser(editingUser?.id, updates);
-      setEditingUser(null);
+      closeEditModal();
     }
   };
 
@@ -473,7 +552,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       editPrimaryRoleId !== initialEditPrimaryRoleId);
   const hasEditChanges =
     !!editingUser &&
-    (editName !== editingUser.name ||
+    (buildFullName(editFirstName, editSurname) !== editingUser.name ||
+      editEmail.trim() !== (editingUser.email || '') ||
       editIsDisabled !== !!editingUser.isDisabled ||
       (canViewCosts &&
         canUpdateUsers &&
@@ -605,34 +685,57 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
 
-  const activeUsersTotal = users.filter((user) => !user.isDisabled);
-  const disabledUsersTotal = users.filter((user) => user.isDisabled);
-  const activeSearchValue = activeSearch.trim().toLowerCase();
-  const disabledSearchValue = disabledSearch.trim().toLowerCase();
+  const userSearchValue = userSearch.trim().toLowerCase();
   const matchesUserSearch = (user: User, term: string) => {
     if (!term) return true;
-    return user.name.toLowerCase().includes(term) || user.username.toLowerCase().includes(term);
+    return (
+      user.name.toLowerCase().includes(term) ||
+      user.username.toLowerCase().includes(term) ||
+      (user.email?.toLowerCase() || '').includes(term)
+    );
   };
-  const activeUsersFiltered = activeUsersTotal.filter((user) =>
-    matchesUserSearch(user, activeSearchValue),
-  );
-  const disabledUsersFiltered = disabledUsersTotal.filter((user) =>
-    matchesUserSearch(user, disabledSearchValue),
-  );
+  const usersFiltered = [...users]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    .filter((user) => matchesUserSearch(user, userSearchValue));
 
-  const activeTotalPages = Math.ceil(activeUsersFiltered.length / activeRowsPerPage);
-  const activeStartIndex = (activeCurrentPage - 1) * activeRowsPerPage;
-  const activeUsers = activeUsersFiltered.slice(
-    activeStartIndex,
-    activeStartIndex + activeRowsPerPage,
-  );
+  const usersTotalPages = Math.ceil(usersFiltered.length / usersRowsPerPage);
 
-  const disabledTotalPages = Math.ceil(disabledUsersFiltered.length / disabledRowsPerPage);
-  const disabledStartIndex = (disabledCurrentPage - 1) * disabledRowsPerPage;
-  const disabledUsers = disabledUsersFiltered.slice(
-    disabledStartIndex,
-    disabledStartIndex + disabledRowsPerPage,
-  );
+  React.useEffect(() => {
+    if (usersTotalPages === 0) {
+      if (usersCurrentPage !== 1) {
+        setUsersCurrentPage(1);
+      }
+      return;
+    }
+
+    if (usersCurrentPage > usersTotalPages) {
+      setUsersCurrentPage(usersTotalPages);
+    }
+  }, [usersCurrentPage, usersTotalPages]);
+
+  const usersStartIndex = (usersCurrentPage - 1) * usersRowsPerPage;
+  const paginatedUsers = usersFiltered.slice(usersStartIndex, usersStartIndex + usersRowsPerPage);
+  const emptyEmailLabel = t('common:common.none');
+  const noUsersFoundLabel = t('hr:workforce.noUsers');
+  const getUserStatusLabel = (user: User) =>
+    user.isDisabled ? t('common:common.disabled') : t('common:common.active');
+  const getRolePresentation = (user: User) => {
+    const role = roleLookup.get(user.role);
+    const isAdminRole = role?.isAdmin || user.role === 'admin';
+    const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
+
+    return {
+      roleBadgeClass: isAdminRole
+        ? 'bg-slate-800 text-white border-slate-700'
+        : isManagerRole
+          ? 'bg-blue-50 text-blue-700 border-blue-200'
+          : role?.isSystem
+            ? 'bg-slate-100 text-slate-600 border-slate-200'
+            : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      roleIcon: isAdminRole ? 'fa-shield-halved' : isManagerRole ? 'fa-briefcase' : 'fa-user',
+      roleName: role?.name || user.role,
+    };
+  };
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -668,8 +771,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
       </Modal>
 
       {/* Edit User Modal */}
-      <Modal isOpen={!!editingUser} onClose={() => setEditingUser(null)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+      <Modal isOpen={!!editingUser} onClose={closeEditModal}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
@@ -679,16 +782,72 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </div>
 
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    {t('hr:workforce.name')}
+                  </label>
+                  <input
+                    type="text"
+                    value={editFirstName}
+                    onChange={(e) => {
+                      setEditFirstName(e.target.value);
+                      if (editFormErrors.firstName) {
+                        setEditFormErrors((prev) => ({ ...prev, firstName: '' }));
+                      }
+                    }}
+                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.firstName ? 'border-red-400' : 'border-slate-200'
+                    }`}
+                  />
+                  {editFormErrors.firstName && (
+                    <p className="text-xs text-red-500 mt-1">{editFormErrors.firstName}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    {t('hr:workforce.surname')}
+                  </label>
+                  <input
+                    type="text"
+                    value={editSurname}
+                    onChange={(e) => {
+                      setEditSurname(e.target.value);
+                      if (editFormErrors.surname) {
+                        setEditFormErrors((prev) => ({ ...prev, surname: '' }));
+                      }
+                    }}
+                    className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                      editFormErrors.surname ? 'border-red-400' : 'border-slate-200'
+                    }`}
+                  />
+                  {editFormErrors.surname && (
+                    <p className="text-xs text-red-500 mt-1">{editFormErrors.surname}</p>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  {t('hr:workforce.fullName')}
+                  {t('common:labels.email')}
                 </label>
                 <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => {
+                    setEditEmail(e.target.value);
+                    if (editFormErrors.email) {
+                      setEditFormErrors((prev) => ({ ...prev, email: '' }));
+                    }
+                  }}
+                  placeholder="e.g. alice.smith@example.com"
+                  className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
+                    editFormErrors.email ? 'border-red-400' : 'border-slate-200'
+                  }`}
                 />
+                {editFormErrors.email && (
+                  <p className="text-xs text-red-500 mt-1">{editFormErrors.email}</p>
+                )}
               </div>
 
               {canUpdateUsers && (
@@ -817,15 +976,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setEditingUser(null)}
+                onClick={closeEditModal}
                 className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
                 onClick={saveEdit}
-                disabled={!editName || !hasEditChanges}
-                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!editName || !hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
+                disabled={!hasEditChanges}
+                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-slate-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-slate-200 hover:bg-slate-800'}`}
               >
                 {t('hr:workforce.saveChanges')}
               </button>
@@ -833,118 +992,200 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </div>
         </div>
       </Modal>
+      {/* Create User Modal */}
       {canCreateUsers && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <i className="fa-solid fa-user-plus text-praetor"></i>
-            {t('hr:workforce.createNewUser')}
-          </h3>
-          <form
-            onSubmit={handleSubmit}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"
-          >
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {t('hr:workforce.name')}
-              </label>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value);
-                  if (!newUsername) setNewUsername(e.target.value.toLowerCase());
-                  if (formErrors.name || formErrors.general) {
-                    setFormErrors({ ...formErrors, name: '', general: '' });
-                  }
-                }}
-                placeholder="e.g. Alice Smith"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
-                {formErrors.name || ''}
-              </p>
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {t('hr:workforce.username')}
-              </label>
-              <input
-                type="text"
-                value={newUsername}
-                onChange={(e) => {
-                  setNewUsername(e.target.value);
-                  if (formErrors.username || formErrors.general) {
-                    setFormErrors({ ...formErrors, username: '', general: '' });
-                  }
-                }}
-                placeholder="e.g. alice"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
-                {formErrors.username || ''}
-              </p>
-            </div>
-            <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {t('hr:workforce.password')}
-              </label>
-              <input
-                type="text"
-                value={newPassword}
-                onChange={(e) => {
-                  setNewPassword(e.target.value);
-                  if (formErrors.password || formErrors.general) {
-                    setFormErrors({ ...formErrors, password: '', general: '' });
-                  }
-                }}
-                placeholder="Password"
-                className={`w-full px-4 py-2 bg-slate-50 border rounded-lg focus:ring-2 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4">
-                {formErrors.password || ''}
-              </p>
-            </div>
-            <div className="lg:col-span-1">
-              <CustomSelect
-                label={t('hr:workforce.role')}
-                options={roleOptions}
-                value={newRole}
-                onChange={(val) => setNewRole(val as string)}
-                buttonClassName="py-2 text-sm"
-              />
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4"></p>
-            </div>
-            <div className="lg:col-span-1">
+        <Modal isOpen={isCreateModalOpen} onClose={closeCreateModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                  <i className="fa-solid fa-user-plus"></i>
+                </div>
+                {t('hr:workforce.createNewUser')}
+              </h3>
               <button
-                type="submit"
-                className="w-full px-6 py-2 bg-praetor text-white font-bold rounded-lg hover:bg-slate-800 transition-all h-[38px] shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                onClick={closeCreateModal}
+                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
               >
-                <i className="fa-solid fa-plus"></i> {t('common:buttons.add')}
+                <i className="fa-solid fa-xmark text-lg"></i>
               </button>
-              <p className="text-red-500 text-[10px] font-bold mt-1 h-4 leading-4"></p>
             </div>
-          </form>
-          {formErrors.general && (
-            <p className="mt-3 text-xs font-bold text-red-500">{formErrors.general}</p>
-          )}
-        </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                    {t('hr:workforce.name')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newFirstName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewFirstName(val);
+                      if (!usernameManuallyEdited.current) {
+                        const surname = newSurname.trim().toLowerCase().replace(/\s+/g, '');
+                        const first = val.trim().toLowerCase().replace(/\s+/g, '');
+                        setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
+                      }
+                      if (formErrors.firstName || formErrors.general) {
+                        setFormErrors({ ...formErrors, firstName: '', general: '' });
+                      }
+                    }}
+                    placeholder="e.g. Alice"
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  />
+                  {formErrors.firstName && (
+                    <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.firstName}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                    {t('hr:workforce.surname')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newSurname}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewSurname(val);
+                      if (!usernameManuallyEdited.current) {
+                        const first = newFirstName.trim().toLowerCase().replace(/\s+/g, '');
+                        const surname = val.trim().toLowerCase().replace(/\s+/g, '');
+                        setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
+                      }
+                      if (formErrors.surname || formErrors.general) {
+                        setFormErrors({ ...formErrors, surname: '', general: '' });
+                      }
+                    }}
+                    placeholder="e.g. Smith"
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                  />
+                  {formErrors.surname && (
+                    <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.surname}</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('common:labels.email')}
+                </label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    if (formErrors.email || formErrors.general) {
+                      setFormErrors({ ...formErrors, email: '', general: '' });
+                    }
+                  }}
+                  placeholder="e.g. alice.smith@example.com"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.email && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.email}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('hr:workforce.username')}
+                </label>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => {
+                    usernameManuallyEdited.current = true;
+                    setNewUsername(e.target.value);
+                    if (formErrors.username || formErrors.general) {
+                      setFormErrors({ ...formErrors, username: '', general: '' });
+                    }
+                  }}
+                  placeholder="e.g. alice.smith"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.username && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.username}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 ml-1 mb-1">
+                  {t('hr:workforce.password')}
+                </label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (formErrors.password || formErrors.general) {
+                      setFormErrors({ ...formErrors, password: '', general: '' });
+                    }
+                  }}
+                  placeholder="Password"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-slate-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor/20'}`}
+                />
+                {formErrors.password && (
+                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.password}</p>
+                )}
+              </div>
+              <div>
+                <CustomSelect
+                  label={t('hr:workforce.role')}
+                  options={roleOptions}
+                  value={newRole}
+                  onChange={(val) => setNewRole(val as string)}
+                  buttonClassName="py-3 text-sm"
+                />
+              </div>
+              {formErrors.general && (
+                <p className="text-xs font-bold text-red-500">{formErrors.general}</p>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                >
+                  {t('common:buttons.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-slate-800 transition-colors active:scale-95"
+                >
+                  {t('common:buttons.add')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Modal>
       )}
 
+      {/* Page header: search + add button */}
+      <div className="flex justify-between items-center gap-4">
+        <div className="relative flex-1">
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input
+            type="text"
+            placeholder={t('hr:workforce.searchUsers')}
+            value={userSearch}
+            onChange={(e) => {
+              setUserSearch(e.target.value);
+              setUsersCurrentPage(1);
+            }}
+            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
+          />
+        </div>
+        {canCreateUsers && (
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus"></i> {t('hr:workforce.addUser')}
+          </button>
+        )}
+      </div>
+
       <StandardTable
-        title={t('hr:workforce.activeUsers')}
-        totalCount={activeUsersFiltered.length}
-        headerExtras={
-          <div className="relative">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-            <input
-              type="text"
-              placeholder={t('hr:workforce.searchActiveUsers')}
-              value={activeSearch}
-              onChange={(e) => setActiveSearch(e.target.value)}
-              className="w-56 pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-praetor outline-none"
-            />
-          </div>
-        }
+        title={t('hr:workforce.title')}
+        totalCount={usersFiltered.length}
         footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
         footer={
           <>
@@ -959,36 +1200,36 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   { id: '20', name: '20' },
                   { id: '50', name: '50' },
                 ]}
-                value={activeRowsPerPage.toString()}
-                onChange={(val) => handleActiveRowsPerPageChange(val as string)}
+                value={usersRowsPerPage.toString()}
+                onChange={(val) => handleUsersRowsPerPageChange(val as string)}
                 className="w-20"
                 buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
                 searchable={false}
               />
               <span className="text-xs font-bold text-slate-400 ml-2">
                 {t('common:pagination.showing', {
-                  start: activeUsers.length > 0 ? activeStartIndex + 1 : 0,
-                  end: Math.min(activeStartIndex + activeRowsPerPage, activeUsersFiltered.length),
-                  total: activeUsersFiltered.length,
+                  start: paginatedUsers.length > 0 ? usersStartIndex + 1 : 0,
+                  end: Math.min(usersStartIndex + usersRowsPerPage, usersFiltered.length),
+                  total: usersFiltered.length,
                 })}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setActiveCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={activeCurrentPage === 1}
+                onClick={() => setUsersCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={usersCurrentPage === 1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-left text-xs"></i>
               </button>
               <div className="flex items-center gap-1">
-                {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map((page) => (
+                {Array.from({ length: usersTotalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
-                    onClick={() => setActiveCurrentPage(page)}
+                    onClick={() => setUsersCurrentPage(page)}
                     className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      activeCurrentPage === page
+                      usersCurrentPage === page
                         ? 'bg-praetor text-white shadow-md shadow-slate-200'
                         : 'text-slate-500 hover:bg-slate-100'
                     }`}
@@ -998,8 +1239,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 ))}
               </div>
               <button
-                onClick={() => setActiveCurrentPage((prev) => Math.min(activeTotalPages, prev + 1))}
-                disabled={activeCurrentPage === activeTotalPages || activeTotalPages === 0}
+                onClick={() => setUsersCurrentPage((prev) => Math.min(usersTotalPages, prev + 1))}
+                disabled={usersCurrentPage === usersTotalPages || usersTotalPages === 0}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
               >
                 <i className="fa-solid fa-chevron-right text-xs"></i>
@@ -1018,7 +1259,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 {t('hr:workforce.username')}
               </th>
               <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('common:labels.email')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
                 {t('hr:workforce.role')}
+              </th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                {t('common:labels.status')}
               </th>
               <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
                 {t('hr:workforce.actions')}
@@ -1026,29 +1273,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {activeUsers.map((user) => {
+            {paginatedUsers.map((user) => {
               const canEdit = canUpdateUsers;
-              const role = roleLookup.get(user.role);
-              const isAdminRole = role?.isAdmin || user.role === 'admin';
-              const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
-              const roleBadgeClass = isAdminRole
-                ? 'bg-slate-800 text-white border-slate-700'
-                : isManagerRole
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : role?.isSystem
-                    ? 'bg-slate-100 text-slate-600 border-slate-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-              const roleIcon = isAdminRole
-                ? 'fa-shield-halved'
-                : isManagerRole
-                  ? 'fa-briefcase'
-                  : 'fa-user';
+              const { roleBadgeClass, roleIcon, roleName } = getRolePresentation(user);
 
               return (
                 <tr
                   key={user.id}
                   onClick={() => canEdit && handleEdit(user)}
-                  className={`group hover:bg-slate-50 transition-colors ${canEdit ? 'cursor-pointer' : ''}`}
+                  className={`group hover:bg-slate-50 transition-colors ${
+                    user.isDisabled
+                      ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0'
+                      : ''
+                  } ${canEdit ? 'cursor-pointer' : ''}`}
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -1056,11 +1293,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         {user.avatarInitials}
                       </div>
                       <span className="font-bold text-slate-800">{user.name}</span>
-                      {user.isDisabled && (
-                        <span className="text-[10px] bg-red-100 px-2 py-0.5 rounded text-red-600 font-bold uppercase border border-red-200">
-                          {t('hr:workforce.disabled')}
-                        </span>
-                      )}
                       {user.id === currentUserId && (
                         <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
                           {t('hr:workforce.you')}
@@ -1072,12 +1304,27 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <span className="text-sm text-slate-600 font-mono">{user.username}</span>
                   </td>
                   <td className="px-6 py-4">
+                    {user.email ? (
+                      <span className="text-sm font-medium text-slate-600 break-all">
+                        {user.email}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium text-slate-400">{emptyEmailLabel}</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
                     >
                       <i className={`fa-solid ${roleIcon}`}></i>
-                      {role?.name || user.role}
+                      {roleName}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge
+                      type={user.isDisabled ? 'disabled' : 'active'}
+                      label={getUserStatusLabel(user)}
+                    />
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -1111,20 +1358,36 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               </button>
                             )}
                           </Tooltip>
-                          <Tooltip label={t('hr:workforce.disableUser')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateUser(user.id, { isDisabled: true });
-                                }}
-                                disabled={user.id === currentUserId}
-                                className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
-                              >
-                                <i className="fa-solid fa-ban"></i>
-                              </button>
-                            )}
-                          </Tooltip>
+                          {user.isDisabled ? (
+                            <Tooltip label={t('hr:workforce.reEnableUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateUser(user.id, { isDisabled: false });
+                                  }}
+                                  className="text-slate-400 hover:text-praetor transition-colors p-2 rounded-lg"
+                                >
+                                  <i className="fa-solid fa-rotate-left"></i>
+                                </button>
+                              )}
+                            </Tooltip>
+                          ) : (
+                            <Tooltip label={t('hr:workforce.disableUser')}>
+                              {() => (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateUser(user.id, { isDisabled: true });
+                                  }}
+                                  disabled={user.id === currentUserId}
+                                  className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-0 transition-colors p-2 rounded-lg"
+                                >
+                                  <i className="fa-solid fa-ban"></i>
+                                </button>
+                              )}
+                            </Tooltip>
+                          )}
                         </>
                       )}
                       {canDeleteUsers && (
@@ -1148,255 +1411,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </tr>
               );
             })}
-            {activeUsers.length === 0 && (
+            {paginatedUsers.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-sm font-bold text-slate-400">
-                  {t('hr:workforce.noActiveUsers')}
+                <td colSpan={6} className="px-6 py-10 text-center text-sm font-bold text-slate-400">
+                  {noUsersFoundLabel}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </StandardTable>
-
-      {disabledUsersTotal.length > 0 && (
-        <StandardTable
-          title={t('hr:workforce.disabledUsers')}
-          totalCount={disabledUsersFiltered.length}
-          totalLabel="DISABLED"
-          containerClassName="border-dashed bg-slate-50"
-          headerExtras={
-            <div className="relative">
-              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-              <input
-                type="text"
-                placeholder={t('hr:workforce.searchDisabledUsers')}
-                value={disabledSearch}
-                onChange={(e) => setDisabledSearch(e.target.value)}
-                className="w-56 pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-praetor outline-none"
-              />
-            </div>
-          }
-          footerClassName="flex flex-col sm:flex-row justify-between items-center gap-4"
-          footer={
-            <>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-500">
-                  {t('common:labels.rowsPerPage')}:
-                </span>
-                <CustomSelect
-                  options={[
-                    { id: '5', name: '5' },
-                    { id: '10', name: '10' },
-                    { id: '20', name: '20' },
-                    { id: '50', name: '50' },
-                  ]}
-                  value={disabledRowsPerPage.toString()}
-                  onChange={(val) => handleDisabledRowsPerPageChange(val as string)}
-                  className="w-20"
-                  buttonClassName="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-lg"
-                  searchable={false}
-                />
-                <span className="text-xs font-bold text-slate-400 ml-2">
-                  {t('common:pagination.showing', {
-                    start: disabledUsers.length > 0 ? disabledStartIndex + 1 : 0,
-                    end: Math.min(
-                      disabledStartIndex + disabledRowsPerPage,
-                      disabledUsersFiltered.length,
-                    ),
-                    total: disabledUsersFiltered.length,
-                  })}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDisabledCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={disabledCurrentPage === 1}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-left text-xs"></i>
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: disabledTotalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setDisabledCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                        disabledCurrentPage === page
-                          ? 'bg-praetor text-white shadow-md shadow-slate-200'
-                          : 'text-slate-500 hover:bg-slate-100'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() =>
-                    setDisabledCurrentPage((prev) => Math.min(disabledTotalPages, prev + 1))
-                  }
-                  disabled={disabledCurrentPage === disabledTotalPages || disabledTotalPages === 0}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                >
-                  <i className="fa-solid fa-chevron-right text-xs"></i>
-                </button>
-              </div>
-            </>
-          }
-        >
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  User
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  Username
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {disabledUsers.map((user) => {
-                const canEdit = canUpdateUsers;
-                const role = roleLookup.get(user.role);
-                const isAdminRole = role?.isAdmin || user.role === 'admin';
-                const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
-                const roleBadgeClass = isAdminRole
-                  ? 'bg-slate-800 text-white border-slate-700'
-                  : isManagerRole
-                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                    : role?.isSystem
-                      ? 'bg-slate-100 text-slate-600 border-slate-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                const roleIcon = isAdminRole
-                  ? 'fa-shield-halved'
-                  : isManagerRole
-                    ? 'fa-briefcase'
-                    : 'fa-user';
-                return (
-                  <tr
-                    key={user.id}
-                    onClick={() => canEdit && handleEdit(user)}
-                    className={`group hover:bg-slate-50 transition-colors opacity-60 grayscale hover:opacity-100 hover:grayscale-0 ${canEdit ? 'cursor-pointer' : ''}`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 text-praetor flex items-center justify-center text-xs font-bold">
-                          {user.avatarInitials}
-                        </div>
-                        <span className="font-bold text-slate-800">{user.name}</span>
-                        {user.isDisabled && (
-                          <span className="text-[10px] bg-red-100 px-2 py-0.5 rounded text-red-600 font-bold uppercase border border-red-200">
-                            {t('hr:workforce.disabled')}
-                          </span>
-                        )}
-                        {user.id === currentUserId && (
-                          <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase">
-                            {t('hr:workforce.you')}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-600 font-mono">{user.username}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${roleBadgeClass}`}
-                      >
-                        <i className={`fa-solid ${roleIcon}`}></i>
-                        {role?.name || user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {canManageAssignments && (
-                          <Tooltip label={t('hr:workforce.manageAssignments')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openAssignments(user.id);
-                                }}
-                                className="text-slate-400 hover:text-praetor transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-link"></i>
-                              </button>
-                            )}
-                          </Tooltip>
-                        )}
-                        {canUpdateUsers && (
-                          <>
-                            <Tooltip label={t('hr:workforce.editUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit(user);
-                                  }}
-                                  className="text-slate-400 hover:text-praetor transition-colors p-2"
-                                >
-                                  <i className="fa-solid fa-user-pen"></i>
-                                </button>
-                              )}
-                            </Tooltip>
-                            <Tooltip label={t('hr:workforce.reEnableUser')}>
-                              {() => (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUpdateUser(user.id, { isDisabled: false });
-                                  }}
-                                  className="text-slate-400 hover:text-praetor transition-colors p-2"
-                                >
-                                  <i className="fa-solid fa-rotate-left"></i>
-                                </button>
-                              )}
-                            </Tooltip>
-                          </>
-                        )}
-                        {canDeleteUsers && (
-                          <Tooltip label={t('hr:workforce.deleteUser')}>
-                            {() => (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  confirmDelete(user);
-                                }}
-                                disabled={user.id === currentUserId}
-                                className="text-slate-400 hover:text-red-500 disabled:opacity-0 transition-colors p-2"
-                              >
-                                <i className="fa-solid fa-trash-can"></i>
-                              </button>
-                            )}
-                          </Tooltip>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {disabledUsers.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-6 py-10 text-center text-sm font-bold text-slate-400"
-                  >
-                    {t('hr:workforce.noDisabledUsers')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </StandardTable>
-      )}
 
       {/* Assignment Modal */}
       <Modal
