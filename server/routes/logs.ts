@@ -10,10 +10,13 @@ const auditLogSchema = {
     userId: { type: 'string' },
     userName: { type: 'string' },
     username: { type: 'string' },
+    action: { type: 'string' },
+    entityType: { type: ['string', 'null'] },
+    entityId: { type: ['string', 'null'] },
     ipAddress: { type: 'string' },
     createdAt: { type: 'number' },
   },
-  required: ['id', 'userId', 'userName', 'username', 'ipAddress', 'createdAt'],
+  required: ['id', 'userId', 'userName', 'username', 'action', 'ipAddress', 'createdAt'],
 } as const;
 
 const auditLogListSchema = {
@@ -28,7 +31,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [authenticateToken, requirePermission('administration.logs.view')],
       schema: {
         tags: ['logs'],
-        summary: 'List system access audit logs',
+        summary: 'List system audit logs',
         response: {
           200: auditLogListSchema,
           ...standardRateLimitedErrorResponses,
@@ -37,7 +40,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
       const result = await query(
-        `SELECT al.id, al.user_id, al.ip_address, al.created_at, u.name, u.username
+        `SELECT al.id, al.user_id, al.action, al.entity_type, al.entity_id, al.ip_address, al.created_at, u.name, u.username
          FROM audit_logs al
          JOIN users u ON u.id = al.user_id
          ORDER BY al.created_at DESC
@@ -49,6 +52,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         userId: row.user_id as string,
         userName: row.name as string,
         username: row.username as string,
+        action: row.action as string,
+        entityType: (row.entity_type as string) ?? null,
+        entityId: (row.entity_id as string) ?? null,
         ipAddress: row.ip_address as string,
         createdAt: new Date(row.created_at as string).getTime(),
       }));

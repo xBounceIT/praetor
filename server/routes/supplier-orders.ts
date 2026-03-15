@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
@@ -423,6 +424,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
+      await logAudit({ request, action: 'supplier_order.created', entityType: 'supplier_order', entityId: orderId });
       return reply.code(201).send({
         ...createdOrderResult.rows[0],
         items: createdItems,
@@ -611,6 +613,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOrderId = String(updatedOrderResult.rows[0].id);
 
+      await logAudit({ request, action: 'supplier_order.updated', entityType: 'supplier_order', entityId: updatedOrderId });
+
       let updatedItems: unknown[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -714,6 +718,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Only draft orders can be deleted' });
       }
 
+      await logAudit({ request, action: 'supplier_order.deleted', entityType: 'supplier_order', entityId: idResult.value });
       await query('DELETE FROM supplier_sales WHERE id = $1', [idResult.value]);
       return reply.code(204).send();
     },

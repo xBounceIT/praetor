@@ -14,6 +14,7 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString, validateHexColor } from '../utils/validation.ts';
 
@@ -184,6 +185,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         await bumpNamespaceVersion('projects');
+        await logAudit({ request, action: 'project.created', entityType: 'project', entityId: id });
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -231,6 +233,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('projects');
+      await logAudit({ request, action: 'project.deleted', entityType: 'project', entityId: idResult.value });
       return { message: 'Project deleted' };
     },
   );
@@ -295,6 +298,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const updated = result.rows[0];
 
         await bumpNamespaceVersion('projects');
+        await logAudit({ request, action: 'project.updated', entityType: 'project', entityId: idResult.value });
         return {
           id: updated.id,
           name: updated.name,

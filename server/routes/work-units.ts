@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
@@ -210,6 +211,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await query('COMMIT');
 
         const w = await fetchUnitDetails(id);
+        await logAudit({ request, action: 'work_unit.created', entityType: 'work_unit', entityId: id });
         return reply.code(201).send({
           id: w.id,
           name: w.name,
@@ -332,6 +334,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const w = await fetchUnitDetails(idResult.value);
         if (!w) return reply.code(404).send({ error: 'Work unit not found' });
 
+        await logAudit({ request, action: 'work_unit.updated', entityType: 'work_unit', entityId: idResult.value });
         return {
           id: w.id,
           name: w.name,
@@ -375,6 +378,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Work unit not found' });
       }
 
+      await logAudit({ request, action: 'work_unit.deleted', entityType: 'work_unit', entityId: idResult.value });
       return { message: 'Work unit deleted' };
     },
   );
@@ -462,6 +466,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         await query('COMMIT');
+        await logAudit({ request, action: 'work_unit.users_updated', entityType: 'work_unit', entityId: idResult.value });
         return { message: 'Work unit users updated' };
       } catch (err) {
         await query('ROLLBACK');

@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -702,6 +703,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         const normalizedQuote = normalizeQuoteRow(quoteResult.rows[0] as Record<string, unknown>);
 
+        await logAudit({ request, action: 'client_quote.created', entityType: 'client_quote', entityId: nextIdResult.value });
         return reply.code(201).send({
           ...normalizedQuote,
           items: createdItems,
@@ -1053,6 +1055,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedQuoteId = String(quoteResult.rows[0].id);
 
+      await logAudit({ request, action: 'client_quote.updated', entityType: 'client_quote', entityId: updatedQuoteId });
+
       // If items are provided, update them
       let updatedItems: ReturnType<typeof normalizeQuoteItemRow>[] = [];
       if (normalizedItems) {
@@ -1180,6 +1184,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Items will be deleted automatically via CASCADE
       await query('DELETE FROM quotes WHERE id = $1 RETURNING id', [idResult.value]);
 
+      await logAudit({ request, action: 'client_quote.deleted', entityType: 'client_quote', entityId: idResult.value });
       return reply.code(204).send();
     },
   );

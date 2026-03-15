@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -408,6 +409,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdItems.push(itemResult.rows[0]);
       }
 
+      await logAudit({ request, action: 'supplier_offer.created', entityType: 'supplier_offer', entityId: nextIdResult.value });
       return reply.code(201).send({
         ...normalizeSupplierOfferRow(createdOfferResult.rows[0] as Record<string, unknown>),
         items: createdItems,
@@ -621,6 +623,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOfferId = String(updatedOfferResult.rows[0].id);
 
+      await logAudit({ request, action: 'supplier_offer.updated', entityType: 'supplier_offer', entityId: updatedOfferId });
+
       let updatedItems: unknown[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -724,6 +728,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: 'Only draft offers can be deleted' });
       }
 
+      await logAudit({ request, action: 'supplier_offer.deleted', entityType: 'supplier_offer', entityId: idResult.value });
       await query('DELETE FROM supplier_offers WHERE id = $1', [idResult.value]);
       return reply.code(204).send();
     },

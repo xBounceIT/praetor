@@ -400,6 +400,9 @@ export interface AuditLogEntry {
   userId: string;
   userName: string;
   username: string;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
   ipAddress: string;
   createdAt: number;
 }

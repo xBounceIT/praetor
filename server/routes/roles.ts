@@ -17,6 +17,7 @@ import {
   isPermissionKnown,
   normalizePermission,
 } from '../utils/permissions.ts';
+import { logAudit } from '../utils/audit.ts';
 import { badRequest, ensureArrayOfStrings, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleSchema = {
@@ -209,6 +210,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('roles');
+      await logAudit({ request, action: 'role.created', entityType: 'role', entityId: id });
       const roleRow = await query('SELECT id, name, is_system, is_admin FROM roles WHERE id = $1', [
         id,
       ]);
@@ -257,6 +259,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await query('UPDATE roles SET name = $1 WHERE id = $2', [nameResult.value, idResult.value]);
       await bumpNamespaceVersion('roles');
+      await logAudit({ request, action: 'role.updated', entityType: 'role', entityId: idResult.value });
 
       const updatedRoleResult = await query(
         'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
@@ -308,6 +311,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await query('DELETE FROM roles WHERE id = $1', [idResult.value]);
       await bumpNamespaceVersion('roles');
+      await logAudit({ request, action: 'role.deleted', entityType: 'role', entityId: idResult.value });
       return { message: 'Role deleted' };
     },
   );
@@ -381,6 +385,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('roles');
+      await logAudit({ request, action: 'role.permissions_updated', entityType: 'role', entityId: idResult.value });
       const updatedRoleResult = await query(
         'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
         [idResult.value],

@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
   optionalDateString,
@@ -309,6 +310,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ],
           );
 
+          await logAudit({ request, action: 'special_bid.created', entityType: 'special_bid', entityId: id });
           return reply.code(201).send(result.rows[0]);
         } catch (error) {
           // Check for unique constraint violation (PostgreSQL error code 23505)
@@ -566,6 +568,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Special bid not found' });
       }
 
+      await logAudit({ request, action: 'special_bid.updated', entityType: 'special_bid', entityId: idResult.value });
       return result.rows[0];
     },
   );
@@ -596,6 +599,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Special bid not found' });
       }
 
+      await logAudit({ request, action: 'special_bid.deleted', entityType: 'special_bid', entityId: idResult.value });
       return reply.code(204).send();
     },
   );

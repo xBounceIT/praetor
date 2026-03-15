@@ -9,6 +9,7 @@ import {
   shouldBypassCache,
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -289,6 +290,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('products');
+      await logAudit({ request, action: 'product.created', entityType: 'product', entityId: id });
       return reply.code(201).send(result.rows[0]);
     },
   );
@@ -521,6 +523,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('products');
+      await logAudit({ request, action: 'product.updated', entityType: 'product', entityId: idResult.value });
       return result.rows[0];
     },
   );
@@ -556,6 +559,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('products');
+      await logAudit({ request, action: 'product.deleted', entityType: 'product', entityId: idResult.value });
       return reply.code(204).send();
     },
   );

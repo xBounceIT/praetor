@@ -16,6 +16,7 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -359,6 +360,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         await bumpNamespaceVersion('users');
+        await logAudit({ request, action: 'user.created', entityType: 'user', entityId: id });
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -442,6 +444,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('users');
+      await logAudit({ request, action: 'user.deleted', entityType: 'user', entityId: id });
       return { message: 'User deleted' };
     },
   );
@@ -628,6 +631,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const u = result.rows[0];
 
       await bumpNamespaceVersion('users');
+      await logAudit({ request, action: 'user.updated', entityType: 'user', entityId: idResult.value });
       return {
         id: u.id,
         name: u.name,
@@ -752,6 +756,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('users');
+      await logAudit({ request, action: 'user.roles_updated', entityType: 'user', entityId: idResult.value });
       return { roleIds: roleIdsResult.value, primaryRoleId: primaryRoleIdResult.value };
     },
   );
@@ -917,6 +922,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (clientIds) await bumpNamespaceVersion('clients');
         if (projectIds) await bumpNamespaceVersion('projects');
         if (taskIds) await bumpNamespaceVersion('tasks');
+        await logAudit({ request, action: 'user.assignments_updated', entityType: 'user', entityId: idResult.value });
         return { message: 'Assignments updated' };
       } catch (err) {
         await query('ROLLBACK');

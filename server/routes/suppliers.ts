@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -209,6 +210,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ],
       );
 
+      await logAudit({ request, action: 'supplier.created', entityType: 'supplier', entityId: id });
       return reply.code(201).send({
         id,
         name: nameResult.value,
@@ -340,6 +342,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const s = result.rows[0];
+      await logAudit({ request, action: 'supplier.updated', entityType: 'supplier', entityId: idResult.value });
       return {
         id: s.id,
         name: s.name,
@@ -383,6 +386,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Supplier not found' });
       }
 
+      await logAudit({ request, action: 'supplier.deleted', entityType: 'supplier', entityId: idResult.value });
       return reply.code(204).send();
     },
   );

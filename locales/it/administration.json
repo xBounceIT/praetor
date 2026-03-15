@@ -83,13 +83,14 @@
   },
   "logs": {
     "title": "Logs",
-    "subtitle": "Monitora gli accessi al sistema tramite audit log.",
+    "subtitle": "Monitora le operazioni e gli accessi al sistema tramite audit log.",
     "tabs": {
       "audit": "Audit"
     },
     "columns": {
       "user": "Utente",
       "username": "Username",
+      "operation": "Operazione",
       "ip": "IP",
       "timestamp": "Timestamp"
     },

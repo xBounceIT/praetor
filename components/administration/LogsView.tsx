@@ -61,6 +61,11 @@ const LogsView: React.FC = () => {
         accessorKey: 'username',
       },
       {
+        header: t('logs.columns.operation'),
+        accessorKey: 'action',
+        className: 'font-mono text-xs',
+      },
+      {
         header: t('logs.columns.ip'),
         accessorKey: 'ipAddress',
         className: 'font-mono text-xs',

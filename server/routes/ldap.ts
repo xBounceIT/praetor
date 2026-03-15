@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { validateUserFilterTemplate } from '../utils/ldap-filter.ts';
+import { logAudit } from '../utils/audit.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 const roleMappingSchema = {
@@ -248,6 +249,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const c = result.rows[0];
+      await logAudit({ request, action: 'ldap_config.updated', entityType: 'ldap_config' });
       return {
         enabled: c.enabled,
         serverUrl: c.server_url,
@@ -276,9 +278,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (_request, _reply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       const ldapService = (await import('../services/ldap.ts')).default;
       const stats = await ldapService.syncUsers();
+      await logAudit({ request, action: 'ldap.synced', entityType: 'ldap_config' });
       return { success: true, ...stats };
     },
   );

@@ -14,6 +14,7 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { logAudit } from '../utils/audit.ts';
 import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -244,6 +245,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
 
         await bumpNamespaceVersion('tasks');
+        await logAudit({ request, action: 'task.created', entityType: 'task', entityId: id });
         return reply.code(201).send({
           id,
           name: nameResult.value,
@@ -356,6 +358,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const t = result.rows[0];
       await bumpNamespaceVersion('tasks');
+      await logAudit({ request, action: 'task.updated', entityType: 'task', entityId: idResult.value });
       return {
         id: t.id,
         name: t.name,
@@ -398,6 +401,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('tasks');
+      await logAudit({ request, action: 'task.deleted', entityType: 'task', entityId: idResult.value });
       return { message: 'Task deleted' };
     },
   );
@@ -469,6 +473,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         await query('COMMIT');
         await bumpNamespaceVersion('tasks');
+        await logAudit({ request, action: 'task.users_updated', entityType: 'task', entityId: idResult.value });
         return { message: 'Task assignments updated' };
       } catch (err) {
         await query('ROLLBACK');

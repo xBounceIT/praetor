@@ -83,13 +83,14 @@
   },
   "logs": {
     "title": "Logs",
-    "subtitle": "Monitor system access through audit logs.",
+    "subtitle": "Monitor system operations and access through audit logs.",
     "tabs": {
       "audit": "Audit"
     },
     "columns": {
       "user": "User",
       "username": "Username",
+      "operation": "Operation",
       "ip": "IP",
       "timestamp": "Timestamp"
     },

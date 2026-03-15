@@ -14,6 +14,7 @@ import {
   TTL_LIST_SECONDS,
 } from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -469,6 +470,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const c = created.rows[0];
 
         await bumpNamespaceVersion('clients');
+        await logAudit({ request, action: 'client.created', entityType: 'client', entityId: id });
         return reply.code(201).send(mapClientRow(c));
       } catch (err) {
         const error = err as DatabaseError;
@@ -736,6 +738,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const c = result.rows[0];
 
         await bumpNamespaceVersion('clients');
+        await logAudit({ request, action: 'client.updated', entityType: 'client', entityId: idResult.value });
         return mapClientRow(c);
       } catch (err) {
         const error = err as DatabaseError;
@@ -783,6 +786,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await bumpNamespaceVersion('clients');
+      await logAudit({ request, action: 'client.deleted', entityType: 'client', entityId: idResult.value });
       return { message: 'Client deleted' };
     },
   );
