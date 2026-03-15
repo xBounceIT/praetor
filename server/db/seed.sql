@@ -1278,7 +1278,10 @@ INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES
     ('dm_wu_01', 'u2'),
     ('dm_wu_02', 'u4'),
     ('dm_wu_03', 'u2'),
-    ('dm_wu_03', 'u4')
+    ('dm_wu_03', 'u4'),
+    ('dm_wu_01', 'u9'),
+    ('dm_wu_02', 'u9'),
+    ('dm_wu_03', 'u9')
 ON CONFLICT (work_unit_id, user_id) DO NOTHING;
 
 INSERT INTO user_work_units (user_id, work_unit_id) VALUES
@@ -1292,7 +1295,10 @@ INSERT INTO user_work_units (user_id, work_unit_id) VALUES
     ('u2', 'dm_wu_03'),
     ('u4', 'dm_wu_03'),
     ('u5', 'dm_wu_03'),
-    ('u7', 'dm_wu_03')
+    ('u7', 'dm_wu_03'),
+    ('u9', 'dm_wu_01'),
+    ('u9', 'dm_wu_02'),
+    ('u9', 'dm_wu_03')
 ON CONFLICT (user_id, work_unit_id) DO NOTHING;
 
 INSERT INTO time_entries (
