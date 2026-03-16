@@ -1178,6 +1178,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             );
           }
         }
+
+        await tx.query(
+          `INSERT INTO user_clients (user_id, client_id, assignment_source)
+           SELECT $1, p.client_id, 'project_cascade'
+           FROM user_projects up
+           JOIN projects p ON up.project_id = p.id
+           WHERE up.user_id = $1
+           ON CONFLICT (user_id, client_id) DO NOTHING`,
+          [idResult.value],
+        );
       });
 
       if (clientIds) await bumpNamespaceVersion('clients');
