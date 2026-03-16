@@ -50,7 +50,8 @@
       "manage": "Projects",
       "manage_all": "Projects (All)",
       "tasks": "Tasks",
-      "tasks_all": "Tasks (All)"
+      "tasks_all": "Tasks (All)",
+      "assignments": "Project Assignments"
     },
     "suppliers": {
       "quotes": "Quotes"

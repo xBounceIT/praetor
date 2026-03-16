@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { type QueryExecutor, query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import {
   messageResponseSchema,
@@ -89,11 +89,17 @@ interface DatabaseError extends Error {
   detail?: string;
 }
 
+class ProjectNotFoundError extends Error {
+  constructor() {
+    super('Project not found');
+  }
+}
+
 const hasPermission = (request: FastifyRequest, permission: string) =>
   request.user?.permissions?.includes(permission) ?? false;
 
-const getNonTopManagerProjectUserIds = async (projectId: string) => {
-  const result = await query(
+const getNonTopManagerProjectUserIds = async (db: QueryExecutor, projectId: string) => {
+  const result = await db.query(
     `SELECT user_id FROM user_projects
      WHERE project_id = $1 AND assignment_source != $2`,
     [projectId, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE],
@@ -101,16 +107,24 @@ const getNonTopManagerProjectUserIds = async (projectId: string) => {
   return result.rows.map((row) => row.user_id as string);
 };
 
-const ensureProjectCascadeClientAssignment = async (userId: string, clientId: string) => {
-  await query(
+const ensureProjectCascadeClientAssignment = async (
+  db: QueryExecutor,
+  userId: string,
+  clientId: string,
+) => {
+  await db.query(
     `INSERT INTO user_clients (user_id, client_id, assignment_source)
      VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
     [userId, clientId, PROJECT_CASCADE_ASSIGNMENT_SOURCE],
   );
 };
 
-const removeProjectCascadeClientAssignmentIfUnused = async (userId: string, clientId: string) => {
-  const otherProjectsResult = await query(
+const removeProjectCascadeClientAssignmentIfUnused = async (
+  db: QueryExecutor,
+  userId: string,
+  clientId: string,
+) => {
+  const otherProjectsResult = await db.query(
     `SELECT 1 FROM user_projects up
      INNER JOIN projects p ON up.project_id = p.id
      WHERE up.user_id = $1 AND p.client_id = $2
@@ -119,7 +133,7 @@ const removeProjectCascadeClientAssignmentIfUnused = async (userId: string, clie
   );
 
   if (otherProjectsResult.rows.length === 0) {
-    await query(
+    await db.query(
       `DELETE FROM user_clients
        WHERE user_id = $1 AND client_id = $2 AND assignment_source = $3`,
       [userId, clientId, PROJECT_CASCADE_ASSIGNMENT_SOURCE],
@@ -297,47 +311,50 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      let deletedProject: { projectName: string; clientId: string };
+
       try {
-        await query('BEGIN');
+        deletedProject = await withTransaction(async (tx) => {
+          const projectResult = await tx.query(
+            'SELECT name, client_id FROM projects WHERE id = $1 FOR UPDATE',
+            [idResult.value],
+          );
+          if (projectResult.rows.length === 0) {
+            throw new ProjectNotFoundError();
+          }
 
-        const projectResult = await query(
-          'SELECT name, client_id FROM projects WHERE id = $1 FOR UPDATE',
-          [idResult.value],
-        );
-        if (projectResult.rows.length === 0) {
-          await query('ROLLBACK');
-          return reply.code(404).send({ error: 'Project not found' });
-        }
+          const projectName = projectResult.rows[0].name as string;
+          const clientId = projectResult.rows[0].client_id as string;
+          const previousUserIds = await getNonTopManagerProjectUserIds(tx, idResult.value);
 
-        const projectName = projectResult.rows[0].name as string;
-        const clientId = projectResult.rows[0].client_id as string;
-        const previousUserIds = await getNonTopManagerProjectUserIds(idResult.value);
+          await tx.query('DELETE FROM projects WHERE id = $1', [idResult.value]);
 
-        await query('DELETE FROM projects WHERE id = $1', [idResult.value]);
+          for (const userId of previousUserIds) {
+            await removeProjectCascadeClientAssignmentIfUnused(tx, userId, clientId);
+          }
 
-        for (const userId of previousUserIds) {
-          await removeProjectCascadeClientAssignmentIfUnused(userId, clientId);
-        }
-
-        await query('COMMIT');
-
-        await bumpNamespaceVersion('projects');
-        await bumpNamespaceVersion('clients');
-        await logAudit({
-          request,
-          action: 'project.deleted',
-          entityType: 'project',
-          entityId: idResult.value,
-          details: {
-            targetLabel: projectName,
-            secondaryLabel: clientId,
-          },
+          return { projectName, clientId };
         });
-        return { message: 'Project deleted' };
       } catch (err) {
-        await query('ROLLBACK');
+        if (err instanceof ProjectNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
         throw err;
       }
+
+      await bumpNamespaceVersion('projects');
+      await bumpNamespaceVersion('clients');
+      await logAudit({
+        request,
+        action: 'project.deleted',
+        entityType: 'project',
+        entityId: idResult.value,
+        details: {
+          targetLabel: deletedProject.projectName,
+          secondaryLabel: deletedProject.clientId,
+        },
+      });
+      return { message: 'Project deleted' };
     },
   );
 
@@ -375,99 +392,97 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, (colorResult as { ok: false; message: string }).message);
       }
 
-      try {
-        await query('BEGIN');
-
-        const existingProjectResult = await query(
-          'SELECT client_id FROM projects WHERE id = $1 FOR UPDATE',
-          [idResult.value],
-        );
-        if (existingProjectResult.rows.length === 0) {
-          await query('ROLLBACK');
-          return reply.code(404).send({ error: 'Project not found' });
-        }
-
-        const previousClientId = existingProjectResult.rows[0].client_id as string;
-        const requestedClientId =
-          typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
-        const clientChanged = requestedClientId !== previousClientId;
-        const assignedUserIds = clientChanged
-          ? await getNonTopManagerProjectUserIds(idResult.value)
-          : [];
-
-        const result = await query(
-          `UPDATE projects
-                 SET name = COALESCE($1, name), 
-                     client_id = COALESCE($2, client_id), 
-                     color = COALESCE($3, color), 
-                     description = COALESCE($4, description), 
-                     is_disabled = COALESCE($5, is_disabled)
-                 WHERE id = $6
-                 RETURNING id, name, client_id, color, description, is_disabled`,
-          [
-            name || null,
-            clientId || null,
-            color || null,
-            description || null,
-            isDisabled,
-            idResult.value,
-          ],
-        );
-
-        const updated = result.rows[0];
-
-        if (clientChanged) {
-          const newClientId = updated.client_id as string;
-
-          for (const userId of assignedUserIds) {
-            await ensureProjectCascadeClientAssignment(userId, newClientId);
-          }
-
-          for (const userId of assignedUserIds) {
-            await removeProjectCascadeClientAssignmentIfUnused(userId, previousClientId);
-          }
-        }
-
-        const isDisabledChanged = Object.hasOwn(body, 'isDisabled');
-        const changedFields = [
-          Object.hasOwn(body, 'name') ? 'name' : null,
-          Object.hasOwn(body, 'clientId') ? 'clientId' : null,
-          Object.hasOwn(body, 'description') ? 'description' : null,
-          Object.hasOwn(body, 'color') ? 'color' : null,
-          isDisabledChanged ? 'isDisabled' : null,
-        ].filter((field): field is string => field !== null);
-
-        // Determine specific action based on what changed
-        let action = 'project.updated';
-        if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
-          action = body.isDisabled ? 'project.disabled' : 'project.enabled';
-        }
-
-        await query('COMMIT');
-        await bumpNamespaceVersion('projects');
-        if (clientChanged) {
-          await bumpNamespaceVersion('clients');
-        }
-        await logAudit({
-          request,
-          action,
-          entityType: 'project',
-          entityId: idResult.value,
-          details: {
-            targetLabel: updated.name as string,
-            secondaryLabel: updated.client_id as string,
-          },
-        });
-        return {
-          id: updated.id,
-          name: updated.name,
-          clientId: updated.client_id,
-          color: updated.color,
-          description: updated.description,
-          isDisabled: updated.is_disabled,
+      let updatedProject: {
+        updated: {
+          id: string;
+          name: string;
+          client_id: string;
+          color: string;
+          description: string | null;
+          is_disabled: boolean;
         };
+        clientChanged: boolean;
+        action: string;
+      };
+
+      try {
+        updatedProject = await withTransaction(async (tx) => {
+          const existingProjectResult = await tx.query(
+            'SELECT client_id FROM projects WHERE id = $1 FOR UPDATE',
+            [idResult.value],
+          );
+          if (existingProjectResult.rows.length === 0) {
+            throw new ProjectNotFoundError();
+          }
+
+          const previousClientId = existingProjectResult.rows[0].client_id as string;
+          const requestedClientId =
+            typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
+          const clientChanged = requestedClientId !== previousClientId;
+          const assignedUserIds = clientChanged
+            ? await getNonTopManagerProjectUserIds(tx, idResult.value)
+            : [];
+
+          const result = await tx.query(
+            `UPDATE projects
+                   SET name = COALESCE($1, name),
+                       client_id = COALESCE($2, client_id),
+                       color = COALESCE($3, color),
+                       description = COALESCE($4, description),
+                       is_disabled = COALESCE($5, is_disabled)
+                   WHERE id = $6
+                   RETURNING id, name, client_id, color, description, is_disabled`,
+            [
+              name || null,
+              clientId || null,
+              color || null,
+              description || null,
+              isDisabled,
+              idResult.value,
+            ],
+          );
+
+          const updated = result.rows[0] as {
+            id: string;
+            name: string;
+            client_id: string;
+            color: string;
+            description: string | null;
+            is_disabled: boolean;
+          };
+
+          if (clientChanged) {
+            const newClientId = updated.client_id;
+
+            for (const userId of assignedUserIds) {
+              await ensureProjectCascadeClientAssignment(tx, userId, newClientId);
+            }
+
+            for (const userId of assignedUserIds) {
+              await removeProjectCascadeClientAssignmentIfUnused(tx, userId, previousClientId);
+            }
+          }
+
+          const isDisabledChanged = Object.hasOwn(body, 'isDisabled');
+          const changedFields = [
+            Object.hasOwn(body, 'name') ? 'name' : null,
+            Object.hasOwn(body, 'clientId') ? 'clientId' : null,
+            Object.hasOwn(body, 'description') ? 'description' : null,
+            Object.hasOwn(body, 'color') ? 'color' : null,
+            isDisabledChanged ? 'isDisabled' : null,
+          ].filter((field): field is string => field !== null);
+
+          let action = 'project.updated';
+          if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+            action = body.isDisabled ? 'project.disabled' : 'project.enabled';
+          }
+
+          return { updated, clientChanged, action };
+        });
       } catch (err) {
-        await query('ROLLBACK');
+        if (err instanceof ProjectNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
         const error = err as DatabaseError;
         if (error.code === '23503') {
           // Foreign key violation
@@ -475,6 +490,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         throw err;
       }
+
+      await bumpNamespaceVersion('projects');
+      if (updatedProject.clientChanged) {
+        await bumpNamespaceVersion('clients');
+      }
+      await logAudit({
+        request,
+        action: updatedProject.action,
+        entityType: 'project',
+        entityId: idResult.value,
+        details: {
+          targetLabel: updatedProject.updated.name,
+          secondaryLabel: updatedProject.updated.client_id,
+        },
+      });
+      return {
+        id: updatedProject.updated.id,
+        name: updatedProject.updated.name,
+        clientId: updatedProject.updated.client_id,
+        color: updatedProject.updated.color,
+        description: updatedProject.updated.description,
+        isDisabled: updatedProject.updated.is_disabled,
+      };
     },
   );
 
@@ -530,67 +568,64 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
       const validUserIds = userIdsResult.value;
 
+      let projectName: string;
+
       try {
-        await query('BEGIN');
-
-        const projectResult = await query(
-          'SELECT name, client_id FROM projects WHERE id = $1 FOR UPDATE',
-          [idResult.value],
-        );
-        if (projectResult.rows.length === 0) {
-          await query('ROLLBACK');
-          return reply.code(404).send({ error: 'Project not found' });
-        }
-        const clientId = projectResult.rows[0].client_id as string;
-        const projectName = projectResult.rows[0].name as string;
-
-        // Snapshot current assignments before wiping
-        const previousUserIds = await getNonTopManagerProjectUserIds(idResult.value);
-
-        // Replace project assignments
-        await query(
-          `DELETE FROM user_projects
-           WHERE project_id = $1 AND assignment_source != $2`,
-          [idResult.value, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE],
-        );
-
-        for (const userId of validUserIds) {
-          await query(
-            `INSERT INTO user_projects (user_id, project_id, assignment_source)
-             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-            [userId, idResult.value, MANUAL_ASSIGNMENT_SOURCE],
+        projectName = await withTransaction(async (tx) => {
+          const projectResult = await tx.query(
+            'SELECT name, client_id FROM projects WHERE id = $1 FOR UPDATE',
+            [idResult.value],
           );
-          // Cascade UP: ensure the user has access to the parent client.
-          // Use 'project_cascade' source so it can be safely removed by cascade-down
-          // without touching client assignments that were set independently.
-          await ensureProjectCascadeClientAssignment(userId, clientId);
-        }
+          if (projectResult.rows.length === 0) {
+            throw new ProjectNotFoundError();
+          }
+          const clientId = projectResult.rows[0].client_id as string;
+          const projectName = projectResult.rows[0].name as string;
 
-        // Cascade DOWN: for removed users, unassign from client if no other projects remain.
-        // Only removes 'project_cascade' assignments — never touches independently-set 'manual' ones.
-        const removedUserIds = previousUserIds.filter((uid) => !validUserIds.includes(uid));
-        for (const userId of removedUserIds) {
-          await removeProjectCascadeClientAssignmentIfUnused(userId, clientId);
-        }
+          const previousUserIds = await getNonTopManagerProjectUserIds(tx, idResult.value);
 
-        await query('COMMIT');
-        await bumpNamespaceVersion('projects');
-        await bumpNamespaceVersion('clients');
-        await logAudit({
-          request,
-          action: 'project.users_assigned',
-          entityType: 'project',
-          entityId: idResult.value,
-          details: {
-            targetLabel: projectName,
-            counts: { users: validUserIds.length },
-          },
+          await tx.query(
+            `DELETE FROM user_projects
+             WHERE project_id = $1 AND assignment_source != $2`,
+            [idResult.value, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE],
+          );
+
+          for (const userId of validUserIds) {
+            await tx.query(
+              `INSERT INTO user_projects (user_id, project_id, assignment_source)
+               VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+              [userId, idResult.value, MANUAL_ASSIGNMENT_SOURCE],
+            );
+            await ensureProjectCascadeClientAssignment(tx, userId, clientId);
+          }
+
+          const removedUserIds = previousUserIds.filter((uid) => !validUserIds.includes(uid));
+          for (const userId of removedUserIds) {
+            await removeProjectCascadeClientAssignmentIfUnused(tx, userId, clientId);
+          }
+
+          return projectName;
         });
-        return { message: 'Project assignments updated' };
       } catch (err) {
-        await query('ROLLBACK');
+        if (err instanceof ProjectNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
         throw err;
       }
+
+      await bumpNamespaceVersion('projects');
+      await bumpNamespaceVersion('clients');
+      await logAudit({
+        request,
+        action: 'project.users_assigned',
+        entityType: 'project',
+        entityId: idResult.value,
+        details: {
+          targetLabel: projectName,
+          counts: { users: validUserIds.length },
+        },
+      });
+      return { message: 'Project assignments updated' };
     },
   );
 }

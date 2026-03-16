@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import {
   messageResponseSchema,
@@ -717,8 +717,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Cannot disable your own account');
       }
 
-      const updates = [];
-      const values = [];
+      const updates: string[] = [];
+      const values: Array<string | boolean | number | null> = [];
       let paramIdx = 1;
 
       if (name !== undefined) {
@@ -763,26 +763,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [idResult.value],
         );
       } else if (role !== undefined) {
-        // If role changes via the legacy endpoint, reset assigned roles to this single primary role.
-        try {
-          await query('BEGIN');
-          values.push(idResult.value);
-          result = await query(
+        values.push(idResult.value);
+        result = await withTransaction(async (tx) => {
+          const updatedResult = await tx.query(
             `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type`,
             values,
           );
 
-          await query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
-          await query(
+          await tx.query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
+          await tx.query(
             'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [idResult.value, roleValue],
           );
-
-          await query('COMMIT');
-        } catch (err) {
-          await query('ROLLBACK');
-          throw err;
-        }
+          return updatedResult;
+        });
 
         await syncTopManagerAssignmentsForUser(idResult.value);
       } else {
@@ -981,24 +975,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const missing = roleIdsResult.value.filter((rid) => !found.has(rid));
       if (missing.length > 0) return badRequest(reply, `Invalid role(s): ${missing.join(', ')}`);
 
-      try {
-        await query('BEGIN');
-        await query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
+      await withTransaction(async (tx) => {
+        await tx.query('DELETE FROM user_roles WHERE user_id = $1', [idResult.value]);
         for (const rid of roleIdsResult.value) {
-          await query(
+          await tx.query(
             'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [idResult.value, rid],
           );
         }
-        await query('UPDATE users SET role = $1 WHERE id = $2', [
+        await tx.query('UPDATE users SET role = $1 WHERE id = $2', [
           primaryRoleIdResult.value,
           idResult.value,
         ]);
-        await query('COMMIT');
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      });
 
       await syncTopManagerAssignmentsForUser(idResult.value);
       await bumpNamespaceVersion('users');
@@ -1156,75 +1145,66 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      try {
-        await query('BEGIN');
-
-        // Update Clients
+      await withTransaction(async (tx) => {
         if (clientIds) {
-          await query('DELETE FROM user_clients WHERE user_id = $1', [idResult.value]);
+          await tx.query('DELETE FROM user_clients WHERE user_id = $1', [idResult.value]);
           for (const clientId of (clientIdsResult as { ok: true; value: string[] | null }).value ||
             []) {
-            await query(
+            await tx.query(
               'INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
               [idResult.value, clientId, MANUAL_ASSIGNMENT_SOURCE],
             );
           }
         }
 
-        // Update Projects
         if (projectIds) {
-          await query('DELETE FROM user_projects WHERE user_id = $1', [idResult.value]);
+          await tx.query('DELETE FROM user_projects WHERE user_id = $1', [idResult.value]);
           for (const projectId of (projectIdsResult as { ok: true; value: string[] | null })
             .value || []) {
-            await query(
+            await tx.query(
               'INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
               [idResult.value, projectId, MANUAL_ASSIGNMENT_SOURCE],
             );
           }
         }
 
-        // Update Tasks
         if (taskIds) {
-          await query('DELETE FROM user_tasks WHERE user_id = $1', [idResult.value]);
+          await tx.query('DELETE FROM user_tasks WHERE user_id = $1', [idResult.value]);
           for (const taskId of (taskIdsResult as { ok: true; value: string[] | null }).value ||
             []) {
-            await query(
+            await tx.query(
               'INSERT INTO user_tasks (user_id, task_id, assignment_source) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
               [idResult.value, taskId, MANUAL_ASSIGNMENT_SOURCE],
             );
           }
         }
+      });
 
-        await query('COMMIT');
-        if (clientIds) await bumpNamespaceVersion('clients');
-        if (projectIds) await bumpNamespaceVersion('projects');
-        if (taskIds) await bumpNamespaceVersion('tasks');
-        await logAudit({
-          request,
-          action: 'user.assignments_updated',
-          entityType: 'user',
-          entityId: idResult.value,
-          details: {
-            targetLabel: targetUser.rows[0].name as string,
-            secondaryLabel: targetUser.rows[0].username as string,
-            counts: getAuditCounts({
-              clients: clientIds
-                ? ((clientIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
-                : undefined,
-              projects: projectIds
-                ? ((projectIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
-                : undefined,
-              tasks: taskIds
-                ? ((taskIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
-                : undefined,
-            }),
-          },
-        });
-        return { message: 'Assignments updated' };
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      if (clientIds) await bumpNamespaceVersion('clients');
+      if (projectIds) await bumpNamespaceVersion('projects');
+      if (taskIds) await bumpNamespaceVersion('tasks');
+      await logAudit({
+        request,
+        action: 'user.assignments_updated',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: {
+          targetLabel: targetUser.rows[0].name as string,
+          secondaryLabel: targetUser.rows[0].username as string,
+          counts: getAuditCounts({
+            clients: clientIds
+              ? ((clientIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+              : undefined,
+            projects: projectIds
+              ? ((projectIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+              : undefined,
+            tasks: taskIds
+              ? ((taskIdsResult as { ok: true; value: string[] | null }).value?.length ?? 0)
+              : undefined,
+          }),
+        },
+      });
+      return { message: 'Assignments updated' };
     },
   );
 }

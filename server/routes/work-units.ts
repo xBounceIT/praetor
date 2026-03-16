@@ -1,12 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
-  optionalArrayOfStrings,
   optionalNonEmptyString,
   requireNonEmptyArrayOfStrings,
   requireNonEmptyString,
@@ -92,6 +91,12 @@ const fetchUnitDetails = async (unitId: string) => {
   );
   return result.rows[0];
 };
+
+class WorkUnitNotFoundError extends Error {
+  constructor() {
+    super('Work unit not found');
+  }
+}
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List work units
@@ -186,53 +191,45 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const managerIdsResult = requireNonEmptyArrayOfStrings(managerIds, 'managerIds');
       if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
 
-      try {
-        await query('BEGIN');
-
-        const id = 'wu-' + Date.now();
-        await query('INSERT INTO work_units (id, name, description) VALUES ($1, $2, $3)', [
+      const id = 'wu-' + Date.now();
+      await withTransaction(async (tx) => {
+        await tx.query('INSERT INTO work_units (id, name, description) VALUES ($1, $2, $3)', [
           id,
           nameResult.value,
           description,
         ]);
 
         for (const managerId of managerIdsResult.value) {
-          await query('INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)', [
+          await tx.query('INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)', [
             id,
             managerId,
           ]);
-          // Also add as member
-          await query(
+          await tx.query(
             'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [managerId, id],
           );
         }
+      });
 
-        await query('COMMIT');
-
-        const w = await fetchUnitDetails(id);
-        await logAudit({
-          request,
-          action: 'work_unit.created',
-          entityType: 'work_unit',
-          entityId: id,
-          details: {
-            targetLabel: w.name as string,
-            counts: { users: Number.parseInt(w.user_count ?? '0', 10) },
-          },
-        });
-        return reply.code(201).send({
-          id: w.id,
-          name: w.name,
-          managers: w.managers,
-          description: w.description,
-          isDisabled: !!w.is_disabled,
-          userCount: Number.parseInt(w.user_count ?? '0', 10),
-        });
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      const w = await fetchUnitDetails(id);
+      await logAudit({
+        request,
+        action: 'work_unit.created',
+        entityType: 'work_unit',
+        entityId: id,
+        details: {
+          targetLabel: w.name as string,
+          counts: { users: Number.parseInt(w.user_count ?? '0', 10) },
+        },
+      });
+      return reply.code(201).send({
+        id: w.id,
+        name: w.name,
+        managers: w.managers,
+        description: w.description,
+        isDisabled: !!w.is_disabled,
+        userCount: Number.parseInt(w.user_count ?? '0', 10),
+      });
     },
   );
 
@@ -263,121 +260,109 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (name !== undefined) {
-        const nameResult = optionalNonEmptyString(name, 'name');
-        if (!nameResult.ok) return badRequest(reply, nameResult.message);
-      }
+      const nameResult = name !== undefined ? optionalNonEmptyString(name, 'name') : null;
+      if (nameResult && !nameResult.ok) return badRequest(reply, nameResult.message);
 
-      if (managerIds !== undefined) {
-        const managerIdsResult = optionalArrayOfStrings(managerIds, 'managerIds');
-        if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
+      const managerIdsResult =
+        managerIds !== undefined ? ensureArrayOfStrings(managerIds, 'managerIds') : null;
+      if (managerIdsResult && !managerIdsResult.ok) {
+        return badRequest(reply, managerIdsResult.message);
       }
 
       try {
-        await query('BEGIN');
+        await withTransaction(async (tx) => {
+          const existingUnitResult = await tx.query(
+            'SELECT id FROM work_units WHERE id = $1 FOR UPDATE',
+            [idResult.value],
+          );
+          if (existingUnitResult.rows.length === 0) {
+            throw new WorkUnitNotFoundError();
+          }
 
-        // Update basic fields
-        if (name !== undefined || description !== undefined || isDisabled !== undefined) {
-          const updates = [];
-          const values = [];
-          let paramIdx = 1;
+          if (name !== undefined || description !== undefined || isDisabled !== undefined) {
+            const updates = [];
+            const values = [];
+            let paramIdx = 1;
 
-          if (name !== undefined) {
-            updates.push(`name = $${paramIdx++}`);
-            const nameResult = optionalNonEmptyString(name, 'name');
-            if (!nameResult.ok) {
-              await query('ROLLBACK');
-              return badRequest(reply, nameResult.message);
+            if (name !== undefined) {
+              updates.push(`name = $${paramIdx++}`);
+              values.push(nameResult?.value ?? null);
             }
-            values.push(nameResult.value);
-          }
-          if (description !== undefined) {
-            updates.push(`description = $${paramIdx++}`);
-            values.push(description);
-          }
-          if (isDisabled !== undefined) {
-            updates.push(`is_disabled = $${paramIdx++}`);
-            values.push(isDisabled);
-          }
+            if (description !== undefined) {
+              updates.push(`description = $${paramIdx++}`);
+              values.push(description);
+            }
+            if (isDisabled !== undefined) {
+              updates.push(`is_disabled = $${paramIdx++}`);
+              values.push(isDisabled);
+            }
 
-          if (updates.length > 0) {
-            values.push(idResult.value);
-            const result = await query(
-              `UPDATE work_units SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
-              values,
-            );
-            if (result.rows.length === 0) {
-              await query('ROLLBACK');
-              return reply.code(404).send({ error: 'Work unit not found' });
+            if (updates.length > 0) {
+              values.push(idResult.value);
+              await tx.query(
+                `UPDATE work_units SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
+                values,
+              );
             }
           }
-        }
 
-        // Update managers if provided
-        if (managerIds !== undefined) {
-          const managerIdsResult = ensureArrayOfStrings(managerIds, 'managerIds');
-          if (!managerIdsResult.ok) {
-            await query('ROLLBACK');
-            return badRequest(reply, managerIdsResult.message);
-          }
-
-          // Delete existing managers
-          await query('DELETE FROM work_unit_managers WHERE work_unit_id = $1', [idResult.value]);
-
-          // Insert new managers
-          for (const managerId of managerIdsResult.value) {
-            await query('INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)', [
+          if (managerIdsResult?.ok) {
+            await tx.query('DELETE FROM work_unit_managers WHERE work_unit_id = $1', [
               idResult.value,
-              managerId,
             ]);
-            // Also add as member
-            await query(
-              'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-              [managerId, idResult.value],
-            );
+
+            for (const managerId of managerIdsResult.value) {
+              await tx.query(
+                'INSERT INTO work_unit_managers (work_unit_id, user_id) VALUES ($1, $2)',
+                [idResult.value, managerId],
+              );
+              await tx.query(
+                'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [managerId, idResult.value],
+              );
+            }
           }
-        }
-
-        await query('COMMIT');
-
-        const w = await fetchUnitDetails(idResult.value);
-        if (!w) return reply.code(404).send({ error: 'Work unit not found' });
-
-        const changedFields = [
-          name !== undefined ? 'name' : null,
-          managerIds !== undefined ? 'managerIds' : null,
-          description !== undefined ? 'description' : null,
-          isDisabled !== undefined ? 'isDisabled' : null,
-        ].filter((field): field is string => field !== null);
-
-        // Determine specific action based on what changed
-        let action = 'work_unit.updated';
-        if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
-          action = isDisabled ? 'work_unit.disabled' : 'work_unit.enabled';
-        }
-
-        await logAudit({
-          request,
-          action,
-          entityType: 'work_unit',
-          entityId: idResult.value,
-          details: {
-            targetLabel: w.name as string,
-            counts: { users: parseInt(w.user_count, 10) },
-          },
         });
-        return {
-          id: w.id,
-          name: w.name,
-          managers: w.managers,
-          description: w.description,
-          isDisabled: !!w.is_disabled,
-          userCount: parseInt(w.user_count, 10),
-        };
       } catch (err) {
-        await query('ROLLBACK');
+        if (err instanceof WorkUnitNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
         throw err;
       }
+
+      const w = await fetchUnitDetails(idResult.value);
+      if (!w) return reply.code(404).send({ error: 'Work unit not found' });
+
+      const changedFields = [
+        name !== undefined ? 'name' : null,
+        managerIds !== undefined ? 'managerIds' : null,
+        description !== undefined ? 'description' : null,
+        isDisabled !== undefined ? 'isDisabled' : null,
+      ].filter((field): field is string => field !== null);
+
+      let action = 'work_unit.updated';
+      if (changedFields.length === 1 && changedFields[0] === 'isDisabled') {
+        action = isDisabled ? 'work_unit.disabled' : 'work_unit.enabled';
+      }
+
+      await logAudit({
+        request,
+        action,
+        entityType: 'work_unit',
+        entityId: idResult.value,
+        details: {
+          targetLabel: w.name as string,
+          counts: { users: parseInt(w.user_count, 10) },
+        },
+      });
+      return {
+        id: w.id,
+        name: w.name,
+        managers: w.managers,
+        description: w.description,
+        isDisabled: !!w.is_disabled,
+        userCount: parseInt(w.user_count, 10),
+      };
     },
   );
 
@@ -497,33 +482,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Work unit not found' });
       }
 
-      try {
-        await query('BEGIN');
-        await query('DELETE FROM user_work_units WHERE work_unit_id = $1', [idResult.value]);
+      await withTransaction(async (tx) => {
+        await tx.query('DELETE FROM user_work_units WHERE work_unit_id = $1', [idResult.value]);
 
         for (const userId of userIdsResult.value) {
-          await query(
+          await tx.query(
             'INSERT INTO user_work_units (user_id, work_unit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [userId, idResult.value],
           );
         }
+      });
 
-        await query('COMMIT');
-        await logAudit({
-          request,
-          action: 'work_unit.users_updated',
-          entityType: 'work_unit',
-          entityId: idResult.value,
-          details: {
-            targetLabel: unitResult.rows[0].name as string,
-            counts: { users: userIdsResult.value.length },
-          },
-        });
-        return { message: 'Work unit users updated' };
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      await logAudit({
+        request,
+        action: 'work_unit.users_updated',
+        entityType: 'work_unit',
+        entityId: idResult.value,
+        details: {
+          targetLabel: unitResult.rows[0].name as string,
+          counts: { users: userIdsResult.value.length },
+        },
+      });
+      return { message: 'Work unit users updated' };
     },
   );
 }

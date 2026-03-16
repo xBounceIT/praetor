@@ -50,7 +50,8 @@
       "manage": "Progetti",
       "manage_all": "Progetti (Tutti)",
       "tasks": "Attività",
-      "tasks_all": "Attività (Tutte)"
+      "tasks_all": "Attività (Tutte)",
+      "assignments": "Assegnazioni Progetto"
     },
     "suppliers": {
       "quotes": "Preventivi"
