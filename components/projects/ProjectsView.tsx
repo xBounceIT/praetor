@@ -188,7 +188,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       closeAssignments();
     } catch (err) {
       console.error('Failed to save project users', err);
-      alert(t('hr:workUnits.failedToSaveAssignments'));
+      alert(t('projects:projects.assignmentLoadFailed'));
     }
   };
 
