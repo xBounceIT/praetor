@@ -492,9 +492,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             </button>
             <button
               onClick={saveAssignments}
-              disabled={!canManageAssignments}
+              disabled={!canManageAssignments || isLoadingAssignments}
               className={`px-8 py-2.5 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 text-sm ${
-                canManageAssignments
+                canManageAssignments && !isLoadingAssignments
                   ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
                   : 'bg-slate-300 shadow-none cursor-not-allowed'
               }`}
