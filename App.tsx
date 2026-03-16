@@ -199,16 +199,21 @@ const TrackerView: React.FC<{
 
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
 
-  const handleDeleteClick = (entry: TimeEntry) => {
-    const task = projectTasks.find((t) => t.name === entry.task && t.projectId === entry.projectId);
-    if (entry.isPlaceholder || task?.isRecurring) {
-      // Show modal for recurring entries
-      setPendingDeleteEntry(entry);
-    } else {
-      // Direct delete for normal entries
-      onDeleteEntry(entry.id);
-    }
-  };
+  const handleDeleteClick = useCallback(
+    (entry: TimeEntry) => {
+      const task = projectTasks.find(
+        (t) => t.name === entry.task && t.projectId === entry.projectId,
+      );
+      if (entry.isPlaceholder || task?.isRecurring) {
+        // Show modal for recurring entries
+        setPendingDeleteEntry(entry);
+      } else {
+        // Direct delete for normal entries
+        onDeleteEntry(entry.id);
+      }
+    },
+    [projectTasks, onDeleteEntry],
+  );
 
   const handleRecurringDelete = (action: 'stop' | 'delete_future' | 'delete_all') => {
     if (!pendingDeleteEntry) return;

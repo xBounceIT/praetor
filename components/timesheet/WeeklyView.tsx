@@ -379,7 +379,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
           <button
             onClick={() => handleWeekChange(-1)}
@@ -439,7 +439,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       </div>
 
       {/* Grid */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-max text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
