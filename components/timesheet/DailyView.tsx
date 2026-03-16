@@ -253,7 +253,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-8">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
