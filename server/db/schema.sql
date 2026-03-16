@@ -1388,3 +1388,10 @@ DELETE FROM role_permissions WHERE permission = 'reports.ai_reporting_ai.create'
 
 
 ALTER TABLE report_chat_messages ADD COLUMN IF NOT EXISTS thought_content TEXT;
+
+-- Seed project assignment permissions for manager and top_manager roles
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'projects.assignments.update'),
+    ('top_manager', 'projects.assignments.update')
+ON CONFLICT DO NOTHING;
