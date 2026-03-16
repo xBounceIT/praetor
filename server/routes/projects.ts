@@ -21,8 +21,22 @@ import {
   assignClientToUser,
   assignProjectToTopManagers,
   assignProjectToUser,
+  MANUAL_ASSIGNMENT_SOURCE,
 } from '../utils/top-manager-assignments.ts';
-import { badRequest, requireNonEmptyString, validateHexColor } from '../utils/validation.ts';
+import {
+  badRequest,
+  ensureArrayOfStrings,
+  requireNonEmptyString,
+  validateHexColor,
+} from '../utils/validation.ts';
+
+const userIdsSchema = {
+  type: 'object',
+  properties: {
+    userIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['userIds'],
+} as const;
 
 const idParamSchema = {
   type: 'object',
@@ -369,6 +383,134 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // Foreign key violation
           return reply.code(400).send({ error: 'Client not found' });
         }
+        throw err;
+      }
+    },
+  );
+
+  // GET /:id/users - Get assigned users for a project
+  fastify.get(
+    '/:id/users',
+    {
+      onRequest: [authenticateToken, requirePermission('projects.assignments.update')],
+      schema: {
+        tags: ['projects'],
+        summary: 'Get project user assignments',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: { type: 'string' } },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const result = await query('SELECT user_id FROM user_projects WHERE project_id = $1', [
+        idResult.value,
+      ]);
+      return result.rows.map((r) => r.user_id);
+    },
+  );
+
+  // POST /:id/users - Update assigned users for a project (with cascade to client)
+  fastify.post(
+    '/:id/users',
+    {
+      onRequest: [authenticateToken, requirePermission('projects.assignments.update')],
+      schema: {
+        tags: ['projects'],
+        summary: 'Update project user assignments',
+        params: idParamSchema,
+        body: userIdsSchema,
+        response: {
+          200: messageResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { userIds } = request.body as { userIds: string[] };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
+      if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
+      const validUserIds = userIdsResult.value;
+
+      const projectResult = await query('SELECT name, client_id FROM projects WHERE id = $1', [
+        idResult.value,
+      ]);
+      if (projectResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Project not found' });
+      }
+      const clientId = projectResult.rows[0].client_id as string;
+      const projectName = projectResult.rows[0].name as string;
+
+      try {
+        await query('BEGIN');
+
+        // Snapshot current assignments before wiping
+        const currentResult = await query(
+          'SELECT user_id FROM user_projects WHERE project_id = $1',
+          [idResult.value],
+        );
+        const previousUserIds = currentResult.rows.map((r) => r.user_id as string);
+
+        // Replace project assignments
+        await query('DELETE FROM user_projects WHERE project_id = $1', [idResult.value]);
+
+        for (const userId of validUserIds) {
+          await query(
+            `INSERT INTO user_projects (user_id, project_id, assignment_source)
+             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+            [userId, idResult.value, MANUAL_ASSIGNMENT_SOURCE],
+          );
+          // Cascade UP: ensure the user is also assigned to the parent client
+          await query(
+            `INSERT INTO user_clients (user_id, client_id, assignment_source)
+             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+            [userId, clientId, MANUAL_ASSIGNMENT_SOURCE],
+          );
+        }
+
+        // Cascade DOWN: for removed users, unassign from client if no other projects remain
+        const removedUserIds = previousUserIds.filter((uid) => !validUserIds.includes(uid));
+        for (const userId of removedUserIds) {
+          const otherProjectsResult = await query(
+            `SELECT 1 FROM user_projects up
+             INNER JOIN projects p ON up.project_id = p.id
+             WHERE up.user_id = $1 AND p.client_id = $2
+             LIMIT 1`,
+            [userId, clientId],
+          );
+          if (otherProjectsResult.rows.length === 0) {
+            await query(
+              `DELETE FROM user_clients
+               WHERE user_id = $1 AND client_id = $2 AND assignment_source = $3`,
+              [userId, clientId, MANUAL_ASSIGNMENT_SOURCE],
+            );
+          }
+        }
+
+        await query('COMMIT');
+        await bumpNamespaceVersion('projects');
+        await bumpNamespaceVersion('clients');
+        await logAudit({
+          request,
+          action: 'project.users_assigned',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: {
+            targetLabel: projectName,
+            counts: { users: validUserIds.length },
+          },
+        });
+        return { message: 'Project assignments updated' };
+      } catch (err) {
+        await query('ROLLBACK');
         throw err;
       }
     },

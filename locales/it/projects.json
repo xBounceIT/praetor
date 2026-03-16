@@ -41,6 +41,10 @@
     "allClients": "Tutti i Clienti",
     "searchPlaceholder": "Cerca progetti, descrizioni o clienti...",
     "filterByClient": "Filtra per Cliente",
+    "assignUsers": "Assegna Utenti",
+    "manageMembers": "Gestisci Membri",
+    "searchUsers": "Cerca utenti...",
+    "noUsersFound": "Nessun utente trovato.",
     "tableHeaders": {
       "client": "Cliente",
       "projectName": "Nome Progetto",
