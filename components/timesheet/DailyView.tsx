@@ -253,7 +253,7 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-8">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
@@ -281,7 +281,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           onSubmit={handleSubmit}
           className="grid grid-cols-1 md:grid-cols-[2fr_2fr_2fr_1.5fr_1fr] gap-4"
         >
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.client')}
               options={clientOptions}
@@ -297,7 +297,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.project')}
               options={projectOptions}
@@ -316,7 +316,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.task')}
               options={taskOptions}
@@ -348,7 +348,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               />
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.location')}
               options={[
@@ -361,7 +361,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onChange={(val) => setLocation(val as TimeEntryLocation)}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
             </label>
@@ -418,33 +418,29 @@ const DailyView: React.FC<DailyViewProps> = ({
                     </button>
 
                     {makeRecurring && (
-                      <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                        <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                        <div className="min-w-[180px]">
-                          <CustomSelect
-                            options={[
-                              { id: 'daily', name: t('entry.recurrencePatterns.daily') },
-                              { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
-                              { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
-                              {
-                                id: 'custom',
-                                name: recurrencePattern.startsWith('monthly:')
-                                  ? getRecurrenceLabel(recurrencePattern)
-                                  : t('entry.recurrencePatterns.custom'),
-                              },
-                            ]}
-                            value={
-                              recurrencePattern.startsWith('monthly:')
-                                ? 'custom'
-                                : recurrencePattern
-                            }
-                            onChange={(val) => handleRecurrenceChange(val as string)}
-                            className="text-xs"
-                            placeholder="Pattern..."
-                            buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs"
-                          />
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-6">
+                      <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200 flex-wrap">
+                        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0"></div>
+                        <CustomSelect
+                          options={[
+                            { id: 'daily', name: t('entry.recurrencePatterns.daily') },
+                            { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
+                            { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
+                            {
+                              id: 'custom',
+                              name: recurrencePattern.startsWith('monthly:')
+                                ? getRecurrenceLabel(recurrencePattern)
+                                : t('entry.recurrencePatterns.custom'),
+                            },
+                          ]}
+                          value={
+                            recurrencePattern.startsWith('monthly:') ? 'custom' : recurrencePattern
+                          }
+                          onChange={(val) => handleRecurrenceChange(val as string)}
+                          className="text-xs min-w-[120px]"
+                          placeholder="Pattern..."
+                          buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs whitespace-nowrap"
+                        />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
                           {t('entry.until')}
                         </span>
                         <input
@@ -455,7 +451,7 @@ const DailyView: React.FC<DailyViewProps> = ({
                             if (errors.recurrenceEndDate)
                               setErrors({ ...errors, recurrenceEndDate: '' });
                           }}
-                          className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
+                          className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
                         />
                         {errors.recurrenceEndDate && (
                           <p className="text-red-500 text-[10px] font-bold mt-1">
@@ -473,7 +469,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onClick={handleSubmit}
               className="bg-praetor text-white px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap"
             >
-              <i className="fa-solid fa-check"></i> {t('entry.logTime')}
+              {t('entry.logTime')}
             </button>
           </div>
         </div>
