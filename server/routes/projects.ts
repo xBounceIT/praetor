@@ -452,13 +452,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         await query('BEGIN');
 
-        // Snapshot current assignments before wiping
-        const currentResult = await query(
-          'SELECT user_id FROM user_projects WHERE project_id = $1',
-          [idResult.value],
-        );
-        const previousUserIds = currentResult.rows.map((r) => r.user_id as string);
-
         // Replace project assignments
         await query('DELETE FROM user_projects WHERE project_id = $1', [idResult.value]);
 
@@ -474,25 +467,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
             [userId, clientId, MANUAL_ASSIGNMENT_SOURCE],
           );
-        }
-
-        // Cascade DOWN: for removed users, unassign from client if no other projects remain
-        const removedUserIds = previousUserIds.filter((uid) => !validUserIds.includes(uid));
-        for (const userId of removedUserIds) {
-          const otherProjectsResult = await query(
-            `SELECT 1 FROM user_projects up
-             INNER JOIN projects p ON up.project_id = p.id
-             WHERE up.user_id = $1 AND p.client_id = $2
-             LIMIT 1`,
-            [userId, clientId],
-          );
-          if (otherProjectsResult.rows.length === 0) {
-            await query(
-              `DELETE FROM user_clients
-               WHERE user_id = $1 AND client_id = $2 AND assignment_source = $3`,
-              [userId, clientId, MANUAL_ASSIGNMENT_SOURCE],
-            );
-          }
         }
 
         await query('COMMIT');
