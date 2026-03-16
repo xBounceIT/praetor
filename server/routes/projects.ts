@@ -455,13 +455,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
         // Snapshot current assignments before wiping
         const currentResult = await query(
-          'SELECT user_id FROM user_projects WHERE project_id = $1',
+          `SELECT user_id FROM user_projects
+           WHERE project_id = $1 AND assignment_source != 'top_manager_auto'`,
           [idResult.value],
         );
         const previousUserIds = currentResult.rows.map((r) => r.user_id as string);
 
         // Replace project assignments
-        await query('DELETE FROM user_projects WHERE project_id = $1', [idResult.value]);
+        await query(
+          `DELETE FROM user_projects
+           WHERE project_id = $1 AND assignment_source != 'top_manager_auto'`,
+          [idResult.value],
+        );
 
         for (const userId of validUserIds) {
           await query(
