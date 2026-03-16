@@ -34,6 +34,7 @@ import SupplierQuotesView from './components/sales/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
 import CustomSelect from './components/shared/CustomSelect';
 import StandardTable, { type Column } from './components/shared/StandardTable';
+import StatusBadge from './components/shared/StatusBadge';
 import Tooltip from './components/shared/Tooltip';
 import DailyView from './components/timesheet/DailyView';
 import WeeklyView from './components/timesheet/WeeklyView';
@@ -240,25 +241,13 @@ const TrackerView: React.FC<{
         id: 'client',
         header: t('entry.client'),
         accessorKey: 'clientName',
-        cell: ({ row }) => (
-          <span className="text-[10px] font-black text-indigo-500 uppercase leading-none tracking-wider">
-            {row.clientName}
-          </span>
-        ),
+        cell: ({ row }) => <span className="font-semibold text-slate-800">{row.clientName}</span>,
       },
       {
         id: 'project',
         header: t('entry.project'),
         accessorKey: 'projectName',
-        cell: ({ row }) => (
-          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: projects.find((p) => p.id === row.projectId)?.color }}
-            />
-            {row.projectName}
-          </span>
-        ),
+        cell: ({ row }) => <span className="font-semibold text-slate-800">{row.projectName}</span>,
       },
       {
         id: 'task',
@@ -281,11 +270,12 @@ const TrackerView: React.FC<{
         accessorKey: 'location',
         cell: ({ row }) =>
           row.location ? (
-            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
-              {t(
+            <StatusBadge
+              type={row.location}
+              label={t(
                 `entry.locationTypes.${row.location.replace(/_([a-z])/g, (_, c) => (c as string).toUpperCase())}`,
               )}
-            </span>
+            />
           ) : (
             <span className="text-slate-300 text-xs">-</span>
           ),
@@ -330,7 +320,7 @@ const TrackerView: React.FC<{
         ),
       },
     ],
-    [selectedDate, projects, t, handleDeleteClick],
+    [selectedDate, t, handleDeleteClick],
   );
 
   return (
