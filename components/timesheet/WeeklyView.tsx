@@ -668,13 +668,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           disabled={isLoading || !hasChanges}
           className={`bg-praetor text-white px-10 py-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-slate-200 font-bold text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:grayscale-[0.5] ${showSuccess ? 'bg-emerald-600 hover:bg-emerald-600 shadow-emerald-500/20' : ''}`}
         >
-          {isLoading ? (
-            <i className="fa-solid fa-circle-notch fa-spin"></i>
-          ) : showSuccess ? (
-            <i className="fa-solid fa-check"></i>
-          ) : (
-            <i className="fa-solid fa-cloud-arrow-up"></i>
-          )}
           {showSuccess ? t('weekly.success') : t('weekly.submitTime')}
         </button>
       </div>

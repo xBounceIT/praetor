@@ -473,7 +473,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onClick={handleSubmit}
               className="bg-praetor text-white px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap"
             >
-              <i className="fa-solid fa-check"></i> {t('entry.logTime')}
+              {t('entry.logTime')}
             </button>
           </div>
         </div>
