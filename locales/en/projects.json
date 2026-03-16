@@ -46,6 +46,7 @@
     "searchUsers": "Search users...",
     "noUsersFound": "No users found.",
     "assignmentLoadFailed": "Failed to load project assignments.",
+    "assignmentSaveFailed": "Failed to save project assignments.",
     "assignmentLoadRetryHint": "Retry before saving any assignment changes.",
     "tableHeaders": {
       "client": "Client",
