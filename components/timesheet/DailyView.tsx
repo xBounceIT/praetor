@@ -281,7 +281,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           onSubmit={handleSubmit}
           className="grid grid-cols-1 md:grid-cols-[2fr_2fr_2fr_1.5fr_1fr] gap-4"
         >
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.client')}
               options={clientOptions}
@@ -297,7 +297,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.project')}
               options={projectOptions}
@@ -316,7 +316,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.task')}
               options={taskOptions}
@@ -348,7 +348,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               />
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.location')}
               options={[
@@ -361,7 +361,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onChange={(val) => setLocation(val as TimeEntryLocation)}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
             </label>
