@@ -3,10 +3,12 @@ import { TOP_MANAGER_ROLE_ID } from './permissions.ts';
 
 export const MANUAL_ASSIGNMENT_SOURCE = 'manual';
 export const TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE = 'top_manager_auto';
+export const PROJECT_CASCADE_ASSIGNMENT_SOURCE = 'project_cascade';
 
 export type AssignmentSource =
   | typeof MANUAL_ASSIGNMENT_SOURCE
-  | typeof TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE;
+  | typeof TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE
+  | typeof PROJECT_CASCADE_ASSIGNMENT_SOURCE;
 
 const mergeAssignmentSourceSql = (table: string, targetColumn: string) => `
   INSERT INTO ${table} (user_id, ${targetColumn}, assignment_source)

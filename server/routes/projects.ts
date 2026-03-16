@@ -22,6 +22,7 @@ import {
   assignProjectToTopManagers,
   assignProjectToUser,
   MANUAL_ASSIGNMENT_SOURCE,
+  PROJECT_CASCADE_ASSIGNMENT_SOURCE,
 } from '../utils/top-manager-assignments.ts';
 import {
   badRequest,
@@ -452,6 +453,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         await query('BEGIN');
 
+        // Snapshot current assignments before wiping
+        const currentResult = await query(
+          'SELECT user_id FROM user_projects WHERE project_id = $1',
+          [idResult.value],
+        );
+        const previousUserIds = currentResult.rows.map((r) => r.user_id as string);
+
         // Replace project assignments
         await query('DELETE FROM user_projects WHERE project_id = $1', [idResult.value]);
 
@@ -461,12 +469,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
             [userId, idResult.value, MANUAL_ASSIGNMENT_SOURCE],
           );
-          // Cascade UP: ensure the user is also assigned to the parent client
+          // Cascade UP: ensure the user has access to the parent client.
+          // Use 'project_cascade' source so it can be safely removed by cascade-down
+          // without touching client assignments that were set independently.
           await query(
             `INSERT INTO user_clients (user_id, client_id, assignment_source)
              VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-            [userId, clientId, MANUAL_ASSIGNMENT_SOURCE],
+            [userId, clientId, PROJECT_CASCADE_ASSIGNMENT_SOURCE],
           );
+        }
+
+        // Cascade DOWN: for removed users, unassign from client if no other projects remain.
+        // Only removes 'project_cascade' assignments — never touches independently-set 'manual' ones.
+        const removedUserIds = previousUserIds.filter((uid) => !validUserIds.includes(uid));
+        for (const userId of removedUserIds) {
+          const otherProjectsResult = await query(
+            `SELECT 1 FROM user_projects up
+             INNER JOIN projects p ON up.project_id = p.id
+             WHERE up.user_id = $1 AND p.client_id = $2
+             LIMIT 1`,
+            [userId, clientId],
+          );
+          if (otherProjectsResult.rows.length === 0) {
+            await query(
+              `DELETE FROM user_clients
+               WHERE user_id = $1 AND client_id = $2 AND assignment_source = $3`,
+              [userId, clientId, PROJECT_CASCADE_ASSIGNMENT_SOURCE],
+            );
+          }
         }
 
         await query('COMMIT');

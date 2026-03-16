@@ -442,12 +442,9 @@ UPDATE user_clients SET assignment_source = 'manual' WHERE assignment_source IS 
 ALTER TABLE user_clients ALTER COLUMN assignment_source SET NOT NULL;
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'user_clients_assignment_source_check'
-    ) THEN
-        ALTER TABLE user_clients ADD CONSTRAINT user_clients_assignment_source_check
-            CHECK (assignment_source IN ('manual', 'top_manager_auto'));
-    END IF;
+    ALTER TABLE user_clients DROP CONSTRAINT IF EXISTS user_clients_assignment_source_check;
+    ALTER TABLE user_clients ADD CONSTRAINT user_clients_assignment_source_check
+        CHECK (assignment_source IN ('manual', 'top_manager_auto', 'project_cascade'));
 END $$;
 
 -- User-Project associations
@@ -464,12 +461,9 @@ UPDATE user_projects SET assignment_source = 'manual' WHERE assignment_source IS
 ALTER TABLE user_projects ALTER COLUMN assignment_source SET NOT NULL;
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'user_projects_assignment_source_check'
-    ) THEN
-        ALTER TABLE user_projects ADD CONSTRAINT user_projects_assignment_source_check
-            CHECK (assignment_source IN ('manual', 'top_manager_auto'));
-    END IF;
+    ALTER TABLE user_projects DROP CONSTRAINT IF EXISTS user_projects_assignment_source_check;
+    ALTER TABLE user_projects ADD CONSTRAINT user_projects_assignment_source_check
+        CHECK (assignment_source IN ('manual', 'top_manager_auto', 'project_cascade'));
 END $$;
 
 -- User-Task associations
@@ -486,12 +480,9 @@ UPDATE user_tasks SET assignment_source = 'manual' WHERE assignment_source IS NU
 ALTER TABLE user_tasks ALTER COLUMN assignment_source SET NOT NULL;
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'user_tasks_assignment_source_check'
-    ) THEN
-        ALTER TABLE user_tasks ADD CONSTRAINT user_tasks_assignment_source_check
-            CHECK (assignment_source IN ('manual', 'top_manager_auto'));
-    END IF;
+    ALTER TABLE user_tasks DROP CONSTRAINT IF EXISTS user_tasks_assignment_source_check;
+    ALTER TABLE user_tasks ADD CONSTRAINT user_tasks_assignment_source_check
+        CHECK (assignment_source IN ('manual', 'top_manager_auto', 'project_cascade'));
 END $$;
 
 -- Time entries table
