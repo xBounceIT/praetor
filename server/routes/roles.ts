@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
@@ -202,27 +202,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      try {
-        await query('BEGIN');
-        await query('INSERT INTO roles (id, name, is_system, is_admin) VALUES ($1, $2, $3, $4)', [
-          id,
-          nameResult.value,
-          false,
-          false,
-        ]);
+      await withTransaction(async (tx) => {
+        await tx.query(
+          'INSERT INTO roles (id, name, is_system, is_admin) VALUES ($1, $2, $3, $4)',
+          [id, nameResult.value, false, false],
+        );
 
         for (const permission of normalizedPermissions) {
-          await query(
+          await tx.query(
             'INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [id, permission],
           );
         }
-
-        await query('COMMIT');
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      });
 
       await bumpNamespaceVersion('roles');
       const roleRow = await query('SELECT id, name, is_system, is_admin FROM roles WHERE id = $1', [
@@ -426,20 +418,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      try {
-        await query('BEGIN');
-        await query('DELETE FROM role_permissions WHERE role_id = $1', [idResult.value]);
+      await withTransaction(async (tx) => {
+        await tx.query('DELETE FROM role_permissions WHERE role_id = $1', [idResult.value]);
         for (const permission of normalizedPermissions) {
-          await query(
+          await tx.query(
             'INSERT INTO role_permissions (role_id, permission) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [idResult.value, permission],
           );
         }
-        await query('COMMIT');
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      });
 
       await bumpNamespaceVersion('roles');
       const updatedRoleResult = await query(

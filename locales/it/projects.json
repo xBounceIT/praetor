@@ -45,6 +45,8 @@
     "manageMembers": "Gestisci Membri",
     "searchUsers": "Cerca utenti...",
     "noUsersFound": "Nessun utente trovato.",
+    "assignmentLoadFailed": "Impossibile caricare le assegnazioni del progetto.",
+    "assignmentLoadRetryHint": "Riprova prima di salvare modifiche alle assegnazioni.",
     "tableHeaders": {
       "client": "Cliente",
       "projectName": "Nome Progetto",

@@ -45,6 +45,8 @@
     "manageMembers": "Manage Members",
     "searchUsers": "Search users...",
     "noUsersFound": "No users found.",
+    "assignmentLoadFailed": "Failed to load project assignments.",
+    "assignmentLoadRetryHint": "Retry before saving any assignment changes.",
     "tableHeaders": {
       "client": "Client",
       "projectName": "Project Name",

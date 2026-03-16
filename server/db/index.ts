@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import pg from 'pg';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 
@@ -30,5 +31,38 @@ pool.on('error', (err) => {
 });
 
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);
+
+export type QueryExecutor = {
+  query: <T extends QueryResultRow = QueryResultRow>(
+    text: string,
+    params?: unknown[],
+  ) => Promise<QueryResult<T>>;
+};
+
+export const withTransaction = async <T>(callback: (client: PoolClient) => Promise<T>) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      logger.error(
+        {
+          err: serializeError(rollbackErr),
+          originalErr: serializeError(err),
+        },
+        'Failed to rollback database transaction',
+      );
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+};
 
 export default pool;

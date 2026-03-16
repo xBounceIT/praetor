@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import {
   messageResponseSchema,
@@ -538,36 +538,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
-      try {
-        await query('BEGIN');
-
-        // Delete existing assignments
-        await query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
+      await withTransaction(async (tx) => {
+        await tx.query('DELETE FROM user_tasks WHERE task_id = $1', [idResult.value]);
 
         for (const userId of validUserIds) {
-          await query(
+          await tx.query(
             'INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
             [userId, idResult.value],
           );
         }
+      });
 
-        await query('COMMIT');
-        await bumpNamespaceVersion('tasks');
-        await logAudit({
-          request,
-          action: 'task.users_assigned',
-          entityType: 'task',
-          entityId: idResult.value,
-          details: {
-            targetLabel: taskResult.rows[0].name as string,
-            counts: { users: validUserIds.length },
-          },
-        });
-        return { message: 'Task assignments updated' };
-      } catch (err) {
-        await query('ROLLBACK');
-        throw err;
-      }
+      await bumpNamespaceVersion('tasks');
+      await logAudit({
+        request,
+        action: 'task.users_assigned',
+        entityType: 'task',
+        entityId: idResult.value,
+        details: {
+          targetLabel: taskResult.rows[0].name as string,
+          counts: { users: validUserIds.length },
+        },
+      });
+      return { message: 'Task assignments updated' };
     },
   );
 }

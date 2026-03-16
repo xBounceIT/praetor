@@ -23,6 +23,8 @@ export interface ProjectsViewProps {
   onDeleteProject: (id: string) => void;
 }
 
+type AssignmentLoadState = 'loading' | 'error' | 'ready';
+
 const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
@@ -59,7 +61,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   // Assignment Modal State
   const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
-  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  const [assignmentLoadState, setAssignmentLoadState] = useState<AssignmentLoadState>('ready');
   const [userSearch, setUserSearch] = useState('');
 
   // Form State
@@ -146,25 +148,31 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   };
 
-  const openAssignments = async (projectId: string) => {
-    if (!canManageAssignments) return;
-    setManagingProjectId(projectId);
-    setIsLoadingAssignments(true);
+  const loadAssignments = async (projectId: string) => {
+    setAssignmentLoadState('loading');
     setAssignedUserIds([]);
     try {
       const userIds = await projectsApi.getUsers(projectId);
       setAssignedUserIds(userIds);
+      setAssignmentLoadState('ready');
     } catch (err) {
       console.error('Failed to load project users', err);
-    } finally {
-      setIsLoadingAssignments(false);
+      setAssignmentLoadState('error');
     }
+  };
+
+  const openAssignments = async (projectId: string) => {
+    if (!canManageAssignments) return;
+    setManagingProjectId(projectId);
+    setUserSearch('');
+    await loadAssignments(projectId);
   };
 
   const closeAssignments = () => {
     setManagingProjectId(null);
     setAssignedUserIds([]);
     setUserSearch('');
+    setAssignmentLoadState('ready');
   };
 
   const toggleUserAssignment = (userId: string) => {
@@ -174,13 +182,18 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   };
 
   const saveAssignments = async () => {
-    if (!canManageAssignments || !managingProjectId) return;
+    if (!canManageAssignments || !managingProjectId || assignmentLoadState !== 'ready') return;
     try {
       await projectsApi.updateUsers(managingProjectId, assignedUserIds);
       closeAssignments();
     } catch (err) {
       console.error('Failed to save project users', err);
     }
+  };
+
+  const retryAssignmentsLoad = async () => {
+    if (!managingProjectId) return;
+    await loadAssignments(managingProjectId);
   };
 
   const canSubmit = editingProject ? canUpdateProjects : canCreateProjects;
@@ -424,16 +437,41 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 placeholder={t('projects:projects.searchUsers')}
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none text-sm font-medium transition-all"
-                autoFocus
+                disabled={assignmentLoadState !== 'ready'}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none text-sm font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                autoFocus={assignmentLoadState === 'ready'}
               />
             </div>
           </div>
 
           <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
-            {isLoadingAssignments ? (
+            {assignmentLoadState === 'loading' ? (
               <div className="flex items-center justify-center py-12">
                 <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+              </div>
+            ) : assignmentLoadState === 'error' ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="max-w-sm text-center space-y-4">
+                  <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-slate-800">
+                      {t('projects:projects.assignmentLoadFailed')}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      {t('projects:projects.assignmentLoadRetryHint')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={retryAssignmentsLoad}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors"
+                  >
+                    <i className="fa-solid fa-rotate-right"></i>
+                    {t('common:buttons.refresh')}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -492,9 +530,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             </button>
             <button
               onClick={saveAssignments}
-              disabled={!canManageAssignments || isLoadingAssignments}
+              disabled={!canManageAssignments || assignmentLoadState !== 'ready'}
               className={`px-8 py-2.5 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 text-sm ${
-                canManageAssignments && !isLoadingAssignments
+                canManageAssignments && assignmentLoadState === 'ready'
                   ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
                   : 'bg-slate-300 shadow-none cursor-not-allowed'
               }`}
