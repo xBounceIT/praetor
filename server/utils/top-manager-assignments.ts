@@ -18,6 +18,9 @@ const mergeAssignmentSourceSql = (table: string, targetColumn: string) => `
     WHEN ${table}.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
       OR EXCLUDED.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
     THEN '${MANUAL_ASSIGNMENT_SOURCE}'
+    WHEN ${table}.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+      OR EXCLUDED.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+    THEN '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
     ELSE ${table}.assignment_source
   END
 `;
@@ -31,6 +34,9 @@ const assignAllForUserSql = (table: string, sourceTable: string, targetColumn: s
     WHEN ${table}.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
       OR EXCLUDED.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
     THEN '${MANUAL_ASSIGNMENT_SOURCE}'
+    WHEN ${table}.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+      OR EXCLUDED.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+    THEN '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
     ELSE ${table}.assignment_source
   END
 `;
@@ -45,6 +51,9 @@ const assignAllTopManagersSql = (table: string, targetColumn: string) => `
     WHEN ${table}.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
       OR EXCLUDED.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
     THEN '${MANUAL_ASSIGNMENT_SOURCE}'
+    WHEN ${table}.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+      OR EXCLUDED.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+    THEN '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
     ELSE ${table}.assignment_source
   END
 `;
