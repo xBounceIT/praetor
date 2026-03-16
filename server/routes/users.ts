@@ -1179,6 +1179,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
         }
 
+        if (projectIds || clientIds) {
+          await tx.query(
+            `DELETE FROM user_clients WHERE user_id = $1 AND assignment_source = 'project_cascade'`,
+            [idResult.value],
+          );
+        }
+
         await tx.query(
           `INSERT INTO user_clients (user_id, client_id, assignment_source)
            SELECT $1, p.client_id, 'project_cascade'
