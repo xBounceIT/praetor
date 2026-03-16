@@ -54,10 +54,10 @@ const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
 ).flatMap((def) => def.actions.map((action) => buildPermission(def.id, action)));
 const isAdministrationPermission = (permission: string) =>
   permission.startsWith('administration.') || permission.startsWith('configuration.');
-const isPermissionEditableForRole = (permission: string, roleId?: string | null) =>
+const isPermissionEditableForRole = (permission: string, roleId: string | null = null) =>
   !isAdministrationPermission(permission) &&
   (!isTopManagerOnlyPermission(permission) || roleId === TOP_MANAGER_ROLE_ID);
-const sanitizeEditableRolePermissions = (rolePermissions: string[], roleId?: string | null) =>
+const sanitizeEditableRolePermissions = (rolePermissions: string[], roleId: string | null = null) =>
   rolePermissions.filter((permission) => isPermissionEditableForRole(permission, roleId));
 
 const RolesView: React.FC<RolesViewProps> = ({
@@ -230,7 +230,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       return;
     }
     try {
-      const sanitizedPermissions = sanitizeEditableRolePermissions(selectedPermissions);
+      const sanitizedPermissions = sanitizeEditableRolePermissions(selectedPermissions, null);
       const finalPermissions = Array.from(
         new Set([...sanitizedPermissions, ...ALWAYS_GRANTED_PERMISSIONS]),
       );
