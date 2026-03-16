@@ -418,33 +418,29 @@ const DailyView: React.FC<DailyViewProps> = ({
                     </button>
 
                     {makeRecurring && (
-                      <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                        <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                        <div className="min-w-[180px]">
-                          <CustomSelect
-                            options={[
-                              { id: 'daily', name: t('entry.recurrencePatterns.daily') },
-                              { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
-                              { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
-                              {
-                                id: 'custom',
-                                name: recurrencePattern.startsWith('monthly:')
-                                  ? getRecurrenceLabel(recurrencePattern)
-                                  : t('entry.recurrencePatterns.custom'),
-                              },
-                            ]}
-                            value={
-                              recurrencePattern.startsWith('monthly:')
-                                ? 'custom'
-                                : recurrencePattern
-                            }
-                            onChange={(val) => handleRecurrenceChange(val as string)}
-                            className="text-xs"
-                            placeholder="Pattern..."
-                            buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs"
-                          />
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-6">
+                      <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200 flex-wrap">
+                        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0"></div>
+                        <CustomSelect
+                          options={[
+                            { id: 'daily', name: t('entry.recurrencePatterns.daily') },
+                            { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
+                            { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
+                            {
+                              id: 'custom',
+                              name: recurrencePattern.startsWith('monthly:')
+                                ? getRecurrenceLabel(recurrencePattern)
+                                : t('entry.recurrencePatterns.custom'),
+                            },
+                          ]}
+                          value={
+                            recurrencePattern.startsWith('monthly:') ? 'custom' : recurrencePattern
+                          }
+                          onChange={(val) => handleRecurrenceChange(val as string)}
+                          className="text-xs min-w-[120px]"
+                          placeholder="Pattern..."
+                          buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs whitespace-nowrap"
+                        />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
                           {t('entry.until')}
                         </span>
                         <input
@@ -455,7 +451,7 @@ const DailyView: React.FC<DailyViewProps> = ({
                             if (errors.recurrenceEndDate)
                               setErrors({ ...errors, recurrenceEndDate: '' });
                           }}
-                          className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
+                          className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
                         />
                         {errors.recurrenceEndDate && (
                           <p className="text-red-500 text-[10px] font-bold mt-1">
