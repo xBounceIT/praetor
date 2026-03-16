@@ -530,17 +530,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
       const validUserIds = userIdsResult.value;
 
-      const projectResult = await query('SELECT name, client_id FROM projects WHERE id = $1', [
-        idResult.value,
-      ]);
-      if (projectResult.rows.length === 0) {
-        return reply.code(404).send({ error: 'Project not found' });
-      }
-      const clientId = projectResult.rows[0].client_id as string;
-      const projectName = projectResult.rows[0].name as string;
-
       try {
         await query('BEGIN');
+
+        const projectResult = await query(
+          'SELECT name, client_id FROM projects WHERE id = $1 FOR UPDATE',
+          [idResult.value],
+        );
+        if (projectResult.rows.length === 0) {
+          await query('ROLLBACK');
+          return reply.code(404).send({ error: 'Project not found' });
+        }
+        const clientId = projectResult.rows[0].client_id as string;
+        const projectName = projectResult.rows[0].name as string;
 
         // Snapshot current assignments before wiping
         const previousUserIds = await getNonTopManagerProjectUserIds(idResult.value);
