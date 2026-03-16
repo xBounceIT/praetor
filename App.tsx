@@ -3419,6 +3419,7 @@ const App: React.FC = () => {
                 projects={projects}
                 clients={clients}
                 permissions={currentUser.permissions || []}
+                users={availableUsers}
                 onAddProject={addProject}
                 onUpdateProject={handleUpdateProject}
                 onDeleteProject={handleDeleteProject}
