@@ -33,6 +33,7 @@ import SupplierOffersView from './components/sales/SupplierOffersView';
 import SupplierQuotesView from './components/sales/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
 import CustomSelect from './components/shared/CustomSelect';
+import StandardTable, { type Column } from './components/shared/StandardTable';
 import Tooltip from './components/shared/Tooltip';
 import DailyView from './components/timesheet/DailyView';
 import WeeklyView from './components/timesheet/WeeklyView';
@@ -227,6 +228,111 @@ const TrackerView: React.FC<{
     [availableUsers],
   );
 
+  const activityColumns = useMemo<Column<TimeEntry>[]>(
+    () => [
+      {
+        id: 'date',
+        header: t('entry.date'),
+        accessorKey: 'date',
+        hidden: !!selectedDate,
+      },
+      {
+        id: 'client',
+        header: t('entry.client'),
+        accessorKey: 'clientName',
+        cell: ({ row }) => (
+          <span className="text-[10px] font-black text-indigo-500 uppercase leading-none tracking-wider">
+            {row.clientName}
+          </span>
+        ),
+      },
+      {
+        id: 'project',
+        header: t('entry.project'),
+        accessorKey: 'projectName',
+        cell: ({ row }) => (
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: projects.find((p) => p.id === row.projectId)?.color }}
+            />
+            {row.projectName}
+          </span>
+        ),
+      },
+      {
+        id: 'task',
+        header: t('entry.task'),
+        accessorKey: 'task',
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">{row.task}</span>
+            {row.isPlaceholder && (
+              <Tooltip label={t('entry.recurringTask')}>
+                {() => <i className="fa-solid fa-repeat text-[10px] text-indigo-400" />}
+              </Tooltip>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: 'location',
+        header: t('entry.location'),
+        accessorKey: 'location',
+        cell: ({ row }) =>
+          row.location ? (
+            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+              {t(
+                `entry.locationTypes.${row.location.replace(/_([a-z])/g, (_, c) => (c as string).toUpperCase())}`,
+              )}
+            </span>
+          ) : (
+            <span className="text-slate-300 text-xs">-</span>
+          ),
+      },
+      {
+        id: 'notes',
+        header: t('tracker.notes'),
+        accessorKey: 'notes',
+        cell: ({ row }) =>
+          row.notes ? (
+            <div className="text-slate-500 text-xs italic leading-relaxed">{row.notes}</div>
+          ) : (
+            <span className="text-slate-300 text-xs">-</span>
+          ),
+      },
+      {
+        id: 'duration',
+        header: t('entry.hours'),
+        accessorKey: 'duration',
+        align: 'right',
+        cell: ({ row }) => (
+          <span className="font-black text-slate-900">
+            {row.isPlaceholder && row.duration === 0 ? '--' : row.duration.toFixed(2)}
+          </span>
+        ),
+      },
+      {
+        id: 'delete',
+        header: '',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteClick(row);
+            }}
+            className="text-slate-200 hover:text-red-500 transition-colors p-1"
+          >
+            <i className="fa-solid fa-trash-can text-xs" />
+          </button>
+        ),
+      },
+    ],
+    [selectedDate, projects, t, handleDeleteClick],
+  );
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {/* Top Middle Toggle */}
@@ -313,24 +419,19 @@ const TrackerView: React.FC<{
               defaultLocation={defaultLocation}
             />
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-end px-2">
-                <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
-                    {selectedDate
-                      ? t('tracker.activityFor', {
-                          date: formatDateOnlyForLocale(selectedDate, undefined, {
-                            month: 'long',
-                            day: 'numeric',
-                          }),
-                        })
-                      : t('entry.recentActivity')}
-                  </h3>
-                  {selectedDate && (
-                    <p className="text-xs text-slate-400 font-medium">{t('tracker.logsForDate')}</p>
-                  )}
-                </div>
-                {selectedDate && (
+            <StandardTable<TimeEntry>
+              title={
+                selectedDate
+                  ? t('tracker.activityFor', {
+                      date: formatDateOnlyForLocale(selectedDate, undefined, {
+                        month: 'long',
+                        day: 'numeric',
+                      }),
+                    })
+                  : t('entry.recentActivity')
+              }
+              headerExtras={
+                selectedDate ? (
                   <div className="text-right">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">
                       {t('tracker.dayTotal')}
@@ -341,126 +442,19 @@ const TrackerView: React.FC<{
                       {dailyTotal.toFixed(2)} h
                     </p>
                   </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      {!selectedDate && (
-                        <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                          {t('entry.date')}
-                        </th>
-                      )}
-                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                        {t('tracker.clientProject')}
-                      </th>
-                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                        {t('entry.task')}
-                      </th>
-                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                        {t('entry.location')}
-                      </th>
-                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                        {t('tracker.notes')}
-                      </th>
-                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase tracking-tighter text-right">
-                        {t('entry.hours')}
-                      </th>
-                      <th className="px-6 py-3 w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredEntries.length === 0 ? (
-                      <tr>
-                        <td colSpan={selectedDate ? 6 : 7} className="px-6 py-20 text-center">
-                          <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block"></i>
-                          <p className="text-slate-400 font-medium text-sm">
-                            {t('tracker.noEntries')}
-                          </p>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredEntries.map((entry) => (
-                        <tr
-                          key={entry.id}
-                          className={`group hover:bg-slate-50/50 transition-colors ${entry.isPlaceholder ? 'bg-indigo-50/30 italic' : ''}`}
-                        >
-                          {!selectedDate && (
-                            <td className="px-6 py-4 text-xs font-bold text-slate-500 align-top">
-                              {entry.date}
-                            </td>
-                          )}
-                          <td className="px-6 py-4 align-top">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] font-black text-indigo-500 uppercase leading-none mb-1 tracking-wider">
-                                {entry.clientName}
-                              </span>
-                              <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-                                <span
-                                  className="w-2 h-2 rounded-full"
-                                  style={{
-                                    backgroundColor: projects.find((p) => p.id === entry.projectId)
-                                      ?.color,
-                                  }}
-                                ></span>
-                                {entry.projectName}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm align-top">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-slate-800">{entry.task}</span>
-                              {entry.isPlaceholder && (
-                                <Tooltip label={t('entry.recurringTask')}>
-                                  {() => (
-                                    <i className="fa-solid fa-repeat text-[10px] text-indigo-400"></i>
-                                  )}
-                                </Tooltip>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm align-top">
-                            {entry.location ? (
-                              <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                {t(
-                                  `entry.locationTypes.${entry.location.replace(/_([a-z])/g, (_, c) => c.toUpperCase())}`,
-                                )}
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 text-xs">-</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm align-top">
-                            {entry.notes ? (
-                              <div className="text-slate-500 text-xs italic leading-relaxed">
-                                {entry.notes}
-                              </div>
-                            ) : (
-                              <span className="text-slate-300 text-xs">-</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-900 font-black text-right align-top">
-                            {entry.isPlaceholder && entry.duration === 0
-                              ? '--'
-                              : entry.duration.toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 align-top">
-                            <button
-                              onClick={() => handleDeleteClick(entry)}
-                              className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                            >
-                              <i className="fa-solid fa-trash-can text-xs"></i>
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                ) : undefined
+              }
+              data={filteredEntries}
+              columns={activityColumns}
+              defaultRowsPerPage={10}
+              rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
+              emptyState={
+                <div className="px-6 py-20 text-center">
+                  <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
+                  <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
+                </div>
+              }
+            />
           </div>
 
           <div className="lg:w-80 shrink-0 space-y-6">
