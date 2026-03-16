@@ -3,10 +3,12 @@ import { TOP_MANAGER_ROLE_ID } from './permissions.ts';
 
 export const MANUAL_ASSIGNMENT_SOURCE = 'manual';
 export const TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE = 'top_manager_auto';
+export const PROJECT_CASCADE_ASSIGNMENT_SOURCE = 'project_cascade';
 
 export type AssignmentSource =
   | typeof MANUAL_ASSIGNMENT_SOURCE
-  | typeof TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE;
+  | typeof TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE
+  | typeof PROJECT_CASCADE_ASSIGNMENT_SOURCE;
 
 const mergeAssignmentSourceSql = (table: string, targetColumn: string) => `
   INSERT INTO ${table} (user_id, ${targetColumn}, assignment_source)
@@ -16,6 +18,9 @@ const mergeAssignmentSourceSql = (table: string, targetColumn: string) => `
     WHEN ${table}.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
       OR EXCLUDED.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
     THEN '${MANUAL_ASSIGNMENT_SOURCE}'
+    WHEN ${table}.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+      OR EXCLUDED.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+    THEN '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
     ELSE ${table}.assignment_source
   END
 `;
@@ -29,6 +34,9 @@ const assignAllForUserSql = (table: string, sourceTable: string, targetColumn: s
     WHEN ${table}.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
       OR EXCLUDED.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
     THEN '${MANUAL_ASSIGNMENT_SOURCE}'
+    WHEN ${table}.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+      OR EXCLUDED.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+    THEN '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
     ELSE ${table}.assignment_source
   END
 `;
@@ -43,6 +51,9 @@ const assignAllTopManagersSql = (table: string, targetColumn: string) => `
     WHEN ${table}.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
       OR EXCLUDED.assignment_source = '${MANUAL_ASSIGNMENT_SOURCE}'
     THEN '${MANUAL_ASSIGNMENT_SOURCE}'
+    WHEN ${table}.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+      OR EXCLUDED.assignment_source = '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
+    THEN '${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}'
     ELSE ${table}.assignment_source
   END
 `;
@@ -119,6 +130,15 @@ export const syncTopManagerAssignmentsForUser = async (userId: string) => {
       userId,
       TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
     ]);
+    await query(
+      `INSERT INTO user_clients (user_id, client_id, assignment_source)
+       SELECT $1, p.client_id, 'project_cascade'
+       FROM user_projects up
+       JOIN projects p ON up.project_id = p.id
+       WHERE up.user_id = $1
+       ON CONFLICT (user_id, client_id) DO NOTHING`,
+      [userId],
+    );
     return;
   }
 

@@ -22,4 +22,12 @@ export const projectsApi = {
     }),
 
   delete: (id: string): Promise<void> => fetchApi(`/projects/${id}`, { method: 'DELETE' }),
+
+  getUsers: (id: string): Promise<string[]> => fetchApi(`/projects/${id}/users`),
+
+  updateUsers: (id: string, userIds: string[]): Promise<void> =>
+    fetchApi(`/projects/${id}/users`, {
+      method: 'POST',
+      body: JSON.stringify({ userIds }),
+    }),
 };
