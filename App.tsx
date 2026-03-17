@@ -775,10 +775,13 @@ const App: React.FC = () => {
     if (activeView === 'docs/api' || activeView === 'docs/frontend') return true;
     if (!currentUser) return false;
     if (activeView === '404') return false;
+    if (activeView === 'reports/ai-reporting') {
+      if (hasLoadedGeneralSettings && !generalSettings.enableAiReporting) return false;
+    }
 
     const permission = VIEW_PERMISSION_MAP[activeView as View];
     return permission ? hasPermission(currentUser.permissions, permission) : false;
-  }, [activeView, currentUser]);
+  }, [activeView, currentUser, hasLoadedGeneralSettings, generalSettings.enableAiReporting]);
 
   // Redirect to 404 if route is not accessible
   useEffect(() => {
@@ -3092,6 +3095,9 @@ const App: React.FC = () => {
         onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
+        isAiReportingEnabled={
+          !hasLoadedGeneralSettings || generalSettings.enableAiReporting
+        }
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
