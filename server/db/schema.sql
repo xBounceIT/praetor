@@ -1305,6 +1305,19 @@ CREATE TABLE IF NOT EXISTS report_chat_messages (
 CREATE INDEX IF NOT EXISTS idx_report_chat_messages_session_created
     ON report_chat_messages(session_id, created_at ASC);
 
+-- Reports: private dashboards (v1)
+CREATE TABLE IF NOT EXISTS report_dashboards (
+    id VARCHAR(50) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(120) NOT NULL,
+    widgets_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_dashboards_user_updated
+    ON report_dashboards(user_id, updated_at DESC);
+
 -- Email administration table (single row)
 CREATE TABLE IF NOT EXISTS email_config (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -1343,7 +1356,11 @@ ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions (role_id, permission)
 VALUES
     ('manager', 'reports.ai_reporting.view'),
-    ('manager', 'reports.ai_reporting.create')
+    ('manager', 'reports.ai_reporting.create'),
+    ('manager', 'reports.dashboard.view'),
+    ('manager', 'reports.dashboard.create'),
+    ('manager', 'reports.dashboard.update'),
+    ('manager', 'reports.dashboard.delete')
 ON CONFLICT DO NOTHING;
 
 -- Seed Top Manager from the scoped manager baseline, then add its extra visibility/control.
@@ -1363,7 +1380,11 @@ VALUES
     ('top_manager', 'hr.work_units.create'),
     ('top_manager', 'hr.work_units.update'),
     ('top_manager', 'hr.work_units.delete'),
-    ('top_manager', 'hr.work_units_all.view')
+    ('top_manager', 'hr.work_units_all.view'),
+    ('top_manager', 'reports.dashboard.view'),
+    ('top_manager', 'reports.dashboard.create'),
+    ('top_manager', 'reports.dashboard.update'),
+    ('top_manager', 'reports.dashboard.delete')
 ON CONFLICT DO NOTHING;
 
 -- Migration: Merge reports.ai_reporting_ai.create into reports.ai_reporting.create

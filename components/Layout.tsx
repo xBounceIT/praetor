@@ -31,7 +31,7 @@ const moduleRoutes: Record<string, View[]> = {
     'accounting/supplier-invoices',
   ],
   hr: ['hr/internal', 'hr/external', 'hr/work-units'],
-  reports: ['reports/ai-reporting'],
+  reports: ['reports/dashboard', 'reports/ai-reporting'],
   administration: [
     'administration/authentication',
     'administration/general',
@@ -557,6 +557,18 @@ const Layout: React.FC<LayoutProps> = ({
       case 'reports':
         return (
           <>
+            {canAccessView('reports/dashboard') && (
+              <NavItem
+                icon="fa-chart-pie"
+                label={t('routes.dashboard')}
+                active={activeView === 'reports/dashboard'}
+                isCollapsed={isCollapsed}
+                onClick={() => {
+                  onViewChange('reports/dashboard');
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            )}
             {canAccessView('reports/ai-reporting') && (
               <NavItem
                 iconElement={

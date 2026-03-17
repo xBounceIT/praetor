@@ -49,6 +49,7 @@
     "internalEmployees": "Internal Employees",
     "externalEmployees": "External Employees",
     "roles": "Roles",
+    "dashboard": "Dashboard",
     "aiReporting": "AI Reporting",
     "logs": "Logs"
   },
@@ -88,6 +89,7 @@
     "externalEmployees": "External Employees",
     "emailSettings": "Email Settings",
     "roles": "Roles",
+    "dashboard": "Dashboard",
     "aiReporting": "AI Reporting",
     "logs": "System Logs"
   },

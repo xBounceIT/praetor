@@ -1,4 +1,55 @@
 {
+  "dashboard": {
+    "loading": "Loading dashboards...",
+    "error": "Unable to load dashboard data.",
+    "selectDashboard": "Dashboard",
+    "noDashboards": "No dashboards yet. Create one to get started.",
+    "newDashboardPlaceholder": "New dashboard name",
+    "create": "Create",
+    "dashboardName": "Dashboard name",
+    "saveName": "Save name",
+    "deleteDashboard": "Delete dashboard",
+    "addWidget": "Add widget",
+    "widgetTitle": "Widget title",
+    "addWidgetAction": "Add widget",
+    "removeWidget": "Remove",
+    "loadingWidget": "Loading widget data...",
+    "noData": "No data for this configuration.",
+    "chartTypes": {
+      "pie": "Pie",
+      "bar": "Histogram"
+    },
+    "datasets": {
+      "timesheets": "Timesheets",
+      "quotes": "Client Quotes",
+      "orders": "Client Orders",
+      "invoices": "Client Invoices",
+      "supplierQuotes": "Supplier Quotes",
+      "catalog": "Catalog"
+    },
+    "groupBy": {
+      "user": "User",
+      "client": "Client",
+      "project": "Project",
+      "task": "Task",
+      "location": "Location",
+      "month": "Month",
+      "status": "Status",
+      "supplier": "Supplier",
+      "type": "Type",
+      "category": "Category",
+      "subcategory": "Subcategory"
+    },
+    "metrics": {
+      "hours": "Hours",
+      "entries": "Entries",
+      "cost": "Cost",
+      "count": "Count",
+      "net": "Net",
+      "total": "Total",
+      "outstanding": "Outstanding"
+    }
+  },
   "aiReporting": {
     "newChat": "New Chat",
     "session": "Session",

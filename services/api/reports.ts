@@ -2,6 +2,38 @@ import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { fetchApi, fetchApiStream } from './client';
 import type { ReportChatStreamDoneEvent, ReportChatStreamHandlers } from './contracts';
 
+export type DashboardChartType = 'pie' | 'bar';
+
+export interface DashboardWidget {
+  id: string;
+  title: string;
+  chartType: DashboardChartType;
+  dataset: 'timesheets' | 'quotes' | 'orders' | 'invoices' | 'supplierQuotes' | 'catalog';
+  groupBy: string;
+  metric: string;
+  limit?: number;
+}
+
+export interface ReportDashboard {
+  id: string;
+  name: string;
+  widgets: DashboardWidget[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DashboardWidgetDataPoint {
+  label: string;
+  value: number;
+}
+
+export interface DashboardWidgetDataResult {
+  metric: string;
+  groupBy: string;
+  total: number;
+  series: DashboardWidgetDataPoint[];
+}
+
 const parseSseEventBlock = (rawBlock: string): { event: string; data: string } | null => {
   const lines = rawBlock.replace(/\r/g, '').split('\n');
   let event = 'message';
@@ -133,6 +165,35 @@ const parseReportStream = async (
 };
 
 export const reportsApi = {
+  listDashboards: (): Promise<ReportDashboard[]> =>
+    fetchApi<ReportDashboard[]>('/reports/dashboard'),
+
+  createDashboard: (data: { name: string }): Promise<ReportDashboard> =>
+    fetchApi('/reports/dashboard', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateDashboard: (
+    dashboardId: string,
+    data: { name?: string; widgets?: DashboardWidget[] },
+  ): Promise<ReportDashboard> =>
+    fetchApi(`/reports/dashboard/${dashboardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteDashboard: (dashboardId: string): Promise<{ success: boolean }> =>
+    fetchApi(`/reports/dashboard/${dashboardId}`, {
+      method: 'DELETE',
+    }),
+
+  getDashboardWidgetData: (widget: DashboardWidget): Promise<DashboardWidgetDataResult> =>
+    fetchApi('/reports/dashboard/widget-data', {
+      method: 'POST',
+      body: JSON.stringify({ widget }),
+    }),
+
   listSessions: (): Promise<ReportChatSessionSummary[]> =>
     fetchApi<ReportChatSessionSummary[]>('/reports/ai-reporting/sessions'),
 

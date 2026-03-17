@@ -1,4 +1,55 @@
 {
+  "dashboard": {
+    "loading": "Caricamento dashboard...",
+    "error": "Impossibile caricare i dati della dashboard.",
+    "selectDashboard": "Dashboard",
+    "noDashboards": "Nessuna dashboard. Creane una per iniziare.",
+    "newDashboardPlaceholder": "Nome nuova dashboard",
+    "create": "Crea",
+    "dashboardName": "Nome dashboard",
+    "saveName": "Salva nome",
+    "deleteDashboard": "Elimina dashboard",
+    "addWidget": "Aggiungi widget",
+    "widgetTitle": "Titolo widget",
+    "addWidgetAction": "Aggiungi widget",
+    "removeWidget": "Rimuovi",
+    "loadingWidget": "Caricamento dati widget...",
+    "noData": "Nessun dato per questa configurazione.",
+    "chartTypes": {
+      "pie": "Torta",
+      "bar": "Istogramma"
+    },
+    "datasets": {
+      "timesheets": "Presenze",
+      "quotes": "Preventivi Clienti",
+      "orders": "Ordini Clienti",
+      "invoices": "Fatture Clienti",
+      "supplierQuotes": "Preventivi Fornitori",
+      "catalog": "Catalogo"
+    },
+    "groupBy": {
+      "user": "Utente",
+      "client": "Cliente",
+      "project": "Progetto",
+      "task": "Attivita",
+      "location": "Luogo",
+      "month": "Mese",
+      "status": "Stato",
+      "supplier": "Fornitore",
+      "type": "Tipo",
+      "category": "Categoria",
+      "subcategory": "Sottocategoria"
+    },
+    "metrics": {
+      "hours": "Ore",
+      "entries": "Inserimenti",
+      "cost": "Costo",
+      "count": "Conteggio",
+      "net": "Netto",
+      "total": "Totale",
+      "outstanding": "Scoperto"
+    }
+  },
   "aiReporting": {
     "newChat": "Nuova Chat",
     "session": "Sessione",

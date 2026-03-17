@@ -2692,6 +2692,359 @@ const endSseResponse = (reply: FastifyReply) => {
   }
 };
 
+type DashboardChartType = 'pie' | 'bar';
+type DashboardDataset =
+  | 'timesheets'
+  | 'quotes'
+  | 'orders'
+  | 'invoices'
+  | 'supplierQuotes'
+  | 'catalog';
+
+type DashboardWidgetConfig = {
+  id: string;
+  title: string;
+  chartType: DashboardChartType;
+  dataset: DashboardDataset;
+  groupBy: string;
+  metric: string;
+  limit: number;
+};
+
+const DASHBOARD_OPTIONS: Record<DashboardDataset, { groupBy: string[]; metric: string[] }> = {
+  timesheets: {
+    groupBy: ['user', 'client', 'project', 'task', 'location', 'month'],
+    metric: ['hours', 'entries', 'cost'],
+  },
+  quotes: {
+    groupBy: ['status', 'client', 'month'],
+    metric: ['count', 'net'],
+  },
+  orders: {
+    groupBy: ['status', 'client', 'month'],
+    metric: ['count', 'net'],
+  },
+  invoices: {
+    groupBy: ['status', 'client', 'month'],
+    metric: ['count', 'total', 'outstanding'],
+  },
+  supplierQuotes: {
+    groupBy: ['status', 'supplier', 'month'],
+    metric: ['count', 'net'],
+  },
+  catalog: {
+    groupBy: ['type', 'category', 'subcategory', 'supplier'],
+    metric: ['count', 'cost'],
+  },
+};
+
+const DATASET_PERMISSION_OPTIONS: Record<DashboardDataset, string[]> = {
+  timesheets: ['timesheets.tracker.view'],
+  quotes: ['sales.client_quotes.view'],
+  orders: ['accounting.clients_orders.view'],
+  invoices: ['accounting.clients_invoices.view'],
+  supplierQuotes: ['sales.supplier_quotes.view'],
+  catalog: [
+    'catalog.internal_listing.view',
+    'catalog.external_listing.view',
+    'catalog.special_bids.view',
+  ],
+};
+
+const normalizeWidget = (
+  raw: unknown,
+): { ok: true; value: DashboardWidgetConfig } | { ok: false; error: string } => {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'widget must be an object' };
+  const obj = raw as Record<string, unknown>;
+  const id = String(obj.id || '').trim() || `rpt-wdg-${randomUUID()}`;
+  const title = String(obj.title || '').trim();
+  const chartType = String(obj.chartType || '').trim() as DashboardChartType;
+  const dataset = String(obj.dataset || '').trim() as DashboardDataset;
+  const groupBy = String(obj.groupBy || '').trim();
+  const metric = String(obj.metric || '').trim();
+  const parsedLimit = Number.parseInt(String(obj.limit ?? '8'), 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(3, Math.min(parsedLimit, 20)) : 8;
+
+  if (!title) return { ok: false, error: 'widget.title is required' };
+  if (chartType !== 'pie' && chartType !== 'bar') {
+    return { ok: false, error: 'widget.chartType must be pie or bar' };
+  }
+  if (!(dataset in DASHBOARD_OPTIONS)) {
+    return { ok: false, error: 'widget.dataset is invalid' };
+  }
+  if (!DASHBOARD_OPTIONS[dataset].groupBy.includes(groupBy)) {
+    return { ok: false, error: 'widget.groupBy is invalid for selected dataset' };
+  }
+  if (!DASHBOARD_OPTIONS[dataset].metric.includes(metric)) {
+    return { ok: false, error: 'widget.metric is invalid for selected dataset' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      id,
+      title,
+      chartType,
+      dataset,
+      groupBy,
+      metric,
+      limit,
+    },
+  };
+};
+
+const normalizeStoredWidgets = (raw: unknown): DashboardWidgetConfig[] => {
+  if (!Array.isArray(raw)) return [];
+  const normalized: DashboardWidgetConfig[] = [];
+  for (const item of raw) {
+    const parsed = normalizeWidget(item);
+    if (parsed.ok) normalized.push(parsed.value);
+  }
+  return normalized;
+};
+
+const canAccessDashboardDataset = (request: FastifyRequest, dataset: DashboardDataset) =>
+  DATASET_PERMISSION_OPTIONS[dataset].some((permission) => hasPermission(request, permission));
+
+const getDashboardWidgetSeries = async (request: FastifyRequest, widget: DashboardWidgetConfig) => {
+  const { fromDate, toDate } = getReportingRange();
+
+  if (widget.dataset === 'timesheets') {
+    const groupByMap: Record<string, string> = {
+      user: 'u.name',
+      client: 'te.client_name',
+      project: 'te.project_name',
+      task: 'te.task',
+      location: "COALESCE(NULLIF(te.location, ''), 'unknown')",
+      month: "TO_CHAR(DATE_TRUNC('month', te.date), 'YYYY-MM')",
+    };
+    const metricMap: Record<string, string> = {
+      hours: 'COALESCE(SUM(te.duration), 0)',
+      entries: 'COUNT(*)',
+      cost: 'COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0)',
+    };
+
+    const groupExpr = groupByMap[widget.groupBy];
+    const metricExpr = metricMap[widget.metric];
+    const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
+    const viewerId = request.user?.id || '';
+    const allowedUserIds = canViewAll
+      ? null
+      : Array.from(new Set([viewerId, ...(await getManagedUserIds(viewerId))]));
+    const whereClause = canViewAll
+      ? 'te.date >= $1 AND te.date <= $2'
+      : 'te.date >= $1 AND te.date <= $2 AND te.user_id = ANY($3)';
+    const params = canViewAll
+      ? [fromDate, toDate, widget.limit]
+      : [fromDate, toDate, allowedUserIds || [], widget.limit];
+    const limitParamIndex = canViewAll ? 3 : 4;
+    const joinUsers = widget.groupBy === 'user' ? 'JOIN users u ON u.id = te.user_id' : '';
+    const orderBy = widget.groupBy === 'month' ? 'label ASC' : 'value DESC';
+    const result = await query(
+      `SELECT ${groupExpr} as label, ${metricExpr} as value
+       FROM time_entries te
+       ${joinUsers}
+       WHERE ${whereClause}
+       GROUP BY label
+       ORDER BY ${orderBy}
+       LIMIT $${limitParamIndex}`,
+      params,
+    );
+    return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+  }
+
+  if (widget.dataset === 'quotes') {
+    const groupByMap: Record<string, string> = {
+      status: 'q.status',
+      client: 'q.client_name',
+      month: "TO_CHAR(DATE_TRUNC('month', q.created_at), 'YYYY-MM')",
+    };
+    if (widget.metric === 'count') {
+      const result = await query(
+        `SELECT ${groupByMap[widget.groupBy]} as label, COUNT(*) as value
+         FROM quotes q
+         WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+         GROUP BY label
+         ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+         LIMIT $3`,
+        [fromDate, toDate, widget.limit],
+      );
+      return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+    }
+    const result = await query(
+      `WITH per_quote AS (
+         SELECT
+           q.id,
+           q.status,
+           q.client_name,
+           q.created_at,
+           SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
+             * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
+         FROM quotes q
+         JOIN quote_items qi ON qi.quote_id = q.id
+         WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
+         GROUP BY q.id
+       )
+       SELECT ${
+         widget.groupBy === 'status'
+           ? 'status'
+           : widget.groupBy === 'client'
+             ? 'client_name'
+             : "TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')"
+       } as label,
+       COALESCE(SUM(net_value), 0) as value
+       FROM per_quote
+       GROUP BY label
+       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       LIMIT $3`,
+      [fromDate, toDate, widget.limit],
+    );
+    return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+  }
+
+  if (widget.dataset === 'orders') {
+    const groupByMap: Record<string, string> = {
+      status: 's.status',
+      client: 's.client_name',
+      month: "TO_CHAR(DATE_TRUNC('month', s.created_at), 'YYYY-MM')",
+    };
+    if (widget.metric === 'count') {
+      const result = await query(
+        `SELECT ${groupByMap[widget.groupBy]} as label, COUNT(*) as value
+         FROM sales s
+         WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+         GROUP BY label
+         ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+         LIMIT $3`,
+        [fromDate, toDate, widget.limit],
+      );
+      return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+    }
+    const result = await query(
+      `WITH per_order AS (
+         SELECT
+           s.id,
+           s.status,
+           s.client_name,
+           s.created_at,
+           SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
+             * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
+         FROM sales s
+         JOIN sale_items si ON si.sale_id = s.id
+         WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
+         GROUP BY s.id
+       )
+       SELECT ${
+         widget.groupBy === 'status'
+           ? 'status'
+           : widget.groupBy === 'client'
+             ? 'client_name'
+             : "TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')"
+       } as label,
+       COALESCE(SUM(net_value), 0) as value
+       FROM per_order
+       GROUP BY label
+       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       LIMIT $3`,
+      [fromDate, toDate, widget.limit],
+    );
+    return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+  }
+
+  if (widget.dataset === 'invoices') {
+    const groupByMap: Record<string, string> = {
+      status: 'i.status',
+      client: 'i.client_name',
+      month: "TO_CHAR(DATE_TRUNC('month', i.issue_date), 'YYYY-MM')",
+    };
+    const metricExpr =
+      widget.metric === 'count'
+        ? 'COUNT(*)'
+        : widget.metric === 'total'
+          ? 'COALESCE(SUM(i.total), 0)'
+          : 'COALESCE(SUM(GREATEST(i.total - i.amount_paid, 0)), 0)';
+    const result = await query(
+      `SELECT ${groupByMap[widget.groupBy]} as label, ${metricExpr} as value
+       FROM invoices i
+       WHERE i.issue_date >= $1 AND i.issue_date <= $2
+       GROUP BY label
+       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       LIMIT $3`,
+      [fromDate, toDate, widget.limit],
+    );
+    return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+  }
+
+  if (widget.dataset === 'supplierQuotes') {
+    const groupByMap: Record<string, string> = {
+      status: 'sq.status',
+      supplier: 'sq.supplier_name',
+      month: "TO_CHAR(DATE_TRUNC('month', sq.created_at), 'YYYY-MM')",
+    };
+    if (widget.metric === 'count') {
+      const result = await query(
+        `SELECT ${groupByMap[widget.groupBy]} as label, COUNT(*) as value
+         FROM supplier_quotes sq
+         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+         GROUP BY label
+         ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+         LIMIT $3`,
+        [fromDate, toDate, widget.limit],
+      );
+      return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+    }
+    const result = await query(
+      `WITH per_quote AS (
+         SELECT
+           sq.id,
+           sq.status,
+           sq.supplier_name,
+           sq.created_at,
+           SUM(sqi.quantity * sqi.unit_price * (1 - COALESCE(sqi.discount, 0) / 100.0))
+             * (1 - COALESCE(sq.discount, 0) / 100.0) as net_value
+         FROM supplier_quotes sq
+         JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
+         WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
+         GROUP BY sq.id
+       )
+       SELECT ${
+         widget.groupBy === 'status'
+           ? 'status'
+           : widget.groupBy === 'supplier'
+             ? 'supplier_name'
+             : "TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')"
+       } as label,
+       COALESCE(SUM(net_value), 0) as value
+       FROM per_quote
+       GROUP BY label
+       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       LIMIT $3`,
+      [fromDate, toDate, widget.limit],
+    );
+    return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+  }
+
+  const groupByMap: Record<string, string> = {
+    type: "COALESCE(NULLIF(p.type, ''), 'unknown')",
+    category: "COALESCE(NULLIF(p.category, ''), 'uncategorized')",
+    subcategory: "COALESCE(NULLIF(p.subcategory, ''), 'none')",
+    supplier: "COALESCE(s.name, 'Internal')",
+  };
+  const metricExpr = widget.metric === 'count' ? 'COUNT(*)' : 'COALESCE(SUM(p.costo), 0)';
+  const joinSuppliers =
+    widget.groupBy === 'supplier' ? 'LEFT JOIN suppliers s ON s.id = p.supplier_id' : '';
+  const result = await query(
+    `SELECT ${groupByMap[widget.groupBy]} as label, ${metricExpr} as value
+     FROM products p
+     ${joinSuppliers}
+     GROUP BY label
+     ORDER BY value DESC
+     LIMIT $1`,
+    [widget.limit],
+  );
+  return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -2718,6 +3071,305 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     required: ['id', 'sessionId', 'role', 'content', 'createdAt'],
   } as const;
+
+  const dashboardWidgetSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      title: { type: 'string' },
+      chartType: { type: 'string', enum: ['pie', 'bar'] },
+      dataset: {
+        type: 'string',
+        enum: ['timesheets', 'quotes', 'orders', 'invoices', 'supplierQuotes', 'catalog'],
+      },
+      groupBy: { type: 'string' },
+      metric: { type: 'string' },
+      limit: { type: 'number' },
+    },
+    required: ['id', 'title', 'chartType', 'dataset', 'groupBy', 'metric'],
+  } as const;
+
+  const dashboardSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      name: { type: 'string' },
+      widgets: { type: 'array', items: dashboardWidgetSchema },
+      createdAt: { type: 'number' },
+      updatedAt: { type: 'number' },
+    },
+    required: ['id', 'name', 'widgets', 'createdAt', 'updatedAt'],
+  } as const;
+
+  fastify.get(
+    '/dashboard',
+    {
+      onRequest: [requirePermission('reports.dashboard.view')],
+      schema: {
+        tags: ['reports'],
+        summary: 'List private report dashboards',
+        response: {
+          200: { type: 'array', items: dashboardSchema },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest) => {
+      const userId = request.user?.id || '';
+      const result = await query(
+        `SELECT
+           id,
+           name,
+           widgets_json,
+           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
+         FROM report_dashboards
+         WHERE user_id = $1
+         ORDER BY updated_at DESC`,
+        [userId],
+      );
+
+      return result.rows.map((row) => ({
+        id: String(row.id),
+        name: String(row.name || ''),
+        widgets: normalizeStoredWidgets(row.widgets_json),
+        createdAt: toNumber(row.createdAt),
+        updatedAt: toNumber(row.updatedAt),
+      }));
+    },
+  );
+
+  fastify.post(
+    '/dashboard',
+    {
+      onRequest: [requirePermission('reports.dashboard.create')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Create a private report dashboard',
+        body: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+          },
+          required: ['name'],
+        },
+        response: {
+          200: dashboardSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const body = request.body as { name?: unknown };
+      const nameResult = requireNonEmptyString(body.name, 'name');
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      const id = `rpt-dsh-${randomUUID()}`;
+      await query(
+        `INSERT INTO report_dashboards (id, user_id, name, widgets_json, created_at, updated_at)
+         VALUES ($1, $2, $3, '[]'::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [id, userId, nameResult.value.trim().slice(0, 120)],
+      );
+
+      const result = await query(
+        `SELECT
+           id,
+           name,
+           widgets_json,
+           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
+         FROM report_dashboards
+         WHERE id = $1 AND user_id = $2
+         LIMIT 1`,
+        [id, userId],
+      );
+      const row = result.rows[0];
+      return {
+        id: String(row.id),
+        name: String(row.name || ''),
+        widgets: normalizeStoredWidgets(row.widgets_json),
+        createdAt: toNumber(row.createdAt),
+        updatedAt: toNumber(row.updatedAt),
+      };
+    },
+  );
+
+  fastify.patch(
+    '/dashboard/:id',
+    {
+      onRequest: [requirePermission('reports.dashboard.update')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Update private report dashboard',
+        params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        body: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            widgets: { type: 'array', items: dashboardWidgetSchema },
+          },
+        },
+        response: {
+          200: dashboardSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const params = request.params as { id?: string };
+      const idResult = requireNonEmptyString(params.id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const body = request.body as { name?: unknown; widgets?: unknown };
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let position = 1;
+
+      if (body.name !== undefined) {
+        const nameResult = requireNonEmptyString(body.name, 'name');
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
+        updates.push(`name = $${position++}`);
+        values.push(nameResult.value.trim().slice(0, 120));
+      }
+
+      if (body.widgets !== undefined) {
+        if (!Array.isArray(body.widgets)) return badRequest(reply, 'widgets must be an array');
+        const normalized: DashboardWidgetConfig[] = [];
+        for (const item of body.widgets) {
+          const parsed = normalizeWidget(item);
+          if (!parsed.ok) return badRequest(reply, parsed.error);
+          if (!canAccessDashboardDataset(request, parsed.value.dataset)) {
+            return reply
+              .code(403)
+              .send({ error: `Missing permission for ${parsed.value.dataset}` });
+          }
+          normalized.push(parsed.value);
+        }
+        updates.push(`widgets_json = $${position++}::jsonb`);
+        values.push(JSON.stringify(normalized));
+      }
+
+      if (updates.length === 0) return badRequest(reply, 'No updates provided');
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+
+      values.push(idResult.value, userId);
+      const idPos = position++;
+      const userPos = position;
+      const result = await query(
+        `UPDATE report_dashboards
+         SET ${updates.join(', ')}
+         WHERE id = $${idPos} AND user_id = $${userPos}
+         RETURNING
+           id,
+           name,
+           widgets_json,
+           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
+        values,
+      );
+      if (result.rows.length === 0) return reply.code(404).send({ error: 'Dashboard not found' });
+
+      const row = result.rows[0];
+      return {
+        id: String(row.id),
+        name: String(row.name || ''),
+        widgets: normalizeStoredWidgets(row.widgets_json),
+        createdAt: toNumber(row.createdAt),
+        updatedAt: toNumber(row.updatedAt),
+      };
+    },
+  );
+
+  fastify.delete(
+    '/dashboard/:id',
+    {
+      onRequest: [requirePermission('reports.dashboard.delete')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Delete private report dashboard',
+        params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        response: {
+          200: {
+            type: 'object',
+            properties: { success: { type: 'boolean' } },
+            required: ['success'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const params = request.params as { id?: string };
+      const idResult = requireNonEmptyString(params.id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const result = await query(
+        `DELETE FROM report_dashboards WHERE id = $1 AND user_id = $2 RETURNING id`,
+        [idResult.value, userId],
+      );
+      if (result.rows.length === 0) return reply.code(404).send({ error: 'Dashboard not found' });
+      return { success: true };
+    },
+  );
+
+  fastify.post(
+    '/dashboard/widget-data',
+    {
+      onRequest: [requirePermission('reports.dashboard.view')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Get chart data for dashboard widget',
+        body: {
+          type: 'object',
+          properties: {
+            widget: dashboardWidgetSchema,
+          },
+          required: ['widget'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              metric: { type: 'string' },
+              groupBy: { type: 'string' },
+              total: { type: 'number' },
+              series: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    label: { type: 'string' },
+                    value: { type: 'number' },
+                  },
+                  required: ['label', 'value'],
+                },
+              },
+            },
+            required: ['metric', 'groupBy', 'total', 'series'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = request.body as { widget?: unknown };
+      const parsed = normalizeWidget(body.widget);
+      if (!parsed.ok) return badRequest(reply, parsed.error);
+      if (!canAccessDashboardDataset(request, parsed.value.dataset)) {
+        return reply.code(403).send({ error: `Missing permission for ${parsed.value.dataset}` });
+      }
+      const series = await getDashboardWidgetSeries(request, parsed.value);
+      return {
+        metric: parsed.value.metric,
+        groupBy: parsed.value.groupBy,
+        total: series.reduce((sum, item) => sum + item.value, 0),
+        series,
+      };
+    },
+  );
 
   // GET /ai-reporting/sessions
   fastify.get(

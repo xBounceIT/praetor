@@ -382,6 +382,7 @@ export type View =
   | 'hr/external'
   | 'hr/work-units'
   // Reports module
+  | 'reports/dashboard'
   | 'reports/ai-reporting'
   // Standalone
   | 'settings'
@@ -424,6 +425,26 @@ export interface ReportChatMessage {
   content: string;
   thoughtContent?: string;
   createdAt: number;
+}
+
+export type ReportWidgetChartType = 'pie' | 'bar';
+
+export interface ReportDashboardWidget {
+  id: string;
+  title: string;
+  chartType: ReportWidgetChartType;
+  dataset: 'timesheets' | 'quotes' | 'orders' | 'invoices' | 'supplierQuotes' | 'catalog';
+  groupBy: string;
+  metric: string;
+  limit?: number;
+}
+
+export interface ReportDashboard {
+  id: string;
+  name: string;
+  widgets: ReportDashboardWidget[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface WorkUnit {

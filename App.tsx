@@ -26,6 +26,7 @@ import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
 import AiReportingView from './components/reports/AiReportingView';
+import DashboardView from './components/reports/DashboardView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import ClientOffersView from './components/sales/ClientOffersView';
 import ClientQuotesView from './components/sales/ClientQuotesView';
@@ -661,6 +662,7 @@ const App: React.FC = () => {
       'hr/external',
       'hr/work-units',
       // Reports module
+      'reports/dashboard',
       'reports/ai-reporting',
       'settings',
       'docs/api',
@@ -711,6 +713,7 @@ const App: React.FC = () => {
       'hr/external',
       'hr/work-units',
       // Reports module
+      'reports/dashboard',
       'reports/ai-reporting',
       'settings',
       'docs/api',
@@ -3530,6 +3533,9 @@ const App: React.FC = () => {
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
               />
+            )}
+            {activeView === 'reports/dashboard' && (
+              <DashboardView permissions={currentUser.permissions || []} />
             )}
             {activeView === 'reports/ai-reporting' &&
               (!hasLoadedGeneralSettings ? (

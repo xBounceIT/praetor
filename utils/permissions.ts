@@ -68,6 +68,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'hr.work_units_all', actions: VIEW_ONLY, isScope: true, module: 'hr' },
 
   // Reports
+  { id: 'reports.dashboard', actions: CRUD, module: 'reports' },
   { id: 'reports.ai_reporting', actions: ['view', 'create'], module: 'reports' },
 
   // Administration
@@ -157,6 +158,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'hr/internal': buildPermission('hr.internal', 'view'),
   'hr/external': buildPermission('hr.external', 'view'),
   'hr/work-units': buildPermission('hr.work_units', 'view'),
+  'reports/dashboard': buildPermission('reports.dashboard', 'view'),
   'reports/ai-reporting': buildPermission('reports.ai_reporting', 'view'),
   settings: buildPermission('settings', 'view'),
   'docs/api': buildPermission('docs.api', 'view'),

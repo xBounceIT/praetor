@@ -49,6 +49,7 @@
     "internalEmployees": "Dipendenti Interni",
     "externalEmployees": "Dipendenti Esterni",
     "roles": "Ruoli",
+    "dashboard": "Dashboard",
     "aiReporting": "AI Reporting",
     "logs": "Log"
   },
@@ -88,6 +89,7 @@
     "externalEmployees": "Dipendenti Esterni",
     "emailSettings": "Impostazioni Email",
     "roles": "Ruoli",
+    "dashboard": "Dashboard",
     "aiReporting": "AI Reporting",
     "logs": "Log di Sistema"
   },
