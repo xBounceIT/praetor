@@ -65,6 +65,7 @@ export interface LayoutProps {
   onSwitchRole: (roleId: string) => void;
   roles: Role[];
   isNotFound?: boolean;
+  isAiReportingEnabled?: boolean;
   notifications?: Notification[];
   unreadNotificationCount?: number;
   onMarkNotificationAsRead?: (id: string) => void;
@@ -81,6 +82,7 @@ const Layout: React.FC<LayoutProps> = ({
   onSwitchRole,
   roles,
   isNotFound,
+  isAiReportingEnabled = true,
   notifications = [],
   unreadNotificationCount = 0,
   onMarkNotificationAsRead,
@@ -113,6 +115,10 @@ const Layout: React.FC<LayoutProps> = ({
   ).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
 
   const canAccessView = (view: View) => {
+    if (view === 'reports/ai-reporting' && !isAiReportingEnabled) {
+      return false;
+    }
+
     const permission = VIEW_PERMISSION_MAP[view];
     return permission ? hasPermission(currentUser.permissions, permission) : false;
   };
