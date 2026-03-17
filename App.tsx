@@ -776,8 +776,7 @@ const App: React.FC = () => {
     if (!currentUser) return false;
     if (activeView === '404') return false;
     if (activeView === 'reports/ai-reporting') {
-      if (!hasLoadedGeneralSettings) return true;
-      if (!generalSettings.enableAiReporting) return false;
+      if (hasLoadedGeneralSettings && !generalSettings.enableAiReporting) return false;
     }
 
     const permission = VIEW_PERMISSION_MAP[activeView as View];
