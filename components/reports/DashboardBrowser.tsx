@@ -67,7 +67,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   return (
     <div
       ref={droppableRef}
-      className={`group flex items-center gap-2 rounded-lg px-2 py-2 transition ${
+      className={`group flex items-center gap-2 px-2 py-2 transition ${
         isOver ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-slate-50'
       }`}
     >
@@ -206,7 +206,7 @@ const DashboardRowInner: React.FC<
   return (
     <div
       ref={dragRef}
-      className={`group flex items-center gap-2 rounded-lg px-2 py-2 transition ${
+      className={`group flex items-center gap-2 px-2 py-2 transition ${
         indented ? 'pl-9' : ''
       } ${isDragging ? 'opacity-40' : 'hover:bg-slate-50'}`}
     >
@@ -650,7 +650,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
               {t('dashboard.browser.emptySearch')}
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
               {searchResults.map((dashboard) => {
                 const folderName = dashboard.folderId
                   ? (folders.find((f) => f.id === dashboard.folderId)?.name ?? null)
@@ -680,7 +680,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
             onDragStart={handleDragStart}
             onDragEnd={(e) => void handleDragEnd(e)}
           >
-            <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
               {/* Folders */}
               {folders.map((folder) => {
                 const children = dashboardsByFolder.get(folder.id) ?? [];
