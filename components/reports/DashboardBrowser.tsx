@@ -305,17 +305,24 @@ const DroppableFolderRow: React.FC<Omit<FolderRowProps, 'isOver' | 'droppableRef
 };
 
 // Root droppable zone
-const RootDropZone: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const RootDropZone: React.FC<{ children: React.ReactNode; showDropArea: boolean }> = ({
+  children,
+  showDropArea,
+}) => {
   const { isOver, setNodeRef } = useDroppable({
     id: 'root',
     data: { type: 'root' },
   });
+  const rootDropZoneClass = [
+    showDropArea ? 'min-h-8' : 'min-h-0',
+    'rounded-lg transition',
+    isOver ? 'bg-blue-50 ring-2 ring-blue-200' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`min-h-8 rounded-lg transition ${isOver ? 'bg-blue-50 ring-2 ring-blue-200' : ''}`}
-    >
+    <div ref={setNodeRef} className={rootDropZoneClass}>
       {children}
     </div>
   );
@@ -734,7 +741,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
               })}
 
               {/* Root-level (unfiled) dashboards */}
-              <RootDropZone>
+              <RootDropZone showDropArea={Boolean(activeDragId)}>
                 {(dashboardsByFolder.get(null) ?? []).map((dashboard) => (
                   <DraggableDashboardRow
                     key={dashboard.id}
