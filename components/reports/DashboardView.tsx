@@ -7,25 +7,17 @@ export interface DashboardViewProps {
   permissions: string[];
 }
 
-type ViewMode =
-  | { kind: 'browser'; folderId: string | null }
-  | { kind: 'detail'; dashboardId: string; returnFolderId: string | null };
+type ViewMode = { kind: 'browser' } | { kind: 'detail'; dashboardId: string };
 
 const DashboardView: React.FC<DashboardViewProps> = ({ permissions }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>({ kind: 'browser', folderId: null });
+  const [viewMode, setViewMode] = useState<ViewMode>({ kind: 'browser' });
 
   const handleOpenDashboard = (dashboardId: string) => {
-    const returnFolderId = viewMode.kind === 'browser' ? viewMode.folderId : null;
-    setViewMode({ kind: 'detail', dashboardId, returnFolderId });
+    setViewMode({ kind: 'detail', dashboardId });
   };
 
   const handleBack = () => {
-    const returnFolderId = viewMode.kind === 'detail' ? viewMode.returnFolderId : null;
-    setViewMode({ kind: 'browser', folderId: returnFolderId });
-  };
-
-  const handleNavigateToFolder = (folderId: string | null) => {
-    setViewMode({ kind: 'browser', folderId });
+    setViewMode({ kind: 'browser' });
   };
 
   if (viewMode.kind === 'detail') {
@@ -38,14 +30,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ permissions }) => {
     );
   }
 
-  return (
-    <DashboardBrowser
-      permissions={permissions}
-      currentFolderId={viewMode.folderId}
-      onOpenDashboard={handleOpenDashboard}
-      onNavigateToFolder={handleNavigateToFolder}
-    />
-  );
+  return <DashboardBrowser permissions={permissions} onOpenDashboard={handleOpenDashboard} />;
 };
 
 export default DashboardView;

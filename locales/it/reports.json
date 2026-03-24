@@ -28,7 +28,9 @@
       "confirmDeleteDashboard": "Clicca di nuovo per eliminare",
       "confirmDeleteFolder": "Clicca di nuovo per eliminare la cartella (le dashboard saranno spostate in radice)",
       "renameFolder": "Rinomina cartella",
-      "backToDashboards": "Torna alle dashboard"
+      "backToDashboards": "Torna alle dashboard",
+      "emptyFolderExpanded": "Nessuna dashboard in questa cartella",
+      "dragHint": "Trascina per spostare tra le cartelle"
     },
     "createModal": {
       "createDashboard": "Nuova Dashboard",

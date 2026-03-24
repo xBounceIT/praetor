@@ -1,3 +1,14 @@
+import {
+  DndContext,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,17 +19,311 @@ import DashboardCreateModal from './DashboardCreateModal';
 
 export interface DashboardBrowserProps {
   permissions: string[];
-  currentFolderId: string | null;
   onOpenDashboard: (dashboardId: string) => void;
-  onNavigateToFolder: (folderId: string | null) => void;
 }
 
-const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
-  permissions,
-  currentFolderId,
-  onOpenDashboard,
-  onNavigateToFolder,
+// ─── Folder Row ───────────────────────────────────────────────────────────────
+
+interface FolderRowProps {
+  folder: ReportDashboardFolder;
+  isExpanded: boolean;
+  isOver: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  deletingId: string | null;
+  isMutating: boolean;
+  onToggle: () => void;
+  onRenameStart: () => void;
+  onRenameChange: (v: string) => void;
+  onRenameCommit: () => void;
+  onRenameCancel: () => void;
+  onDelete: () => void;
+  droppableRef: (node: HTMLElement | null) => void;
+}
+
+const FolderRow: React.FC<FolderRowProps> = ({
+  folder,
+  isExpanded,
+  isOver,
+  canUpdate,
+  canDelete,
+  isRenaming,
+  renameValue,
+  deletingId,
+  isMutating,
+  onToggle,
+  onRenameStart,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
+  onDelete,
+  droppableRef,
 }) => {
+  const { t } = useTranslation('reports');
+  const isConfirmDelete = deletingId === folder.id;
+
+  return (
+    <div
+      ref={droppableRef}
+      className={`group flex items-center gap-2 rounded-lg px-2 py-2 transition ${
+        isOver ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-slate-50'
+      }`}
+    >
+      {/* Chevron toggle */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600"
+        tabIndex={-1}
+      >
+        <i
+          className={`fa-solid fa-chevron-right text-xs transition-transform duration-200 ${
+            isExpanded ? 'rotate-90' : ''
+          }`}
+        />
+      </button>
+
+      {/* Folder icon */}
+      <i className="fa-solid fa-folder text-base text-amber-500 shrink-0" />
+
+      {/* Name / rename input */}
+      {isRenaming ? (
+        <input
+          value={renameValue}
+          onChange={(e) => onRenameChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onRenameCommit();
+            if (e.key === 'Escape') onRenameCancel();
+          }}
+          onBlur={onRenameCommit}
+          autoFocus
+          className="min-w-0 flex-1 rounded-lg border border-praetor bg-white px-2 py-0.5 text-sm font-semibold text-slate-800 outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="min-w-0 flex-1 text-left text-sm font-semibold text-slate-800 truncate"
+        >
+          {folder.name}
+        </button>
+      )}
+
+      {/* Dashboard count */}
+      <span className="shrink-0 text-xs text-slate-400 tabular-nums">
+        {t('dashboard.browser.dashboardCount', { count: folder.dashboardCount })}
+      </span>
+
+      {/* Actions (hover) */}
+      {(canUpdate || canDelete) && !isRenaming && (
+        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {canUpdate && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRenameStart();
+              }}
+              className="rounded-lg border border-slate-200 bg-white p-1 text-xs text-slate-500 hover:text-slate-700"
+              title={t('dashboard.browser.renameFolder')}
+            >
+              <i className="fa-solid fa-pen" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              disabled={isMutating}
+              className={`rounded-lg border p-1 text-xs transition ${
+                isConfirmDelete
+                  ? 'border-red-300 bg-red-50 text-red-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:text-red-600'
+              }`}
+              title={isConfirmDelete ? t('dashboard.browser.confirmDeleteFolder') : undefined}
+            >
+              <i className="fa-solid fa-trash" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Dashboard Row ─────────────────────────────────────────────────────────────
+
+interface DashboardRowProps {
+  dashboard: ReportDashboard;
+  indented: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  deletingId: string | null;
+  isMutating: boolean;
+  folderName?: string | null;
+  showFolderBadge?: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}
+
+const DashboardRowInner: React.FC<
+  DashboardRowProps & {
+    dragHandleProps?: React.HTMLAttributes<HTMLElement>;
+    dragRef?: (node: HTMLElement | null) => void;
+    isDragging?: boolean;
+  }
+> = ({
+  dashboard,
+  indented,
+  canUpdate,
+  canDelete,
+  deletingId,
+  isMutating,
+  folderName,
+  showFolderBadge,
+  onOpen,
+  onDelete,
+  dragHandleProps,
+  dragRef,
+  isDragging,
+}) => {
+  const { t } = useTranslation('reports');
+  const isConfirmDelete = deletingId === dashboard.id;
+
+  const formatUpdated = (ts: number) => {
+    return new Date(ts).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  return (
+    <div
+      ref={dragRef}
+      className={`group flex items-center gap-2 rounded-lg px-2 py-2 transition ${
+        indented ? 'pl-9' : ''
+      } ${isDragging ? 'opacity-40' : 'hover:bg-slate-50'}`}
+    >
+      {/* Drag handle */}
+      {canUpdate && (
+        <span
+          {...dragHandleProps}
+          className="shrink-0 cursor-grab touch-none text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        >
+          <i className="fa-solid fa-grip-vertical text-xs" />
+        </span>
+      )}
+
+      {/* Dashboard icon */}
+      <i className="fa-solid fa-chart-pie text-base text-blue-500 shrink-0" />
+
+      {/* Name */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-left text-sm font-medium text-slate-800 truncate hover:text-praetor"
+      >
+        {dashboard.name}
+      </button>
+
+      {/* Folder badge (search mode) */}
+      {showFolderBadge && (
+        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+          {folderName
+            ? t('dashboard.browser.inFolder', { name: folderName })
+            : t('dashboard.browser.inRoot')}
+        </span>
+      )}
+
+      {/* Widget count */}
+      <span className="shrink-0 text-xs text-slate-400 tabular-nums">
+        {t('dashboard.browser.widgetCount', { count: dashboard.widgets.length })}
+      </span>
+
+      {/* Updated date */}
+      <span className="hidden shrink-0 text-xs text-slate-400 sm:block">
+        {formatUpdated(dashboard.updatedAt)}
+      </span>
+
+      {/* Delete action */}
+      {canDelete && (
+        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            disabled={isMutating}
+            className={`rounded-lg border p-1 text-xs transition ${
+              isConfirmDelete
+                ? 'border-red-300 bg-red-50 text-red-700'
+                : 'border-slate-200 bg-white text-slate-500 hover:text-red-600'
+            }`}
+            title={isConfirmDelete ? t('dashboard.browser.confirmDeleteDashboard') : undefined}
+          >
+            <i className="fa-solid fa-trash" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Draggable wrapper
+const DraggableDashboardRow: React.FC<DashboardRowProps> = (props) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: props.dashboard.id,
+    data: { type: 'dashboard', dashboard: props.dashboard },
+    disabled: !props.canUpdate,
+  });
+
+  return (
+    <DashboardRowInner
+      {...props}
+      dragRef={setNodeRef}
+      dragHandleProps={{ ...attributes, ...listeners }}
+      isDragging={isDragging}
+    />
+  );
+};
+
+// Droppable folder wrapper
+const DroppableFolderRow: React.FC<Omit<FolderRowProps, 'isOver' | 'droppableRef'>> = (props) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `folder-${props.folder.id}`,
+    data: { type: 'folder', folderId: props.folder.id },
+  });
+
+  return <FolderRow {...props} isOver={isOver} droppableRef={setNodeRef} />;
+};
+
+// Root droppable zone
+const RootDropZone: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: 'root',
+    data: { type: 'root' },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-h-8 rounded-lg transition ${isOver ? 'bg-blue-50 ring-2 ring-blue-200' : ''}`}
+    >
+      {children}
+    </div>
+  );
+};
+
+// ─── Main Browser Component ────────────────────────────────────────────────────
+
+const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpenDashboard }) => {
   const { t } = useTranslation('reports');
   const [folders, setFolders] = useState<ReportDashboardFolder[]>([]);
   const [dashboards, setDashboards] = useState<ReportDashboard[]>([]);
@@ -27,20 +332,18 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
   const [error, setError] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<'dashboard' | 'folder'>('dashboard');
-
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameFolderValue, setRenameFolderValue] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const canCreate = hasPermission(permissions, buildPermission('reports.dashboard', 'create'));
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('reports.dashboard', 'delete'));
 
-  const currentFolder = useMemo(
-    () => folders.find((f) => f.id === currentFolderId) || null,
-    [folders, currentFolderId],
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   useEffect(() => {
     const load = async () => {
@@ -62,19 +365,36 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
     void load();
   }, [t]);
 
-  const visibleFolders = useMemo(() => {
-    if (searchQuery.trim()) return [];
-    if (currentFolderId !== null) return [];
-    return folders;
-  }, [folders, searchQuery, currentFolderId]);
-
-  const visibleDashboards = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      return dashboards.filter((d) => d.name.toLowerCase().includes(q));
+  const dashboardsByFolder = useMemo(() => {
+    const map = new Map<string | null, ReportDashboard[]>();
+    for (const d of dashboards) {
+      const key = d.folderId ?? null;
+      if (!map.has(key)) map.set(key, []);
+      (map.get(key) as ReportDashboard[]).push(d);
     }
-    return dashboards.filter((d) => d.folderId === currentFolderId);
-  }, [dashboards, searchQuery, currentFolderId]);
+    return map;
+  }, [dashboards]);
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return dashboards.filter((d) => d.name.toLowerCase().includes(q));
+  }, [dashboards, searchQuery]);
+
+  const isEmpty = !searchQuery.trim() && folders.length === 0 && dashboards.length === 0;
+
+  // ── Expand/collapse ────────────────────────────────────────────────────────
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
 
   const openCreateModal = (type: 'dashboard' | 'folder') => {
     setCreateModalType(type);
@@ -87,11 +407,6 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
     } else {
       setFolders((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
     }
-  };
-
-  const startRenameFolder = (folder: ReportDashboardFolder) => {
-    setRenamingFolderId(folder.id);
-    setRenameFolderValue(folder.name);
   };
 
   const commitRenameFolder = async (folderId: string) => {
@@ -126,7 +441,6 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
       setDashboards((prev) =>
         prev.map((d) => (d.folderId === folderId ? { ...d, folderId: null } : d)),
       );
-      if (currentFolderId === folderId) onNavigateToFolder(null);
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
     } finally {
@@ -151,57 +465,81 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
     }
   };
 
-  const formatUpdated = (ts: number) => {
-    const date = new Date(ts);
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  // ── Drag-and-drop ──────────────────────────────────────────────────────────
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
+    setDeletingId(null);
   };
 
-  const isEmpty = visibleFolders.length === 0 && visibleDashboards.length === 0;
-  const emptyKey = searchQuery.trim()
-    ? 'dashboard.browser.emptySearch'
-    : currentFolderId
-      ? 'dashboard.browser.emptyFolder'
-      : 'dashboard.browser.emptyRoot';
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const draggedId = activeDragId;
+    setActiveDragId(null);
+
+    const { over } = event;
+    if (!over || !draggedId) return;
+
+    const overData = over.data.current as { type: string; folderId?: string } | undefined;
+    const newFolderId: string | null =
+      overData?.type === 'folder' ? (overData.folderId ?? null) : null;
+
+    const dashboard = dashboards.find((d) => d.id === draggedId);
+    if (!dashboard) return;
+
+    const oldFolderId = dashboard.folderId ?? null;
+    if (oldFolderId === newFolderId) return;
+
+    // Optimistic update
+    setDashboards((prev) =>
+      prev.map((d) => (d.id === draggedId ? { ...d, folderId: newFolderId } : d)),
+    );
+    setFolders((prev) =>
+      prev.map((f) => {
+        if (f.id === oldFolderId) return { ...f, dashboardCount: f.dashboardCount - 1 };
+        if (f.id === newFolderId) return { ...f, dashboardCount: f.dashboardCount + 1 };
+        return f;
+      }),
+    );
+
+    try {
+      await api.reports.updateDashboard(draggedId, { folderId: newFolderId });
+    } catch (err) {
+      // Revert
+      setDashboards((prev) =>
+        prev.map((d) => (d.id === draggedId ? { ...d, folderId: oldFolderId } : d)),
+      );
+      setFolders((prev) =>
+        prev.map((f) => {
+          if (f.id === oldFolderId) return { ...f, dashboardCount: f.dashboardCount + 1 };
+          if (f.id === newFolderId) return { ...f, dashboardCount: f.dashboardCount - 1 };
+          return f;
+        }),
+      );
+      setError((err as Error).message || t('dashboard.error'));
+    }
+  };
+
+  const activeDashboard = activeDragId ? dashboards.find((d) => d.id === activeDragId) : null;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <>
       <div className="space-y-6 animate-in fade-in duration-300">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <button
-                type="button"
-                onClick={() => onNavigateToFolder(null)}
-                className={
-                  currentFolderId
-                    ? 'font-medium text-praetor hover:underline'
-                    : 'font-bold text-slate-800 cursor-default'
-                }
-              >
-                {t('dashboard.browser.title')}
-              </button>
-              {currentFolder && (
-                <>
-                  <i className="fa-solid fa-chevron-right text-xs text-slate-400" />
-                  <span className="font-bold text-slate-800">{currentFolder.name}</span>
-                </>
-              )}
-            </div>
-          </div>
+          <h2 className="text-xl font-black text-slate-800">{t('dashboard.browser.title')}</h2>
 
           {canCreate && (
             <div className="flex items-center gap-2">
-              {!currentFolderId && (
-                <button
-                  type="button"
-                  onClick={() => openCreateModal('folder')}
-                  className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                  <i className="fa-solid fa-folder-plus text-amber-500" />
-                  {t('dashboard.browser.newFolder')}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => openCreateModal('folder')}
+                className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <i className="fa-solid fa-folder-plus text-amber-500" />
+                {t('dashboard.browser.newFolder')}
+              </button>
               <button
                 type="button"
                 onClick={() => openCreateModal('dashboard')}
@@ -249,163 +587,133 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
           </div>
         ) : isEmpty ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-            {t(emptyKey)}
+            {t('dashboard.browser.emptyRoot')}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {/* Folder cards */}
-            {visibleFolders.map((folder) => (
-              <div
-                key={folder.id}
-                className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-              >
-                <button
-                  type="button"
-                  onClick={() => onNavigateToFolder(folder.id)}
-                  className="flex w-full items-center gap-4 text-left"
-                >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                    <i className="fa-solid fa-folder text-xl" />
-                  </div>
-                  <div className="min-w-0">
-                    {renamingFolderId === folder.id ? (
-                      <input
-                        value={renameFolderValue}
-                        onChange={(e) => setRenameFolderValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') void commitRenameFolder(folder.id);
-                          if (e.key === 'Escape') setRenamingFolderId(null);
-                        }}
-                        onBlur={() => void commitRenameFolder(folder.id)}
-                        autoFocus
-                        className="w-full rounded-lg border border-praetor bg-white px-2 py-1 text-sm font-bold text-slate-800 outline-none"
-                      />
-                    ) : (
-                      <p className="truncate font-bold text-slate-800">{folder.name}</p>
-                    )}
-                    <p className="text-xs text-slate-500">
-                      {t('dashboard.browser.dashboardCount', {
-                        count: folder.dashboardCount,
-                      })}
-                    </p>
-                  </div>
-                </button>
-
-                {(canUpdate || canDelete) && renamingFolderId !== folder.id && (
-                  <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    {canUpdate && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startRenameFolder(folder);
-                        }}
-                        className="rounded-lg border border-slate-200 bg-white p-1.5 text-xs text-slate-500 hover:text-slate-700"
-                        title={t('dashboard.browser.renameFolder')}
-                      >
-                        <i className="fa-solid fa-pen" />
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDeleteFolder(folder.id);
-                        }}
-                        disabled={isMutating}
-                        className={`rounded-lg border p-1.5 text-xs transition ${
-                          deletingId === folder.id
-                            ? 'border-red-300 bg-red-50 text-red-700'
-                            : 'border-slate-200 bg-white text-slate-500 hover:text-red-600'
-                        }`}
-                        title={
-                          deletingId === folder.id
-                            ? t('dashboard.browser.confirmDeleteFolder')
-                            : undefined
-                        }
-                      >
-                        <i className="fa-solid fa-trash" />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Dashboard cards */}
-            {visibleDashboards.map((dashboard) => {
-              const folderName =
-                searchQuery.trim() && dashboard.folderId
+        ) : searchResults ? (
+          /* ── Search results (flat) ── */
+          searchResults.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+              {t('dashboard.browser.emptySearch')}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
+              {searchResults.map((dashboard) => {
+                const folderName = dashboard.folderId
                   ? (folders.find((f) => f.id === dashboard.folderId)?.name ?? null)
                   : null;
+                return (
+                  <DashboardRowInner
+                    key={dashboard.id}
+                    dashboard={dashboard}
+                    indented={false}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    deletingId={deletingId}
+                    isMutating={isMutating}
+                    folderName={folderName}
+                    showFolderBadge
+                    onOpen={() => onOpenDashboard(dashboard.id)}
+                    onDelete={() => void handleDeleteDashboard(dashboard.id)}
+                  />
+                );
+              })}
+            </div>
+          )
+        ) : (
+          /* ── Tree view ── */
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={(e) => void handleDragEnd(e)}
+          >
+            <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
+              {/* Folders */}
+              {folders.map((folder) => {
+                const children = dashboardsByFolder.get(folder.id) ?? [];
+                const isExpanded = expandedFolderIds.has(folder.id);
 
-              return (
-                <div
-                  key={dashboard.id}
-                  className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-                >
-                  <button
-                    type="button"
-                    onClick={() => onOpenDashboard(dashboard.id)}
-                    className="flex w-full items-center gap-4 text-left"
-                  >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                      <i className="fa-solid fa-chart-pie text-xl" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-bold text-slate-800">{dashboard.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {t('dashboard.browser.widgetCount', {
-                          count: dashboard.widgets.length,
-                        })}
-                        {folderName ? (
-                          <span className="ml-1 text-slate-400">
-                            · {t('dashboard.browser.inFolder', { name: folderName })}
-                          </span>
-                        ) : searchQuery.trim() && !dashboard.folderId ? (
-                          <span className="ml-1 text-slate-400">
-                            · {t('dashboard.browser.inRoot')}
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {t('dashboard.browser.lastUpdated', {
-                          date: formatUpdated(dashboard.updatedAt),
-                        })}
-                      </p>
-                    </div>
-                  </button>
+                return (
+                  <div key={folder.id}>
+                    <DroppableFolderRow
+                      folder={folder}
+                      isExpanded={isExpanded}
+                      canUpdate={canUpdate}
+                      canDelete={canDelete}
+                      isRenaming={renamingFolderId === folder.id}
+                      renameValue={renameFolderValue}
+                      deletingId={deletingId}
+                      isMutating={isMutating}
+                      onToggle={() => toggleFolder(folder.id)}
+                      onRenameStart={() => {
+                        setRenamingFolderId(folder.id);
+                        setRenameFolderValue(folder.name);
+                      }}
+                      onRenameChange={setRenameFolderValue}
+                      onRenameCommit={() => void commitRenameFolder(folder.id)}
+                      onRenameCancel={() => setRenamingFolderId(null)}
+                      onDelete={() => void handleDeleteFolder(folder.id)}
+                    />
 
-                  {canDelete && (
-                    <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDeleteDashboard(dashboard.id);
-                        }}
-                        disabled={isMutating}
-                        className={`rounded-lg border p-1.5 text-xs transition ${
-                          deletingId === dashboard.id
-                            ? 'border-red-300 bg-red-50 text-red-700'
-                            : 'border-slate-200 bg-white text-slate-500 hover:text-red-600'
-                        }`}
-                        title={
-                          deletingId === dashboard.id
-                            ? t('dashboard.browser.confirmDeleteDashboard')
-                            : undefined
-                        }
-                      >
-                        <i className="fa-solid fa-trash" />
-                      </button>
+                    {/* Animated children container */}
+                    <div
+                      className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
+                        isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                      }`}
+                    >
+                      <div className="overflow-hidden min-h-0">
+                        {children.length === 0 ? (
+                          <div className="pl-9 py-2 text-xs text-slate-400 italic">
+                            {t('dashboard.browser.emptyFolderExpanded')}
+                          </div>
+                        ) : (
+                          children.map((dashboard) => (
+                            <DraggableDashboardRow
+                              key={dashboard.id}
+                              dashboard={dashboard}
+                              indented
+                              canUpdate={canUpdate}
+                              canDelete={canDelete}
+                              deletingId={deletingId}
+                              isMutating={isMutating}
+                              onOpen={() => onOpenDashboard(dashboard.id)}
+                              onDelete={() => void handleDeleteDashboard(dashboard.id)}
+                            />
+                          ))
+                        )}
+                      </div>
                     </div>
-                  )}
+                  </div>
+                );
+              })}
+
+              {/* Root-level (unfiled) dashboards */}
+              <RootDropZone>
+                {(dashboardsByFolder.get(null) ?? []).map((dashboard) => (
+                  <DraggableDashboardRow
+                    key={dashboard.id}
+                    dashboard={dashboard}
+                    indented={false}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    deletingId={deletingId}
+                    isMutating={isMutating}
+                    onOpen={() => onOpenDashboard(dashboard.id)}
+                    onDelete={() => void handleDeleteDashboard(dashboard.id)}
+                  />
+                ))}
+              </RootDropZone>
+            </div>
+
+            {/* Drag overlay */}
+            <DragOverlay>
+              {activeDashboard ? (
+                <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-white px-3 py-2 shadow-lg">
+                  <i className="fa-solid fa-chart-pie text-blue-500" />
+                  <span className="text-sm font-medium text-slate-700">{activeDashboard.name}</span>
                 </div>
-              );
-            })}
-          </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
 
@@ -413,7 +721,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         type={createModalType}
-        currentFolderId={currentFolderId}
+        currentFolderId={null}
         onCreated={handleCreated}
       />
     </>
