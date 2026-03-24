@@ -10,7 +10,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../services/api';
 import type { ReportDashboard, ReportDashboardFolder } from '../../services/api/reports';
@@ -338,12 +338,38 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
   const canCreate = hasPermission(permissions, buildPermission('reports.dashboard', 'create'));
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('reports.dashboard', 'delete'));
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  useEffect(() => {
+    if (!isAddMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target as Node)) {
+        setIsAddMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAddMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isAddMenuOpen]);
 
   useEffect(() => {
     const load = async () => {
@@ -397,6 +423,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
   const openCreateModal = (type: 'dashboard' | 'folder') => {
+    setIsAddMenuOpen(false);
     setCreateModalType(type);
     setCreateModalOpen(true);
   };
@@ -531,23 +558,43 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
           <h2 className="text-xl font-black text-slate-800">{t('dashboard.browser.title')}</h2>
 
           {canCreate && (
-            <div className="flex items-center gap-2">
+            <div className="relative" ref={addMenuRef}>
               <button
                 type="button"
-                onClick={() => openCreateModal('folder')}
-                className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                <i className="fa-solid fa-folder-plus text-amber-500" />
-                {t('dashboard.browser.newFolder')}
-              </button>
-              <button
-                type="button"
-                onClick={() => openCreateModal('dashboard')}
+                onClick={() => setIsAddMenuOpen((prev) => !prev)}
                 className="flex items-center gap-2 rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white shadow-xl shadow-slate-200 transition hover:brightness-110"
+                aria-haspopup="menu"
+                aria-expanded={isAddMenuOpen}
               >
                 <i className="fa-solid fa-plus" />
-                {t('dashboard.browser.newDashboard')}
+                {t('dashboard.browser.add')}
               </button>
+
+              {isAddMenuOpen && (
+                <div
+                  className="absolute right-0 z-30 mt-2 w-56 rounded-2xl border border-slate-200 bg-white py-2 shadow-xl animate-in fade-in zoom-in-95 duration-150 origin-top-right"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    onClick={() => openCreateModal('folder')}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <i className="fa-solid fa-folder-plus text-amber-500" />
+                    {t('dashboard.browser.newFolder')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCreateModal('dashboard')}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <i className="fa-solid fa-chart-pie text-blue-500" />
+                    {t('dashboard.browser.newDashboard')}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -721,7 +768,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         type={createModalType}
-        currentFolderId={null}
+        folders={folders}
         onCreated={handleCreated}
       />
     </>

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../services/api';
 import type { ReportDashboard, ReportDashboardFolder } from '../../services/api/reports';
@@ -9,25 +9,35 @@ export interface DashboardCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
   type: 'dashboard' | 'folder';
-  currentFolderId: string | null;
+  folders: ReportDashboardFolder[];
   onCreated: (item: ReportDashboard | ReportDashboardFolder) => void;
 }
+
+const ROOT_FOLDER_VALUE = '__root__';
 
 const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
   isOpen,
   onClose,
   type,
-  currentFolderId,
+  folders,
   onCreated,
 }) => {
   const { t } = useTranslation('reports');
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState(ROOT_FOLDER_VALUE);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedFolderId(ROOT_FOLDER_VALUE);
+    }
+  }, [isOpen]);
 
   const handleClose = () => {
     setName('');
     setError('');
+    setSelectedFolderId(ROOT_FOLDER_VALUE);
     onClose();
   };
 
@@ -42,7 +52,7 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
       } else {
         const dashboard = await api.reports.createDashboard({
           name: name.trim(),
-          ...(currentFolderId ? { folderId: currentFolderId } : {}),
+          ...(selectedFolderId !== ROOT_FOLDER_VALUE ? { folderId: selectedFolderId } : {}),
         });
         onCreated(dashboard);
       }
@@ -83,6 +93,27 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
           />
         </div>
+
+        {type === 'dashboard' && (
+          <div className="mb-4">
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+              {t('dashboard.createModal.locationLabel')}
+            </label>
+            <select
+              value={selectedFolderId}
+              onChange={(e) => setSelectedFolderId(e.target.value)}
+              disabled={isSaving}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-50"
+            >
+              <option value={ROOT_FOLDER_VALUE}>{t('dashboard.createModal.locationRoot')}</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

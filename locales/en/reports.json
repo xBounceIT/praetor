@@ -15,6 +15,7 @@
     "browser": {
       "title": "Dashboards",
       "searchPlaceholder": "Search dashboards...",
+      "add": "Add",
       "newDashboard": "New Dashboard",
       "newFolder": "New Folder",
       "emptyRoot": "No dashboards yet. Create one to get started.",
@@ -37,6 +38,8 @@
       "createFolder": "New Folder",
       "nameLabel": "Name",
       "namePlaceholder": "Enter a name...",
+      "locationLabel": "Folder location",
+      "locationRoot": "Root",
       "cancel": "Cancel",
       "create": "Create"
     },

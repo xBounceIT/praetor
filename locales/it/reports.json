@@ -15,6 +15,7 @@
     "browser": {
       "title": "Dashboard",
       "searchPlaceholder": "Cerca dashboard...",
+      "add": "Aggiungi",
       "newDashboard": "Nuova Dashboard",
       "newFolder": "Nuova Cartella",
       "emptyRoot": "Nessuna dashboard. Creane una per iniziare.",
@@ -37,6 +38,8 @@
       "createFolder": "Nuova Cartella",
       "nameLabel": "Nome",
       "namePlaceholder": "Inserisci un nome...",
+      "locationLabel": "Posizione cartella",
+      "locationRoot": "Radice",
       "cancel": "Annulla",
       "create": "Crea"
     },
