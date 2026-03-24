@@ -802,16 +802,16 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
               <i className="fa-solid fa-trash text-xl text-red-600" />
             </div>
 
-            <div className="space-y-2 text-center">
+            <div className="text-center">
               <h3 className="text-xl font-black text-slate-800">
-                {t('dashboard.browser.deleteFolderTitle')}
+                {t('dashboard.browser.deleteFolderTitleWithName', {
+                  name: folderPendingDelete?.name,
+                })}
               </h3>
-              <p className="text-sm text-slate-500">
-                {t('dashboard.browser.deleteFolderConfirm', { name: folderPendingDelete?.name })}
-              </p>
-              <p className="text-xs text-slate-400">{t('dashboard.browser.deleteFolderHint')}</p>
             </div>
+          </div>
 
+          <div className="space-y-3 border-t border-slate-100 px-6 py-4">
             <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
               <Checkbox
                 checked={deleteDashboardsInFolder}
@@ -822,14 +822,15 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
                 {t('dashboard.browser.deleteFolderWithDashboards')}
               </span>
             </label>
+            <p className="text-xs text-slate-400">{t('dashboard.browser.deleteFolderHint')}</p>
           </div>
 
-          <div className="flex border-t border-slate-100">
+          <div className="flex gap-3 px-6 pb-6">
             <button
               type="button"
               onClick={closeDeleteFolderModal}
               disabled={isMutating}
-              className="flex-1 px-6 py-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+              className="flex-1 rounded-xl py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50"
             >
               {t('dashboard.createModal.cancel')}
             </button>
@@ -837,7 +838,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
               type="button"
               onClick={() => void handleDeleteFolder()}
               disabled={isMutating}
-              className="flex-1 bg-red-600 px-6 py-4 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-red-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               {isMutating ? (
                 <i className="fa-solid fa-circle-notch fa-spin" />
