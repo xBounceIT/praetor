@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { createHash, randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query as dbQuery } from '../db/index.ts';
+import { query as dbQuery, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
@@ -14,7 +14,12 @@ import {
 } from '../services/cache.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
-import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
+import {
+  badRequest,
+  optionalNonEmptyString,
+  parseQueryBoolean,
+  requireNonEmptyString,
+} from '../utils/validation.ts';
 
 type AiProvider = 'gemini' | 'openrouter';
 type UiLanguage = 'en' | 'it';
@@ -3274,6 +3279,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['reports'],
         summary: 'Delete a dashboard folder',
         params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        querystring: {
+          type: 'object',
+          properties: {
+            deleteDashboards: { type: 'boolean' },
+          },
+        },
         response: {
           200: {
             type: 'object',
@@ -3289,6 +3300,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const params = request.params as { id?: string };
       const idResult = requireNonEmptyString(params.id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      const { deleteDashboards } = request.query as { deleteDashboards?: unknown };
+      const parsedDeleteDashboards = parseQueryBoolean(deleteDashboards);
+      if (deleteDashboards !== undefined && parsedDeleteDashboards === null) {
+        return badRequest(reply, 'deleteDashboards must be true or false');
+      }
+      const shouldDeleteDashboards = parsedDeleteDashboards === true;
+
+      if (shouldDeleteDashboards) {
+        const deleted = await withTransaction(async (client) => {
+          const folderCheck = await client.query(
+            `SELECT id FROM report_dashboard_folders WHERE id = $1 AND user_id = $2 LIMIT 1`,
+            [idResult.value, userId],
+          );
+          if (folderCheck.rows.length === 0) return false;
+
+          await client.query(
+            `DELETE FROM report_dashboards WHERE folder_id = $1 AND user_id = $2`,
+            [idResult.value, userId],
+          );
+          await client.query(
+            `DELETE FROM report_dashboard_folders WHERE id = $1 AND user_id = $2`,
+            [idResult.value, userId],
+          );
+          return true;
+        });
+        if (!deleted) return reply.code(404).send({ error: 'Folder not found' });
+        return { success: true };
+      }
 
       const result = await query(
         `DELETE FROM report_dashboard_folders WHERE id = $1 AND user_id = $2 RETURNING id`,

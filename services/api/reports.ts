@@ -221,10 +221,20 @@ export const reportsApi = {
       body: JSON.stringify(data),
     }),
 
-  deleteDashboardFolder: (folderId: string): Promise<{ success: boolean }> =>
-    fetchApi(`/reports/dashboard/folders/${folderId}`, {
+  deleteDashboardFolder: (
+    folderId: string,
+    options: { deleteDashboards?: boolean } = {},
+  ): Promise<{ success: boolean }> => {
+    const params = new URLSearchParams();
+    if (typeof options.deleteDashboards === 'boolean') {
+      params.set('deleteDashboards', String(options.deleteDashboards));
+    }
+    const query = params.toString();
+    const endpoint = `/reports/dashboard/folders/${folderId}${query ? `?${query}` : ''}`;
+    return fetchApi(endpoint, {
       method: 'DELETE',
-    }),
+    });
+  },
 
   listSessions: (): Promise<ReportChatSessionSummary[]> =>
     fetchApi<ReportChatSessionSummary[]>('/reports/ai-reporting/sessions'),

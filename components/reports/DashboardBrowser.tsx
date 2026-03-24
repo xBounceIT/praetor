@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../../services/api';
 import type { ReportDashboard, ReportDashboardFolder } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import Checkbox from '../shared/Checkbox';
+import Modal from '../shared/Modal';
 import DashboardCreateModal from './DashboardCreateModal';
 
 export interface DashboardBrowserProps {
@@ -32,7 +34,6 @@ interface FolderRowProps {
   canDelete: boolean;
   isRenaming: boolean;
   renameValue: string;
-  deletingId: string | null;
   isMutating: boolean;
   onToggle: () => void;
   onRenameStart: () => void;
@@ -51,7 +52,6 @@ const FolderRow: React.FC<FolderRowProps> = ({
   canDelete,
   isRenaming,
   renameValue,
-  deletingId,
   isMutating,
   onToggle,
   onRenameStart,
@@ -62,7 +62,6 @@ const FolderRow: React.FC<FolderRowProps> = ({
   droppableRef,
 }) => {
   const { t } = useTranslation('reports');
-  const isConfirmDelete = deletingId === folder.id;
 
   return (
     <div
@@ -140,12 +139,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
                 onDelete();
               }}
               disabled={isMutating}
-              className={`rounded-lg border p-1 text-xs transition ${
-                isConfirmDelete
-                  ? 'border-red-300 bg-red-50 text-red-700'
-                  : 'border-slate-200 bg-white text-slate-500 hover:text-red-600'
-              }`}
-              title={isConfirmDelete ? t('dashboard.browser.confirmDeleteFolder') : undefined}
+              className="rounded-lg border border-slate-200 bg-white p-1 text-xs text-slate-500 transition hover:text-red-600"
             >
               <i className="fa-solid fa-trash" />
             </button>
@@ -343,6 +337,10 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameFolderValue, setRenameFolderValue] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [folderPendingDelete, setFolderPendingDelete] = useState<ReportDashboardFolder | null>(
+    null,
+  );
+  const [deleteDashboardsInFolder, setDeleteDashboardsInFolder] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -462,19 +460,38 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
     }
   };
 
-  const handleDeleteFolder = async (folderId: string) => {
-    if (deletingId !== folderId) {
-      setDeletingId(folderId);
-      return;
-    }
+  const openDeleteFolderModal = (folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    setFolderPendingDelete(folder);
+    setDeleteDashboardsInFolder(false);
+  };
+
+  const closeDeleteFolderModal = () => {
+    if (isMutating) return;
+    setFolderPendingDelete(null);
+    setDeleteDashboardsInFolder(false);
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!folderPendingDelete) return;
+    const folderId = folderPendingDelete.id;
+    const shouldDeleteDashboards = deleteDashboardsInFolder;
     setIsMutating(true);
-    setDeletingId(null);
     try {
-      await api.reports.deleteDashboardFolder(folderId);
+      await api.reports.deleteDashboardFolder(folderId, {
+        deleteDashboards: shouldDeleteDashboards,
+      });
       setFolders((prev) => prev.filter((f) => f.id !== folderId));
-      setDashboards((prev) =>
-        prev.map((d) => (d.folderId === folderId ? { ...d, folderId: null } : d)),
-      );
+      if (shouldDeleteDashboards) {
+        setDashboards((prev) => prev.filter((d) => d.folderId !== folderId));
+      } else {
+        setDashboards((prev) =>
+          prev.map((d) => (d.folderId === folderId ? { ...d, folderId: null } : d)),
+        );
+      }
+      setFolderPendingDelete(null);
+      setDeleteDashboardsInFolder(false);
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
     } finally {
@@ -695,7 +712,6 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
                       canDelete={canDelete}
                       isRenaming={renamingFolderId === folder.id}
                       renameValue={renameFolderValue}
-                      deletingId={deletingId}
                       isMutating={isMutating}
                       onToggle={() => toggleFolder(folder.id)}
                       onRenameStart={() => {
@@ -705,7 +721,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
                       onRenameChange={setRenameFolderValue}
                       onRenameCommit={() => void commitRenameFolder(folder.id)}
                       onRenameCancel={() => setRenamingFolderId(null)}
-                      onDelete={() => void handleDeleteFolder(folder.id)}
+                      onDelete={() => openDeleteFolderModal(folder.id)}
                     />
 
                     {/* Animated children container */}
@@ -778,6 +794,60 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
         folders={folders}
         onCreated={handleCreated}
       />
+
+      <Modal isOpen={Boolean(folderPendingDelete)} onClose={closeDeleteFolderModal}>
+        <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="space-y-4 p-6">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+              <i className="fa-solid fa-trash text-xl text-red-600" />
+            </div>
+
+            <div className="space-y-2 text-center">
+              <h3 className="text-xl font-black text-slate-800">
+                {t('dashboard.browser.deleteFolderTitle')}
+              </h3>
+              <p className="text-sm text-slate-500">
+                {t('dashboard.browser.deleteFolderConfirm', { name: folderPendingDelete?.name })}
+              </p>
+              <p className="text-xs text-slate-400">{t('dashboard.browser.deleteFolderHint')}</p>
+            </div>
+
+            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <Checkbox
+                checked={deleteDashboardsInFolder}
+                onChange={(e) => setDeleteDashboardsInFolder(e.target.checked)}
+                disabled={isMutating}
+              />
+              <span className="text-sm font-semibold text-slate-700">
+                {t('dashboard.browser.deleteFolderWithDashboards')}
+              </span>
+            </label>
+          </div>
+
+          <div className="flex border-t border-slate-100">
+            <button
+              type="button"
+              onClick={closeDeleteFolderModal}
+              disabled={isMutating}
+              className="flex-1 px-6 py-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              {t('dashboard.createModal.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteFolder()}
+              disabled={isMutating}
+              className="flex-1 bg-red-600 px-6 py-4 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            >
+              {isMutating ? (
+                <i className="fa-solid fa-circle-notch fa-spin" />
+              ) : (
+                t('dashboard.browser.deleteFolderAction')
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };
