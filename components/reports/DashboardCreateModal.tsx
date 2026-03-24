@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../services/api';
 import type { ReportDashboard, ReportDashboardFolder } from '../../services/api/reports';
+import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 
 export interface DashboardCreateModalProps {
@@ -74,6 +75,10 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
     type === 'folder'
       ? t('dashboard.createModal.createFolder')
       : t('dashboard.createModal.createDashboard');
+  const folderOptions = [
+    { id: ROOT_FOLDER_VALUE, name: t('dashboard.createModal.locationRoot') },
+    ...folders.map((folder) => ({ id: folder.id, name: folder.name })),
+  ];
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
@@ -95,24 +100,16 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
         </div>
 
         {type === 'dashboard' && (
-          <div className="mb-4">
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-              {t('dashboard.createModal.locationLabel')}
-            </label>
-            <select
-              value={selectedFolderId}
-              onChange={(e) => setSelectedFolderId(e.target.value)}
-              disabled={isSaving}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-50"
-            >
-              <option value={ROOT_FOLDER_VALUE}>{t('dashboard.createModal.locationRoot')}</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <CustomSelect
+            className="mb-4"
+            label={t('dashboard.createModal.locationLabel')}
+            options={folderOptions}
+            value={selectedFolderId}
+            onChange={(value) =>
+              setSelectedFolderId(typeof value === 'string' ? value : ROOT_FOLDER_VALUE)
+            }
+            disabled={isSaving}
+          />
         )}
 
         {error && (
