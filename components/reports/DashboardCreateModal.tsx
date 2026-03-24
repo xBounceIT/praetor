@@ -1,0 +1,120 @@
+import type React from 'react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import api from '../../services/api';
+import type { ReportDashboard, ReportDashboardFolder } from '../../services/api/reports';
+import Modal from '../shared/Modal';
+
+export interface DashboardCreateModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  type: 'dashboard' | 'folder';
+  currentFolderId: string | null;
+  onCreated: (item: ReportDashboard | ReportDashboardFolder) => void;
+}
+
+const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
+  isOpen,
+  onClose,
+  type,
+  currentFolderId,
+  onCreated,
+}) => {
+  const { t } = useTranslation('reports');
+  const [name, setName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleClose = () => {
+    setName('');
+    setError('');
+    onClose();
+  };
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setIsSaving(true);
+    setError('');
+    try {
+      if (type === 'folder') {
+        const folder = await api.reports.createDashboardFolder({ name: name.trim() });
+        onCreated(folder);
+      } else {
+        const dashboard = await api.reports.createDashboard({
+          name: name.trim(),
+          ...(currentFolderId ? { folderId: currentFolderId } : {}),
+        });
+        onCreated(dashboard);
+      }
+      handleClose();
+    } catch (err) {
+      setError((err as Error).message || t('dashboard.error'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && name.trim() && !isSaving) {
+      void handleCreate();
+    }
+  };
+
+  const title =
+    type === 'folder'
+      ? t('dashboard.createModal.createFolder')
+      : t('dashboard.createModal.createDashboard');
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose}>
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+        <h2 className="mb-5 text-lg font-black text-slate-800">{title}</h2>
+
+        <div className="mb-4">
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+            {t('dashboard.createModal.nameLabel')}
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('dashboard.createModal.namePlaceholder')}
+            autoFocus
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+          />
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isSaving}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50"
+          >
+            {t('dashboard.createModal.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleCreate()}
+            disabled={isSaving || !name.trim()}
+            className="rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving ? (
+              <i className="fa-solid fa-circle-notch fa-spin" />
+            ) : (
+              t('dashboard.createModal.create')
+            )}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+export default DashboardCreateModal;

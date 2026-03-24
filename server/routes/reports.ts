@@ -3094,12 +3094,210 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     properties: {
       id: { type: 'string' },
       name: { type: 'string' },
+      folderId: { type: ['string', 'null'] },
       widgets: { type: 'array', items: dashboardWidgetSchema },
       createdAt: { type: 'number' },
       updatedAt: { type: 'number' },
     },
-    required: ['id', 'name', 'widgets', 'createdAt', 'updatedAt'],
+    required: ['id', 'name', 'folderId', 'widgets', 'createdAt', 'updatedAt'],
   } as const;
+
+  const dashboardFolderSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      name: { type: 'string' },
+      dashboardCount: { type: 'number' },
+      createdAt: { type: 'number' },
+      updatedAt: { type: 'number' },
+    },
+    required: ['id', 'name', 'dashboardCount', 'createdAt', 'updatedAt'],
+  } as const;
+
+  fastify.get(
+    '/dashboard/folders',
+    {
+      onRequest: [requirePermission('reports.dashboard.view')],
+      schema: {
+        tags: ['reports'],
+        summary: 'List dashboard folders',
+        response: {
+          200: { type: 'array', items: dashboardFolderSchema },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest) => {
+      const userId = request.user?.id || '';
+      const result = await query(
+        `SELECT
+           f.id,
+           f.name,
+           COUNT(d.id)::int AS "dashboardCount",
+           EXTRACT(EPOCH FROM f.created_at) * 1000 AS "createdAt",
+           EXTRACT(EPOCH FROM f.updated_at) * 1000 AS "updatedAt"
+         FROM report_dashboard_folders f
+         LEFT JOIN report_dashboards d ON d.folder_id = f.id AND d.user_id = f.user_id
+         WHERE f.user_id = $1
+         GROUP BY f.id
+         ORDER BY f.name`,
+        [userId],
+      );
+      return result.rows.map((row) => ({
+        id: String(row.id),
+        name: String(row.name || ''),
+        dashboardCount: toNumber(row.dashboardCount),
+        createdAt: toNumber(row.createdAt),
+        updatedAt: toNumber(row.updatedAt),
+      }));
+    },
+  );
+
+  fastify.post(
+    '/dashboard/folders',
+    {
+      onRequest: [requirePermission('reports.dashboard.create')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Create a dashboard folder',
+        body: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        response: {
+          200: dashboardFolderSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const body = request.body as { name?: unknown };
+      const nameResult = requireNonEmptyString(body.name, 'name');
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      const id = `rpt-dfl-${randomUUID()}`;
+      await query(
+        `INSERT INTO report_dashboard_folders (id, user_id, name, created_at, updated_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [id, userId, nameResult.value.trim().slice(0, 120)],
+      );
+
+      const result = await query(
+        `SELECT
+           f.id,
+           f.name,
+           COUNT(d.id)::int AS "dashboardCount",
+           EXTRACT(EPOCH FROM f.created_at) * 1000 AS "createdAt",
+           EXTRACT(EPOCH FROM f.updated_at) * 1000 AS "updatedAt"
+         FROM report_dashboard_folders f
+         LEFT JOIN report_dashboards d ON d.folder_id = f.id AND d.user_id = f.user_id
+         WHERE f.id = $1 AND f.user_id = $2
+         GROUP BY f.id
+         LIMIT 1`,
+        [id, userId],
+      );
+      const row = result.rows[0];
+      return {
+        id: String(row.id),
+        name: String(row.name || ''),
+        dashboardCount: toNumber(row.dashboardCount),
+        createdAt: toNumber(row.createdAt),
+        updatedAt: toNumber(row.updatedAt),
+      };
+    },
+  );
+
+  fastify.patch(
+    '/dashboard/folders/:id',
+    {
+      onRequest: [requirePermission('reports.dashboard.update')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Rename a dashboard folder',
+        params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        body: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        response: {
+          200: dashboardFolderSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const params = request.params as { id?: string };
+      const idResult = requireNonEmptyString(params.id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const body = request.body as { name?: unknown };
+      const nameResult = requireNonEmptyString(body.name, 'name');
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      const result = await query(
+        `UPDATE report_dashboard_folders
+         SET name = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND user_id = $3
+         RETURNING
+           id,
+           name,
+           EXTRACT(EPOCH FROM created_at) * 1000 AS "createdAt",
+           EXTRACT(EPOCH FROM updated_at) * 1000 AS "updatedAt"`,
+        [nameResult.value.trim().slice(0, 120), idResult.value, userId],
+      );
+      if (result.rows.length === 0) return reply.code(404).send({ error: 'Folder not found' });
+
+      const row = result.rows[0];
+      const countResult = await query(
+        `SELECT COUNT(id)::int AS "dashboardCount" FROM report_dashboards WHERE folder_id = $1 AND user_id = $2`,
+        [idResult.value, userId],
+      );
+      return {
+        id: String(row.id),
+        name: String(row.name || ''),
+        dashboardCount: toNumber(countResult.rows[0]?.dashboardCount),
+        createdAt: toNumber(row.createdAt),
+        updatedAt: toNumber(row.updatedAt),
+      };
+    },
+  );
+
+  fastify.delete(
+    '/dashboard/folders/:id',
+    {
+      onRequest: [requirePermission('reports.dashboard.delete')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Delete a dashboard folder',
+        params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        response: {
+          200: {
+            type: 'object',
+            properties: { success: { type: 'boolean' } },
+            required: ['success'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id || '';
+      const params = request.params as { id?: string };
+      const idResult = requireNonEmptyString(params.id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const result = await query(
+        `DELETE FROM report_dashboard_folders WHERE id = $1 AND user_id = $2 RETURNING id`,
+        [idResult.value, userId],
+      );
+      if (result.rows.length === 0) return reply.code(404).send({ error: 'Folder not found' });
+      return { success: true };
+    },
+  );
 
   fastify.get(
     '/dashboard',
@@ -3120,6 +3318,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
            id,
            name,
+           folder_id AS "folderId",
            widgets_json,
            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
@@ -3132,6 +3331,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return result.rows.map((row) => ({
         id: String(row.id),
         name: String(row.name || ''),
+        folderId: row.folderId ? String(row.folderId) : null,
         widgets: normalizeStoredWidgets(row.widgets_json),
         createdAt: toNumber(row.createdAt),
         updatedAt: toNumber(row.updatedAt),
@@ -3150,6 +3350,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: 'object',
           properties: {
             name: { type: 'string' },
+            folderId: { type: 'string' },
           },
           required: ['name'],
         },
@@ -3161,21 +3362,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.id || '';
-      const body = request.body as { name?: unknown };
+      const body = request.body as { name?: unknown; folderId?: unknown };
       const nameResult = requireNonEmptyString(body.name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
+      let folderId: string | null = null;
+      if (body.folderId !== undefined && body.folderId !== null) {
+        const folderIdResult = requireNonEmptyString(body.folderId, 'folderId');
+        if (!folderIdResult.ok) return badRequest(reply, folderIdResult.message);
+        const folderCheck = await query(
+          `SELECT id FROM report_dashboard_folders WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [folderIdResult.value, userId],
+        );
+        if (folderCheck.rows.length === 0)
+          return reply.code(404).send({ error: 'Folder not found' });
+        folderId = folderIdResult.value;
+      }
+
       const id = `rpt-dsh-${randomUUID()}`;
       await query(
-        `INSERT INTO report_dashboards (id, user_id, name, widgets_json, created_at, updated_at)
-         VALUES ($1, $2, $3, '[]'::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [id, userId, nameResult.value.trim().slice(0, 120)],
+        `INSERT INTO report_dashboards (id, user_id, name, folder_id, widgets_json, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, '[]'::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [id, userId, nameResult.value.trim().slice(0, 120), folderId],
       );
 
       const result = await query(
         `SELECT
            id,
            name,
+           folder_id AS "folderId",
            widgets_json,
            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
@@ -3188,6 +3403,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         id: String(row.id),
         name: String(row.name || ''),
+        folderId: row.folderId ? String(row.folderId) : null,
         widgets: normalizeStoredWidgets(row.widgets_json),
         createdAt: toNumber(row.createdAt),
         updatedAt: toNumber(row.updatedAt),
@@ -3207,6 +3423,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: 'object',
           properties: {
             name: { type: 'string' },
+            folderId: { type: ['string', 'null'] },
             widgets: { type: 'array', items: dashboardWidgetSchema },
           },
         },
@@ -3222,7 +3439,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(params.id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const body = request.body as { name?: unknown; widgets?: unknown };
+      const body = request.body as { name?: unknown; widgets?: unknown; folderId?: unknown };
       const updates: string[] = [];
       const values: unknown[] = [];
       let position = 1;
@@ -3251,6 +3468,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(JSON.stringify(normalized));
       }
 
+      if ('folderId' in body) {
+        if (body.folderId === null) {
+          updates.push(`folder_id = NULL`);
+        } else {
+          const folderIdResult = requireNonEmptyString(body.folderId, 'folderId');
+          if (!folderIdResult.ok) return badRequest(reply, folderIdResult.message);
+          const folderCheck = await query(
+            `SELECT id FROM report_dashboard_folders WHERE id = $1 AND user_id = $2 LIMIT 1`,
+            [folderIdResult.value, userId],
+          );
+          if (folderCheck.rows.length === 0)
+            return reply.code(404).send({ error: 'Folder not found' });
+          updates.push(`folder_id = $${position++}`);
+          values.push(folderIdResult.value);
+        }
+      }
+
       if (updates.length === 0) return badRequest(reply, 'No updates provided');
       updates.push('updated_at = CURRENT_TIMESTAMP');
 
@@ -3264,6 +3498,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          RETURNING
            id,
            name,
+           folder_id AS "folderId",
            widgets_json,
            EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
            EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -3275,6 +3510,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         id: String(row.id),
         name: String(row.name || ''),
+        folderId: row.folderId ? String(row.folderId) : null,
         widgets: normalizeStoredWidgets(row.widgets_json),
         createdAt: toNumber(row.createdAt),
         updatedAt: toNumber(row.updatedAt),

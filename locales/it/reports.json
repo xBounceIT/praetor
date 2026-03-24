@@ -2,10 +2,7 @@
   "dashboard": {
     "loading": "Caricamento dashboard...",
     "error": "Impossibile caricare i dati della dashboard.",
-    "selectDashboard": "Dashboard",
     "noDashboards": "Nessuna dashboard. Creane una per iniziare.",
-    "newDashboardPlaceholder": "Nome nuova dashboard",
-    "create": "Crea",
     "dashboardName": "Nome dashboard",
     "saveName": "Salva nome",
     "deleteDashboard": "Elimina dashboard",
@@ -15,6 +12,32 @@
     "removeWidget": "Rimuovi",
     "loadingWidget": "Caricamento dati widget...",
     "noData": "Nessun dato per questa configurazione.",
+    "browser": {
+      "title": "Dashboard",
+      "searchPlaceholder": "Cerca dashboard...",
+      "newDashboard": "Nuova Dashboard",
+      "newFolder": "Nuova Cartella",
+      "emptyRoot": "Nessuna dashboard. Creane una per iniziare.",
+      "emptyFolder": "Questa cartella e' vuota.",
+      "emptySearch": "Nessuna dashboard corrisponde alla ricerca.",
+      "dashboardCount": "{{count}} dashboard",
+      "widgetCount": "{{count}} widget",
+      "inFolder": "in {{name}}",
+      "inRoot": "in Radice",
+      "lastUpdated": "Aggiornato {{date}}",
+      "confirmDeleteDashboard": "Clicca di nuovo per eliminare",
+      "confirmDeleteFolder": "Clicca di nuovo per eliminare la cartella (le dashboard saranno spostate in radice)",
+      "renameFolder": "Rinomina cartella",
+      "backToDashboards": "Torna alle dashboard"
+    },
+    "createModal": {
+      "createDashboard": "Nuova Dashboard",
+      "createFolder": "Nuova Cartella",
+      "nameLabel": "Nome",
+      "namePlaceholder": "Inserisci un nome...",
+      "cancel": "Annulla",
+      "create": "Crea"
+    },
     "chartTypes": {
       "pie": "Torta",
       "bar": "Istogramma"

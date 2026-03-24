@@ -2,10 +2,7 @@
   "dashboard": {
     "loading": "Loading dashboards...",
     "error": "Unable to load dashboard data.",
-    "selectDashboard": "Dashboard",
     "noDashboards": "No dashboards yet. Create one to get started.",
-    "newDashboardPlaceholder": "New dashboard name",
-    "create": "Create",
     "dashboardName": "Dashboard name",
     "saveName": "Save name",
     "deleteDashboard": "Delete dashboard",
@@ -15,6 +12,32 @@
     "removeWidget": "Remove",
     "loadingWidget": "Loading widget data...",
     "noData": "No data for this configuration.",
+    "browser": {
+      "title": "Dashboards",
+      "searchPlaceholder": "Search dashboards...",
+      "newDashboard": "New Dashboard",
+      "newFolder": "New Folder",
+      "emptyRoot": "No dashboards yet. Create one to get started.",
+      "emptyFolder": "This folder is empty.",
+      "emptySearch": "No dashboards match your search.",
+      "dashboardCount": "{{count}} dashboard(s)",
+      "widgetCount": "{{count}} widget(s)",
+      "inFolder": "in {{name}}",
+      "inRoot": "in Root",
+      "lastUpdated": "Updated {{date}}",
+      "confirmDeleteDashboard": "Click again to delete",
+      "confirmDeleteFolder": "Click again to delete folder (dashboards will move to root)",
+      "renameFolder": "Rename folder",
+      "backToDashboards": "Back to dashboards"
+    },
+    "createModal": {
+      "createDashboard": "New Dashboard",
+      "createFolder": "New Folder",
+      "nameLabel": "Name",
+      "namePlaceholder": "Enter a name...",
+      "cancel": "Cancel",
+      "create": "Create"
+    },
     "chartTypes": {
       "pie": "Pie",
       "bar": "Histogram"

@@ -1318,6 +1318,25 @@ CREATE TABLE IF NOT EXISTS report_dashboards (
 CREATE INDEX IF NOT EXISTS idx_report_dashboards_user_updated
     ON report_dashboards(user_id, updated_at DESC);
 
+-- Reports: dashboard folders (v1)
+CREATE TABLE IF NOT EXISTS report_dashboard_folders (
+    id VARCHAR(50) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(120) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_dashboard_folders_user
+    ON report_dashboard_folders(user_id, name);
+
+ALTER TABLE report_dashboards
+    ADD COLUMN IF NOT EXISTS folder_id VARCHAR(50)
+    REFERENCES report_dashboard_folders(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_report_dashboards_folder
+    ON report_dashboards(folder_id);
+
 -- Email administration table (single row)
 CREATE TABLE IF NOT EXISTS email_config (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),

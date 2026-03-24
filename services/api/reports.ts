@@ -17,7 +17,16 @@ export interface DashboardWidget {
 export interface ReportDashboard {
   id: string;
   name: string;
+  folderId: string | null;
   widgets: DashboardWidget[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ReportDashboardFolder {
+  id: string;
+  name: string;
+  dashboardCount: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -168,7 +177,7 @@ export const reportsApi = {
   listDashboards: (): Promise<ReportDashboard[]> =>
     fetchApi<ReportDashboard[]>('/reports/dashboard'),
 
-  createDashboard: (data: { name: string }): Promise<ReportDashboard> =>
+  createDashboard: (data: { name: string; folderId?: string }): Promise<ReportDashboard> =>
     fetchApi('/reports/dashboard', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -176,7 +185,7 @@ export const reportsApi = {
 
   updateDashboard: (
     dashboardId: string,
-    data: { name?: string; widgets?: DashboardWidget[] },
+    data: { name?: string; widgets?: DashboardWidget[]; folderId?: string | null },
   ): Promise<ReportDashboard> =>
     fetchApi(`/reports/dashboard/${dashboardId}`, {
       method: 'PATCH',
@@ -192,6 +201,29 @@ export const reportsApi = {
     fetchApi('/reports/dashboard/widget-data', {
       method: 'POST',
       body: JSON.stringify({ widget }),
+    }),
+
+  listDashboardFolders: (): Promise<ReportDashboardFolder[]> =>
+    fetchApi<ReportDashboardFolder[]>('/reports/dashboard/folders'),
+
+  createDashboardFolder: (data: { name: string }): Promise<ReportDashboardFolder> =>
+    fetchApi('/reports/dashboard/folders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateDashboardFolder: (
+    folderId: string,
+    data: { name: string },
+  ): Promise<ReportDashboardFolder> =>
+    fetchApi(`/reports/dashboard/folders/${folderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteDashboardFolder: (folderId: string): Promise<{ success: boolean }> =>
+    fetchApi(`/reports/dashboard/folders/${folderId}`, {
+      method: 'DELETE',
     }),
 
   listSessions: (): Promise<ReportChatSessionSummary[]> =>
