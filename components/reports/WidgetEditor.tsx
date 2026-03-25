@@ -66,6 +66,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   const [previewData, setPreviewData] = useState<DashboardWidgetDataResult | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRequestRef = useRef<AbortController | null>(null);
+  const previewRunRef = useRef(0);
 
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
 
@@ -110,31 +112,60 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
 
   // Live preview with 500ms debounce
   useEffect(() => {
+    if (isLoading || !dashboard) return;
+
+    const runId = ++previewRunRef.current;
+
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    if (previewRequestRef.current) {
+      previewRequestRef.current.abort();
+      previewRequestRef.current = null;
+    }
+
     previewTimerRef.current = setTimeout(async () => {
+      const abortController = new AbortController();
+      previewRequestRef.current = abortController;
+
       setIsLoadingPreview(true);
       try {
         const previewWidget: DashboardWidget = {
           id: 'preview',
-          title: title || 'Preview',
+          title: 'Preview',
           chartType,
           dataset,
           groupBy,
           metric,
           limit,
         };
-        const data = await api.reports.getDashboardWidgetData(previewWidget);
+
+        const data = await api.reports.getDashboardWidgetData(previewWidget, {
+          signal: abortController.signal,
+        });
+
+        if (previewRunRef.current !== runId || abortController.signal.aborted) return;
         setPreviewData(data);
       } catch {
+        if (abortController.signal.aborted) return;
+        if (previewRunRef.current !== runId) return;
         setPreviewData(null);
       } finally {
-        setIsLoadingPreview(false);
+        if (previewRequestRef.current === abortController) {
+          previewRequestRef.current = null;
+        }
+        if (previewRunRef.current === runId && !abortController.signal.aborted) {
+          setIsLoadingPreview(false);
+        }
       }
     }, 500);
+
     return () => {
       if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+      if (previewRequestRef.current) {
+        previewRequestRef.current.abort();
+        previewRequestRef.current = null;
+      }
     };
-  }, [chartType, dataset, groupBy, metric, limit, title]);
+  }, [isLoading, dashboard, chartType, dataset, groupBy, metric, limit]);
 
   const addTag = (raw: string) => {
     const trimmed = raw.trim().replace(/,$/, '').trim();

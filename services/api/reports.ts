@@ -199,10 +199,14 @@ export const reportsApi = {
       method: 'DELETE',
     }),
 
-  getDashboardWidgetData: (widget: DashboardWidget): Promise<DashboardWidgetDataResult> =>
+  getDashboardWidgetData: (
+    widget: DashboardWidget,
+    options: Pick<RequestInit, 'signal'> = {},
+  ): Promise<DashboardWidgetDataResult> =>
     fetchApi('/reports/dashboard/widget-data', {
       method: 'POST',
       body: JSON.stringify({ widget }),
+      signal: options.signal,
     }),
 
   listDashboardFolders: (): Promise<ReportDashboardFolder[]> =>
