@@ -82,6 +82,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   }, [mode, widgetId, dashboard]);
 
   const isInvalidEditTarget = Boolean(isOpen && mode === 'edit' && widgetId && !existingWidget);
+  const dashboardId = dashboard?.id || '';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -119,7 +120,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   }, [dataset]);
 
   useEffect(() => {
-    if (!isOpen || !dashboard || isInvalidEditTarget) return;
+    if (!isOpen || !dashboardId || isInvalidEditTarget) return;
 
     const runId = ++previewRunRef.current;
 
@@ -138,7 +139,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
         const previewWidget: DashboardWidget = {
           id: 'preview',
           title: 'Preview',
-          chartType,
+          // Preview series calculation is independent of chart type.
+          chartType: 'pie',
           dataset,
           groupBy,
           metric,
@@ -172,7 +174,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
         previewRequestRef.current = null;
       }
     };
-  }, [isOpen, dashboard, isInvalidEditTarget, chartType, dataset, groupBy, metric, limit]);
+  }, [isOpen, dashboardId, isInvalidEditTarget, dataset, groupBy, metric, limit]);
 
   const addTag = (raw: string) => {
     const trimmed = raw.trim().replace(/,$/, '').trim();
