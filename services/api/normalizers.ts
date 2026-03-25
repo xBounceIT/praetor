@@ -4,6 +4,7 @@ import type {
   ClientOfferItem,
   ClientsOrder,
   ClientsOrderItem,
+  EmployeeType,
   GeneralSettings,
   Invoice,
   InvoiceItem,
@@ -11,6 +12,7 @@ import type {
   ProjectTask,
   Quote,
   QuoteItem,
+  RoleSummary,
   SpecialBid,
   SupplierInvoice,
   SupplierInvoiceItem,
@@ -44,15 +46,66 @@ export const normalizeClient = (c: Client): Client => ({
   taxCode: c.taxCode ?? undefined,
 });
 
-export const normalizeUser = (u: User): User => ({
-  ...u,
-  hasTopManagerRole: !!u.hasTopManagerRole,
-  isAdminOnly: !!u.isAdminOnly,
-  email: u.email || undefined,
-  permissions: u.permissions || [],
-  costPerHour: u.costPerHour ? Number(u.costPerHour) : 0,
-  employeeType: u.employeeType || 'app_user',
-});
+const normalizeTrimmedString = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeTrimmedString(entry))
+    .filter((entry): entry is string => entry.length > 0);
+};
+
+const normalizeEmployeeType = (value: unknown): EmployeeType => {
+  if (value === 'internal' || value === 'external' || value === 'app_user') {
+    return value;
+  }
+  return 'app_user';
+};
+
+const normalizeAvailableRoles = (value: unknown): RoleSummary[] | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return [];
+
+  const normalizedRoles: RoleSummary[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+
+    const role = entry as Partial<RoleSummary>;
+    const id = normalizeTrimmedString(role.id);
+    const name = normalizeTrimmedString(role.name);
+    if (!id || !name) continue;
+
+    normalizedRoles.push({
+      id,
+      name,
+      isSystem: !!role.isSystem,
+      isAdmin: !!role.isAdmin,
+    });
+  }
+
+  return normalizedRoles;
+};
+
+export const normalizeUser = (u: User): User => {
+  const normalizedCostPerHour = Number(u.costPerHour ?? 0);
+
+  return {
+    ...u,
+    id: normalizeTrimmedString(u.id),
+    name: normalizeTrimmedString(u.name),
+    role: normalizeTrimmedString(u.role),
+    avatarInitials: normalizeTrimmedString(u.avatarInitials),
+    username: normalizeTrimmedString(u.username),
+    hasTopManagerRole: !!u.hasTopManagerRole,
+    isAdminOnly: !!u.isAdminOnly,
+    email: normalizeTrimmedString(u.email) || undefined,
+    permissions: normalizeStringArray(u.permissions),
+    availableRoles: normalizeAvailableRoles(u.availableRoles),
+    costPerHour: Number.isFinite(normalizedCostPerHour) ? normalizedCostPerHour : 0,
+    employeeType: normalizeEmployeeType(u.employeeType),
+  };
+};
 
 export const normalizeProduct = (p: Product): Product => ({
   ...p,
