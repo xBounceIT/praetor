@@ -233,6 +233,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const activeAssistantMessageIdRef = useRef('');
   const pendingRetryAutoSelectGroupRef = useRef('');
   const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
+  const skipNextAutoLoadSessionIdRef = useRef('');
 
   const canSend =
     enableAiReporting &&
@@ -575,6 +576,18 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       abortRef.current === abortController &&
       !abortController.signal.aborted;
 
+    const activateSessionForCurrentSend = (
+      sessionId: string,
+      opts: { skipAutoLoad?: boolean } = {},
+    ) => {
+      if (!sessionId || !isRunActive()) return;
+      if (opts.skipAutoLoad) {
+        skipNextAutoLoadSessionIdRef.current = sessionId;
+      }
+      setActiveSessionId(sessionId);
+      setIsNewChat(false);
+    };
+
     const cleanupCancelledAssistant = () => {
       setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
       setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
@@ -594,7 +607,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         if (!sessionId || !isRunActive()) return;
         resolvedSessionId = sessionId;
         setMessages((prev) =>
-          prev.map((m) => (m.id === assistantMessageId ? { ...m, sessionId } : m)),
+          prev.map((m) =>
+            m.id === assistantMessageId || m.id === optimisticUser.id ? { ...m, sessionId } : m,
+          ),
         );
       };
 
@@ -617,8 +632,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
               streamStarted = true;
               syncAssistantSession(sessionId);
               if (!hadSession && sessionId) {
-                setActiveSessionId(sessionId);
-                setIsNewChat(false);
+                activateSessionForCurrentSend(sessionId, { skipAutoLoad: true });
               }
               if (pendingEmptySessionId && sessionId === pendingEmptySessionId) {
                 setPendingEmptySessionId('');
@@ -689,9 +703,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         syncAssistantSession(streamed.sessionId);
         closeThoughtPanel();
 
-        if (!hadSession && streamed.sessionId) {
-          setActiveSessionId(streamed.sessionId);
-          setIsNewChat(false);
+        if (!hadSession && !streamStarted && streamed.sessionId) {
+          activateSessionForCurrentSend(streamed.sessionId, { skipAutoLoad: true });
         }
         if (pendingEmptySessionId && streamed.sessionId === pendingEmptySessionId) {
           setPendingEmptySessionId('');
@@ -712,6 +725,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         );
         if (activeAssistantMessageIdRef.current === assistantMessageId) {
           activeAssistantMessageIdRef.current = '';
+        }
+        if (!hadSession && streamed.sessionId) {
+          await loadMessages(streamed.sessionId, { forceScroll: false });
         }
         await loadSessions({ preferredSessionId: streamed.sessionId });
       } catch (streamErr) {
@@ -745,12 +761,12 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
           }
 
           if (!hadSession) {
-            setActiveSessionId(fallback.sessionId);
-            setIsNewChat(false);
+            activateSessionForCurrentSend(fallback.sessionId, { skipAutoLoad: true });
           }
           if (pendingEmptySessionId && fallback.sessionId === pendingEmptySessionId) {
             setPendingEmptySessionId('');
           }
+          syncAssistantSession(fallback.sessionId);
 
           const completed = await typeAssistantMessage(
             assistantMessageId,
@@ -769,6 +785,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             activeAssistantMessageIdRef.current = '';
           }
           setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
+          if (!hadSession && fallback.sessionId) {
+            await loadMessages(fallback.sessionId, { forceScroll: false });
+          }
           await loadSessions({ preferredSessionId: fallback.sessionId });
         } else {
           if (!isRunActive()) return;
@@ -1099,6 +1118,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       abortRef.current?.abort();
       abortRef.current = null;
       activeAssistantMessageIdRef.current = '';
+      skipNextAutoLoadSessionIdRef.current = '';
       setSessions([]);
       setActiveSessionId('');
       setIsNewChat(false);
@@ -1118,6 +1138,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     abortRef.current?.abort();
     abortRef.current = null;
     activeAssistantMessageIdRef.current = '';
+    skipNextAutoLoadSessionIdRef.current = '';
     setActiveSessionId('');
     setIsNewChat(false);
     setMessages([]);
@@ -1132,6 +1153,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   useEffect(() => {
     if (!enableAiReporting) return;
     if (!activeSessionId) return;
+    if (skipNextAutoLoadSessionIdRef.current) {
+      const shouldSkip = skipNextAutoLoadSessionIdRef.current === activeSessionId;
+      skipNextAutoLoadSessionIdRef.current = '';
+      if (shouldSkip) return;
+    }
     setIsNewChat(false);
     setHasNewText(false);
     void loadMessages(activeSessionId, { forceScroll: true });
