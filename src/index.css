@@ -25,6 +25,25 @@
   --color-neutral: #b8b5b3;
 }
 
+@keyframes dashboard-widget-pop {
+  0% {
+    transform: scale(0.94);
+    opacity: 0.75;
+  }
+  65% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.dashboard-widget-pop {
+  animation: dashboard-widget-pop 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
 /* Chrome, Safari, Edge, Opera */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {

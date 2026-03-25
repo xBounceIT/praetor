@@ -14,26 +14,29 @@ import {
   YAxis,
 } from 'recharts';
 import api from '../../services/api';
-import type { DashboardWidgetDataResult } from '../../services/api/reports';
+import type { DashboardWidgetDataResult, ReportDashboard } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import NotFound from '../NotFound';
 import Modal from '../shared/Modal';
 import { CHART_COLORS } from './dashboardConstants';
+import WidgetEditor from './WidgetEditor';
 
 type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
 
 export interface DashboardDetailProps {
   permissions: string[];
   dashboardId: string;
+  activeWidgetRoute: WidgetRoute | null;
   onBack: () => void;
-  onNavigateToWidgetEditor: (route: WidgetRoute) => void;
+  onWidgetRouteChange: (route: WidgetRoute | null) => void;
 }
 
 const DashboardDetail: React.FC<DashboardDetailProps> = ({
   permissions,
   dashboardId,
+  activeWidgetRoute,
   onBack,
-  onNavigateToWidgetEditor,
+  onWidgetRouteChange,
 }) => {
   const { t } = useTranslation('reports');
   const [dashboards, setDashboards] = useState<
@@ -44,6 +47,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [widgetData, setWidgetData] = useState<Record<string, DashboardWidgetDataResult>>({});
+  const [recentlyAddedWidgetId, setRecentlyAddedWidgetId] = useState<string | null>(null);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -74,6 +78,28 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   useEffect(() => {
     setRenameValue(dashboard?.name || '');
   }, [dashboard]);
+
+  useEffect(() => {
+    if (!recentlyAddedWidgetId) return;
+    const timer = window.setTimeout(() => {
+      setRecentlyAddedWidgetId(null);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [recentlyAddedWidgetId]);
+
+  useEffect(() => {
+    if (!dashboard || !activeWidgetRoute || activeWidgetRoute.mode !== 'edit') return;
+    const exists = dashboard.widgets.some((widget) => widget.id === activeWidgetRoute.widgetId);
+    if (!exists) {
+      onWidgetRouteChange(null);
+    }
+  }, [dashboard, activeWidgetRoute, onWidgetRouteChange]);
+
+  useEffect(() => {
+    if (activeWidgetRoute && !canUpdate) {
+      onWidgetRouteChange(null);
+    }
+  }, [activeWidgetRoute, canUpdate, onWidgetRouteChange]);
 
   useEffect(() => {
     if (!dashboard || dashboard.widgets.length === 0) {
@@ -145,6 +171,20 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
     }
   };
 
+  const handleWidgetSaved = (payload: {
+    dashboard: ReportDashboard;
+    mode: 'new' | 'edit';
+    widgetId: string;
+  }) => {
+    setDashboards((prev) =>
+      prev.map((item) => (item.id === payload.dashboard.id ? payload.dashboard : item)),
+    );
+    if (payload.mode === 'new') {
+      setRecentlyAddedWidgetId(payload.widgetId);
+    }
+    onWidgetRouteChange(null);
+  };
+
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
@@ -187,7 +227,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           {canUpdate && (
             <button
               type="button"
-              onClick={() => onNavigateToWidgetEditor({ mode: 'new' })}
+              onClick={() => onWidgetRouteChange({ mode: 'new' })}
               className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
             >
               <i className="fa-solid fa-plus" />
@@ -204,7 +244,11 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           return (
             <div
               key={widget.id}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
+                recentlyAddedWidgetId === widget.id
+                  ? 'dashboard-widget-pop ring-2 ring-blue-200'
+                  : ''
+              }`}
             >
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -234,9 +278,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() =>
-                        onNavigateToWidgetEditor({ mode: 'edit', widgetId: widget.id })
-                      }
+                      onClick={() => onWidgetRouteChange({ mode: 'edit', widgetId: widget.id })}
                       className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
                     >
                       <i className="fa-solid fa-pen text-[10px]" />
@@ -310,6 +352,18 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
           {t('dashboard.noData')}
         </div>
+      )}
+
+      {activeWidgetRoute && canUpdate && (
+        <WidgetEditor
+          isOpen={Boolean(activeWidgetRoute)}
+          permissions={permissions}
+          dashboard={dashboard}
+          mode={activeWidgetRoute.mode}
+          widgetId={activeWidgetRoute.mode === 'edit' ? activeWidgetRoute.widgetId : undefined}
+          onClose={() => onWidgetRouteChange(null)}
+          onSaved={handleWidgetSaved}
+        />
       )}
 
       {/* Edit modal (rename + delete) */}

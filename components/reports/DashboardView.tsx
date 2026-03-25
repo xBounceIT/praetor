@@ -1,7 +1,6 @@
 import type React from 'react';
 import DashboardBrowser from './DashboardBrowser';
 import DashboardDetail from './DashboardDetail';
-import WidgetEditor from './WidgetEditor';
 
 type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
 
@@ -20,25 +19,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onDashboardIdChange,
   onWidgetRouteChange,
 }) => {
-  if (activeDashboardId && activeWidgetRoute) {
-    return (
-      <WidgetEditor
-        permissions={permissions}
-        dashboardId={activeDashboardId}
-        mode={activeWidgetRoute.mode}
-        widgetId={activeWidgetRoute.mode === 'edit' ? activeWidgetRoute.widgetId : undefined}
-        onBack={() => onWidgetRouteChange(null)}
-      />
-    );
-  }
-
   if (activeDashboardId) {
     return (
       <DashboardDetail
         permissions={permissions}
         dashboardId={activeDashboardId}
+        activeWidgetRoute={activeWidgetRoute}
         onBack={() => onDashboardIdChange(null)}
-        onNavigateToWidgetEditor={onWidgetRouteChange}
+        onWidgetRouteChange={onWidgetRouteChange}
       />
     );
   }
