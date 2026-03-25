@@ -16,6 +16,7 @@ import {
 import api from '../../services/api';
 import type { DashboardWidget, DashboardWidgetDataResult } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
+import NotFound from '../NotFound';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 
@@ -227,11 +228,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
   }
 
   if (!dashboard) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
-        {t('dashboard.error')}
-      </div>
-    );
+    return <NotFound onReturn={onBack} />;
   }
 
   return (
