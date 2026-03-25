@@ -17,6 +17,7 @@ import api from '../../services/api';
 import type { DashboardWidget, DashboardWidgetDataResult } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
+import Modal from '../shared/Modal';
 
 export interface DashboardDetailProps {
   permissions: string[];
@@ -69,6 +70,9 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
   const [widgetDataset, setWidgetDataset] = useState<DashboardWidget['dataset']>('timesheets');
   const [widgetGroupBy, setWidgetGroupBy] = useState('user');
   const [widgetMetric, setWidgetMetric] = useState('hours');
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddWidgetModalOpen, setIsAddWidgetModalOpen] = useState(false);
 
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('reports.dashboard', 'delete'));
@@ -140,6 +144,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
         name: renameValue.trim(),
       });
       setDashboards((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setIsEditModalOpen(false);
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
     } finally {
@@ -160,7 +165,16 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
     }
   };
 
-  const addWidget = async () => {
+  const resetWidgetForm = () => {
+    setWidgetTitle('');
+    setWidgetChartType('pie');
+    setWidgetDataset('timesheets');
+    setWidgetGroupBy('user');
+    setWidgetMetric('hours');
+    setError('');
+  };
+
+  const handleAddWidget = async () => {
     if (!canUpdate || !dashboard || !widgetTitle.trim()) return;
     const nextWidget: DashboardWidget = {
       id: `wdg-${Date.now()}`,
@@ -178,7 +192,8 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
         widgets: [...dashboard.widgets, nextWidget],
       });
       setDashboards((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      setWidgetTitle('');
+      resetWidgetForm();
+      setIsAddWidgetModalOpen(false);
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
     } finally {
@@ -234,108 +249,29 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
           </button>
           <h2 className="text-xl font-black text-slate-800">{dashboard.name}</h2>
         </div>
-      </div>
-
-      {/* Rename / Delete controls */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="w-full lg:max-w-md">
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-              {t('dashboard.dashboardName')}
-            </label>
-            <input
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
-            />
-          </div>
+        <div className="flex items-center gap-2">
+          {(canUpdate || canDelete) && (
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+            >
+              <i className="fa-solid fa-pen text-xs" />
+              {t('dashboard.editDashboard')}
+            </button>
+          )}
           {canUpdate && (
             <button
               type="button"
-              onClick={() => void saveDashboardName()}
-              disabled={isSaving || !renameValue.trim()}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setIsAddWidgetModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
             >
-              {t('dashboard.saveName')}
-            </button>
-          )}
-          {canDelete && (
-            <button
-              type="button"
-              onClick={() => void deleteDashboard()}
-              disabled={isSaving}
-              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t('dashboard.deleteDashboard')}
+              <i className="fa-solid fa-plus" />
+              {t('dashboard.addVisualization')}
             </button>
           )}
         </div>
-
-        {error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
       </div>
-
-      {/* Widget builder */}
-      {canUpdate && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-4 text-sm font-black uppercase tracking-wider text-slate-500">
-            {t('dashboard.addWidget')}
-          </h3>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
-            <input
-              value={widgetTitle}
-              onChange={(event) => setWidgetTitle(event.target.value)}
-              placeholder={t('dashboard.widgetTitle')}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 lg:col-span-2"
-            />
-            <CustomSelect
-              options={[
-                { id: 'pie', name: t('dashboard.chartTypes.pie') },
-                { id: 'bar', name: t('dashboard.chartTypes.bar') },
-              ]}
-              value={widgetChartType}
-              onChange={(value) => setWidgetChartType(value as DashboardWidget['chartType'])}
-            />
-            <CustomSelect
-              options={DATASET_OPTIONS.map((dataset) => ({
-                id: dataset,
-                name: t(`dashboard.datasets.${dataset}`),
-              }))}
-              value={widgetDataset}
-              onChange={(value) => setWidgetDataset(value as DashboardWidget['dataset'])}
-            />
-            <CustomSelect
-              options={GROUP_BY_OPTIONS[widgetDataset].map((groupBy) => ({
-                id: groupBy,
-                name: t(`dashboard.groupBy.${groupBy}`),
-              }))}
-              value={widgetGroupBy}
-              onChange={(value) => setWidgetGroupBy(value as string)}
-            />
-            <CustomSelect
-              options={METRIC_OPTIONS[widgetDataset].map((metric) => ({
-                id: metric,
-                name: t(`dashboard.metrics.${metric}`),
-              }))}
-              value={widgetMetric}
-              onChange={(value) => setWidgetMetric(value as string)}
-            />
-          </div>
-          <div className="mt-4 text-right">
-            <button
-              type="button"
-              onClick={() => void addWidget()}
-              disabled={isSaving || !widgetTitle.trim()}
-              className="rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t('dashboard.addWidgetAction')}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Widget grid */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -425,6 +361,182 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
           {t('dashboard.noData')}
         </div>
       )}
+
+      {/* Edit modal (rename + delete) */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setError('');
+          setIsEditModalOpen(false);
+        }}
+      >
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <h2 className="mb-5 text-lg font-black text-slate-800">{t('dashboard.editDashboard')}</h2>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+              {t('dashboard.dashboardName')}
+            </label>
+            <input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+            />
+          </div>
+
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                setIsEditModalOpen(false);
+              }}
+              disabled={isSaving}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50"
+            >
+              {t('dashboard.editModal.cancel')}
+            </button>
+            {canUpdate && (
+              <button
+                type="button"
+                onClick={() => void saveDashboardName()}
+                disabled={isSaving || !renameValue.trim()}
+                className="rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <i className="fa-solid fa-circle-notch fa-spin" />
+                ) : (
+                  t('dashboard.saveName')
+                )}
+              </button>
+            )}
+          </div>
+
+          {canDelete && (
+            <>
+              <div className="my-5 border-t border-slate-200" />
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold text-red-700">{t('dashboard.deleteDashboard')}</p>
+                  <p className="text-xs text-slate-500">{t('dashboard.editModal.deleteHint')}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void deleteDashboard()}
+                  disabled={isSaving}
+                  className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t('dashboard.deleteDashboard')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* Add visualization modal (widget builder) */}
+      <Modal
+        isOpen={isAddWidgetModalOpen}
+        onClose={() => {
+          resetWidgetForm();
+          setIsAddWidgetModalOpen(false);
+        }}
+      >
+        <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          <h2 className="mb-5 text-lg font-black text-slate-800">
+            {t('dashboard.addVisualization')}
+          </h2>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+              {t('dashboard.widgetTitle')}
+            </label>
+            <input
+              value={widgetTitle}
+              onChange={(e) => setWidgetTitle(e.target.value)}
+              placeholder={t('dashboard.widgetTitle')}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+            />
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <CustomSelect
+              label={t('dashboard.editModal.chartType')}
+              options={[
+                { id: 'pie', name: t('dashboard.chartTypes.pie') },
+                { id: 'bar', name: t('dashboard.chartTypes.bar') },
+              ]}
+              value={widgetChartType}
+              onChange={(value) => setWidgetChartType(value as DashboardWidget['chartType'])}
+            />
+            <CustomSelect
+              label={t('dashboard.editModal.dataset')}
+              options={DATASET_OPTIONS.map((ds) => ({
+                id: ds,
+                name: t(`dashboard.datasets.${ds}`),
+              }))}
+              value={widgetDataset}
+              onChange={(value) => setWidgetDataset(value as DashboardWidget['dataset'])}
+            />
+            <CustomSelect
+              label={t('dashboard.editModal.groupByLabel')}
+              options={GROUP_BY_OPTIONS[widgetDataset].map((g) => ({
+                id: g,
+                name: t(`dashboard.groupBy.${g}`),
+              }))}
+              value={widgetGroupBy}
+              onChange={(value) => setWidgetGroupBy(value as string)}
+            />
+            <CustomSelect
+              label={t('dashboard.editModal.metric')}
+              options={METRIC_OPTIONS[widgetDataset].map((m) => ({
+                id: m,
+                name: t(`dashboard.metrics.${m}`),
+              }))}
+              value={widgetMetric}
+              onChange={(value) => setWidgetMetric(value as string)}
+            />
+          </div>
+
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                resetWidgetForm();
+                setIsAddWidgetModalOpen(false);
+              }}
+              disabled={isSaving}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50"
+            >
+              {t('dashboard.editModal.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleAddWidget()}
+              disabled={isSaving || !widgetTitle.trim()}
+              className="rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSaving ? (
+                <i className="fa-solid fa-circle-notch fa-spin" />
+              ) : (
+                t('dashboard.addWidgetAction')
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
