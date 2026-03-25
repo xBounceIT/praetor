@@ -57,6 +57,24 @@
       "cancel": "Annulla",
       "create": "Crea"
     },
+    "widgetEditor": {
+      "newTitle": "Nuova Visualizzazione",
+      "editTitle": "Modifica Visualizzazione",
+      "backToDashboard": "Torna alla dashboard",
+      "discard": "Annulla",
+      "save": "Salva",
+      "nameLabel": "Nome",
+      "namePlaceholder": "Inserisci il nome del widget...",
+      "descriptionLabel": "Descrizione",
+      "descriptionPlaceholder": "Descrivi cosa mostra questa visualizzazione...",
+      "tagsLabel": "Tag",
+      "tagsPlaceholder": "Aggiungi un tag...",
+      "limitLabel": "Limite",
+      "previewTitle": "Anteprima",
+      "loadingPreview": "Caricamento anteprima...",
+      "noPreviewData": "Nessun dato disponibile per l'anteprima.",
+      "configTitle": "Configurazione Dati"
+    },
     "chartTypes": {
       "pie": "Torta",
       "bar": "Istogramma"

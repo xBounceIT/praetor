@@ -57,6 +57,24 @@
       "cancel": "Cancel",
       "create": "Create"
     },
+    "widgetEditor": {
+      "newTitle": "New Visualization",
+      "editTitle": "Edit Visualization",
+      "backToDashboard": "Back to dashboard",
+      "discard": "Discard",
+      "save": "Save",
+      "nameLabel": "Name",
+      "namePlaceholder": "Enter widget name...",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Describe what this visualization shows...",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "Add a tag...",
+      "limitLabel": "Limit",
+      "previewTitle": "Preview",
+      "loadingPreview": "Loading preview...",
+      "noPreviewData": "No data available for preview.",
+      "configTitle": "Data Configuration"
+    },
     "chartTypes": {
       "pie": "Pie",
       "bar": "Histogram"

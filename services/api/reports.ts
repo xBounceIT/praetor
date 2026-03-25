@@ -12,6 +12,8 @@ export interface DashboardWidget {
   groupBy: string;
   metric: string;
   limit?: number;
+  description?: string;
+  tags?: string[];
 }
 
 export interface ReportDashboard {

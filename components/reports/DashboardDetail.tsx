@@ -14,48 +14,27 @@ import {
   YAxis,
 } from 'recharts';
 import api from '../../services/api';
-import type { DashboardWidget, DashboardWidgetDataResult } from '../../services/api/reports';
+import type { DashboardWidgetDataResult } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import NotFound from '../NotFound';
-import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
+import { CHART_COLORS } from './dashboardConstants';
+
+type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
 
 export interface DashboardDetailProps {
   permissions: string[];
   dashboardId: string;
   onBack: () => void;
+  onNavigateToWidgetEditor: (route: WidgetRoute) => void;
 }
 
-const CHART_COLORS = ['#1d4ed8', '#0d9488', '#d97706', '#be123c', '#7c3aed', '#0f766e', '#334155'];
-
-const DATASET_OPTIONS: DashboardWidget['dataset'][] = [
-  'timesheets',
-  'quotes',
-  'orders',
-  'invoices',
-  'supplierQuotes',
-  'catalog',
-];
-
-const GROUP_BY_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
-  timesheets: ['user', 'client', 'project', 'task', 'location', 'month'],
-  quotes: ['status', 'client', 'month'],
-  orders: ['status', 'client', 'month'],
-  invoices: ['status', 'client', 'month'],
-  supplierQuotes: ['status', 'supplier', 'month'],
-  catalog: ['type', 'category', 'subcategory', 'supplier'],
-};
-
-const METRIC_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
-  timesheets: ['hours', 'entries', 'cost'],
-  quotes: ['count', 'net'],
-  orders: ['count', 'net'],
-  invoices: ['count', 'total', 'outstanding'],
-  supplierQuotes: ['count', 'net'],
-  catalog: ['count', 'cost'],
-};
-
-const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboardId, onBack }) => {
+const DashboardDetail: React.FC<DashboardDetailProps> = ({
+  permissions,
+  dashboardId,
+  onBack,
+  onNavigateToWidgetEditor,
+}) => {
   const { t } = useTranslation('reports');
   const [dashboards, setDashboards] = useState<
     Awaited<ReturnType<typeof api.reports.listDashboards>>
@@ -66,14 +45,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
   const [error, setError] = useState('');
   const [widgetData, setWidgetData] = useState<Record<string, DashboardWidgetDataResult>>({});
 
-  const [widgetTitle, setWidgetTitle] = useState('');
-  const [widgetChartType, setWidgetChartType] = useState<DashboardWidget['chartType']>('pie');
-  const [widgetDataset, setWidgetDataset] = useState<DashboardWidget['dataset']>('timesheets');
-  const [widgetGroupBy, setWidgetGroupBy] = useState('user');
-  const [widgetMetric, setWidgetMetric] = useState('hours');
-
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isAddWidgetModalOpen, setIsAddWidgetModalOpen] = useState(false);
 
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('reports.dashboard', 'delete'));
@@ -82,15 +54,6 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
     () => dashboards.find((d) => d.id === dashboardId) || null,
     [dashboards, dashboardId],
   );
-
-  useEffect(() => {
-    const firstGroupBy = GROUP_BY_OPTIONS[widgetDataset][0] || '';
-    const firstMetric = METRIC_OPTIONS[widgetDataset][0] || '';
-    setWidgetGroupBy((prev) =>
-      GROUP_BY_OPTIONS[widgetDataset].includes(prev) ? prev : firstGroupBy,
-    );
-    setWidgetMetric((prev) => (METRIC_OPTIONS[widgetDataset].includes(prev) ? prev : firstMetric));
-  }, [widgetDataset]);
 
   useEffect(() => {
     const load = async () => {
@@ -166,42 +129,6 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
     }
   };
 
-  const resetWidgetForm = () => {
-    setWidgetTitle('');
-    setWidgetChartType('pie');
-    setWidgetDataset('timesheets');
-    setWidgetGroupBy('user');
-    setWidgetMetric('hours');
-    setError('');
-  };
-
-  const handleAddWidget = async () => {
-    if (!canUpdate || !dashboard || !widgetTitle.trim()) return;
-    const nextWidget: DashboardWidget = {
-      id: `wdg-${Date.now()}`,
-      title: widgetTitle.trim(),
-      chartType: widgetChartType,
-      dataset: widgetDataset,
-      groupBy: widgetGroupBy,
-      metric: widgetMetric,
-      limit: 8,
-    };
-    setIsSaving(true);
-    setError('');
-    try {
-      const updated = await api.reports.updateDashboard(dashboard.id, {
-        widgets: [...dashboard.widgets, nextWidget],
-      });
-      setDashboards((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      resetWidgetForm();
-      setIsAddWidgetModalOpen(false);
-    } catch (err) {
-      setError((err as Error).message || t('dashboard.error'));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const removeWidget = async (widgetId: string) => {
     if (!canUpdate || !dashboard) return;
     setIsSaving(true);
@@ -260,7 +187,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
           {canUpdate && (
             <button
               type="button"
-              onClick={() => setIsAddWidgetModalOpen(true)}
+              onClick={() => onNavigateToWidgetEditor({ mode: 'new' })}
               className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
             >
               <i className="fa-solid fa-plus" />
@@ -279,23 +206,49 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
               key={widget.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
                   <h4 className="text-base font-bold text-slate-800">{widget.title}</h4>
                   <p className="text-xs text-slate-500">
                     {t(`dashboard.datasets.${widget.dataset}`)} -{' '}
                     {t(`dashboard.groupBy.${widget.groupBy}`)} -{' '}
                     {t(`dashboard.metrics.${widget.metric}`)}
                   </p>
+                  {widget.description && (
+                    <p className="mt-1 text-xs text-slate-500">{widget.description}</p>
+                  )}
+                  {widget.tags && widget.tags.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {widget.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {canUpdate && (
-                  <button
-                    type="button"
-                    onClick={() => void removeWidget(widget.id)}
-                    className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700"
-                  >
-                    {t('dashboard.removeWidget')}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onNavigateToWidgetEditor({ mode: 'edit', widgetId: widget.id })
+                      }
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+                    >
+                      <i className="fa-solid fa-pen text-[10px]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeWidget(widget.id)}
+                      className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700"
+                    >
+                      {t('dashboard.removeWidget')}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -434,104 +387,6 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({ permissions, dashboar
               </div>
             </>
           )}
-        </div>
-      </Modal>
-
-      {/* Add visualization modal (widget builder) */}
-      <Modal
-        isOpen={isAddWidgetModalOpen}
-        onClose={() => {
-          resetWidgetForm();
-          setIsAddWidgetModalOpen(false);
-        }}
-      >
-        <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-          <h2 className="mb-5 text-lg font-black text-slate-800">
-            {t('dashboard.addVisualization')}
-          </h2>
-
-          <div className="mb-4">
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-              {t('dashboard.widgetTitle')}
-            </label>
-            <input
-              value={widgetTitle}
-              onChange={(e) => setWidgetTitle(e.target.value)}
-              placeholder={t('dashboard.widgetTitle')}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
-            />
-          </div>
-
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <CustomSelect
-              label={t('dashboard.editModal.chartType')}
-              options={[
-                { id: 'pie', name: t('dashboard.chartTypes.pie') },
-                { id: 'bar', name: t('dashboard.chartTypes.bar') },
-              ]}
-              value={widgetChartType}
-              onChange={(value) => setWidgetChartType(value as DashboardWidget['chartType'])}
-            />
-            <CustomSelect
-              label={t('dashboard.editModal.dataset')}
-              options={DATASET_OPTIONS.map((ds) => ({
-                id: ds,
-                name: t(`dashboard.datasets.${ds}`),
-              }))}
-              value={widgetDataset}
-              onChange={(value) => setWidgetDataset(value as DashboardWidget['dataset'])}
-            />
-            <CustomSelect
-              label={t('dashboard.editModal.groupByLabel')}
-              options={GROUP_BY_OPTIONS[widgetDataset].map((g) => ({
-                id: g,
-                name: t(`dashboard.groupBy.${g}`),
-              }))}
-              value={widgetGroupBy}
-              onChange={(value) => setWidgetGroupBy(value as string)}
-            />
-            <CustomSelect
-              label={t('dashboard.editModal.metric')}
-              options={METRIC_OPTIONS[widgetDataset].map((m) => ({
-                id: m,
-                name: t(`dashboard.metrics.${m}`),
-              }))}
-              value={widgetMetric}
-              onChange={(value) => setWidgetMetric(value as string)}
-            />
-          </div>
-
-          {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                resetWidgetForm();
-                setIsAddWidgetModalOpen(false);
-              }}
-              disabled={isSaving}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50"
-            >
-              {t('dashboard.editModal.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleAddWidget()}
-              disabled={isSaving || !widgetTitle.trim()}
-              className="rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSaving ? (
-                <i className="fa-solid fa-circle-notch fa-spin" />
-              ) : (
-                t('dashboard.addWidgetAction')
-              )}
-            </button>
-          </div>
         </div>
       </Modal>
     </div>

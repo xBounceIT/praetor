@@ -129,12 +129,33 @@ const canonicalizeLegacyHash = (hash: string) => {
   return hash;
 };
 
+type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
+
+const parseDashboardHash = (
+  hash: string,
+): { dashboardId: string | null; widgetRoute: WidgetRoute | null } => {
+  if (!hash.startsWith('reports/dashboard/')) return { dashboardId: null, widgetRoute: null };
+  const segments = hash.slice('reports/dashboard/'.length).split('/');
+  const dashboardId = segments[0] || null;
+  if (!dashboardId) return { dashboardId: null, widgetRoute: null };
+  if (segments[1] === 'widget' && segments[2]) {
+    const seg = segments[2];
+    return {
+      dashboardId,
+      widgetRoute: seg === 'new' ? { mode: 'new' } : { mode: 'edit', widgetId: seg },
+    };
+  }
+  return { dashboardId, widgetRoute: null };
+};
+
 const getInitialDashboardId = (): string | null => {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
-  if (hash.startsWith('reports/dashboard/')) {
-    return hash.slice('reports/dashboard/'.length) || null;
-  }
-  return null;
+  return parseDashboardHash(hash).dashboardId;
+};
+
+const getInitialWidgetRoute = (): WidgetRoute | null => {
+  const hash = window.location.hash.replace('#/', '').replace('#', '');
+  return parseDashboardHash(hash).widgetRoute;
 };
 
 const TrackerView: React.FC<{
@@ -739,6 +760,9 @@ const App: React.FC = () => {
         : '404';
   });
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(getInitialDashboardId);
+  const [activeWidgetRoute, setActiveWidgetRoute] = useState<WidgetRoute | null>(
+    getInitialWidgetRoute,
+  );
   const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
@@ -816,10 +840,18 @@ const App: React.FC = () => {
       if (window.location.hash !== '#/login') window.location.hash = '/login';
       return;
     }
-    const hashSuffix =
-      activeView === 'reports/dashboard' && activeDashboardId ? `/${activeDashboardId}` : '';
+    let hashSuffix = '';
+    if (activeView === 'reports/dashboard' && activeDashboardId) {
+      hashSuffix = `/${activeDashboardId}`;
+      if (activeWidgetRoute) {
+        hashSuffix +=
+          activeWidgetRoute.mode === 'new'
+            ? '/widget/new'
+            : `/widget/${activeWidgetRoute.widgetId}`;
+      }
+    }
     window.location.hash = '/' + activeView + hashSuffix;
-  }, [activeView, activeDashboardId, currentUser, isLoading]);
+  }, [activeView, activeDashboardId, activeWidgetRoute, currentUser, isLoading]);
 
   useEffect(() => {
     if (
@@ -840,7 +872,16 @@ const App: React.FC = () => {
     if (activeView !== 'reports/dashboard' && activeDashboardId) {
       React.startTransition(() => setActiveDashboardId(null));
     }
-  }, [activeView, activeDashboardId, clientQuoteFilterId, supplierQuoteFilterId]);
+    if (activeView !== 'reports/dashboard' && activeWidgetRoute) {
+      React.startTransition(() => setActiveWidgetRoute(null));
+    }
+  }, [
+    activeView,
+    activeDashboardId,
+    activeWidgetRoute,
+    clientQuoteFilterId,
+    supplierQuoteFilterId,
+  ]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -859,10 +900,13 @@ const App: React.FC = () => {
       }
       let viewPart = canonicalHash;
       if (canonicalHash.startsWith('reports/dashboard/')) {
-        setActiveDashboardId(canonicalHash.slice('reports/dashboard/'.length) || null);
+        const parsed = parseDashboardHash(canonicalHash);
+        setActiveDashboardId(parsed.dashboardId);
+        setActiveWidgetRoute(parsed.widgetRoute);
         viewPart = 'reports/dashboard';
       } else if (canonicalHash === 'reports/dashboard') {
         setActiveDashboardId(null);
+        setActiveWidgetRoute(null);
       }
       const hash = viewPart as View;
       const nextView = VALID_VIEWS.includes(hash)
@@ -876,7 +920,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, activeDashboardId, VALID_VIEWS, currentUser]);
+  }, [activeView, activeDashboardId, activeWidgetRoute, VALID_VIEWS, currentUser]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
@@ -3562,7 +3606,12 @@ const App: React.FC = () => {
               <DashboardView
                 permissions={currentUser.permissions || []}
                 activeDashboardId={activeDashboardId}
-                onDashboardIdChange={setActiveDashboardId}
+                activeWidgetRoute={activeWidgetRoute}
+                onDashboardIdChange={(id) => {
+                  setActiveDashboardId(id);
+                  if (!id) setActiveWidgetRoute(null);
+                }}
+                onWidgetRouteChange={setActiveWidgetRoute}
               />
             )}
             {activeView === 'reports/ai-reporting' &&

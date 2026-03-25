@@ -2714,6 +2714,8 @@ type DashboardWidgetConfig = {
   groupBy: string;
   metric: string;
   limit: number;
+  description: string;
+  tags: string[];
 };
 
 const DASHBOARD_OPTIONS: Record<DashboardDataset, { groupBy: string[]; metric: string[] }> = {
@@ -2769,6 +2771,15 @@ const normalizeWidget = (
   const metric = String(obj.metric || '').trim();
   const parsedLimit = Number.parseInt(String(obj.limit ?? '8'), 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(3, Math.min(parsedLimit, 20)) : 8;
+  const description = String(obj.description || '')
+    .trim()
+    .slice(0, 500);
+  const tags: string[] = Array.isArray(obj.tags)
+    ? (obj.tags as unknown[])
+        .map((t) => String(t || '').trim())
+        .filter((t) => t.length > 0)
+        .slice(0, 10)
+    : [];
 
   if (!title) return { ok: false, error: 'widget.title is required' };
   if (chartType !== 'pie' && chartType !== 'bar') {
@@ -2794,6 +2805,8 @@ const normalizeWidget = (
       groupBy,
       metric,
       limit,
+      description,
+      tags,
     },
   };
 };
@@ -3090,6 +3103,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       groupBy: { type: 'string' },
       metric: { type: 'string' },
       limit: { type: 'number' },
+      description: { type: 'string' },
+      tags: { type: 'array', items: { type: 'string' } },
     },
     required: ['id', 'title', 'chartType', 'dataset', 'groupBy', 'metric'],
   } as const;
