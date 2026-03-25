@@ -1,36 +1,31 @@
 import type React from 'react';
-import { useState } from 'react';
 import DashboardBrowser from './DashboardBrowser';
 import DashboardDetail from './DashboardDetail';
 
 export interface DashboardViewProps {
   permissions: string[];
+  activeDashboardId: string | null;
+  onDashboardIdChange: (id: string | null) => void;
 }
 
-type ViewMode = { kind: 'browser' } | { kind: 'detail'; dashboardId: string };
-
-const DashboardView: React.FC<DashboardViewProps> = ({ permissions }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>({ kind: 'browser' });
-
-  const handleOpenDashboard = (dashboardId: string) => {
-    setViewMode({ kind: 'detail', dashboardId });
-  };
-
-  const handleBack = () => {
-    setViewMode({ kind: 'browser' });
-  };
-
-  if (viewMode.kind === 'detail') {
+const DashboardView: React.FC<DashboardViewProps> = ({
+  permissions,
+  activeDashboardId,
+  onDashboardIdChange,
+}) => {
+  if (activeDashboardId) {
     return (
       <DashboardDetail
         permissions={permissions}
-        dashboardId={viewMode.dashboardId}
-        onBack={handleBack}
+        dashboardId={activeDashboardId}
+        onBack={() => onDashboardIdChange(null)}
       />
     );
   }
 
-  return <DashboardBrowser permissions={permissions} onOpenDashboard={handleOpenDashboard} />;
+  return (
+    <DashboardBrowser permissions={permissions} onOpenDashboard={(id) => onDashboardIdChange(id)} />
+  );
 };
 
 export default DashboardView;

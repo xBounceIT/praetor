@@ -129,6 +129,14 @@ const canonicalizeLegacyHash = (hash: string) => {
   return hash;
 };
 
+const getInitialDashboardId = (): string | null => {
+  const hash = window.location.hash.replace('#/', '').replace('#', '');
+  if (hash.startsWith('reports/dashboard/')) {
+    return hash.slice('reports/dashboard/'.length) || null;
+  }
+  return null;
+};
+
 const TrackerView: React.FC<{
   entries: TimeEntry[];
   clients: Client[];
@@ -720,13 +728,17 @@ const App: React.FC = () => {
       'docs/frontend',
     ];
     const canonicalHash = canonicalizeLegacyHash(rawHash);
-    const hash = canonicalHash as View;
+    const viewHash = canonicalHash.startsWith('reports/dashboard/')
+      ? 'reports/dashboard'
+      : canonicalHash;
+    const hash = viewHash as View;
     return validViews.includes(hash)
       ? hash
       : canonicalHash === '' || canonicalHash === 'login'
         ? 'timesheets/tracker'
         : '404';
   });
+  const [activeDashboardId, setActiveDashboardId] = useState<string | null>(getInitialDashboardId);
   const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
@@ -804,8 +816,10 @@ const App: React.FC = () => {
       if (window.location.hash !== '#/login') window.location.hash = '/login';
       return;
     }
-    window.location.hash = '/' + activeView;
-  }, [activeView, currentUser, isLoading]);
+    const hashSuffix =
+      activeView === 'reports/dashboard' && activeDashboardId ? `/${activeDashboardId}` : '';
+    window.location.hash = '/' + activeView + hashSuffix;
+  }, [activeView, activeDashboardId, currentUser, isLoading]);
 
   useEffect(() => {
     if (
@@ -823,7 +837,10 @@ const App: React.FC = () => {
     ) {
       React.startTransition(() => setSupplierQuoteFilterId(null));
     }
-  }, [activeView, clientQuoteFilterId, supplierQuoteFilterId]);
+    if (activeView !== 'reports/dashboard' && activeDashboardId) {
+      React.startTransition(() => setActiveDashboardId(null));
+    }
+  }, [activeView, activeDashboardId, clientQuoteFilterId, supplierQuoteFilterId]);
 
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
@@ -840,10 +857,17 @@ const App: React.FC = () => {
         window.location.hash = `/${canonicalHash}`;
         return;
       }
-      const hash = canonicalHash as View;
+      let viewPart = canonicalHash;
+      if (canonicalHash.startsWith('reports/dashboard/')) {
+        setActiveDashboardId(canonicalHash.slice('reports/dashboard/'.length) || null);
+        viewPart = 'reports/dashboard';
+      } else if (canonicalHash === 'reports/dashboard') {
+        setActiveDashboardId(null);
+      }
+      const hash = viewPart as View;
       const nextView = VALID_VIEWS.includes(hash)
         ? hash
-        : canonicalHash === ''
+        : viewPart === ''
           ? 'timesheets/tracker'
           : '404';
       if (nextView !== activeView) {
@@ -852,7 +876,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, VALID_VIEWS, currentUser]);
+  }, [activeView, activeDashboardId, VALID_VIEWS, currentUser]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
@@ -3535,7 +3559,11 @@ const App: React.FC = () => {
               />
             )}
             {activeView === 'reports/dashboard' && (
-              <DashboardView permissions={currentUser.permissions || []} />
+              <DashboardView
+                permissions={currentUser.permissions || []}
+                activeDashboardId={activeDashboardId}
+                onDashboardIdChange={setActiveDashboardId}
+              />
             )}
             {activeView === 'reports/ai-reporting' &&
               (!hasLoadedGeneralSettings ? (
