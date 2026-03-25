@@ -657,14 +657,20 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
             {t('dashboard.loading')}
           </div>
         ) : isEmpty ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-            {t('dashboard.browser.emptyRoot')}
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i className="fa-solid fa-gauge text-slate-300 text-2xl" />
+            </div>
+            <p className="text-slate-500 font-medium">{t('dashboard.browser.emptyRoot')}</p>
           </div>
         ) : searchResults ? (
           /* ── Search results (flat) ── */
           searchResults.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-              {t('dashboard.browser.emptySearch')}
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i className="fa-solid fa-magnifying-glass text-slate-300 text-2xl" />
+              </div>
+              <p className="text-slate-500 font-medium">{t('dashboard.browser.emptySearch')}</p>
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
