@@ -596,9 +596,22 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       }
     };
 
+    const hadSession = Boolean(activeSessionId);
+    let resolvedSessionId = activeSessionId || '';
+
+    const reloadInitialSessionAfterAbort = async () => {
+      // First streamed sends skip auto-load while optimistic rows are on screen.
+      // If that run is aborted, pull canonical messages so the persisted first user
+      // message remains visible.
+      if (hadSession || !resolvedSessionId) return;
+      if (!abortController.signal.aborted) return;
+      if (abortRef.current) return;
+      if (sendRunIdRef.current <= runId) return;
+      await loadMessages(resolvedSessionId, { forceScroll: false });
+      await loadSessions({ preferredSessionId: resolvedSessionId });
+    };
+
     try {
-      const hadSession = Boolean(activeSessionId);
-      let resolvedSessionId = activeSessionId || '';
       let thoughtDoneClosed = false;
       let streamStarted = false;
       let streamProducedOutput = false;
@@ -733,11 +746,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       } catch (streamErr) {
         if (!isRunActive()) {
           cleanupCancelledAssistant();
+          await reloadInitialSessionAfterAbort();
           return;
         }
 
         if ((streamErr as Error).name === 'AbortError') {
           cleanupCancelledAssistant();
+          await reloadInitialSessionAfterAbort();
         } else if (!streamStarted && !streamProducedOutput) {
           if (!isRunActive()) return;
           setMessages((prev) =>
@@ -757,6 +772,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
           );
           if (!isRunActive()) {
             cleanupCancelledAssistant();
+            await reloadInitialSessionAfterAbort();
             return;
           }
 
@@ -779,6 +795,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
           );
           if (!completed || !isRunActive()) {
             cleanupCancelledAssistant();
+            await reloadInitialSessionAfterAbort();
             return;
           }
           if (activeAssistantMessageIdRef.current === assistantMessageId) {
@@ -800,11 +817,13 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     } catch (err) {
       if (!isRunActive()) {
         cleanupCancelledAssistant();
+        await reloadInitialSessionAfterAbort();
         return;
       }
 
       if ((err as Error).name === 'AbortError') {
         cleanupCancelledAssistant();
+        await reloadInitialSessionAfterAbort();
       } else {
         setError((err as Error).message || t('aiReporting.error'));
         // Reload canonical messages if possible.
