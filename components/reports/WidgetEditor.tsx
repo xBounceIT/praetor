@@ -24,6 +24,8 @@ import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import {
   CHART_COLORS,
+  DASHBOARD_WIDGET_DEFAULT_HEIGHT,
+  DASHBOARD_WIDGET_DEFAULT_WIDTH,
   DATASET_OPTIONS,
   GROUP_BY_OPTIONS,
   METRIC_OPTIONS,
@@ -224,6 +226,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
       groupBy,
       metric,
       limit,
+      width: existingWidget?.width ?? DASHBOARD_WIDGET_DEFAULT_WIDTH,
+      height: existingWidget?.height ?? DASHBOARD_WIDGET_DEFAULT_HEIGHT,
     };
 
     const updatedWidgets =

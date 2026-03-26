@@ -19,6 +19,17 @@ export const DATASET_OPTIONS: DashboardWidget['dataset'][] = [
   'catalog',
 ];
 
+export const DASHBOARD_GRID_GAP_PX = 16;
+export const DASHBOARD_GRID_ROW_HEIGHT_PX = 132;
+
+export const DASHBOARD_WIDGET_MIN_WIDTH = 3;
+export const DASHBOARD_WIDGET_MAX_WIDTH = 12;
+export const DASHBOARD_WIDGET_DEFAULT_WIDTH = 6;
+
+export const DASHBOARD_WIDGET_MIN_HEIGHT = 2;
+export const DASHBOARD_WIDGET_MAX_HEIGHT = 5;
+export const DASHBOARD_WIDGET_DEFAULT_HEIGHT = 2;
+
 export const GROUP_BY_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
   timesheets: ['user', 'client', 'project', 'task', 'location', 'month'],
   quotes: ['status', 'client', 'month'],

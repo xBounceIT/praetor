@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bar,
@@ -14,14 +14,81 @@ import {
   YAxis,
 } from 'recharts';
 import api from '../../services/api';
-import type { DashboardWidgetDataResult, ReportDashboard } from '../../services/api/reports';
+import type {
+  DashboardWidget,
+  DashboardWidgetDataResult,
+  ReportDashboard,
+} from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import NotFound from '../NotFound';
 import Modal from '../shared/Modal';
-import { CHART_COLORS } from './dashboardConstants';
+import {
+  CHART_COLORS,
+  DASHBOARD_GRID_GAP_PX,
+  DASHBOARD_GRID_ROW_HEIGHT_PX,
+  DASHBOARD_WIDGET_DEFAULT_HEIGHT,
+  DASHBOARD_WIDGET_DEFAULT_WIDTH,
+  DASHBOARD_WIDGET_MAX_HEIGHT,
+  DASHBOARD_WIDGET_MAX_WIDTH,
+  DASHBOARD_WIDGET_MIN_HEIGHT,
+  DASHBOARD_WIDGET_MIN_WIDTH,
+} from './dashboardConstants';
 import WidgetEditor from './WidgetEditor';
 
 type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
+type DashboardMode = 'readonly' | 'edit';
+type WidgetSize = { width: number; height: number };
+
+type ResizeInteractionState = {
+  widgetId: string;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+  currentWidth: number;
+  currentHeight: number;
+  cellWidth: number;
+  gridColumnCount: number;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+
+const normalizeWidgetWidth = (value?: number) =>
+  clamp(
+    Number.isFinite(value) ? Math.floor(value as number) : DASHBOARD_WIDGET_DEFAULT_WIDTH,
+    DASHBOARD_WIDGET_MIN_WIDTH,
+    DASHBOARD_WIDGET_MAX_WIDTH,
+  );
+
+const normalizeWidgetHeight = (value?: number) =>
+  clamp(
+    Number.isFinite(value) ? Math.floor(value as number) : DASHBOARD_WIDGET_DEFAULT_HEIGHT,
+    DASHBOARD_WIDGET_MIN_HEIGHT,
+    DASHBOARD_WIDGET_MAX_HEIGHT,
+  );
+
+const getGridColumnCount = (viewportWidth: number) => {
+  if (viewportWidth >= 1280) return 12;
+  if (viewportWidth >= 768) return 6;
+  return 1;
+};
+
+const getInitialGridColumnCount = () => {
+  if (typeof window === 'undefined') return 12;
+  return getGridColumnCount(window.innerWidth);
+};
+
+const getColumnResizeStep = (gridColumnCount: number) => (gridColumnCount >= 12 ? 1 : 2);
+
+const getRenderWidthSpan = (widgetWidth: number, gridColumnCount: number) => {
+  if (gridColumnCount >= 12) {
+    return clamp(widgetWidth, 1, 12);
+  }
+  if (gridColumnCount >= 6) {
+    return clamp(Math.ceil(widgetWidth / 2), 1, 6);
+  }
+  return 1;
+};
 
 export interface DashboardDetailProps {
   permissions: string[];
@@ -48,16 +115,179 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   const [error, setError] = useState('');
   const [widgetData, setWidgetData] = useState<Record<string, DashboardWidgetDataResult>>({});
   const [recentlyAddedWidgetId, setRecentlyAddedWidgetId] = useState<string | null>(null);
-
+  const [widgetPendingDelete, setWidgetPendingDelete] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<DashboardMode>('readonly');
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  const [gridColumnCount, setGridColumnCount] = useState(getInitialGridColumnCount);
+  const [resizingWidgetId, setResizingWidgetId] = useState<string | null>(null);
+  const [draftWidgetSizes, setDraftWidgetSizes] = useState<Record<string, WidgetSize>>({});
+
+  const modeMenuRef = useRef<HTMLDivElement | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const resizeStateRef = useRef<ResizeInteractionState | null>(null);
+  const removeResizeListenersRef = useRef<(() => void) | null>(null);
 
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('reports.dashboard', 'delete'));
+  const canManageDashboard = canUpdate || canDelete;
+  const isEditMode = dashboardMode === 'edit';
+  const canMutateDashboard = canManageDashboard && isEditMode;
+  const canMutateWidgets = canUpdate && isEditMode;
 
   const dashboard = useMemo(
     () => dashboards.find((d) => d.id === dashboardId) || null,
     [dashboards, dashboardId],
   );
+
+  const clearResizeListeners = () => {
+    if (removeResizeListenersRef.current) {
+      removeResizeListenersRef.current();
+      removeResizeListenersRef.current = null;
+    }
+    resizeStateRef.current = null;
+  };
+
+  const persistWidgetResize = async (widgetId: string, width: number, height: number) => {
+    if (!dashboard || !canUpdate || !isEditMode) return;
+
+    const nextWidth = normalizeWidgetWidth(width);
+    const nextHeight = normalizeWidgetHeight(height);
+    const currentWidget = dashboard.widgets.find((widget) => widget.id === widgetId);
+    if (!currentWidget) return;
+
+    const currentWidth = normalizeWidgetWidth(currentWidget.width);
+    const currentHeight = normalizeWidgetHeight(currentWidget.height);
+    if (currentWidth === nextWidth && currentHeight === nextHeight) return;
+
+    const updatedWidgets = dashboard.widgets.map((widget) =>
+      widget.id === widgetId ? { ...widget, width: nextWidth, height: nextHeight } : widget,
+    );
+
+    try {
+      const updated = await api.reports.updateDashboard(dashboard.id, { widgets: updatedWidgets });
+      setDashboards((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (err) {
+      setError((err as Error).message || t('dashboard.error'));
+    }
+  };
+
+  const startWidgetResize = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    widgetId: string,
+    width: number,
+    height: number,
+  ) => {
+    if (!canMutateWidgets || gridColumnCount <= 1) return;
+    if (!gridRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const totalGap = DASHBOARD_GRID_GAP_PX * Math.max(gridColumnCount - 1, 0);
+    const cellWidth = (gridRect.width - totalGap) / gridColumnCount;
+    if (!Number.isFinite(cellWidth) || cellWidth <= 0) return;
+
+    clearResizeListeners();
+    setResizingWidgetId(widgetId);
+    setDraftWidgetSizes((prev) => ({ ...prev, [widgetId]: { width, height } }));
+
+    resizeStateRef.current = {
+      widgetId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: width,
+      startHeight: height,
+      currentWidth: width,
+      currentHeight: height,
+      cellWidth,
+      gridColumnCount,
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState || resizeState.widgetId !== widgetId) return;
+
+      const deltaCols = Math.round(
+        (moveEvent.clientX - resizeState.startX) / (resizeState.cellWidth + DASHBOARD_GRID_GAP_PX),
+      );
+      const deltaRows = Math.round(
+        (moveEvent.clientY - resizeState.startY) /
+          (DASHBOARD_GRID_ROW_HEIGHT_PX + DASHBOARD_GRID_GAP_PX),
+      );
+
+      const widthStep = getColumnResizeStep(resizeState.gridColumnCount);
+      const nextWidth = clamp(
+        resizeState.startWidth + deltaCols * widthStep,
+        DASHBOARD_WIDGET_MIN_WIDTH,
+        DASHBOARD_WIDGET_MAX_WIDTH,
+      );
+      const nextHeight = clamp(
+        resizeState.startHeight + deltaRows,
+        DASHBOARD_WIDGET_MIN_HEIGHT,
+        DASHBOARD_WIDGET_MAX_HEIGHT,
+      );
+
+      if (nextWidth === resizeState.currentWidth && nextHeight === resizeState.currentHeight) {
+        return;
+      }
+
+      resizeState.currentWidth = nextWidth;
+      resizeState.currentHeight = nextHeight;
+      setDraftWidgetSizes((prev) => ({
+        ...prev,
+        [widgetId]: { width: nextWidth, height: nextHeight },
+      }));
+    };
+
+    const handlePointerEnd = () => {
+      const resizeState = resizeStateRef.current;
+      clearResizeListeners();
+      setResizingWidgetId(null);
+      setDraftWidgetSizes((prev) => {
+        const next = { ...prev };
+        delete next[widgetId];
+        return next;
+      });
+
+      if (!resizeState || resizeState.widgetId !== widgetId) return;
+      void persistWidgetResize(
+        widgetId,
+        normalizeWidgetWidth(resizeState.currentWidth),
+        normalizeWidgetHeight(resizeState.currentHeight),
+      );
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerEnd);
+    window.addEventListener('pointercancel', handlePointerEnd);
+    removeResizeListenersRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerEnd);
+      window.removeEventListener('pointercancel', handlePointerEnd);
+    };
+  };
+
+  const getWidgetSize = (widget: DashboardWidget): WidgetSize => {
+    const draftSize = draftWidgetSizes[widget.id];
+    return {
+      width: normalizeWidgetWidth(draftSize?.width ?? widget.width),
+      height: normalizeWidgetHeight(draftSize?.height ?? widget.height),
+    };
+  };
+
+  useEffect(() => {
+    return () => {
+      if (removeResizeListenersRef.current) {
+        removeResizeListenersRef.current();
+        removeResizeListenersRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -88,6 +318,35 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   }, [recentlyAddedWidgetId]);
 
   useEffect(() => {
+    if (!dashboardId) return;
+    setDashboardMode('readonly');
+    setIsModeMenuOpen(false);
+    setIsEditModalOpen(false);
+    setWidgetPendingDelete(null);
+    if (removeResizeListenersRef.current) {
+      removeResizeListenersRef.current();
+      removeResizeListenersRef.current = null;
+    }
+    resizeStateRef.current = null;
+    setResizingWidgetId(null);
+    setDraftWidgetSizes({});
+    onWidgetRouteChange(null);
+  }, [dashboardId, onWidgetRouteChange]);
+
+  useEffect(() => {
+    if (isEditMode) return;
+    setIsEditModalOpen(false);
+    setWidgetPendingDelete(null);
+    if (removeResizeListenersRef.current) {
+      removeResizeListenersRef.current();
+      removeResizeListenersRef.current = null;
+    }
+    resizeStateRef.current = null;
+    setResizingWidgetId(null);
+    setDraftWidgetSizes({});
+  }, [isEditMode]);
+
+  useEffect(() => {
     if (!dashboard || !activeWidgetRoute || activeWidgetRoute.mode !== 'edit') return;
     const exists = dashboard.widgets.some((widget) => widget.id === activeWidgetRoute.widgetId);
     if (!exists) {
@@ -96,10 +355,10 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   }, [dashboard, activeWidgetRoute, onWidgetRouteChange]);
 
   useEffect(() => {
-    if (activeWidgetRoute && !canUpdate) {
+    if (activeWidgetRoute && !canMutateWidgets) {
       onWidgetRouteChange(null);
     }
-  }, [activeWidgetRoute, canUpdate, onWidgetRouteChange]);
+  }, [activeWidgetRoute, canMutateWidgets, onWidgetRouteChange]);
 
   useEffect(() => {
     if (!dashboard || dashboard.widgets.length === 0) {
@@ -125,8 +384,27 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
     void loadWidgetData();
   }, [dashboard]);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setGridColumnCount(getGridColumnCount(window.innerWidth));
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isModeMenuOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(event.target as Node)) {
+        setIsModeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isModeMenuOpen]);
+
   const saveDashboardName = async () => {
-    if (!canUpdate || !dashboard || !renameValue.trim()) return;
+    if (!canUpdate || !canMutateDashboard || !dashboard || !renameValue.trim()) return;
     setIsSaving(true);
     setError('');
     try {
@@ -143,7 +421,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   };
 
   const deleteDashboard = async () => {
-    if (!canDelete || !dashboard) return;
+    if (!canDelete || !canMutateDashboard || !dashboard) return;
     setIsSaving(true);
     setError('');
     try {
@@ -155,8 +433,18 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
     }
   };
 
-  const removeWidget = async (widgetId: string) => {
-    if (!canUpdate || !dashboard) return;
+  const openDeleteWidgetModal = (widgetId: string, title: string) => {
+    if (!canMutateWidgets || isSaving) return;
+    setWidgetPendingDelete({ id: widgetId, title });
+  };
+
+  const closeDeleteWidgetModal = () => {
+    if (isSaving) return;
+    setWidgetPendingDelete(null);
+  };
+
+  const removeWidget = async (widgetId: string): Promise<boolean> => {
+    if (!canMutateWidgets || !dashboard) return false;
     setIsSaving(true);
     setError('');
     try {
@@ -164,10 +452,20 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
         widgets: dashboard.widgets.filter((widget) => widget.id !== widgetId),
       });
       setDashboards((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      return true;
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
+      return false;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const confirmDeleteWidget = async () => {
+    if (!widgetPendingDelete) return;
+    const removed = await removeWidget(widgetPendingDelete.id);
+    if (removed) {
+      setWidgetPendingDelete(null);
     }
   };
 
@@ -214,21 +512,84 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           <h2 className="text-xl font-black text-slate-800">{dashboard.name}</h2>
         </div>
         <div className="flex items-center gap-2">
-          {(canUpdate || canDelete) && (
+          {canManageDashboard && (
             <button
               type="button"
               onClick={() => setIsEditModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+              disabled={!canMutateDashboard || isSaving}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <i className="fa-solid fa-pen text-xs" />
               {t('dashboard.editDashboard')}
             </button>
           )}
+
+          {canManageDashboard && (
+            <div className="relative" ref={modeMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsModeMenuOpen((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                aria-haspopup="menu"
+                aria-expanded={isModeMenuOpen}
+              >
+                <i
+                  className={`fa-solid ${isEditMode ? 'fa-pen-to-square text-slate-600' : 'fa-eye text-slate-500'} text-xs`}
+                />
+                {isEditMode ? t('dashboard.modes.edit') : t('dashboard.modes.readOnly')}
+                <i className="fa-solid fa-chevron-down text-[10px]" />
+              </button>
+
+              {isModeMenuOpen && (
+                <div
+                  className="absolute right-0 z-30 mt-2 w-48 rounded-2xl border border-slate-200 bg-white py-2 shadow-xl animate-in fade-in zoom-in-95 duration-150 origin-top-right"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDashboardMode('readonly');
+                      setIsModeMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <span className="flex items-center gap-2">
+                      <i className="fa-solid fa-eye text-xs text-slate-500" />
+                      {t('dashboard.modes.readOnly')}
+                    </span>
+                    {dashboardMode === 'readonly' && (
+                      <i className="fa-solid fa-check text-xs text-praetor" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDashboardMode('edit');
+                      setIsModeMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <span className="flex items-center gap-2">
+                      <i className="fa-solid fa-pen-to-square text-xs text-slate-500" />
+                      {t('dashboard.modes.edit')}
+                    </span>
+                    {dashboardMode === 'edit' && (
+                      <i className="fa-solid fa-check text-xs text-praetor" />
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {canUpdate && (
             <button
               type="button"
               onClick={() => onWidgetRouteChange({ mode: 'new' })}
-              className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95"
+              disabled={!canMutateWidgets || isSaving}
+              className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
             >
               <i className="fa-solid fa-plus" />
               {t('dashboard.addVisualization')}
@@ -237,14 +598,36 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
         </div>
       </div>
 
+      {canManageDashboard && !isEditMode && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+          <i className="fa-solid fa-eye mr-1.5 text-slate-500" />
+          {t('dashboard.readOnlyHint')}
+        </div>
+      )}
+
       {/* Widget grid */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div
+        ref={gridRef}
+        className="grid gap-4"
+        style={{
+          gridTemplateColumns: `repeat(${gridColumnCount}, minmax(0, 1fr))`,
+          gridAutoRows: `${DASHBOARD_GRID_ROW_HEIGHT_PX}px`,
+          gridAutoFlow: 'row dense',
+        }}
+      >
         {dashboard.widgets.map((widget) => {
           const data = widgetData[widget.id];
+          const widgetSize = getWidgetSize(widget);
+          const renderWidth = getRenderWidthSpan(widgetSize.width, gridColumnCount);
+
           return (
             <div
               key={widget.id}
-              className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
+              style={{
+                gridColumn: `span ${renderWidth} / span ${renderWidth}`,
+                gridRow: `span ${widgetSize.height} / span ${widgetSize.height}`,
+              }}
+              className={`relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
                 recentlyAddedWidgetId === widget.id
                   ? 'dashboard-widget-pop ring-2 ring-blue-200'
                   : ''
@@ -274,7 +657,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                     </div>
                   )}
                 </div>
-                {canUpdate && (
+                {canMutateWidgets && (
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
@@ -285,16 +668,18 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => void removeWidget(widget.id)}
+                      onClick={() => openDeleteWidgetModal(widget.id, widget.title)}
                       className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700"
+                      aria-label={t('dashboard.deleteWidgetAction')}
+                      title={t('dashboard.deleteWidgetAction')}
                     >
-                      {t('dashboard.removeWidget')}
+                      <i className="fa-solid fa-trash text-[10px]" />
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="h-64">
+              <div className="min-h-0 flex-1">
                 {!data ? (
                   <div className="flex h-full items-center justify-center text-sm text-slate-500">
                     <i className="fa-solid fa-circle-notch fa-spin mr-2" />
@@ -343,6 +728,22 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                   </ResponsiveContainer>
                 )}
               </div>
+
+              {canMutateWidgets && gridColumnCount > 1 && (
+                <button
+                  type="button"
+                  onPointerDown={(event) =>
+                    startWidgetResize(event, widget.id, widgetSize.width, widgetSize.height)
+                  }
+                  className={`absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white/95 text-slate-500 transition hover:bg-slate-100 ${
+                    resizingWidgetId === widget.id ? 'cursor-grabbing' : 'cursor-se-resize'
+                  }`}
+                  aria-label={t('dashboard.resizeWidgetAction')}
+                  title={t('dashboard.resizeWidgetAction')}
+                >
+                  <i className="fa-solid fa-up-right-and-down-left-from-center text-[10px]" />
+                </button>
+              )}
             </div>
           );
         })}
@@ -354,7 +755,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
         </div>
       )}
 
-      {activeWidgetRoute && canUpdate && (
+      {activeWidgetRoute && canMutateWidgets && (
         <WidgetEditor
           isOpen={Boolean(activeWidgetRoute)}
           permissions={permissions}
@@ -365,6 +766,47 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           onSaved={handleWidgetSaved}
         />
       )}
+
+      <Modal isOpen={Boolean(widgetPendingDelete)} onClose={closeDeleteWidgetModal}>
+        <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="space-y-4 p-6">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+              <i className="fa-solid fa-trash text-xl text-red-600" />
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-xl font-black text-slate-800">
+                {t('dashboard.deleteWidgetTitleWithName', {
+                  name: widgetPendingDelete?.title,
+                })}
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex gap-3 border-t border-slate-100 px-6 pb-6 pt-4">
+            <button
+              type="button"
+              onClick={closeDeleteWidgetModal}
+              disabled={isSaving}
+              className="flex-1 rounded-xl py-3 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              {t('dashboard.createModal.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmDeleteWidget()}
+              disabled={isSaving}
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-red-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            >
+              {isSaving ? (
+                <i className="fa-solid fa-circle-notch fa-spin" />
+              ) : (
+                t('dashboard.deleteWidgetAction')
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Edit modal (rename + delete) */}
       <Modal
@@ -384,7 +826,8 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
             <input
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
+              disabled={isSaving || !canMutateDashboard}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-60"
             />
           </div>
 
@@ -410,7 +853,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
               <button
                 type="button"
                 onClick={() => void saveDashboardName()}
-                disabled={isSaving || !renameValue.trim()}
+                disabled={isSaving || !renameValue.trim() || !canMutateDashboard}
                 className="rounded-xl bg-praetor px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? (
@@ -433,7 +876,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                 <button
                   type="button"
                   onClick={() => void deleteDashboard()}
-                  disabled={isSaving}
+                  disabled={isSaving || !canMutateDashboard}
                   className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t('dashboard.deleteDashboard')}

@@ -8,6 +8,11 @@
     "deleteDashboard": "Delete dashboard",
     "editDashboard": "Edit",
     "addVisualization": "Add visualization",
+    "readOnlyHint": "Dashboard is in read-only mode. Switch to Edit mode to modify it.",
+    "modes": {
+      "readOnly": "Read-only",
+      "edit": "Edit mode"
+    },
     "addWidget": "Add widget",
     "widgetTitle": "Widget title",
     "addWidgetAction": "Add widget",
@@ -20,6 +25,9 @@
       "metric": "Metric"
     },
     "removeWidget": "Remove",
+    "deleteWidgetTitleWithName": "Delete widget {{name}}",
+    "deleteWidgetAction": "Delete widget",
+    "resizeWidgetAction": "Resize widget",
     "loadingWidget": "Loading widget data...",
     "noData": "No data for this configuration.",
     "browser": {

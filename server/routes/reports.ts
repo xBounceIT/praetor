@@ -2716,6 +2716,8 @@ type DashboardWidgetConfig = {
   limit: number;
   description: string;
   tags: string[];
+  width: number;
+  height: number;
 };
 
 const DASHBOARD_OPTIONS: Record<DashboardDataset, { groupBy: string[]; metric: string[] }> = {
@@ -2771,6 +2773,10 @@ const normalizeWidget = (
   const metric = String(obj.metric || '').trim();
   const parsedLimit = Number.parseInt(String(obj.limit ?? '8'), 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(3, Math.min(parsedLimit, 20)) : 8;
+  const parsedWidth = Number.parseInt(String(obj.width ?? '6'), 10);
+  const width = Number.isFinite(parsedWidth) ? Math.max(3, Math.min(parsedWidth, 12)) : 6;
+  const parsedHeight = Number.parseInt(String(obj.height ?? '2'), 10);
+  const height = Number.isFinite(parsedHeight) ? Math.max(2, Math.min(parsedHeight, 5)) : 2;
   const description = String(obj.description || '')
     .trim()
     .slice(0, 500);
@@ -2807,6 +2813,8 @@ const normalizeWidget = (
       limit,
       description,
       tags,
+      width,
+      height,
     },
   };
 };
@@ -3105,6 +3113,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       limit: { type: 'number' },
       description: { type: 'string' },
       tags: { type: 'array', items: { type: 'string' } },
+      width: { type: 'number' },
+      height: { type: 'number' },
     },
     required: ['id', 'title', 'chartType', 'dataset', 'groupBy', 'metric'],
   } as const;

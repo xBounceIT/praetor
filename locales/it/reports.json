@@ -8,6 +8,11 @@
     "deleteDashboard": "Elimina dashboard",
     "editDashboard": "Modifica",
     "addVisualization": "Aggiungi visualizzazione",
+    "readOnlyHint": "La dashboard e' in sola lettura. Passa alla modalita' Modifica per aggiornarla.",
+    "modes": {
+      "readOnly": "Sola lettura",
+      "edit": "Modalita' modifica"
+    },
     "addWidget": "Aggiungi widget",
     "widgetTitle": "Titolo widget",
     "addWidgetAction": "Aggiungi widget",
@@ -20,6 +25,9 @@
       "metric": "Metrica"
     },
     "removeWidget": "Rimuovi",
+    "deleteWidgetTitleWithName": "Elimina widget {{name}}",
+    "deleteWidgetAction": "Elimina widget",
+    "resizeWidgetAction": "Ridimensiona widget",
     "loadingWidget": "Caricamento dati widget...",
     "noData": "Nessun dato per questa configurazione.",
     "browser": {

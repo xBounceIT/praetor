@@ -14,6 +14,8 @@ export interface DashboardWidget {
   limit?: number;
   description?: string;
   tags?: string[];
+  width?: number;
+  height?: number;
 }
 
 export interface ReportDashboard {
