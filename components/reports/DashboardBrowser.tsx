@@ -24,6 +24,19 @@ export interface DashboardBrowserProps {
   onOpenDashboard: (dashboardId: string) => void;
 }
 
+const adjustFolderDashboardCount = (
+  folders: ReportDashboardFolder[],
+  folderId: string | null,
+  delta: number,
+) => {
+  if (!folderId) return folders;
+  return folders.map((folder) =>
+    folder.id === folderId
+      ? { ...folder, dashboardCount: Math.max(0, folder.dashboardCount + delta) }
+      : folder,
+  );
+};
+
 // ─── Folder Row ───────────────────────────────────────────────────────────────
 
 interface FolderRowProps {
@@ -436,6 +449,7 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
   const handleCreated = (item: ReportDashboard | ReportDashboardFolder) => {
     if ('widgets' in item) {
       setDashboards((prev) => [item, ...prev]);
+      setFolders((prev) => adjustFolderDashboardCount(prev, item.folderId, 1));
     } else {
       setFolders((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
     }
@@ -504,11 +518,15 @@ const DashboardBrowser: React.FC<DashboardBrowserProps> = ({ permissions, onOpen
       setDeletingId(dashboardId);
       return;
     }
+    const dashboardToDelete = dashboards.find((dashboard) => dashboard.id === dashboardId) || null;
     setIsMutating(true);
     setDeletingId(null);
     try {
       await api.reports.deleteDashboard(dashboardId);
       setDashboards((prev) => prev.filter((d) => d.id !== dashboardId));
+      setFolders((prev) =>
+        adjustFolderDashboardCount(prev, dashboardToDelete?.folderId ?? null, -1),
+      );
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
     } finally {

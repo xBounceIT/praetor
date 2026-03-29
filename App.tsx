@@ -768,6 +768,14 @@ const App: React.FC = () => {
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [supplierOfferFilterId, setSupplierOfferFilterId] = useState<string | null>(null);
 
+  const handleLayoutViewChange = (view: View) => {
+    if (view === 'reports/dashboard') {
+      setActiveDashboardId(null);
+      setActiveWidgetRoute(null);
+    }
+    setActiveView(view);
+  };
+
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
     clientOffers.forEach((offer) => {
@@ -920,7 +928,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, activeDashboardId, activeWidgetRoute, VALID_VIEWS, currentUser]);
+  }, [activeView, VALID_VIEWS, currentUser]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
@@ -3157,7 +3165,7 @@ const App: React.FC = () => {
       <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />
       <Layout
         activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}
-        onViewChange={setActiveView}
+        onViewChange={handleLayoutViewChange}
         currentUser={currentUser}
         onLogout={handleLogout}
         onSwitchRole={handleSwitchRole}

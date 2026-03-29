@@ -33,6 +33,7 @@ import {
   DASHBOARD_WIDGET_MIN_HEIGHT,
   DASHBOARD_WIDGET_MIN_WIDTH,
 } from './dashboardConstants';
+import { buildDashboardBarChartRows, getDashboardQueryDisplayName } from './dashboardWidgetUtils';
 import WidgetEditor from './WidgetEditor';
 
 type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
@@ -90,6 +91,19 @@ const getRenderWidthSpan = (widgetWidth: number, gridColumnCount: number) => {
   return 1;
 };
 
+const buildEmptyWidgetDataResult = (widget: DashboardWidget): DashboardWidgetDataResult => ({
+  groupBy: widget.groupBy,
+  queries: widget.queries.map((query) => ({
+    id: query.id,
+    ref: query.ref,
+    label: query.label,
+    dataset: query.dataset,
+    metric: query.metric,
+    total: 0,
+    series: [],
+  })),
+});
+
 export interface DashboardDetailProps {
   permissions: string[];
   dashboardId: string;
@@ -130,6 +144,8 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   const gridRef = useRef<HTMLDivElement | null>(null);
   const resizeStateRef = useRef<ResizeInteractionState | null>(null);
   const removeResizeListenersRef = useRef<(() => void) | null>(null);
+  const widgetDataRequestRef = useRef<AbortController | null>(null);
+  const widgetDataRunRef = useRef(0);
 
   const canUpdate = hasPermission(permissions, buildPermission('reports.dashboard', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('reports.dashboard', 'delete'));
@@ -330,8 +346,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
     resizeStateRef.current = null;
     setResizingWidgetId(null);
     setDraftWidgetSizes({});
-    onWidgetRouteChange(null);
-  }, [dashboardId, onWidgetRouteChange]);
+  }, [dashboardId]);
 
   useEffect(() => {
     if (isEditMode) return;
@@ -355,33 +370,67 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   }, [dashboard, activeWidgetRoute, onWidgetRouteChange]);
 
   useEffect(() => {
-    if (activeWidgetRoute && !canMutateWidgets) {
+    if (!activeWidgetRoute) return;
+    if (!canUpdate) {
       onWidgetRouteChange(null);
+      return;
     }
-  }, [activeWidgetRoute, canMutateWidgets, onWidgetRouteChange]);
+    if (dashboardMode !== 'edit') {
+      setDashboardMode('edit');
+    }
+  }, [activeWidgetRoute, canUpdate, dashboardMode, onWidgetRouteChange]);
 
   useEffect(() => {
+    const runId = ++widgetDataRunRef.current;
+    if (widgetDataRequestRef.current) {
+      widgetDataRequestRef.current.abort();
+      widgetDataRequestRef.current = null;
+    }
+
     if (!dashboard || dashboard.widgets.length === 0) {
       setWidgetData({});
       return;
     }
+
+    const abortController = new AbortController();
+    widgetDataRequestRef.current = abortController;
+    setWidgetData({});
+
     const loadWidgetData = async () => {
       const results = await Promise.all(
         dashboard.widgets.map(async (widget) => {
           try {
-            const response = await api.reports.getDashboardWidgetData(widget);
+            const response = await api.reports.getDashboardWidgetData(widget, {
+              signal: abortController.signal,
+            });
             return [widget.id, response] as const;
           } catch {
-            return [
-              widget.id,
-              { metric: widget.metric, groupBy: widget.groupBy, total: 0, series: [] },
-            ] as const;
+            if (abortController.signal.aborted) {
+              return null;
+            }
+            return [widget.id, buildEmptyWidgetDataResult(widget)] as const;
           }
         }),
       );
-      setWidgetData(Object.fromEntries(results));
+
+      if (widgetDataRunRef.current !== runId || abortController.signal.aborted) return;
+      setWidgetData(
+        Object.fromEntries(
+          results.filter((result): result is readonly [string, DashboardWidgetDataResult] =>
+            Boolean(result),
+          ),
+        ),
+      );
     };
+
     void loadWidgetData();
+
+    return () => {
+      abortController.abort();
+      if (widgetDataRequestRef.current === abortController) {
+        widgetDataRequestRef.current = null;
+      }
+    };
   }, [dashboard]);
 
   useEffect(() => {
@@ -549,6 +598,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                     type="button"
                     onClick={() => {
                       setDashboardMode('readonly');
+                      onWidgetRouteChange(null);
                       setIsModeMenuOpen(false);
                     }}
                     className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
@@ -619,6 +669,9 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           const data = widgetData[widget.id];
           const widgetSize = getWidgetSize(widget);
           const renderWidth = getRenderWidthSpan(widgetSize.width, gridColumnCount);
+          const pieQuery = data?.queries[0];
+          const barRows = data ? buildDashboardBarChartRows(data, widget.limit ?? 8) : [];
+          const hasSeriesData = Boolean(data?.queries.some((query) => query.series.length > 0));
 
           return (
             <div
@@ -637,10 +690,21 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                 <div className="min-w-0 flex-1">
                   <h4 className="text-base font-bold text-slate-800">{widget.title}</h4>
                   <p className="text-xs text-slate-500">
-                    {t(`dashboard.datasets.${widget.dataset}`)} -{' '}
-                    {t(`dashboard.groupBy.${widget.groupBy}`)} -{' '}
-                    {t(`dashboard.metrics.${widget.metric}`)}
+                    {t('dashboard.editModal.groupByLabel')}:{' '}
+                    {t(`dashboard.groupBy.${widget.groupBy}`)}
                   </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {widget.queries.map((query) => (
+                      <span
+                        key={query.id}
+                        className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500"
+                      >
+                        {getDashboardQueryDisplayName(query)} ·{' '}
+                        {t(`dashboard.datasets.${query.dataset}`)} ·{' '}
+                        {t(`dashboard.metrics.${query.metric}`)}
+                      </span>
+                    ))}
+                  </div>
                   {widget.description && (
                     <p className="mt-1 text-xs text-slate-500">{widget.description}</p>
                   )}
@@ -685,22 +749,22 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                     <i className="fa-solid fa-circle-notch fa-spin mr-2" />
                     {t('dashboard.loadingWidget')}
                   </div>
-                ) : data.series.length === 0 ? (
+                ) : !hasSeriesData ? (
                   <div className="flex h-full items-center justify-center text-sm text-slate-500">
                     {t('dashboard.noData')}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    {widget.chartType === 'pie' ? (
+                    {widget.chartType === 'pie' && pieQuery ? (
                       <PieChart>
                         <Pie
-                          data={data.series}
+                          data={pieQuery.series}
                           dataKey="value"
                           nameKey="label"
                           outerRadius={90}
                           label
                         >
-                          {data.series.map((entry, index) => (
+                          {pieQuery.series.map((entry, index) => (
                             <Cell
                               key={`${entry.label}-${index}`}
                               fill={CHART_COLORS[index % CHART_COLORS.length]}
@@ -725,7 +789,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                         )}
                       </PieChart>
                     ) : (
-                      <BarChart data={data.series}>
+                      <BarChart data={barRows}>
                         <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} />
                         <Tooltip />
@@ -744,14 +808,15 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                             }
                           />
                         )}
-                        <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                          {data.series.map((entry, index) => (
-                            <Cell
-                              key={`${entry.label}-${index}`}
-                              fill={CHART_COLORS[index % CHART_COLORS.length]}
-                            />
-                          ))}
-                        </Bar>
+                        {data.queries.map((query, index) => (
+                          <Bar
+                            key={query.id}
+                            dataKey={query.id}
+                            name={getDashboardQueryDisplayName(query)}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            radius={[6, 6, 0, 0]}
+                          />
+                        ))}
                       </BarChart>
                     )}
                   </ResponsiveContainer>
