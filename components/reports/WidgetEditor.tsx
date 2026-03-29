@@ -15,6 +15,8 @@ import {
 } from 'recharts';
 import api from '../../services/api';
 import type {
+  DashboardLegendMode,
+  DashboardLegendPlacement,
   DashboardWidget,
   DashboardWidgetDataResult,
   ReportDashboard,
@@ -28,6 +30,8 @@ import {
   DASHBOARD_WIDGET_DEFAULT_WIDTH,
   DATASET_OPTIONS,
   GROUP_BY_OPTIONS,
+  LEGEND_MODE_OPTIONS,
+  LEGEND_PLACEMENT_OPTIONS,
   METRIC_OPTIONS,
 } from './dashboardConstants';
 
@@ -68,6 +72,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   const [groupBy, setGroupBy] = useState('user');
   const [metric, setMetric] = useState('hours');
   const [limit, setLimit] = useState(8);
+  const [legendMode, setLegendMode] = useState<DashboardLegendMode>('list');
+  const [legendPlacement, setLegendPlacement] = useState<DashboardLegendPlacement>('bottom');
 
   // Preview state
   const [previewData, setPreviewData] = useState<DashboardWidgetDataResult | null>(null);
@@ -100,6 +106,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
       setGroupBy(existingWidget.groupBy);
       setMetric(existingWidget.metric);
       setLimit(existingWidget.limit ?? 8);
+      setLegendMode(existingWidget.legendMode || 'list');
+      setLegendPlacement(existingWidget.legendPlacement || 'bottom');
       return;
     }
 
@@ -112,6 +120,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
     setGroupBy('user');
     setMetric('hours');
     setLimit(8);
+    setLegendMode('list');
+    setLegendPlacement('bottom');
   }, [isOpen, mode, existingWidget]);
 
   useEffect(() => {
@@ -228,6 +238,8 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
       limit,
       width: existingWidget?.width ?? DASHBOARD_WIDGET_DEFAULT_WIDTH,
       height: existingWidget?.height ?? DASHBOARD_WIDGET_DEFAULT_HEIGHT,
+      legendMode,
+      legendPlacement,
     };
 
     const updatedWidgets =
@@ -337,13 +349,26 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                                 ))}
                               </Pie>
                               <Tooltip />
-                              <Legend />
+                              {legendMode !== 'hidden' && (
+                                <Legend
+                                  verticalAlign={legendPlacement === 'right' ? 'middle' : 'bottom'}
+                                  align={legendPlacement === 'right' ? 'right' : 'center'}
+                                  layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
+                                />
+                              )}
                             </PieChart>
                           ) : (
                             <BarChart data={previewData.series}>
                               <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                               <YAxis tick={{ fontSize: 12 }} />
                               <Tooltip />
+                              {legendMode !== 'hidden' && (
+                                <Legend
+                                  verticalAlign={legendPlacement === 'right' ? 'middle' : 'bottom'}
+                                  align={legendPlacement === 'right' ? 'right' : 'center'}
+                                  layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
+                                />
+                              )}
                               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                                 {previewData.series.map((entry, index) => (
                                   <Cell
@@ -364,16 +389,6 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                       {t('dashboard.widgetEditor.configTitle')}
                     </p>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <CustomSelect
-                        label={t('dashboard.editModal.chartType')}
-                        options={[
-                          { id: 'pie', name: t('dashboard.chartTypes.pie') },
-                          { id: 'bar', name: t('dashboard.chartTypes.bar') },
-                        ]}
-                        value={chartType}
-                        onChange={(value) => setChartType(value as DashboardWidget['chartType'])}
-                        disabled={isSaving}
-                      />
                       <CustomSelect
                         label={t('dashboard.editModal.dataset')}
                         options={DATASET_OPTIONS.map((item) => ({
@@ -427,6 +442,51 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                 </div>
 
                 <div className="w-full shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:w-80">
+                  <div className="mb-5">
+                    <CustomSelect
+                      label={t('dashboard.widgetEditor.chartTypeLabel')}
+                      options={[
+                        { id: 'pie', name: t('dashboard.chartTypes.pie') },
+                        { id: 'bar', name: t('dashboard.chartTypes.bar') },
+                      ]}
+                      value={chartType}
+                      onChange={(value) => setChartType(value as DashboardWidget['chartType'])}
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="mb-5">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {t('dashboard.widgetEditor.legendTitle')}
+                    </p>
+                    <div className="space-y-3">
+                      <CustomSelect
+                        label={t('dashboard.widgetEditor.legendModeLabel')}
+                        options={LEGEND_MODE_OPTIONS.map((item) => ({
+                          id: item,
+                          name: t(`dashboard.legendModes.${item}`),
+                        }))}
+                        value={legendMode}
+                        onChange={(value) => setLegendMode(value as DashboardLegendMode)}
+                        disabled={isSaving}
+                      />
+                      {legendMode === 'list' && (
+                        <CustomSelect
+                          label={t('dashboard.widgetEditor.legendPlacementLabel')}
+                          options={LEGEND_PLACEMENT_OPTIONS.map((item) => ({
+                            id: item,
+                            name: t(`dashboard.legendPlacements.${item}`),
+                          }))}
+                          value={legendPlacement}
+                          onChange={(value) =>
+                            setLegendPlacement(value as DashboardLegendPlacement)
+                          }
+                          disabled={isSaving}
+                        />
+                      )}
+                    </div>
+                  </div>
+
                   <div className="mb-5">
                     <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
                       {t('dashboard.widgetEditor.nameLabel')}

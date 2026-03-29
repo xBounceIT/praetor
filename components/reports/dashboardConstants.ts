@@ -1,4 +1,8 @@
-import type { DashboardWidget } from '../../services/api/reports';
+import type {
+  DashboardLegendMode,
+  DashboardLegendPlacement,
+  DashboardWidget,
+} from '../../services/api/reports';
 
 export const CHART_COLORS = [
   '#1d4ed8',
@@ -38,6 +42,9 @@ export const GROUP_BY_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
   supplierQuotes: ['status', 'supplier', 'month'],
   catalog: ['type', 'category', 'subcategory', 'supplier'],
 };
+
+export const LEGEND_MODE_OPTIONS: DashboardLegendMode[] = ['list', 'hidden'];
+export const LEGEND_PLACEMENT_OPTIONS: DashboardLegendPlacement[] = ['bottom', 'right'];
 
 export const METRIC_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
   timesheets: ['hours', 'entries', 'cost'],

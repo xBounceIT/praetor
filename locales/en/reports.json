@@ -81,11 +81,23 @@
       "previewTitle": "Preview",
       "loadingPreview": "Loading preview...",
       "noPreviewData": "No data available for preview.",
-      "configTitle": "Data Configuration"
+      "configTitle": "Data Configuration",
+      "chartTypeLabel": "Chart Type",
+      "legendTitle": "Legend",
+      "legendModeLabel": "Display",
+      "legendPlacementLabel": "Placement"
     },
     "chartTypes": {
       "pie": "Pie",
       "bar": "Histogram"
+    },
+    "legendModes": {
+      "list": "Visible",
+      "hidden": "Hidden"
+    },
+    "legendPlacements": {
+      "bottom": "Bottom",
+      "right": "Right"
     },
     "datasets": {
       "timesheets": "Timesheets",

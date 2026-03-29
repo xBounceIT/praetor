@@ -81,11 +81,23 @@
       "previewTitle": "Anteprima",
       "loadingPreview": "Caricamento anteprima...",
       "noPreviewData": "Nessun dato disponibile per l'anteprima.",
-      "configTitle": "Configurazione Dati"
+      "configTitle": "Configurazione Dati",
+      "chartTypeLabel": "Tipo Grafico",
+      "legendTitle": "Legenda",
+      "legendModeLabel": "Visibilita'",
+      "legendPlacementLabel": "Posizione"
     },
     "chartTypes": {
       "pie": "Torta",
       "bar": "Istogramma"
+    },
+    "legendModes": {
+      "list": "Visibile",
+      "hidden": "Nascosta"
+    },
+    "legendPlacements": {
+      "bottom": "In basso",
+      "right": "A destra"
     },
     "datasets": {
       "timesheets": "Presenze",

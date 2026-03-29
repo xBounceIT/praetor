@@ -2706,6 +2706,9 @@ type DashboardDataset =
   | 'supplierQuotes'
   | 'catalog';
 
+type DashboardLegendMode = 'list' | 'hidden';
+type DashboardLegendPlacement = 'bottom' | 'right';
+
 type DashboardWidgetConfig = {
   id: string;
   title: string;
@@ -2718,6 +2721,8 @@ type DashboardWidgetConfig = {
   tags: string[];
   width: number;
   height: number;
+  legendMode: DashboardLegendMode;
+  legendPlacement: DashboardLegendPlacement;
 };
 
 const DASHBOARD_OPTIONS: Record<DashboardDataset, { groupBy: string[]; metric: string[] }> = {
@@ -2786,6 +2791,11 @@ const normalizeWidget = (
         .filter((t) => t.length > 0)
         .slice(0, 10)
     : [];
+  const rawLegendMode = String(obj.legendMode || '').trim();
+  const legendMode: DashboardLegendMode = rawLegendMode === 'hidden' ? 'hidden' : 'list';
+  const rawLegendPlacement = String(obj.legendPlacement || '').trim();
+  const legendPlacement: DashboardLegendPlacement =
+    rawLegendPlacement === 'right' ? 'right' : 'bottom';
 
   if (!title) return { ok: false, error: 'widget.title is required' };
   if (chartType !== 'pie' && chartType !== 'bar') {
@@ -2815,6 +2825,8 @@ const normalizeWidget = (
       tags,
       width,
       height,
+      legendMode,
+      legendPlacement,
     },
   };
 };

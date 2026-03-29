@@ -3,6 +3,8 @@ import { fetchApi, fetchApiStream } from './client';
 import type { ReportChatStreamDoneEvent, ReportChatStreamHandlers } from './contracts';
 
 export type DashboardChartType = 'pie' | 'bar';
+export type DashboardLegendMode = 'list' | 'hidden';
+export type DashboardLegendPlacement = 'bottom' | 'right';
 
 export interface DashboardWidget {
   id: string;
@@ -16,6 +18,8 @@ export interface DashboardWidget {
   tags?: string[];
   width?: number;
   height?: number;
+  legendMode?: DashboardLegendMode;
+  legendPlacement?: DashboardLegendPlacement;
 }
 
 export interface ReportDashboard {

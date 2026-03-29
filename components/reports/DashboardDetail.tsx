@@ -708,13 +708,42 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                           ))}
                         </Pie>
                         <Tooltip />
-                        <Legend />
+                        {(widget.legendMode || 'list') !== 'hidden' && (
+                          <Legend
+                            verticalAlign={
+                              (widget.legendPlacement || 'bottom') === 'right' ? 'middle' : 'bottom'
+                            }
+                            align={
+                              (widget.legendPlacement || 'bottom') === 'right' ? 'right' : 'center'
+                            }
+                            layout={
+                              (widget.legendPlacement || 'bottom') === 'right'
+                                ? 'vertical'
+                                : 'horizontal'
+                            }
+                          />
+                        )}
                       </PieChart>
                     ) : (
                       <BarChart data={data.series}>
                         <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} />
                         <Tooltip />
+                        {(widget.legendMode || 'list') !== 'hidden' && (
+                          <Legend
+                            verticalAlign={
+                              (widget.legendPlacement || 'bottom') === 'right' ? 'middle' : 'bottom'
+                            }
+                            align={
+                              (widget.legendPlacement || 'bottom') === 'right' ? 'right' : 'center'
+                            }
+                            layout={
+                              (widget.legendPlacement || 'bottom') === 'right'
+                                ? 'vertical'
+                                : 'horizontal'
+                            }
+                          />
+                        )}
                         <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                           {data.series.map((entry, index) => (
                             <Cell
