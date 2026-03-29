@@ -4,6 +4,7 @@ import type {
   DashboardWidgetDataResult,
   DashboardWidgetQuery,
 } from '../../services/api/reports';
+import { createPrefixedId } from '../../utils/id';
 import { GROUP_BY_OPTIONS, METRIC_OPTIONS } from './dashboardConstants';
 
 export const DASHBOARD_QUERY_REFS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
@@ -23,7 +24,7 @@ export const createDashboardWidgetQuery = (
   ref: string,
   dataset: DashboardDataset = 'timesheets',
 ): DashboardWidgetQuery => ({
-  id: `wdq-${crypto.randomUUID()}`,
+  id: createPrefixedId('wdq'),
   ref,
   dataset,
   metric: getDefaultMetricForDataset(dataset),
