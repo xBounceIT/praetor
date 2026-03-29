@@ -5,6 +5,11 @@ import type { ReportChatStreamDoneEvent, ReportChatStreamHandlers } from './cont
 export type DashboardChartType = 'pie' | 'bar';
 export type DashboardLegendMode = 'list' | 'hidden';
 export type DashboardLegendPlacement = 'bottom' | 'right';
+export type DashboardWidgetTransformationReducer = 'sum' | 'avg' | 'min' | 'max';
+export type DashboardWidgetTransformationSortBy = 'label' | 'total';
+export type DashboardWidgetTransformationDirection = 'asc' | 'desc';
+export type DashboardWidgetTransformationLabelOperator = 'contains' | 'equals' | 'startsWith';
+export type DashboardWidgetTransformationNumberOperator = 'gt' | 'gte' | 'lt' | 'lte' | 'between';
 export type DashboardDataset =
   | 'timesheets'
   | 'quotes'
@@ -12,6 +17,54 @@ export type DashboardDataset =
   | 'invoices'
   | 'supplierQuotes'
   | 'catalog';
+
+export interface DashboardWidgetSortRowsTransformation {
+  id: string;
+  type: 'sortRows';
+  sortBy: DashboardWidgetTransformationSortBy;
+  direction: DashboardWidgetTransformationDirection;
+}
+
+export interface DashboardWidgetFilterRowsTransformation {
+  id: string;
+  type: 'filterRows';
+  field: 'label' | 'total';
+  operator:
+    | DashboardWidgetTransformationLabelOperator
+    | DashboardWidgetTransformationNumberOperator;
+  value: string | number;
+  secondaryValue?: number;
+}
+
+export interface DashboardWidgetOrganizeSeriesTransformation {
+  id: string;
+  type: 'organizeSeries';
+  queryOrder: string[];
+  hiddenQueryIds: string[];
+}
+
+export interface DashboardWidgetMergeSeriesTransformation {
+  id: string;
+  type: 'mergeSeries';
+  queryIds: string[];
+  reducer: DashboardWidgetTransformationReducer;
+  label?: string;
+}
+
+export interface DashboardWidgetReduceQueriesTransformation {
+  id: string;
+  type: 'reduceQueries';
+  queryIds: string[];
+  reducer: DashboardWidgetTransformationReducer;
+  label?: string;
+}
+
+export type DashboardWidgetTransformation =
+  | DashboardWidgetSortRowsTransformation
+  | DashboardWidgetFilterRowsTransformation
+  | DashboardWidgetOrganizeSeriesTransformation
+  | DashboardWidgetMergeSeriesTransformation
+  | DashboardWidgetReduceQueriesTransformation;
 
 export interface DashboardWidgetQuery {
   id: string;
@@ -27,6 +80,7 @@ export interface DashboardWidget {
   chartType: DashboardChartType;
   groupBy: string;
   queries: DashboardWidgetQuery[];
+  transformations?: DashboardWidgetTransformation[];
   limit?: number;
   description?: string;
   tags?: string[];

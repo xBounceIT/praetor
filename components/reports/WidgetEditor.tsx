@@ -21,6 +21,7 @@ import type {
   DashboardWidget,
   DashboardWidgetDataResult,
   DashboardWidgetQuery,
+  DashboardWidgetTransformation,
   ReportDashboard,
 } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -39,14 +40,17 @@ import {
   widgetHasRestrictedDashboardDatasets,
 } from './dashboardPermissions';
 import {
-  buildDashboardBarChartRows,
+  buildDashboardWidgetVisualizationModel,
+  normalizeDashboardWidgetTransformations,
+} from './dashboardWidgetTransformations';
+import {
   createDashboardWidgetQuery,
-  getDashboardQueryDisplayName,
   getDefaultGroupByForDatasets,
   getDefaultMetricForDataset,
   getNextDashboardQueryRef,
   getSharedGroupByOptions,
 } from './dashboardWidgetUtils';
+import WidgetTransformationEditor from './WidgetTransformationEditor';
 
 export interface WidgetEditorProps {
   isOpen: boolean;
@@ -112,9 +116,11 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [chartType, setChartType] = useState<DashboardWidget['chartType']>('pie');
+  const [activeConfigTab, setActiveConfigTab] = useState<'data' | 'transformation'>('data');
   const [queries, setQueries] = useState<DashboardWidgetQuery[]>(() =>
     createDefaultQueries(firstAccessibleDataset),
   );
+  const [transformations, setTransformations] = useState<DashboardWidgetTransformation[]>([]);
   const [groupBy, setGroupBy] = useState(
     getDefaultGroupByForDatasets(firstAccessibleDataset ? [firstAccessibleDataset] : []),
   );
@@ -163,15 +169,28 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
       hasAccessibleDatasets &&
       !isRestrictedEdit,
   );
-  const previewBarRows = useMemo(
-    () => (previewData ? buildDashboardBarChartRows(previewData, limit) : []),
-    [previewData, limit],
+  const normalizedTransformations = useMemo(
+    () => normalizeDashboardWidgetTransformations(transformations, queries),
+    [transformations, queries],
   );
-  const hasPreviewData = useMemo(
-    () => Boolean(previewData?.queries.some((query) => query.series.length > 0)),
-    [previewData],
+  const previewModel = useMemo(
+    () =>
+      previewData
+        ? buildDashboardWidgetVisualizationModel(
+            {
+              limit,
+              transformations: normalizedTransformations,
+            },
+            previewData,
+            {
+              mergedSeries: t('dashboard.widgetEditor.transformations.defaultMergedLabel'),
+              reducedValue: t('dashboard.widgetEditor.transformations.defaultReducedLabel'),
+            },
+          )
+        : null,
+    [limit, normalizedTransformations, previewData, t],
   );
-  const previewPieQuery = previewData?.queries[0] || null;
+  const hasPreviewData = previewModel?.hasSeriesData || false;
   const nextQueryRef = getNextDashboardQueryRef(queries);
   const chartTypeOptions =
     queries.length > 1
@@ -187,13 +206,18 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
     setQueryHint('');
     setPreviewData(null);
     setTagInput('');
+    setActiveConfigTab('data');
 
     if (mode === 'edit' && existingWidget) {
+      const editorQueries = normalizeEditorQueries(existingWidget.queries, firstAccessibleDataset);
       setTitle(existingWidget.title);
       setDescription(existingWidget.description || '');
       setTags(existingWidget.tags || []);
       setChartType(existingWidget.chartType);
-      setQueries(normalizeEditorQueries(existingWidget.queries, firstAccessibleDataset));
+      setQueries(editorQueries);
+      setTransformations(
+        normalizeDashboardWidgetTransformations(existingWidget.transformations, editorQueries),
+      );
       setGroupBy(existingWidget.groupBy);
       setLimit(existingWidget.limit ?? 8);
       setLegendMode(existingWidget.legendMode || 'list');
@@ -205,7 +229,9 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
     setDescription('');
     setTags([]);
     setChartType('pie');
-    setQueries(createDefaultQueries(firstAccessibleDataset));
+    const defaultQueries = createDefaultQueries(firstAccessibleDataset);
+    setQueries(defaultQueries);
+    setTransformations([]);
     setGroupBy(
       getDefaultGroupByForDatasets(firstAccessibleDataset ? [firstAccessibleDataset] : []),
     );
@@ -224,6 +250,10 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
       setQueryHint('');
     }
   }, [chartType, queries.length]);
+
+  useEffect(() => {
+    setTransformations((prev) => normalizeDashboardWidgetTransformations(prev, queries));
+  }, [queries]);
 
   useEffect(() => {
     if (
@@ -389,6 +419,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
       chartType,
       groupBy,
       queries: normalizedQueries,
+      transformations: normalizedTransformations,
       limit,
       width: existingWidget?.width ?? DASHBOARD_WIDGET_DEFAULT_WIDTH,
       height: existingWidget?.height ?? DASHBOARD_WIDGET_DEFAULT_HEIGHT,
@@ -488,21 +519,21 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                         <div className="flex h-full items-center justify-center text-sm text-amber-600">
                           {t('dashboard.widgetEditor.noSharedGroupBy')}
                         </div>
-                      ) : !previewData || !hasPreviewData ? (
+                      ) : !previewModel || !hasPreviewData ? (
                         <div className="flex h-full items-center justify-center text-sm text-slate-400">
                           {t('dashboard.widgetEditor.noPreviewData')}
                         </div>
-                      ) : chartType === 'pie' && previewPieQuery ? (
+                      ) : chartType === 'pie' && previewModel.pieSeries.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
-                              data={previewPieQuery.series}
+                              data={previewModel.pieSeries}
                               dataKey="value"
                               nameKey="label"
                               outerRadius={100}
                               label
                             >
-                              {previewPieQuery.series.map((entry, index) => (
+                              {previewModel.pieSeries.map((entry, index) => (
                                 <Cell
                                   key={`${entry.label}-${index}`}
                                   fill={CHART_COLORS[index % CHART_COLORS.length]}
@@ -521,7 +552,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                         </ResponsiveContainer>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={previewBarRows}>
+                          <BarChart data={previewModel.barRows}>
                             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                             <YAxis tick={{ fontSize: 12 }} />
                             <Tooltip />
@@ -532,11 +563,11 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                                 layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
                               />
                             )}
-                            {previewData.queries.map((query, index) => (
+                            {previewModel.series.map((seriesItem, index) => (
                               <Bar
-                                key={query.id}
-                                dataKey={query.id}
-                                name={getDashboardQueryDisplayName(query)}
+                                key={seriesItem.id}
+                                dataKey={seriesItem.id}
+                                name={seriesItem.label}
                                 fill={CHART_COLORS[index % CHART_COLORS.length]}
                                 radius={[6, 6, 0, 0]}
                               />
@@ -552,142 +583,180 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                         {t('dashboard.widgetEditor.configTitle')}
                       </p>
+                      {activeConfigTab === 'data' && (
+                        <button
+                          type="button"
+                          onClick={handleAddQuery}
+                          disabled={isSaving || !nextQueryRef}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <i className="fa-solid fa-plus text-[10px]" />
+                          {t('dashboard.widgetEditor.addQuery')}
+                        </button>
+                      )}
+                    </div>
+                    <div className="mb-4 flex items-center gap-2 rounded-xl bg-slate-100 p-1">
                       <button
                         type="button"
-                        onClick={handleAddQuery}
-                        disabled={isSaving || !nextQueryRef}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => setActiveConfigTab('data')}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold transition ${
+                          activeConfigTab === 'data'
+                            ? 'bg-white text-slate-800 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
                       >
-                        <i className="fa-solid fa-plus text-[10px]" />
-                        {t('dashboard.widgetEditor.addQuery')}
+                        {t('dashboard.widgetEditor.tabs.data')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveConfigTab('transformation')}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold transition ${
+                          activeConfigTab === 'transformation'
+                            ? 'bg-white text-slate-800 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {t('dashboard.widgetEditor.tabs.transformation')}
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <CustomSelect
-                        label={t('dashboard.editModal.groupByLabel')}
-                        options={sharedGroupByOptions.map((item) => ({
-                          id: item,
-                          name: t(`dashboard.groupBy.${item}`),
-                        }))}
-                        value={groupBy}
-                        onChange={(value) => setGroupBy(value as string)}
-                        disabled={isSaving || !hasSharedGroupBy}
-                        placeholder={t('dashboard.widgetEditor.noSharedGroupBy')}
-                      />
-                      <div>
-                        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                          {t('dashboard.widgetEditor.limitLabel')}
-                        </label>
-                        <input
-                          type="number"
-                          min={3}
-                          max={20}
-                          value={limit}
-                          onChange={(e) => {
-                            const parsed = Number.parseInt(e.target.value, 10);
-                            if (!Number.isFinite(parsed)) return;
-                            setLimit(Math.max(3, Math.min(parsed, 20)));
-                          }}
-                          disabled={isSaving}
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-60"
-                        />
-                      </div>
-                    </div>
-
-                    {queryHint && (
-                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                        {queryHint}
-                      </div>
-                    )}
-
-                    {!hasSharedGroupBy && (
-                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                        {t('dashboard.widgetEditor.noSharedGroupBy')}
-                      </div>
-                    )}
-
-                    <div className="mt-4 space-y-3">
-                      {queries.map((query) => (
-                        <div
-                          key={query.id}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                        >
-                          <div className="mb-3 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-800 px-2 text-xs font-black text-white">
-                                {query.ref}
-                              </span>
-                              <p className="text-sm font-bold text-slate-700">
-                                {t('dashboard.widgetEditor.queryTitle', { ref: query.ref })}
-                              </p>
-                            </div>
-                            {queries.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveQuery(query.id)}
-                                disabled={isSaving}
-                                className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-700 disabled:opacity-60"
-                              >
-                                {t('dashboard.widgetEditor.removeQuery')}
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <CustomSelect
-                              label={t('dashboard.editModal.dataset')}
-                              options={accessibleDatasetOptions}
-                              value={query.dataset}
-                              onChange={(value) => {
-                                const dataset = value as DashboardDataset;
-                                updateQuery(query.id, (current) => ({
-                                  ...current,
-                                  dataset,
-                                  metric: METRIC_OPTIONS[dataset].includes(current.metric)
-                                    ? current.metric
-                                    : getDefaultMetricForDataset(dataset),
-                                }));
+                    {activeConfigTab === 'data' ? (
+                      <>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <CustomSelect
+                            label={t('dashboard.editModal.groupByLabel')}
+                            options={sharedGroupByOptions.map((item) => ({
+                              id: item,
+                              name: t(`dashboard.groupBy.${item}`),
+                            }))}
+                            value={groupBy}
+                            onChange={(value) => setGroupBy(value as string)}
+                            disabled={isSaving || !hasSharedGroupBy}
+                            placeholder={t('dashboard.widgetEditor.noSharedGroupBy')}
+                          />
+                          <div>
+                            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+                              {t('dashboard.widgetEditor.limitLabel')}
+                            </label>
+                            <input
+                              type="number"
+                              min={3}
+                              max={20}
+                              value={limit}
+                              onChange={(e) => {
+                                const parsed = Number.parseInt(e.target.value, 10);
+                                if (!Number.isFinite(parsed)) return;
+                                setLimit(Math.max(3, Math.min(parsed, 20)));
                               }}
                               disabled={isSaving}
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-60"
                             />
-                            <CustomSelect
-                              label={t('dashboard.editModal.metric')}
-                              options={METRIC_OPTIONS[query.dataset].map((item) => ({
-                                id: item,
-                                name: t(`dashboard.metrics.${item}`),
-                              }))}
-                              value={query.metric}
-                              onChange={(value) =>
-                                updateQuery(query.id, (current) => ({
-                                  ...current,
-                                  metric: value as string,
-                                }))
-                              }
-                              disabled={isSaving}
-                            />
-                            <div>
-                              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                                {t('dashboard.widgetEditor.queryAliasLabel')}
-                              </label>
-                              <input
-                                value={query.label || ''}
-                                onChange={(e) =>
-                                  updateQuery(query.id, (current) => ({
-                                    ...current,
-                                    label: e.target.value,
-                                  }))
-                                }
-                                placeholder={t('dashboard.widgetEditor.queryAliasPlaceholder')}
-                                maxLength={120}
-                                disabled={isSaving}
-                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-60"
-                              />
-                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+
+                        {queryHint && (
+                          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                            {queryHint}
+                          </div>
+                        )}
+
+                        {!hasSharedGroupBy && (
+                          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {t('dashboard.widgetEditor.noSharedGroupBy')}
+                          </div>
+                        )}
+
+                        <div className="mt-4 space-y-3">
+                          {queries.map((query) => (
+                            <div
+                              key={query.id}
+                              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                            >
+                              <div className="mb-3 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-800 px-2 text-xs font-black text-white">
+                                    {query.ref}
+                                  </span>
+                                  <p className="text-sm font-bold text-slate-700">
+                                    {t('dashboard.widgetEditor.queryTitle', { ref: query.ref })}
+                                  </p>
+                                </div>
+                                {queries.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveQuery(query.id)}
+                                    disabled={isSaving}
+                                    className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-700 disabled:opacity-60"
+                                  >
+                                    {t('dashboard.widgetEditor.removeQuery')}
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <CustomSelect
+                                  label={t('dashboard.editModal.dataset')}
+                                  options={accessibleDatasetOptions}
+                                  value={query.dataset}
+                                  onChange={(value) => {
+                                    const dataset = value as DashboardDataset;
+                                    updateQuery(query.id, (current) => ({
+                                      ...current,
+                                      dataset,
+                                      metric: METRIC_OPTIONS[dataset].includes(current.metric)
+                                        ? current.metric
+                                        : getDefaultMetricForDataset(dataset),
+                                    }));
+                                  }}
+                                  disabled={isSaving}
+                                />
+                                <CustomSelect
+                                  label={t('dashboard.editModal.metric')}
+                                  options={METRIC_OPTIONS[query.dataset].map((item) => ({
+                                    id: item,
+                                    name: t(`dashboard.metrics.${item}`),
+                                  }))}
+                                  value={query.metric}
+                                  onChange={(value) =>
+                                    updateQuery(query.id, (current) => ({
+                                      ...current,
+                                      metric: value as string,
+                                    }))
+                                  }
+                                  disabled={isSaving}
+                                />
+                                <div>
+                                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+                                    {t('dashboard.widgetEditor.queryAliasLabel')}
+                                  </label>
+                                  <input
+                                    value={query.label || ''}
+                                    onChange={(e) =>
+                                      updateQuery(query.id, (current) => ({
+                                        ...current,
+                                        label: e.target.value,
+                                      }))
+                                    }
+                                    placeholder={t('dashboard.widgetEditor.queryAliasPlaceholder')}
+                                    maxLength={120}
+                                    disabled={isSaving}
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-60"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <WidgetTransformationEditor
+                        chartType={chartType}
+                        queries={queries}
+                        transformations={normalizedTransformations}
+                        onChange={setTransformations}
+                        disabled={isSaving}
+                      />
+                    )}
                   </div>
                 </div>
 

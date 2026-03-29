@@ -2708,7 +2708,17 @@ type DashboardDataset =
 
 type DashboardLegendMode = 'list' | 'hidden';
 type DashboardLegendPlacement = 'bottom' | 'right';
+type DashboardWidgetTransformationReducer = 'sum' | 'avg' | 'min' | 'max';
+type DashboardWidgetTransformationSortBy = 'label' | 'total';
+type DashboardWidgetTransformationDirection = 'asc' | 'desc';
+type DashboardWidgetTransformationLabelOperator = 'contains' | 'equals' | 'startsWith';
+type DashboardWidgetTransformationNumberOperator = 'gt' | 'gte' | 'lt' | 'lte' | 'between';
 const DASHBOARD_QUERY_REFS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
+const DASHBOARD_TRANSFORMATION_REDUCERS = ['sum', 'avg', 'min', 'max'] as const;
+const DASHBOARD_TRANSFORMATION_SORT_BY = ['label', 'total'] as const;
+const DASHBOARD_TRANSFORMATION_DIRECTIONS = ['asc', 'desc'] as const;
+const DASHBOARD_TRANSFORMATION_LABEL_OPERATORS = ['contains', 'equals', 'startsWith'] as const;
+const DASHBOARD_TRANSFORMATION_NUMBER_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'between'] as const;
 type DashboardQueryRef = (typeof DASHBOARD_QUERY_REFS)[number];
 
 type DashboardWidgetQueryConfig = {
@@ -2719,12 +2729,61 @@ type DashboardWidgetQueryConfig = {
   label: string;
 };
 
+type DashboardWidgetSortRowsTransformation = {
+  id: string;
+  type: 'sortRows';
+  sortBy: DashboardWidgetTransformationSortBy;
+  direction: DashboardWidgetTransformationDirection;
+};
+
+type DashboardWidgetFilterRowsTransformation = {
+  id: string;
+  type: 'filterRows';
+  field: 'label' | 'total';
+  operator:
+    | DashboardWidgetTransformationLabelOperator
+    | DashboardWidgetTransformationNumberOperator;
+  value: string | number;
+  secondaryValue?: number;
+};
+
+type DashboardWidgetOrganizeSeriesTransformation = {
+  id: string;
+  type: 'organizeSeries';
+  queryOrder: string[];
+  hiddenQueryIds: string[];
+};
+
+type DashboardWidgetMergeSeriesTransformation = {
+  id: string;
+  type: 'mergeSeries';
+  queryIds: string[];
+  reducer: DashboardWidgetTransformationReducer;
+  label: string;
+};
+
+type DashboardWidgetReduceQueriesTransformation = {
+  id: string;
+  type: 'reduceQueries';
+  queryIds: string[];
+  reducer: DashboardWidgetTransformationReducer;
+  label: string;
+};
+
+type DashboardWidgetTransformation =
+  | DashboardWidgetSortRowsTransformation
+  | DashboardWidgetFilterRowsTransformation
+  | DashboardWidgetOrganizeSeriesTransformation
+  | DashboardWidgetMergeSeriesTransformation
+  | DashboardWidgetReduceQueriesTransformation;
+
 type DashboardWidgetConfig = {
   id: string;
   title: string;
   chartType: DashboardChartType;
   groupBy: string;
   queries: DashboardWidgetQueryConfig[];
+  transformations: DashboardWidgetTransformation[];
   limit: number;
   description: string;
   tags: string[];
@@ -2779,6 +2838,155 @@ const normalizeDashboardQueryRef = (raw: unknown): DashboardQueryRef | null => {
     .trim()
     .toUpperCase();
   return DASHBOARD_QUERY_REFS.find((item) => item === ref) || null;
+};
+
+const normalizeUniqueStringArray = (raw: unknown, allowedValues: Set<string>) => {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(
+    new Set(
+      raw
+        .map((item) => String(item || '').trim())
+        .filter((item) => item.length > 0 && allowedValues.has(item)),
+    ),
+  );
+};
+
+const normalizeWidgetTransformation = (
+  raw: unknown,
+  queryIds: string[],
+): DashboardWidgetTransformation | null => {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const obj = raw as Record<string, unknown>;
+  const type = String(obj.type || '').trim();
+  const id = String(obj.id || '').trim() || `wdt-${randomUUID()}`;
+  const availableQueryIds = new Set(queryIds);
+
+  if (type === 'sortRows') {
+    const sortBy = String(obj.sortBy || '').trim();
+    const direction = String(obj.direction || '').trim();
+    if (
+      !DASHBOARD_TRANSFORMATION_SORT_BY.includes(sortBy as DashboardWidgetTransformationSortBy) ||
+      !DASHBOARD_TRANSFORMATION_DIRECTIONS.includes(
+        direction as DashboardWidgetTransformationDirection,
+      )
+    ) {
+      return null;
+    }
+
+    return {
+      id,
+      type,
+      sortBy: sortBy as DashboardWidgetTransformationSortBy,
+      direction: direction as DashboardWidgetTransformationDirection,
+    };
+  }
+
+  if (type === 'filterRows') {
+    const field = String(obj.field || '').trim();
+    const operator = String(obj.operator || '').trim();
+
+    if (field === 'label') {
+      const value = String(obj.value || '')
+        .trim()
+        .slice(0, 120);
+      if (
+        !DASHBOARD_TRANSFORMATION_LABEL_OPERATORS.includes(
+          operator as DashboardWidgetTransformationLabelOperator,
+        )
+      ) {
+        return null;
+      }
+
+      return {
+        id,
+        type,
+        field,
+        operator: operator as DashboardWidgetTransformationLabelOperator,
+        value,
+      };
+    }
+
+    if (field === 'total') {
+      const value = Number(obj.value);
+      const secondaryValue = Number(obj.secondaryValue);
+      if (
+        !DASHBOARD_TRANSFORMATION_NUMBER_OPERATORS.includes(
+          operator as DashboardWidgetTransformationNumberOperator,
+        ) ||
+        !Number.isFinite(value)
+      ) {
+        return null;
+      }
+      if (operator === 'between' && !Number.isFinite(secondaryValue)) {
+        return null;
+      }
+
+      return {
+        id,
+        type,
+        field,
+        operator: operator as DashboardWidgetTransformationNumberOperator,
+        value,
+        ...(operator === 'between' ? { secondaryValue } : {}),
+      };
+    }
+
+    return null;
+  }
+
+  if (type === 'organizeSeries') {
+    return {
+      id,
+      type,
+      queryOrder: normalizeUniqueStringArray(obj.queryOrder, availableQueryIds),
+      hiddenQueryIds: normalizeUniqueStringArray(obj.hiddenQueryIds, availableQueryIds),
+    };
+  }
+
+  if (type === 'mergeSeries') {
+    const reducer = String(obj.reducer || '').trim();
+    const queryIdsValue = normalizeUniqueStringArray(obj.queryIds, availableQueryIds);
+    const label = String(obj.label || '')
+      .trim()
+      .slice(0, 120);
+    if (
+      !DASHBOARD_TRANSFORMATION_REDUCERS.includes(reducer as DashboardWidgetTransformationReducer)
+    ) {
+      return null;
+    }
+
+    return {
+      id,
+      type,
+      queryIds: queryIdsValue,
+      reducer: reducer as DashboardWidgetTransformationReducer,
+      label,
+    };
+  }
+
+  if (type === 'reduceQueries') {
+    const reducer = String(obj.reducer || '').trim();
+    const queryIdsValue = normalizeUniqueStringArray(obj.queryIds, availableQueryIds);
+    const label = String(obj.label || '')
+      .trim()
+      .slice(0, 120);
+    if (
+      !DASHBOARD_TRANSFORMATION_REDUCERS.includes(reducer as DashboardWidgetTransformationReducer)
+    ) {
+      return null;
+    }
+
+    return {
+      id,
+      type,
+      queryIds: queryIdsValue,
+      reducer: reducer as DashboardWidgetTransformationReducer,
+      label,
+    };
+  }
+
+  return null;
 };
 
 const normalizeWidgetQuery = (
@@ -2892,6 +3100,26 @@ const normalizeWidget = (
     queries.push(parsedQuery.value);
   }
 
+  const rawTransformations = Array.isArray(obj.transformations) ? obj.transformations : [];
+  const transformations: DashboardWidgetTransformation[] = [];
+  const usedTransformationIds = new Set<string>();
+
+  for (const item of rawTransformations.slice(0, 12)) {
+    const normalizedTransformation = normalizeWidgetTransformation(
+      item,
+      queries.map((query) => query.id),
+    );
+    if (!normalizedTransformation) continue;
+    const transformationId = usedTransformationIds.has(normalizedTransformation.id)
+      ? `wdt-${randomUUID()}`
+      : normalizedTransformation.id;
+    usedTransformationIds.add(transformationId);
+    transformations.push({
+      ...normalizedTransformation,
+      id: transformationId,
+    });
+  }
+
   if (
     !queries.every((queryItem) => DASHBOARD_OPTIONS[queryItem.dataset].groupBy.includes(groupBy))
   ) {
@@ -2910,6 +3138,7 @@ const normalizeWidget = (
       chartType,
       groupBy,
       queries,
+      transformations,
       limit,
       description,
       tags,
@@ -3234,6 +3463,78 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     required: ['dataset', 'metric'],
   } as const;
 
+  const dashboardWidgetSortRowsTransformationSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string', enum: ['sortRows'] },
+      sortBy: { type: 'string', enum: ['label', 'total'] },
+      direction: { type: 'string', enum: ['asc', 'desc'] },
+    },
+    required: ['id', 'type', 'sortBy', 'direction'],
+  } as const;
+
+  const dashboardWidgetFilterRowsTransformationSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string', enum: ['filterRows'] },
+      field: { type: 'string', enum: ['label', 'total'] },
+      operator: {
+        type: 'string',
+        enum: ['contains', 'equals', 'startsWith', 'gt', 'gte', 'lt', 'lte', 'between'],
+      },
+      value: { type: ['string', 'number'] },
+      secondaryValue: { type: 'number' },
+    },
+    required: ['id', 'type', 'field', 'operator', 'value'],
+  } as const;
+
+  const dashboardWidgetOrganizeSeriesTransformationSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string', enum: ['organizeSeries'] },
+      queryOrder: { type: 'array', items: { type: 'string' } },
+      hiddenQueryIds: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['id', 'type', 'queryOrder', 'hiddenQueryIds'],
+  } as const;
+
+  const dashboardWidgetMergeSeriesTransformationSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string', enum: ['mergeSeries'] },
+      queryIds: { type: 'array', items: { type: 'string' } },
+      reducer: { type: 'string', enum: ['sum', 'avg', 'min', 'max'] },
+      label: { type: 'string' },
+    },
+    required: ['id', 'type', 'queryIds', 'reducer'],
+  } as const;
+
+  const dashboardWidgetReduceQueriesTransformationSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string', enum: ['reduceQueries'] },
+      queryIds: { type: 'array', items: { type: 'string' } },
+      reducer: { type: 'string', enum: ['sum', 'avg', 'min', 'max'] },
+      label: { type: 'string' },
+    },
+    required: ['id', 'type', 'queryIds', 'reducer'],
+  } as const;
+
+  const dashboardWidgetTransformationSchema = {
+    anyOf: [
+      dashboardWidgetSortRowsTransformationSchema,
+      dashboardWidgetFilterRowsTransformationSchema,
+      dashboardWidgetOrganizeSeriesTransformationSchema,
+      dashboardWidgetMergeSeriesTransformationSchema,
+      dashboardWidgetReduceQueriesTransformationSchema,
+    ],
+  } as const;
+
   const dashboardWidgetSchema = {
     type: 'object',
     properties: {
@@ -3246,6 +3547,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: dashboardWidgetQuerySchema,
         minItems: 1,
         maxItems: DASHBOARD_QUERY_REFS.length,
+      },
+      transformations: {
+        type: 'array',
+        items: dashboardWidgetTransformationSchema,
+        maxItems: 12,
       },
       limit: { type: 'number' },
       description: { type: 'string' },
@@ -3275,6 +3581,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: dashboardWidgetQueryInputSchema,
         minItems: 1,
         maxItems: DASHBOARD_QUERY_REFS.length,
+      },
+      transformations: {
+        type: 'array',
+        items: dashboardWidgetTransformationSchema,
+        maxItems: 12,
       },
       limit: { type: 'number' },
       description: { type: 'string' },

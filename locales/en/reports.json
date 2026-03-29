@@ -86,15 +86,76 @@
       "restrictedDatasetEditBlocked": "This widget cannot be edited because it uses datasets your role cannot access.",
       "configTitle": "Data Configuration",
       "addQuery": "Add query",
+      "addTransformation": "Add transformation",
       "queryTitle": "Query {{ref}}",
       "removeQuery": "Remove query",
+      "removeTransformation": "Remove",
       "queryAliasLabel": "Series label",
       "queryAliasPlaceholder": "Optional legend label...",
       "multiQueryBarHint": "Switch to Histogram to compare multiple queries in one widget.",
       "chartTypeLabel": "Chart Type",
       "legendTitle": "Legend",
       "legendModeLabel": "Display",
-      "legendPlacementLabel": "Placement"
+      "legendPlacementLabel": "Placement",
+      "tabs": {
+        "data": "Data",
+        "transformation": "Transformation"
+      },
+      "transformations": {
+        "empty": "No transformations yet.",
+        "executionHint": "Transformations run from top to bottom on the chart data.",
+        "multiQueryOnly": "Requires at least two queries.",
+        "dragLabel": "Drag transformation",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "showSeries": "Show",
+        "hideSeries": "Hide",
+        "hidden": "Hidden",
+        "visible": "Visible",
+        "defaultMergedLabel": "Merged series",
+        "defaultReducedLabel": "Reduced value",
+        "sortByLabel": "Sort by",
+        "directionLabel": "Direction",
+        "fieldLabel": "Field",
+        "operatorLabel": "Operator",
+        "valueLabel": "Value",
+        "secondaryValueLabel": "Second value",
+        "seriesLabel": "Series",
+        "reducerLabel": "Calculation",
+        "outputLabel": "Output label",
+        "outputPlaceholder": "Optional transformed series label...",
+        "types": {
+          "sortRows": "Sort rows",
+          "filterRows": "Filter rows",
+          "organizeSeries": "Organize series",
+          "mergeSeries": "Merge series",
+          "reduceQueries": "Reduce queries"
+        },
+        "fields": {
+          "label": "Label",
+          "total": "Value"
+        },
+        "directions": {
+          "asc": "Ascending",
+          "desc": "Descending"
+        },
+        "operators": {
+          "contains": "Contains",
+          "equals": "Equals",
+          "startsWith": "Starts with",
+          "gt": "Greater than",
+          "gte": "Greater than or equal",
+          "lt": "Less than",
+          "lte": "Less than or equal",
+          "between": "Between"
+        },
+        "reducers": {
+          "sum": "Sum",
+          "avg": "Average",
+          "min": "Minimum",
+          "max": "Maximum"
+        }
+      }
     },
     "chartTypes": {
       "pie": "Pie",

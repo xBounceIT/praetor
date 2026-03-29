@@ -86,15 +86,76 @@
       "restrictedDatasetEditBlocked": "Questo widget non puo' essere modificato perche' usa dataset a cui il tuo ruolo non puo' accedere.",
       "configTitle": "Configurazione Dati",
       "addQuery": "Aggiungi query",
+      "addTransformation": "Aggiungi trasformazione",
       "queryTitle": "Query {{ref}}",
       "removeQuery": "Rimuovi query",
+      "removeTransformation": "Rimuovi",
       "queryAliasLabel": "Etichetta serie",
       "queryAliasPlaceholder": "Etichetta legenda opzionale...",
       "multiQueryBarHint": "Passa a Istogramma per confrontare piu' query nello stesso widget.",
       "chartTypeLabel": "Tipo Grafico",
       "legendTitle": "Legenda",
       "legendModeLabel": "Visibilita'",
-      "legendPlacementLabel": "Posizione"
+      "legendPlacementLabel": "Posizione",
+      "tabs": {
+        "data": "Dati",
+        "transformation": "Trasformazione"
+      },
+      "transformations": {
+        "empty": "Nessuna trasformazione.",
+        "executionHint": "Le trasformazioni vengono applicate dall'alto verso il basso sui dati del grafico.",
+        "multiQueryOnly": "Richiede almeno due query.",
+        "dragLabel": "Trascina trasformazione",
+        "moveUp": "Sposta su",
+        "moveDown": "Sposta giu'",
+        "showSeries": "Mostra",
+        "hideSeries": "Nascondi",
+        "hidden": "Nascosta",
+        "visible": "Visibile",
+        "defaultMergedLabel": "Serie combinata",
+        "defaultReducedLabel": "Valore ridotto",
+        "sortByLabel": "Ordina per",
+        "directionLabel": "Direzione",
+        "fieldLabel": "Campo",
+        "operatorLabel": "Operatore",
+        "valueLabel": "Valore",
+        "secondaryValueLabel": "Secondo valore",
+        "seriesLabel": "Serie",
+        "reducerLabel": "Calcolo",
+        "outputLabel": "Etichetta output",
+        "outputPlaceholder": "Etichetta opzionale della serie trasformata...",
+        "types": {
+          "sortRows": "Ordina righe",
+          "filterRows": "Filtra righe",
+          "organizeSeries": "Organizza serie",
+          "mergeSeries": "Unisci serie",
+          "reduceQueries": "Riduci query"
+        },
+        "fields": {
+          "label": "Etichetta",
+          "total": "Valore"
+        },
+        "directions": {
+          "asc": "Crescente",
+          "desc": "Decrescente"
+        },
+        "operators": {
+          "contains": "Contiene",
+          "equals": "Uguale a",
+          "startsWith": "Inizia con",
+          "gt": "Maggiore di",
+          "gte": "Maggiore o uguale a",
+          "lt": "Minore di",
+          "lte": "Minore o uguale a",
+          "between": "Tra"
+        },
+        "reducers": {
+          "sum": "Somma",
+          "avg": "Media",
+          "min": "Minimo",
+          "max": "Massimo"
+        }
+      }
     },
     "chartTypes": {
       "pie": "Torta",

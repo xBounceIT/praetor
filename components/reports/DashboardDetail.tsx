@@ -37,7 +37,8 @@ import {
   getAccessibleDashboardDatasets,
   widgetHasRestrictedDashboardDatasets,
 } from './dashboardPermissions';
-import { buildDashboardBarChartRows, getDashboardQueryDisplayName } from './dashboardWidgetUtils';
+import { buildDashboardWidgetVisualizationModel } from './dashboardWidgetTransformations';
+import { getDashboardQueryDisplayName } from './dashboardWidgetUtils';
 import WidgetEditor from './WidgetEditor';
 
 type WidgetRoute = { mode: 'new' } | { mode: 'edit'; widgetId: string };
@@ -685,9 +686,15 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           const data = widgetData[widget.id];
           const widgetSize = getWidgetSize(widget);
           const renderWidth = getRenderWidthSpan(widgetSize.width, gridColumnCount);
-          const pieQuery = data?.queries[0];
-          const barRows = data ? buildDashboardBarChartRows(data, widget.limit ?? 8) : [];
-          const hasSeriesData = Boolean(data?.queries.some((query) => query.series.length > 0));
+          const visualizationModel = data
+            ? buildDashboardWidgetVisualizationModel(widget, data, {
+                mergedSeries: t('dashboard.widgetEditor.transformations.defaultMergedLabel'),
+                reducedValue: t('dashboard.widgetEditor.transformations.defaultReducedLabel'),
+              })
+            : null;
+          const pieSeries = visualizationModel?.pieSeries || [];
+          const barRows = visualizationModel?.barRows || [];
+          const hasSeriesData = visualizationModel?.hasSeriesData || false;
           const isWidgetEditable = !widgetHasRestrictedDashboardDatasets(widget, permissions);
 
           return (
@@ -778,16 +785,16 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    {widget.chartType === 'pie' && pieQuery ? (
+                    {widget.chartType === 'pie' && pieSeries.length > 0 ? (
                       <PieChart>
                         <Pie
-                          data={pieQuery.series}
+                          data={pieSeries}
                           dataKey="value"
                           nameKey="label"
                           outerRadius={90}
                           label
                         >
-                          {pieQuery.series.map((entry, index) => (
+                          {pieSeries.map((entry, index) => (
                             <Cell
                               key={`${entry.label}-${index}`}
                               fill={CHART_COLORS[index % CHART_COLORS.length]}
@@ -831,11 +838,11 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                             }
                           />
                         )}
-                        {data.queries.map((query, index) => (
+                        {(visualizationModel?.series || []).map((seriesItem, index) => (
                           <Bar
-                            key={query.id}
-                            dataKey={query.id}
-                            name={getDashboardQueryDisplayName(query)}
+                            key={seriesItem.id}
+                            dataKey={seriesItem.id}
+                            name={seriesItem.label}
                             fill={CHART_COLORS[index % CHART_COLORS.length]}
                             radius={[6, 6, 0, 0]}
                           />
