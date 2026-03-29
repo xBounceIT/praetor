@@ -5,14 +5,28 @@ import type { ReportChatStreamDoneEvent, ReportChatStreamHandlers } from './cont
 export type DashboardChartType = 'pie' | 'bar';
 export type DashboardLegendMode = 'list' | 'hidden';
 export type DashboardLegendPlacement = 'bottom' | 'right';
+export type DashboardDataset =
+  | 'timesheets'
+  | 'quotes'
+  | 'orders'
+  | 'invoices'
+  | 'supplierQuotes'
+  | 'catalog';
+
+export interface DashboardWidgetQuery {
+  id: string;
+  ref: string;
+  dataset: DashboardDataset;
+  metric: string;
+  label?: string;
+}
 
 export interface DashboardWidget {
   id: string;
   title: string;
   chartType: DashboardChartType;
-  dataset: 'timesheets' | 'quotes' | 'orders' | 'invoices' | 'supplierQuotes' | 'catalog';
   groupBy: string;
-  metric: string;
+  queries: DashboardWidgetQuery[];
   limit?: number;
   description?: string;
   tags?: string[];
@@ -44,11 +58,19 @@ export interface DashboardWidgetDataPoint {
   value: number;
 }
 
-export interface DashboardWidgetDataResult {
+export interface DashboardWidgetDataQueryResult {
+  id: string;
+  ref: string;
+  dataset: DashboardDataset;
   metric: string;
-  groupBy: string;
+  label?: string;
   total: number;
   series: DashboardWidgetDataPoint[];
+}
+
+export interface DashboardWidgetDataResult {
+  groupBy: string;
+  queries: DashboardWidgetDataQueryResult[];
 }
 
 const parseSseEventBlock = (rawBlock: string): { event: string; data: string } | null => {

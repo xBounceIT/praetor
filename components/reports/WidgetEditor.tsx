@@ -15,10 +15,12 @@ import {
 } from 'recharts';
 import api from '../../services/api';
 import type {
+  DashboardDataset,
   DashboardLegendMode,
   DashboardLegendPlacement,
   DashboardWidget,
   DashboardWidgetDataResult,
+  DashboardWidgetQuery,
   ReportDashboard,
 } from '../../services/api/reports';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -28,12 +30,23 @@ import {
   CHART_COLORS,
   DASHBOARD_WIDGET_DEFAULT_HEIGHT,
   DASHBOARD_WIDGET_DEFAULT_WIDTH,
-  DATASET_OPTIONS,
-  GROUP_BY_OPTIONS,
   LEGEND_MODE_OPTIONS,
   LEGEND_PLACEMENT_OPTIONS,
   METRIC_OPTIONS,
 } from './dashboardConstants';
+import {
+  getAccessibleDashboardDatasets,
+  widgetHasRestrictedDashboardDatasets,
+} from './dashboardPermissions';
+import {
+  buildDashboardBarChartRows,
+  createDashboardWidgetQuery,
+  getDashboardQueryDisplayName,
+  getDefaultGroupByForDatasets,
+  getDefaultMetricForDataset,
+  getNextDashboardQueryRef,
+  getSharedGroupByOptions,
+} from './dashboardWidgetUtils';
 
 export interface WidgetEditorProps {
   isOpen: boolean;
@@ -49,6 +62,22 @@ export interface WidgetEditorProps {
   }) => void;
 }
 
+const createDefaultQueries = (defaultDataset: DashboardDataset | null) =>
+  defaultDataset ? [createDashboardWidgetQuery('A', defaultDataset)] : [];
+
+const normalizeEditorQueries = (
+  queries: DashboardWidgetQuery[] | undefined,
+  defaultDataset: DashboardDataset | null,
+) => {
+  if (Array.isArray(queries) && queries.length > 0) {
+    return queries.map((query) => ({
+      ...query,
+      label: query.label || '',
+    }));
+  }
+  return createDefaultQueries(defaultDataset);
+};
+
 const WidgetEditor: React.FC<WidgetEditorProps> = ({
   isOpen,
   permissions,
@@ -59,8 +88,23 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   onSaved,
 }) => {
   const { t } = useTranslation('reports');
+  const accessibleDatasets = useMemo(
+    () => getAccessibleDashboardDatasets(permissions),
+    [permissions],
+  );
+  const firstAccessibleDataset = accessibleDatasets[0] || null;
+  const hasAccessibleDatasets = accessibleDatasets.length > 0;
+  const accessibleDatasetOptions = useMemo(
+    () =>
+      accessibleDatasets.map((item) => ({
+        id: item,
+        name: t(`dashboard.datasets.${item}`),
+      })),
+    [accessibleDatasets, t],
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [queryHint, setQueryHint] = useState('');
 
   // Form state
   const [title, setTitle] = useState('');
@@ -68,9 +112,12 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [chartType, setChartType] = useState<DashboardWidget['chartType']>('pie');
-  const [dataset, setDataset] = useState<DashboardWidget['dataset']>('timesheets');
-  const [groupBy, setGroupBy] = useState('user');
-  const [metric, setMetric] = useState('hours');
+  const [queries, setQueries] = useState<DashboardWidgetQuery[]>(() =>
+    createDefaultQueries(firstAccessibleDataset),
+  );
+  const [groupBy, setGroupBy] = useState(
+    getDefaultGroupByForDatasets(firstAccessibleDataset ? [firstAccessibleDataset] : []),
+  );
   const [limit, setLimit] = useState(8);
   const [legendMode, setLegendMode] = useState<DashboardLegendMode>('list');
   const [legendPlacement, setLegendPlacement] = useState<DashboardLegendPlacement>('bottom');
@@ -90,21 +137,64 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   }, [mode, widgetId, dashboard]);
 
   const isInvalidEditTarget = Boolean(isOpen && mode === 'edit' && widgetId && !existingWidget);
+  const isRestrictedEdit = Boolean(
+    existingWidget && widgetHasRestrictedDashboardDatasets(existingWidget, permissions),
+  );
+  const editorBlockedMessage = isRestrictedEdit
+    ? t('dashboard.widgetEditor.restrictedDatasetEditBlocked')
+    : !hasAccessibleDatasets
+      ? t('dashboard.widgetEditor.noAccessibleDatasets')
+      : '';
   const dashboardId = dashboard?.id || '';
+
+  const sharedGroupByOptions = useMemo(
+    () => getSharedGroupByOptions(queries.map((query) => query.dataset)),
+    [queries],
+  );
+  const hasSharedGroupBy = sharedGroupByOptions.length > 0;
+  const canSave = Boolean(
+    canUpdate &&
+      dashboard &&
+      title.trim() &&
+      queries.length > 0 &&
+      groupBy &&
+      hasSharedGroupBy &&
+      !isInvalidEditTarget &&
+      hasAccessibleDatasets &&
+      !isRestrictedEdit,
+  );
+  const previewBarRows = useMemo(
+    () => (previewData ? buildDashboardBarChartRows(previewData, limit) : []),
+    [previewData, limit],
+  );
+  const hasPreviewData = useMemo(
+    () => Boolean(previewData?.queries.some((query) => query.series.length > 0)),
+    [previewData],
+  );
+  const previewPieQuery = previewData?.queries[0] || null;
+  const nextQueryRef = getNextDashboardQueryRef(queries);
+  const chartTypeOptions =
+    queries.length > 1
+      ? [{ id: 'bar', name: t('dashboard.chartTypes.bar') }]
+      : [
+          { id: 'pie', name: t('dashboard.chartTypes.pie') },
+          { id: 'bar', name: t('dashboard.chartTypes.bar') },
+        ];
 
   useEffect(() => {
     if (!isOpen) return;
     setError('');
+    setQueryHint('');
     setPreviewData(null);
+    setTagInput('');
 
     if (mode === 'edit' && existingWidget) {
       setTitle(existingWidget.title);
       setDescription(existingWidget.description || '');
       setTags(existingWidget.tags || []);
       setChartType(existingWidget.chartType);
-      setDataset(existingWidget.dataset);
+      setQueries(normalizeEditorQueries(existingWidget.queries, firstAccessibleDataset));
       setGroupBy(existingWidget.groupBy);
-      setMetric(existingWidget.metric);
       setLimit(existingWidget.limit ?? 8);
       setLegendMode(existingWidget.legendMode || 'list');
       setLegendPlacement(existingWidget.legendPlacement || 'bottom');
@@ -114,25 +204,40 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
     setTitle('');
     setDescription('');
     setTags([]);
-    setTagInput('');
     setChartType('pie');
-    setDataset('timesheets');
-    setGroupBy('user');
-    setMetric('hours');
+    setQueries(createDefaultQueries(firstAccessibleDataset));
+    setGroupBy(
+      getDefaultGroupByForDatasets(firstAccessibleDataset ? [firstAccessibleDataset] : []),
+    );
     setLimit(8);
     setLegendMode('list');
     setLegendPlacement('bottom');
-  }, [isOpen, mode, existingWidget]);
+  }, [isOpen, mode, existingWidget, firstAccessibleDataset]);
 
   useEffect(() => {
-    const firstGroupBy = GROUP_BY_OPTIONS[dataset][0] || '';
-    const firstMetric = METRIC_OPTIONS[dataset][0] || '';
-    setGroupBy((prev) => (GROUP_BY_OPTIONS[dataset].includes(prev) ? prev : firstGroupBy));
-    setMetric((prev) => (METRIC_OPTIONS[dataset].includes(prev) ? prev : firstMetric));
-  }, [dataset]);
+    const firstGroupBy = sharedGroupByOptions[0] || '';
+    setGroupBy((prev) => (sharedGroupByOptions.includes(prev) ? prev : firstGroupBy));
+  }, [sharedGroupByOptions]);
 
   useEffect(() => {
-    if (!isOpen || !dashboardId || isInvalidEditTarget) return;
+    if (chartType === 'bar' || queries.length <= 1) {
+      setQueryHint('');
+    }
+  }, [chartType, queries.length]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      !dashboardId ||
+      isInvalidEditTarget ||
+      isRestrictedEdit ||
+      !hasAccessibleDatasets ||
+      !groupBy ||
+      !hasSharedGroupBy
+    ) {
+      setPreviewData(null);
+      return;
+    }
 
     const runId = ++previewRunRef.current;
 
@@ -151,11 +256,9 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
         const previewWidget: DashboardWidget = {
           id: 'preview',
           title: 'Preview',
-          // Preview series calculation is independent of chart type.
-          chartType: 'pie',
-          dataset,
+          chartType,
           groupBy,
-          metric,
+          queries,
           limit,
         };
 
@@ -186,7 +289,18 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
         previewRequestRef.current = null;
       }
     };
-  }, [isOpen, dashboardId, isInvalidEditTarget, dataset, groupBy, metric, limit]);
+  }, [
+    isOpen,
+    dashboardId,
+    isInvalidEditTarget,
+    isRestrictedEdit,
+    hasAccessibleDatasets,
+    chartType,
+    groupBy,
+    hasSharedGroupBy,
+    queries,
+    limit,
+  ]);
 
   const addTag = (raw: string) => {
     const trimmed = raw.trim().replace(/,$/, '').trim();
@@ -216,25 +330,65 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
   const handleClose = () => {
     if (isSaving) return;
     setError('');
+    setQueryHint('');
     onClose();
   };
 
+  const updateQuery = (
+    queryId: string,
+    updater: (query: DashboardWidgetQuery) => DashboardWidgetQuery,
+  ) => {
+    setQueries((prev) => prev.map((query) => (query.id === queryId ? updater(query) : query)));
+  };
+
+  const handleAddQuery = () => {
+    if (!nextQueryRef || isSaving || !firstAccessibleDataset || isRestrictedEdit) return;
+    if (chartType === 'pie') {
+      setQueryHint(t('dashboard.widgetEditor.multiQueryBarHint'));
+      return;
+    }
+
+    setQueryHint('');
+    setQueries((prev) => [
+      ...prev,
+      createDashboardWidgetQuery(nextQueryRef, firstAccessibleDataset),
+    ]);
+  };
+
+  const handleRemoveQuery = (queryId: string) => {
+    if (queries.length <= 1 || isSaving) return;
+    setQueries((prev) => prev.filter((query) => query.id !== queryId));
+  };
+
   const handleSave = async () => {
-    if (!canUpdate || !dashboard || !title.trim() || isInvalidEditTarget) return;
+    if (!canSave) return;
+
+    const currentDashboard = dashboard;
+    if (!currentDashboard) return;
 
     setIsSaving(true);
     setError('');
 
     const resolvedWidgetId = mode === 'edit' && widgetId ? widgetId : `wdg-${Date.now()}`;
+    const normalizedQueries: DashboardWidgetQuery[] = queries.map((query) => {
+      const label = query.label?.trim();
+      return {
+        id: query.id,
+        ref: query.ref,
+        dataset: query.dataset,
+        metric: query.metric,
+        ...(label ? { label } : {}),
+      };
+    });
+
     const widget: DashboardWidget = {
       id: resolvedWidgetId,
       title: title.trim(),
       description: description.trim(),
       tags,
       chartType,
-      dataset,
       groupBy,
-      metric,
+      queries: normalizedQueries,
       limit,
       width: existingWidget?.width ?? DASHBOARD_WIDGET_DEFAULT_WIDTH,
       height: existingWidget?.height ?? DASHBOARD_WIDGET_DEFAULT_HEIGHT,
@@ -244,11 +398,11 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
 
     const updatedWidgets =
       mode === 'edit' && widgetId
-        ? dashboard.widgets.map((current) => (current.id === widgetId ? widget : current))
-        : [...dashboard.widgets, widget];
+        ? currentDashboard.widgets.map((current) => (current.id === widgetId ? widget : current))
+        : [...currentDashboard.widgets, widget];
 
     try {
-      const updatedDashboard = await api.reports.updateDashboard(dashboard.id, {
+      const updatedDashboard = await api.reports.updateDashboard(currentDashboard.id, {
         widgets: updatedWidgets,
       });
       onSaved({
@@ -290,7 +444,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
               <button
                 type="button"
                 onClick={() => void handleSave()}
-                disabled={isSaving || !title.trim() || isInvalidEditTarget}
+                disabled={isSaving || !canSave}
                 className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? (
@@ -313,6 +467,10 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-600">
                 {t('dashboard.error')}
               </div>
+            ) : editorBlockedMessage ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center text-sm text-amber-700">
+                {editorBlockedMessage}
+              </div>
             ) : (
               <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
                 <div className="min-w-0 flex-1 space-y-4">
@@ -326,98 +484,96 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                           <i className="fa-solid fa-circle-notch fa-spin mr-2" />
                           {t('dashboard.widgetEditor.loadingPreview')}
                         </div>
-                      ) : !previewData || previewData.series.length === 0 ? (
+                      ) : !groupBy || !hasSharedGroupBy ? (
+                        <div className="flex h-full items-center justify-center text-sm text-amber-600">
+                          {t('dashboard.widgetEditor.noSharedGroupBy')}
+                        </div>
+                      ) : !previewData || !hasPreviewData ? (
                         <div className="flex h-full items-center justify-center text-sm text-slate-400">
                           {t('dashboard.widgetEditor.noPreviewData')}
                         </div>
+                      ) : chartType === 'pie' && previewPieQuery ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={previewPieQuery.series}
+                              dataKey="value"
+                              nameKey="label"
+                              outerRadius={100}
+                              label
+                            >
+                              {previewPieQuery.series.map((entry, index) => (
+                                <Cell
+                                  key={`${entry.label}-${index}`}
+                                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            {legendMode !== 'hidden' && (
+                              <Legend
+                                verticalAlign={legendPlacement === 'right' ? 'middle' : 'bottom'}
+                                align={legendPlacement === 'right' ? 'right' : 'center'}
+                                layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
+                              />
+                            )}
+                          </PieChart>
+                        </ResponsiveContainer>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
-                          {chartType === 'pie' ? (
-                            <PieChart>
-                              <Pie
-                                data={previewData.series}
-                                dataKey="value"
-                                nameKey="label"
-                                outerRadius={100}
-                                label
-                              >
-                                {previewData.series.map((entry, index) => (
-                                  <Cell
-                                    key={`${entry.label}-${index}`}
-                                    fill={CHART_COLORS[index % CHART_COLORS.length]}
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip />
-                              {legendMode !== 'hidden' && (
-                                <Legend
-                                  verticalAlign={legendPlacement === 'right' ? 'middle' : 'bottom'}
-                                  align={legendPlacement === 'right' ? 'right' : 'center'}
-                                  layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
-                                />
-                              )}
-                            </PieChart>
-                          ) : (
-                            <BarChart data={previewData.series}>
-                              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                              <YAxis tick={{ fontSize: 12 }} />
-                              <Tooltip />
-                              {legendMode !== 'hidden' && (
-                                <Legend
-                                  verticalAlign={legendPlacement === 'right' ? 'middle' : 'bottom'}
-                                  align={legendPlacement === 'right' ? 'right' : 'center'}
-                                  layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
-                                />
-                              )}
-                              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                                {previewData.series.map((entry, index) => (
-                                  <Cell
-                                    key={`${entry.label}-${index}`}
-                                    fill={CHART_COLORS[index % CHART_COLORS.length]}
-                                  />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          )}
+                          <BarChart data={previewBarRows}>
+                            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            {legendMode !== 'hidden' && (
+                              <Legend
+                                verticalAlign={legendPlacement === 'right' ? 'middle' : 'bottom'}
+                                align={legendPlacement === 'right' ? 'right' : 'center'}
+                                layout={legendPlacement === 'right' ? 'vertical' : 'horizontal'}
+                              />
+                            )}
+                            {previewData.queries.map((query, index) => (
+                              <Bar
+                                key={query.id}
+                                dataKey={query.id}
+                                name={getDashboardQueryDisplayName(query)}
+                                fill={CHART_COLORS[index % CHART_COLORS.length]}
+                                radius={[6, 6, 0, 0]}
+                              />
+                            ))}
+                          </BarChart>
                         </ResponsiveContainer>
                       )}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      {t('dashboard.widgetEditor.configTitle')}
-                    </p>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        {t('dashboard.widgetEditor.configTitle')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleAddQuery}
+                        disabled={isSaving || !nextQueryRef}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <i className="fa-solid fa-plus text-[10px]" />
+                        {t('dashboard.widgetEditor.addQuery')}
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <CustomSelect
-                        label={t('dashboard.editModal.dataset')}
-                        options={DATASET_OPTIONS.map((item) => ({
-                          id: item,
-                          name: t(`dashboard.datasets.${item}`),
-                        }))}
-                        value={dataset}
-                        onChange={(value) => setDataset(value as DashboardWidget['dataset'])}
-                        disabled={isSaving}
-                      />
-                      <CustomSelect
                         label={t('dashboard.editModal.groupByLabel')}
-                        options={GROUP_BY_OPTIONS[dataset].map((item) => ({
+                        options={sharedGroupByOptions.map((item) => ({
                           id: item,
                           name: t(`dashboard.groupBy.${item}`),
                         }))}
                         value={groupBy}
                         onChange={(value) => setGroupBy(value as string)}
-                        disabled={isSaving}
-                      />
-                      <CustomSelect
-                        label={t('dashboard.editModal.metric')}
-                        options={METRIC_OPTIONS[dataset].map((item) => ({
-                          id: item,
-                          name: t(`dashboard.metrics.${item}`),
-                        }))}
-                        value={metric}
-                        onChange={(value) => setMetric(value as string)}
-                        disabled={isSaving}
+                        disabled={isSaving || !hasSharedGroupBy}
+                        placeholder={t('dashboard.widgetEditor.noSharedGroupBy')}
                       />
                       <div>
                         <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -438,6 +594,100 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                         />
                       </div>
                     </div>
+
+                    {queryHint && (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                        {queryHint}
+                      </div>
+                    )}
+
+                    {!hasSharedGroupBy && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {t('dashboard.widgetEditor.noSharedGroupBy')}
+                      </div>
+                    )}
+
+                    <div className="mt-4 space-y-3">
+                      {queries.map((query) => (
+                        <div
+                          key={query.id}
+                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-800 px-2 text-xs font-black text-white">
+                                {query.ref}
+                              </span>
+                              <p className="text-sm font-bold text-slate-700">
+                                {t('dashboard.widgetEditor.queryTitle', { ref: query.ref })}
+                              </p>
+                            </div>
+                            {queries.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveQuery(query.id)}
+                                disabled={isSaving}
+                                className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-700 disabled:opacity-60"
+                              >
+                                {t('dashboard.widgetEditor.removeQuery')}
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <CustomSelect
+                              label={t('dashboard.editModal.dataset')}
+                              options={accessibleDatasetOptions}
+                              value={query.dataset}
+                              onChange={(value) => {
+                                const dataset = value as DashboardDataset;
+                                updateQuery(query.id, (current) => ({
+                                  ...current,
+                                  dataset,
+                                  metric: METRIC_OPTIONS[dataset].includes(current.metric)
+                                    ? current.metric
+                                    : getDefaultMetricForDataset(dataset),
+                                }));
+                              }}
+                              disabled={isSaving}
+                            />
+                            <CustomSelect
+                              label={t('dashboard.editModal.metric')}
+                              options={METRIC_OPTIONS[query.dataset].map((item) => ({
+                                id: item,
+                                name: t(`dashboard.metrics.${item}`),
+                              }))}
+                              value={query.metric}
+                              onChange={(value) =>
+                                updateQuery(query.id, (current) => ({
+                                  ...current,
+                                  metric: value as string,
+                                }))
+                              }
+                              disabled={isSaving}
+                            />
+                            <div>
+                              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+                                {t('dashboard.widgetEditor.queryAliasLabel')}
+                              </label>
+                              <input
+                                value={query.label || ''}
+                                onChange={(e) =>
+                                  updateQuery(query.id, (current) => ({
+                                    ...current,
+                                    label: e.target.value,
+                                  }))
+                                }
+                                placeholder={t('dashboard.widgetEditor.queryAliasPlaceholder')}
+                                maxLength={120}
+                                disabled={isSaving}
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20 disabled:opacity-60"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -445,10 +695,7 @@ const WidgetEditor: React.FC<WidgetEditorProps> = ({
                   <div className="mb-5">
                     <CustomSelect
                       label={t('dashboard.widgetEditor.chartTypeLabel')}
-                      options={[
-                        { id: 'pie', name: t('dashboard.chartTypes.pie') },
-                        { id: 'bar', name: t('dashboard.chartTypes.bar') },
-                      ]}
+                      options={chartTypeOptions}
                       value={chartType}
                       onChange={(value) => setChartType(value as DashboardWidget['chartType'])}
                       disabled={isSaving}

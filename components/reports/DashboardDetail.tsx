@@ -33,6 +33,10 @@ import {
   DASHBOARD_WIDGET_MIN_HEIGHT,
   DASHBOARD_WIDGET_MIN_WIDTH,
 } from './dashboardConstants';
+import {
+  getAccessibleDashboardDatasets,
+  widgetHasRestrictedDashboardDatasets,
+} from './dashboardPermissions';
 import { buildDashboardBarChartRows, getDashboardQueryDisplayName } from './dashboardWidgetUtils';
 import WidgetEditor from './WidgetEditor';
 
@@ -153,6 +157,12 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
   const isEditMode = dashboardMode === 'edit';
   const canMutateDashboard = canManageDashboard && isEditMode;
   const canMutateWidgets = canUpdate && isEditMode;
+  const accessibleDatasets = useMemo(
+    () => getAccessibleDashboardDatasets(permissions),
+    [permissions],
+  );
+  const hasAccessibleDatasets = accessibleDatasets.length > 0;
+  const canAddWidgets = canMutateWidgets && hasAccessibleDatasets;
 
   const dashboard = useMemo(
     () => dashboards.find((d) => d.id === dashboardId) || null,
@@ -638,7 +648,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
             <button
               type="button"
               onClick={() => onWidgetRouteChange({ mode: 'new' })}
-              disabled={!canMutateWidgets || isSaving}
+              disabled={!canAddWidgets || isSaving}
               className="flex items-center gap-2 rounded-xl bg-praetor px-5 py-2.5 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
             >
               <i className="fa-solid fa-plus" />
@@ -652,6 +662,12 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
           <i className="fa-solid fa-eye mr-1.5 text-slate-500" />
           {t('dashboard.readOnlyHint')}
+        </div>
+      )}
+
+      {canMutateWidgets && !hasAccessibleDatasets && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+          {t('dashboard.widgetEditor.noAccessibleDatasets')}
         </div>
       )}
 
@@ -672,6 +688,7 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
           const pieQuery = data?.queries[0];
           const barRows = data ? buildDashboardBarChartRows(data, widget.limit ?? 8) : [];
           const hasSeriesData = Boolean(data?.queries.some((query) => query.series.length > 0));
+          const isWidgetEditable = !widgetHasRestrictedDashboardDatasets(widget, permissions);
 
           return (
             <div
@@ -726,7 +743,13 @@ const DashboardDetail: React.FC<DashboardDetailProps> = ({
                     <button
                       type="button"
                       onClick={() => onWidgetRouteChange({ mode: 'edit', widgetId: widget.id })}
-                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+                      disabled={!isWidgetEditable}
+                      aria-label={
+                        isWidgetEditable
+                          ? t('dashboard.editDashboard')
+                          : t('dashboard.widgetEditor.restrictedDatasetEditBlocked')
+                      }
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <i className="fa-solid fa-pen text-[10px]" />
                     </button>

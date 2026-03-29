@@ -35,11 +35,20 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
     }
   }, [isOpen]);
 
-  const handleClose = () => {
+  const resetForm = () => {
     setName('');
     setError('');
     setSelectedFolderId(ROOT_FOLDER_VALUE);
+  };
+
+  const closeModal = () => {
+    resetForm();
     onClose();
+  };
+
+  const handleClose = () => {
+    if (isSaving) return;
+    closeModal();
   };
 
   const handleCreate = async () => {
@@ -57,7 +66,7 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
         });
         onCreated(dashboard);
       }
-      handleClose();
+      closeModal();
     } catch (err) {
       setError((err as Error).message || t('dashboard.error'));
     } finally {
@@ -81,7 +90,7 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose}>
+    <Modal isOpen={isOpen} onClose={handleClose} closeOnBackdrop={!isSaving} closeOnEsc={!isSaving}>
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="mb-5 text-lg font-black text-slate-800">{title}</h2>
 
@@ -95,6 +104,7 @@ const DashboardCreateModal: React.FC<DashboardCreateModalProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={t('dashboard.createModal.namePlaceholder')}
             autoFocus
+            disabled={isSaving}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-praetor focus:ring-2 focus:ring-praetor/20"
           />
         </div>

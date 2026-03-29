@@ -1,7 +1,7 @@
 import type {
+  DashboardDataset,
   DashboardLegendMode,
   DashboardLegendPlacement,
-  DashboardWidget,
 } from '../../services/api/reports';
 
 export const CHART_COLORS = [
@@ -14,7 +14,7 @@ export const CHART_COLORS = [
   '#334155',
 ];
 
-export const DATASET_OPTIONS: DashboardWidget['dataset'][] = [
+export const DATASET_OPTIONS: DashboardDataset[] = [
   'timesheets',
   'quotes',
   'orders',
@@ -34,7 +34,7 @@ export const DASHBOARD_WIDGET_MIN_HEIGHT = 2;
 export const DASHBOARD_WIDGET_MAX_HEIGHT = 5;
 export const DASHBOARD_WIDGET_DEFAULT_HEIGHT = 2;
 
-export const GROUP_BY_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
+export const GROUP_BY_OPTIONS: Record<DashboardDataset, string[]> = {
   timesheets: ['user', 'client', 'project', 'task', 'location', 'month'],
   quotes: ['status', 'client', 'month'],
   orders: ['status', 'client', 'month'],
@@ -46,7 +46,7 @@ export const GROUP_BY_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
 export const LEGEND_MODE_OPTIONS: DashboardLegendMode[] = ['list', 'hidden'];
 export const LEGEND_PLACEMENT_OPTIONS: DashboardLegendPlacement[] = ['bottom', 'right'];
 
-export const METRIC_OPTIONS: Record<DashboardWidget['dataset'], string[]> = {
+export const METRIC_OPTIONS: Record<DashboardDataset, string[]> = {
   timesheets: ['hours', 'entries', 'cost'],
   quotes: ['count', 'net'],
   orders: ['count', 'net'],

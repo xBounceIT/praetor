@@ -2708,14 +2708,23 @@ type DashboardDataset =
 
 type DashboardLegendMode = 'list' | 'hidden';
 type DashboardLegendPlacement = 'bottom' | 'right';
+const DASHBOARD_QUERY_REFS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
+type DashboardQueryRef = (typeof DASHBOARD_QUERY_REFS)[number];
+
+type DashboardWidgetQueryConfig = {
+  id: string;
+  ref: DashboardQueryRef;
+  dataset: DashboardDataset;
+  metric: string;
+  label: string;
+};
 
 type DashboardWidgetConfig = {
   id: string;
   title: string;
   chartType: DashboardChartType;
-  dataset: DashboardDataset;
   groupBy: string;
-  metric: string;
+  queries: DashboardWidgetQueryConfig[];
   limit: number;
   description: string;
   tags: string[];
@@ -2765,6 +2774,55 @@ const DATASET_PERMISSION_OPTIONS: Record<DashboardDataset, string[]> = {
   ],
 };
 
+const normalizeDashboardQueryRef = (raw: unknown): DashboardQueryRef | null => {
+  const ref = String(raw || '')
+    .trim()
+    .toUpperCase();
+  return DASHBOARD_QUERY_REFS.find((item) => item === ref) || null;
+};
+
+const normalizeWidgetQuery = (
+  raw: unknown,
+  options: { widgetId: string; fallbackRef: DashboardQueryRef },
+): { ok: true; value: DashboardWidgetQueryConfig } | { ok: false; error: string } => {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'widget.queries must contain objects' };
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const providedRef = obj.ref;
+  const ref =
+    providedRef === undefined ? options.fallbackRef : normalizeDashboardQueryRef(providedRef);
+  if (!ref) {
+    return { ok: false, error: 'widget.query.ref must be one of A, B, C, D, E, F, G' };
+  }
+
+  const dataset = String(obj.dataset || '').trim() as DashboardDataset;
+  const metric = String(obj.metric || '').trim();
+  const label = String(obj.label || '')
+    .trim()
+    .slice(0, 120);
+  const id = String(obj.id || '').trim() || `${options.widgetId}-${ref}`;
+
+  if (!(dataset in DASHBOARD_OPTIONS)) {
+    return { ok: false, error: 'widget.query.dataset is invalid' };
+  }
+  if (!DASHBOARD_OPTIONS[dataset].metric.includes(metric)) {
+    return { ok: false, error: 'widget.query.metric is invalid for selected dataset' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      id,
+      ref,
+      dataset,
+      metric,
+      label,
+    },
+  };
+};
+
 const normalizeWidget = (
   raw: unknown,
 ): { ok: true; value: DashboardWidgetConfig } | { ok: false; error: string } => {
@@ -2773,9 +2831,7 @@ const normalizeWidget = (
   const id = String(obj.id || '').trim() || `rpt-wdg-${randomUUID()}`;
   const title = String(obj.title || '').trim();
   const chartType = String(obj.chartType || '').trim() as DashboardChartType;
-  const dataset = String(obj.dataset || '').trim() as DashboardDataset;
   const groupBy = String(obj.groupBy || '').trim();
-  const metric = String(obj.metric || '').trim();
   const parsedLimit = Number.parseInt(String(obj.limit ?? '8'), 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(3, Math.min(parsedLimit, 20)) : 8;
   const parsedWidth = Number.parseInt(String(obj.width ?? '6'), 10);
@@ -2801,14 +2857,49 @@ const normalizeWidget = (
   if (chartType !== 'pie' && chartType !== 'bar') {
     return { ok: false, error: 'widget.chartType must be pie or bar' };
   }
-  if (!(dataset in DASHBOARD_OPTIONS)) {
-    return { ok: false, error: 'widget.dataset is invalid' };
+
+  const rawQueries = Array.isArray(obj.queries)
+    ? obj.queries
+    : obj.dataset !== undefined || obj.metric !== undefined
+      ? [
+          {
+            id: `${id}-A`,
+            ref: 'A',
+            dataset: obj.dataset,
+            metric: obj.metric,
+          },
+        ]
+      : [];
+
+  if (rawQueries.length === 0) {
+    return { ok: false, error: 'widget.queries must contain at least one query' };
   }
-  if (!DASHBOARD_OPTIONS[dataset].groupBy.includes(groupBy)) {
-    return { ok: false, error: 'widget.groupBy is invalid for selected dataset' };
+  if (rawQueries.length > DASHBOARD_QUERY_REFS.length) {
+    return { ok: false, error: 'widget.queries cannot contain more than 7 queries' };
   }
-  if (!DASHBOARD_OPTIONS[dataset].metric.includes(metric)) {
-    return { ok: false, error: 'widget.metric is invalid for selected dataset' };
+
+  const queries: DashboardWidgetQueryConfig[] = [];
+  const usedRefs = new Set<DashboardQueryRef>();
+
+  for (let index = 0; index < rawQueries.length; index += 1) {
+    const fallbackRef = DASHBOARD_QUERY_REFS[index];
+    const parsedQuery = normalizeWidgetQuery(rawQueries[index], { widgetId: id, fallbackRef });
+    if (!parsedQuery.ok) return parsedQuery;
+    if (usedRefs.has(parsedQuery.value.ref)) {
+      return { ok: false, error: 'widget.query.ref values must be unique' };
+    }
+    usedRefs.add(parsedQuery.value.ref);
+    queries.push(parsedQuery.value);
+  }
+
+  if (
+    !queries.every((queryItem) => DASHBOARD_OPTIONS[queryItem.dataset].groupBy.includes(groupBy))
+  ) {
+    return { ok: false, error: 'widget.groupBy is invalid for selected datasets' };
+  }
+
+  if (chartType === 'pie' && queries.length > 1) {
+    return { ok: false, error: 'widget.chartType pie supports only one query' };
   }
 
   return {
@@ -2817,9 +2908,8 @@ const normalizeWidget = (
       id,
       title,
       chartType,
-      dataset,
       groupBy,
-      metric,
+      queries,
       limit,
       description,
       tags,
@@ -2844,10 +2934,14 @@ const normalizeStoredWidgets = (raw: unknown): DashboardWidgetConfig[] => {
 const canAccessDashboardDataset = (request: FastifyRequest, dataset: DashboardDataset) =>
   DATASET_PERMISSION_OPTIONS[dataset].some((permission) => hasPermission(request, permission));
 
-const getDashboardWidgetSeries = async (request: FastifyRequest, widget: DashboardWidgetConfig) => {
+const getDashboardQuerySeries = async (
+  request: FastifyRequest,
+  queryConfig: Pick<DashboardWidgetQueryConfig, 'dataset' | 'metric'> &
+    Pick<DashboardWidgetConfig, 'groupBy' | 'limit'>,
+) => {
   const { fromDate, toDate } = getReportingRange();
 
-  if (widget.dataset === 'timesheets') {
+  if (queryConfig.dataset === 'timesheets') {
     const groupByMap: Record<string, string> = {
       user: 'u.name',
       client: 'te.client_name',
@@ -2862,8 +2956,8 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
       cost: 'COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0)',
     };
 
-    const groupExpr = groupByMap[widget.groupBy];
-    const metricExpr = metricMap[widget.metric];
+    const groupExpr = groupByMap[queryConfig.groupBy];
+    const metricExpr = metricMap[queryConfig.metric];
     const canViewAll = hasPermission(request, 'timesheets.tracker_all.view');
     const viewerId = request.user?.id || '';
     const allowedUserIds = canViewAll
@@ -2873,11 +2967,11 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
       ? 'te.date >= $1 AND te.date <= $2'
       : 'te.date >= $1 AND te.date <= $2 AND te.user_id = ANY($3)';
     const params = canViewAll
-      ? [fromDate, toDate, widget.limit]
-      : [fromDate, toDate, allowedUserIds || [], widget.limit];
+      ? [fromDate, toDate, queryConfig.limit]
+      : [fromDate, toDate, allowedUserIds || [], queryConfig.limit];
     const limitParamIndex = canViewAll ? 3 : 4;
-    const joinUsers = widget.groupBy === 'user' ? 'JOIN users u ON u.id = te.user_id' : '';
-    const orderBy = widget.groupBy === 'month' ? 'label ASC' : 'value DESC';
+    const joinUsers = queryConfig.groupBy === 'user' ? 'JOIN users u ON u.id = te.user_id' : '';
+    const orderBy = queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC';
     const result = await query(
       `SELECT ${groupExpr} as label, ${metricExpr} as value
        FROM time_entries te
@@ -2891,21 +2985,21 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
     return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
   }
 
-  if (widget.dataset === 'quotes') {
+  if (queryConfig.dataset === 'quotes') {
     const groupByMap: Record<string, string> = {
       status: 'q.status',
       client: 'q.client_name',
       month: "TO_CHAR(DATE_TRUNC('month', q.created_at), 'YYYY-MM')",
     };
-    if (widget.metric === 'count') {
+    if (queryConfig.metric === 'count') {
       const result = await query(
-        `SELECT ${groupByMap[widget.groupBy]} as label, COUNT(*) as value
+        `SELECT ${groupByMap[queryConfig.groupBy]} as label, COUNT(*) as value
          FROM quotes q
          WHERE q.created_at::date >= $1 AND q.created_at::date <= $2
          GROUP BY label
-         ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+         ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
          LIMIT $3`,
-        [fromDate, toDate, widget.limit],
+        [fromDate, toDate, queryConfig.limit],
       );
       return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
     }
@@ -2924,37 +3018,37 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
          GROUP BY q.id
        )
        SELECT ${
-         widget.groupBy === 'status'
+         queryConfig.groupBy === 'status'
            ? 'status'
-           : widget.groupBy === 'client'
+           : queryConfig.groupBy === 'client'
              ? 'client_name'
              : "TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')"
        } as label,
        COALESCE(SUM(net_value), 0) as value
        FROM per_quote
        GROUP BY label
-       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
        LIMIT $3`,
-      [fromDate, toDate, widget.limit],
+      [fromDate, toDate, queryConfig.limit],
     );
     return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
   }
 
-  if (widget.dataset === 'orders') {
+  if (queryConfig.dataset === 'orders') {
     const groupByMap: Record<string, string> = {
       status: 's.status',
       client: 's.client_name',
       month: "TO_CHAR(DATE_TRUNC('month', s.created_at), 'YYYY-MM')",
     };
-    if (widget.metric === 'count') {
+    if (queryConfig.metric === 'count') {
       const result = await query(
-        `SELECT ${groupByMap[widget.groupBy]} as label, COUNT(*) as value
+        `SELECT ${groupByMap[queryConfig.groupBy]} as label, COUNT(*) as value
          FROM sales s
          WHERE s.created_at::date >= $1 AND s.created_at::date <= $2
          GROUP BY label
-         ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+         ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
          LIMIT $3`,
-        [fromDate, toDate, widget.limit],
+        [fromDate, toDate, queryConfig.limit],
       );
       return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
     }
@@ -2973,61 +3067,61 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
          GROUP BY s.id
        )
        SELECT ${
-         widget.groupBy === 'status'
+         queryConfig.groupBy === 'status'
            ? 'status'
-           : widget.groupBy === 'client'
+           : queryConfig.groupBy === 'client'
              ? 'client_name'
              : "TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')"
        } as label,
        COALESCE(SUM(net_value), 0) as value
        FROM per_order
        GROUP BY label
-       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
        LIMIT $3`,
-      [fromDate, toDate, widget.limit],
+      [fromDate, toDate, queryConfig.limit],
     );
     return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
   }
 
-  if (widget.dataset === 'invoices') {
+  if (queryConfig.dataset === 'invoices') {
     const groupByMap: Record<string, string> = {
       status: 'i.status',
       client: 'i.client_name',
       month: "TO_CHAR(DATE_TRUNC('month', i.issue_date), 'YYYY-MM')",
     };
     const metricExpr =
-      widget.metric === 'count'
+      queryConfig.metric === 'count'
         ? 'COUNT(*)'
-        : widget.metric === 'total'
+        : queryConfig.metric === 'total'
           ? 'COALESCE(SUM(i.total), 0)'
           : 'COALESCE(SUM(GREATEST(i.total - i.amount_paid, 0)), 0)';
     const result = await query(
-      `SELECT ${groupByMap[widget.groupBy]} as label, ${metricExpr} as value
+      `SELECT ${groupByMap[queryConfig.groupBy]} as label, ${metricExpr} as value
        FROM invoices i
        WHERE i.issue_date >= $1 AND i.issue_date <= $2
        GROUP BY label
-       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
        LIMIT $3`,
-      [fromDate, toDate, widget.limit],
+      [fromDate, toDate, queryConfig.limit],
     );
     return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
   }
 
-  if (widget.dataset === 'supplierQuotes') {
+  if (queryConfig.dataset === 'supplierQuotes') {
     const groupByMap: Record<string, string> = {
       status: 'sq.status',
       supplier: 'sq.supplier_name',
       month: "TO_CHAR(DATE_TRUNC('month', sq.created_at), 'YYYY-MM')",
     };
-    if (widget.metric === 'count') {
+    if (queryConfig.metric === 'count') {
       const result = await query(
-        `SELECT ${groupByMap[widget.groupBy]} as label, COUNT(*) as value
+        `SELECT ${groupByMap[queryConfig.groupBy]} as label, COUNT(*) as value
          FROM supplier_quotes sq
          WHERE sq.created_at::date >= $1 AND sq.created_at::date <= $2
          GROUP BY label
-         ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+         ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
          LIMIT $3`,
-        [fromDate, toDate, widget.limit],
+        [fromDate, toDate, queryConfig.limit],
       );
       return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
     }
@@ -3046,18 +3140,18 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
          GROUP BY sq.id
        )
        SELECT ${
-         widget.groupBy === 'status'
+         queryConfig.groupBy === 'status'
            ? 'status'
-           : widget.groupBy === 'supplier'
+           : queryConfig.groupBy === 'supplier'
              ? 'supplier_name'
              : "TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')"
        } as label,
        COALESCE(SUM(net_value), 0) as value
        FROM per_quote
        GROUP BY label
-       ORDER BY ${widget.groupBy === 'month' ? 'label ASC' : 'value DESC'}
+       ORDER BY ${queryConfig.groupBy === 'month' ? 'label ASC' : 'value DESC'}
        LIMIT $3`,
-      [fromDate, toDate, widget.limit],
+      [fromDate, toDate, queryConfig.limit],
     );
     return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
   }
@@ -3068,17 +3162,17 @@ const getDashboardWidgetSeries = async (request: FastifyRequest, widget: Dashboa
     subcategory: "COALESCE(NULLIF(p.subcategory, ''), 'none')",
     supplier: "COALESCE(s.name, 'Internal')",
   };
-  const metricExpr = widget.metric === 'count' ? 'COUNT(*)' : 'COALESCE(SUM(p.costo), 0)';
+  const metricExpr = queryConfig.metric === 'count' ? 'COUNT(*)' : 'COALESCE(SUM(p.costo), 0)';
   const joinSuppliers =
-    widget.groupBy === 'supplier' ? 'LEFT JOIN suppliers s ON s.id = p.supplier_id' : '';
+    queryConfig.groupBy === 'supplier' ? 'LEFT JOIN suppliers s ON s.id = p.supplier_id' : '';
   const result = await query(
-    `SELECT ${groupByMap[widget.groupBy]} as label, ${metricExpr} as value
+    `SELECT ${groupByMap[queryConfig.groupBy]} as label, ${metricExpr} as value
      FROM products p
      ${joinSuppliers}
      GROUP BY label
      ORDER BY value DESC
      LIMIT $1`,
-    [widget.limit],
+    [queryConfig.limit],
   );
   return result.rows.map((row) => ({ label: toText(row.label), value: toNumber(row.value) }));
 };
@@ -3110,7 +3204,61 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     required: ['id', 'sessionId', 'role', 'content', 'createdAt'],
   } as const;
 
+  const dashboardWidgetQuerySchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      ref: { type: 'string', enum: [...DASHBOARD_QUERY_REFS] },
+      label: { type: 'string' },
+      dataset: {
+        type: 'string',
+        enum: ['timesheets', 'quotes', 'orders', 'invoices', 'supplierQuotes', 'catalog'],
+      },
+      metric: { type: 'string' },
+    },
+    required: ['id', 'ref', 'dataset', 'metric'],
+  } as const;
+
+  const dashboardWidgetQueryInputSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      ref: { type: 'string', enum: [...DASHBOARD_QUERY_REFS] },
+      label: { type: 'string' },
+      dataset: {
+        type: 'string',
+        enum: ['timesheets', 'quotes', 'orders', 'invoices', 'supplierQuotes', 'catalog'],
+      },
+      metric: { type: 'string' },
+    },
+    required: ['dataset', 'metric'],
+  } as const;
+
   const dashboardWidgetSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      title: { type: 'string' },
+      chartType: { type: 'string', enum: ['pie', 'bar'] },
+      groupBy: { type: 'string' },
+      queries: {
+        type: 'array',
+        items: dashboardWidgetQuerySchema,
+        minItems: 1,
+        maxItems: DASHBOARD_QUERY_REFS.length,
+      },
+      limit: { type: 'number' },
+      description: { type: 'string' },
+      tags: { type: 'array', items: { type: 'string' } },
+      width: { type: 'number' },
+      height: { type: 'number' },
+      legendMode: { type: 'string', enum: ['list', 'hidden'] },
+      legendPlacement: { type: 'string', enum: ['bottom', 'right'] },
+    },
+    required: ['id', 'title', 'chartType', 'groupBy', 'queries'],
+  } as const;
+
+  const dashboardWidgetInputSchema = {
     type: 'object',
     properties: {
       id: { type: 'string' },
@@ -3122,13 +3270,56 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
       groupBy: { type: 'string' },
       metric: { type: 'string' },
+      queries: {
+        type: 'array',
+        items: dashboardWidgetQueryInputSchema,
+        minItems: 1,
+        maxItems: DASHBOARD_QUERY_REFS.length,
+      },
       limit: { type: 'number' },
       description: { type: 'string' },
       tags: { type: 'array', items: { type: 'string' } },
       width: { type: 'number' },
       height: { type: 'number' },
+      legendMode: { type: 'string', enum: ['list', 'hidden'] },
+      legendPlacement: { type: 'string', enum: ['bottom', 'right'] },
     },
-    required: ['id', 'title', 'chartType', 'dataset', 'groupBy', 'metric'],
+    required: ['id', 'title', 'chartType', 'groupBy'],
+  } as const;
+
+  const dashboardWidgetDataPointSchema = {
+    type: 'object',
+    properties: {
+      label: { type: 'string' },
+      value: { type: 'number' },
+    },
+    required: ['label', 'value'],
+  } as const;
+
+  const dashboardWidgetDataQuerySchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      ref: { type: 'string', enum: [...DASHBOARD_QUERY_REFS] },
+      label: { type: 'string' },
+      dataset: {
+        type: 'string',
+        enum: ['timesheets', 'quotes', 'orders', 'invoices', 'supplierQuotes', 'catalog'],
+      },
+      metric: { type: 'string' },
+      total: { type: 'number' },
+      series: { type: 'array', items: dashboardWidgetDataPointSchema },
+    },
+    required: ['id', 'ref', 'dataset', 'metric', 'total', 'series'],
+  } as const;
+
+  const dashboardWidgetDataSchema = {
+    type: 'object',
+    properties: {
+      groupBy: { type: 'string' },
+      queries: { type: 'array', items: dashboardWidgetDataQuerySchema },
+    },
+    required: ['groupBy', 'queries'],
   } as const;
 
   const dashboardSchema = {
@@ -3500,7 +3691,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           properties: {
             name: { type: 'string' },
             folderId: { type: ['string', 'null'] },
-            widgets: { type: 'array', items: dashboardWidgetSchema },
+            widgets: { type: 'array', items: dashboardWidgetInputSchema },
           },
         },
         response: {
@@ -3533,10 +3724,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of body.widgets) {
           const parsed = normalizeWidget(item);
           if (!parsed.ok) return badRequest(reply, parsed.error);
-          if (!canAccessDashboardDataset(request, parsed.value.dataset)) {
-            return reply
-              .code(403)
-              .send({ error: `Missing permission for ${parsed.value.dataset}` });
+          const deniedQuery = parsed.value.queries.find(
+            (queryItem) => !canAccessDashboardDataset(request, queryItem.dataset),
+          );
+          if (deniedQuery) {
+            return reply.code(403).send({ error: `Missing permission for ${deniedQuery.dataset}` });
           }
           normalized.push(parsed.value);
         }
@@ -3637,31 +3829,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: {
           type: 'object',
           properties: {
-            widget: dashboardWidgetSchema,
+            widget: dashboardWidgetInputSchema,
           },
           required: ['widget'],
         },
         response: {
-          200: {
-            type: 'object',
-            properties: {
-              metric: { type: 'string' },
-              groupBy: { type: 'string' },
-              total: { type: 'number' },
-              series: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    label: { type: 'string' },
-                    value: { type: 'number' },
-                  },
-                  required: ['label', 'value'],
-                },
-              },
-            },
-            required: ['metric', 'groupBy', 'total', 'series'],
-          },
+          200: dashboardWidgetDataSchema,
           ...standardErrorResponses,
         },
       },
@@ -3670,15 +3843,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const body = request.body as { widget?: unknown };
       const parsed = normalizeWidget(body.widget);
       if (!parsed.ok) return badRequest(reply, parsed.error);
-      if (!canAccessDashboardDataset(request, parsed.value.dataset)) {
-        return reply.code(403).send({ error: `Missing permission for ${parsed.value.dataset}` });
+      const deniedQuery = parsed.value.queries.find(
+        (queryItem) => !canAccessDashboardDataset(request, queryItem.dataset),
+      );
+      if (deniedQuery) {
+        return reply.code(403).send({ error: `Missing permission for ${deniedQuery.dataset}` });
       }
-      const series = await getDashboardWidgetSeries(request, parsed.value);
+
+      const queryResults = await Promise.all(
+        parsed.value.queries.map(async (queryItem) => {
+          const series = await getDashboardQuerySeries(request, {
+            dataset: queryItem.dataset,
+            metric: queryItem.metric,
+            groupBy: parsed.value.groupBy,
+            limit: parsed.value.limit,
+          });
+
+          return {
+            id: queryItem.id,
+            ref: queryItem.ref,
+            label: queryItem.label,
+            dataset: queryItem.dataset,
+            metric: queryItem.metric,
+            total: series.reduce((sum, item) => sum + item.value, 0),
+            series,
+          };
+        }),
+      );
+
       return {
-        metric: parsed.value.metric,
         groupBy: parsed.value.groupBy,
-        total: series.reduce((sum, item) => sum + item.value, 0),
-        series,
+        queries: queryResults,
       };
     },
   );

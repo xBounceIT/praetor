@@ -22212,22 +22212,56 @@
                                 "bar"
                               ]
                             },
-                            "dataset": {
-                              "type": "string",
-                              "enum": [
-                                "timesheets",
-                                "quotes",
-                                "orders",
-                                "invoices",
-                                "supplierQuotes",
-                                "catalog"
-                              ]
-                            },
                             "groupBy": {
                               "type": "string"
                             },
-                            "metric": {
-                              "type": "string"
+                            "queries": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "ref": {
+                                    "type": "string",
+                                    "enum": [
+                                      "A",
+                                      "B",
+                                      "C",
+                                      "D",
+                                      "E",
+                                      "F",
+                                      "G"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "dataset": {
+                                    "type": "string",
+                                    "enum": [
+                                      "timesheets",
+                                      "quotes",
+                                      "orders",
+                                      "invoices",
+                                      "supplierQuotes",
+                                      "catalog"
+                                    ]
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "ref",
+                                  "dataset",
+                                  "metric"
+                                ]
+                              },
+                              "minItems": 1,
+                              "maxItems": 7
                             },
                             "limit": {
                               "type": "number"
@@ -22246,15 +22280,28 @@
                             },
                             "height": {
                               "type": "number"
+                            },
+                            "legendMode": {
+                              "type": "string",
+                              "enum": [
+                                "list",
+                                "hidden"
+                              ]
+                            },
+                            "legendPlacement": {
+                              "type": "string",
+                              "enum": [
+                                "bottom",
+                                "right"
+                              ]
                             }
                           },
                           "required": [
                             "id",
                             "title",
                             "chartType",
-                            "dataset",
                             "groupBy",
-                            "metric"
+                            "queries"
                           ]
                         }
                       },
@@ -22434,22 +22481,56 @@
                               "bar"
                             ]
                           },
-                          "dataset": {
-                            "type": "string",
-                            "enum": [
-                              "timesheets",
-                              "quotes",
-                              "orders",
-                              "invoices",
-                              "supplierQuotes",
-                              "catalog"
-                            ]
-                          },
                           "groupBy": {
                             "type": "string"
                           },
-                          "metric": {
-                            "type": "string"
+                          "queries": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "ref": {
+                                  "type": "string",
+                                  "enum": [
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D",
+                                    "E",
+                                    "F",
+                                    "G"
+                                  ]
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "dataset": {
+                                  "type": "string",
+                                  "enum": [
+                                    "timesheets",
+                                    "quotes",
+                                    "orders",
+                                    "invoices",
+                                    "supplierQuotes",
+                                    "catalog"
+                                  ]
+                                },
+                                "metric": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "ref",
+                                "dataset",
+                                "metric"
+                              ]
+                            },
+                            "minItems": 1,
+                            "maxItems": 7
                           },
                           "limit": {
                             "type": "number"
@@ -22468,15 +22549,28 @@
                           },
                           "height": {
                             "type": "number"
+                          },
+                          "legendMode": {
+                            "type": "string",
+                            "enum": [
+                              "list",
+                              "hidden"
+                            ]
+                          },
+                          "legendPlacement": {
+                            "type": "string",
+                            "enum": [
+                              "bottom",
+                              "right"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "title",
                           "chartType",
-                          "dataset",
                           "groupBy",
-                          "metric"
+                          "queries"
                         ]
                       }
                     },
@@ -22648,6 +22742,52 @@
                         "metric": {
                           "type": "string"
                         },
+                        "queries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "ref": {
+                                "type": "string",
+                                "enum": [
+                                  "A",
+                                  "B",
+                                  "C",
+                                  "D",
+                                  "E",
+                                  "F",
+                                  "G"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "dataset": {
+                                "type": "string",
+                                "enum": [
+                                  "timesheets",
+                                  "quotes",
+                                  "orders",
+                                  "invoices",
+                                  "supplierQuotes",
+                                  "catalog"
+                                ]
+                              },
+                              "metric": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "dataset",
+                              "metric"
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 7
+                        },
                         "limit": {
                           "type": "number"
                         },
@@ -22665,15 +22805,27 @@
                         },
                         "height": {
                           "type": "number"
+                        },
+                        "legendMode": {
+                          "type": "string",
+                          "enum": [
+                            "list",
+                            "hidden"
+                          ]
+                        },
+                        "legendPlacement": {
+                          "type": "string",
+                          "enum": [
+                            "bottom",
+                            "right"
+                          ]
                         }
                       },
                       "required": [
                         "id",
                         "title",
                         "chartType",
-                        "dataset",
-                        "groupBy",
-                        "metric"
+                        "groupBy"
                       ]
                     }
                   }
@@ -22730,22 +22882,56 @@
                               "bar"
                             ]
                           },
-                          "dataset": {
-                            "type": "string",
-                            "enum": [
-                              "timesheets",
-                              "quotes",
-                              "orders",
-                              "invoices",
-                              "supplierQuotes",
-                              "catalog"
-                            ]
-                          },
                           "groupBy": {
                             "type": "string"
                           },
-                          "metric": {
-                            "type": "string"
+                          "queries": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "ref": {
+                                  "type": "string",
+                                  "enum": [
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D",
+                                    "E",
+                                    "F",
+                                    "G"
+                                  ]
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "dataset": {
+                                  "type": "string",
+                                  "enum": [
+                                    "timesheets",
+                                    "quotes",
+                                    "orders",
+                                    "invoices",
+                                    "supplierQuotes",
+                                    "catalog"
+                                  ]
+                                },
+                                "metric": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "ref",
+                                "dataset",
+                                "metric"
+                              ]
+                            },
+                            "minItems": 1,
+                            "maxItems": 7
                           },
                           "limit": {
                             "type": "number"
@@ -22764,15 +22950,28 @@
                           },
                           "height": {
                             "type": "number"
+                          },
+                          "legendMode": {
+                            "type": "string",
+                            "enum": [
+                              "list",
+                              "hidden"
+                            ]
+                          },
+                          "legendPlacement": {
+                            "type": "string",
+                            "enum": [
+                              "bottom",
+                              "right"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "title",
                           "chartType",
-                          "dataset",
                           "groupBy",
-                          "metric"
+                          "queries"
                         ]
                       }
                     },
@@ -23059,6 +23258,52 @@
                       "metric": {
                         "type": "string"
                       },
+                      "queries": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "ref": {
+                              "type": "string",
+                              "enum": [
+                                "A",
+                                "B",
+                                "C",
+                                "D",
+                                "E",
+                                "F",
+                                "G"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "dataset": {
+                              "type": "string",
+                              "enum": [
+                                "timesheets",
+                                "quotes",
+                                "orders",
+                                "invoices",
+                                "supplierQuotes",
+                                "catalog"
+                              ]
+                            },
+                            "metric": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "dataset",
+                            "metric"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 7
+                      },
                       "limit": {
                         "type": "number"
                       },
@@ -23076,15 +23321,27 @@
                       },
                       "height": {
                         "type": "number"
+                      },
+                      "legendMode": {
+                        "type": "string",
+                        "enum": [
+                          "list",
+                          "hidden"
+                        ]
+                      },
+                      "legendPlacement": {
+                        "type": "string",
+                        "enum": [
+                          "bottom",
+                          "right"
+                        ]
                       }
                     },
                     "required": [
                       "id",
                       "title",
                       "chartType",
-                      "dataset",
-                      "groupBy",
-                      "metric"
+                      "groupBy"
                     ]
                   }
                 },
@@ -23104,39 +23361,82 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "metric": {
-                      "type": "string"
-                    },
                     "groupBy": {
                       "type": "string"
                     },
-                    "total": {
-                      "type": "number"
-                    },
-                    "series": {
+                    "queries": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "A",
+                              "B",
+                              "C",
+                              "D",
+                              "E",
+                              "F",
+                              "G"
+                            ]
+                          },
                           "label": {
                             "type": "string"
                           },
-                          "value": {
+                          "dataset": {
+                            "type": "string",
+                            "enum": [
+                              "timesheets",
+                              "quotes",
+                              "orders",
+                              "invoices",
+                              "supplierQuotes",
+                              "catalog"
+                            ]
+                          },
+                          "metric": {
+                            "type": "string"
+                          },
+                          "total": {
                             "type": "number"
+                          },
+                          "series": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "value"
+                              ]
+                            }
                           }
                         },
                         "required": [
-                          "label",
-                          "value"
+                          "id",
+                          "ref",
+                          "dataset",
+                          "metric",
+                          "total",
+                          "series"
                         ]
                       }
                     }
                   },
                   "required": [
-                    "metric",
                     "groupBy",
-                    "total",
-                    "series"
+                    "queries"
                   ]
                 }
               }

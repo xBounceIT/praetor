@@ -428,14 +428,28 @@ export interface ReportChatMessage {
 }
 
 export type ReportWidgetChartType = 'pie' | 'bar';
+export type ReportWidgetDataset =
+  | 'timesheets'
+  | 'quotes'
+  | 'orders'
+  | 'invoices'
+  | 'supplierQuotes'
+  | 'catalog';
+
+export interface ReportDashboardWidgetQuery {
+  id: string;
+  ref: string;
+  dataset: ReportWidgetDataset;
+  metric: string;
+  label?: string;
+}
 
 export interface ReportDashboardWidget {
   id: string;
   title: string;
   chartType: ReportWidgetChartType;
-  dataset: 'timesheets' | 'quotes' | 'orders' | 'invoices' | 'supplierQuotes' | 'catalog';
   groupBy: string;
-  metric: string;
+  queries: ReportDashboardWidgetQuery[];
   limit?: number;
 }
 
