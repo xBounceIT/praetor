@@ -233,6 +233,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           if (product) {
             nextItem.productName = product.name;
             nextItem.unitPrice = Number(product.costo);
+            if (nextItem.unitType === 'days') {
+              nextItem.unitPrice = Math.round(nextItem.unitPrice * 8 * 100) / 100;
+            }
           }
         }
         items[index] = nextItem;

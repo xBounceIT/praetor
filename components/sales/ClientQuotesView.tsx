@@ -508,11 +508,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
         if (applicableBid) {
           newItems[index].specialBidId = applicableBid.id;
-          // Bid price is the new COST. Calculate sale price based on this cost and margin.
           const molSource = applicableBid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
           console.log(`[SpecialBid] Bid: ${applicableBid.unitPrice}, Mol: ${mol}`);
           newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+          if (newItems[index].unitType === 'days') {
+            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+          }
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
@@ -521,6 +523,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         } else {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          if (newItems[index].unitType === 'days') {
+            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+          }
           newItems[index].specialBidId = '';
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
@@ -536,11 +541,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].specialBidId = '';
         newItems[index].specialBidUnitPrice = null;
         newItems[index].specialBidMolPercentage = null;
-        // Revert to standard product cost
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          if (newItems[index].unitType === 'days') {
+            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+          }
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
@@ -555,10 +562,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         if (product) {
           newItems[index].productId = bid.productId;
           newItems[index].productName = product.name;
-          // Bid selected: Use bid price as COST
           const molSource = bid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
+          if (newItems[index].unitType === 'days') {
+            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+          }
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;

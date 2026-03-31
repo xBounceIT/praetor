@@ -31,6 +31,7 @@ type IncomingQuoteItem = {
   unitPrice: number;
   discount: number;
   note?: string | null;
+  unitType?: 'hours' | 'days';
 };
 
 type QuoteItemSnapshot = {
@@ -404,6 +405,7 @@ const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   ),
   discount: toFiniteNumber(row.discount, 'quoteItem.discount'),
   note: toNullableString(row.note),
+  unitType: (row.unitType as 'hours' | 'days') || 'hours',
 });
 
 const normalizeQuoteRow = (row: Record<string, unknown>) => ({
@@ -488,7 +490,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 special_bid_unit_price as "specialBidUnitPrice",
                 special_bid_mol_percentage as "specialBidMolPercentage",
                 discount,
-                note
+                note,
+                unit_type as "unitType"
             FROM quote_items
             ORDER BY created_at ASC`,
         [],
@@ -664,8 +667,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of resolvedItems) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
-            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, unit_type)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                      RETURNING
                         id,
                         quote_id as "quoteId",
@@ -680,7 +683,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         special_bid_unit_price as "specialBidUnitPrice",
                         special_bid_mol_percentage as "specialBidMolPercentage",
                         discount,
-                        note`,
+                        note,
+                        unit_type as "unitType"`,
             [
               itemId,
               nextIdResult.value,
@@ -696,6 +700,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage ?? null,
               item.discount || 0,
               item.note || null,
+              item.unitType || 'hours',
             ],
           );
           createdItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -943,7 +948,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               product_tax_rate as "productTaxRate",
               product_mol_percentage as "productMolPercentage",
               special_bid_unit_price as "specialBidUnitPrice",
-              special_bid_mol_percentage as "specialBidMolPercentage"
+              special_bid_mol_percentage as "specialBidMolPercentage",
+              unit_type as "unitType"
            FROM quote_items
            WHERE quote_id = $1`,
           [idResult.value],
@@ -972,6 +978,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
                 ? null
                 : Number(item.specialBidMolPercentage),
+            unitType: (item.unitType as 'hours' | 'days') || 'hours',
           });
         });
 
@@ -1074,8 +1081,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of normalizedItems) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
-            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, unit_type)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                      RETURNING
                         id,
                         quote_id as "quoteId",
@@ -1090,7 +1097,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         special_bid_unit_price as "specialBidUnitPrice",
                         special_bid_mol_percentage as "specialBidMolPercentage",
                         discount,
-                        note`,
+                        note,
+                        unit_type as "unitType"`,
             [
               itemId,
               updatedQuoteId,
@@ -1106,6 +1114,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage ?? null,
               item.discount || 0,
               item.note || null,
+              item.unitType || 'hours',
             ],
           );
           updatedItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -1127,7 +1136,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     special_bid_unit_price as "specialBidUnitPrice",
                     special_bid_mol_percentage as "specialBidMolPercentage",
                     discount,
-                    note
+                    note,
+                    unit_type as "unitType"
                 FROM quote_items
                 WHERE quote_id = $1`,
           [updatedQuoteId],
