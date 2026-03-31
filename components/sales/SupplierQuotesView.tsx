@@ -257,6 +257,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           unitPrice: 0,
           discount: 0,
           note: '',
+          unitType: 'hours',
         },
       ],
     }));
@@ -272,6 +273,66 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       });
     },
     [isReadOnly],
+  );
+
+  const handleUnitTypeChange = useCallback(
+    (index: number, newType: 'hours' | 'days') => {
+      if (isReadOnly) return;
+      setFormData((prev) => {
+        const items = [...(prev.items || [])];
+        const item = items[index];
+        if (!item) return prev;
+        const oldType = item.unitType || 'hours';
+        if (oldType === newType) return prev;
+        const adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+        items[index] = {
+          ...item,
+          unitType: newType,
+          unitPrice: Math.round(adjustedPrice * 100) / 100,
+        };
+        return { ...prev, items };
+      });
+    },
+    [isReadOnly],
+  );
+
+  const renderUnitSelector = useCallback(
+    (index: number, item: Partial<SupplierQuoteItem>) => {
+      const product = products.find((p) => p.id === item.productId);
+      const isSupply = product?.type === 'supply';
+      const qty = Number(item.quantity) || 0;
+
+      if (isSupply) {
+        return (
+          <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+            {qty === 1
+              ? t('sales:supplierQuotes.unit', { defaultValue: 'Unit' })
+              : t('sales:supplierQuotes.units', { defaultValue: 'Units' })}
+          </span>
+        );
+      }
+
+      return (
+        <select
+          value={item.unitType || 'hours'}
+          onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
+          disabled={isReadOnly}
+          className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <option value="hours">
+            {t(`sales:supplierQuotes.${qty === 1 ? 'hour' : 'hours'}`, {
+              defaultValue: qty === 1 ? 'Hour' : 'Hours',
+            })}
+          </option>
+          <option value="days">
+            {t(`sales:supplierQuotes.${qty === 1 ? 'day' : 'days'}`, {
+              defaultValue: qty === 1 ? 'Day' : 'Days',
+            })}
+          </option>
+        </select>
+      );
+    },
+    [products, handleUnitTypeChange, isReadOnly, t],
   );
 
   const columns = useMemo<Column<SupplierQuote>[]>(
@@ -888,14 +949,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                   disabled={isReadOnly}
                                   className={`${itemInputClassName} text-center flex-1`}
                                 />
-                                <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-                                  {`/ ${
-                                    products.find((p) => p.id === item.productId)?.costUnit ===
-                                    'hours'
-                                      ? t('crm:internalListing.hour')
-                                      : t('crm:internalListing.unit')
-                                  }`}
+                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  /
                                 </span>
+                                {renderUnitSelector(index, item)}
                               </div>
                             </div>
                             <div className="col-span-6 md:col-span-3">
