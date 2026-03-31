@@ -655,11 +655,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     if (isSupply) {
       return (
         <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-          {t('sales:clientQuotes.qty') === 'Qtà'
-            ? t('sales:clientQuotes.units') // Italian: Unità
-            : qty === 1
-              ? t('sales:clientQuotes.unit')
-              : t('sales:clientQuotes.units')}
+          {qty === 1
+            ? t('sales:clientQuotes.unit')
+            : t('sales:clientQuotes.units')}
         </span>
       );
     }
