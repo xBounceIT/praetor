@@ -661,7 +661,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:internalListing.cost')}
+                    {t('crm:internalListing.cost')}<span className="text-slate-400 font-semibold">/{formData.costUnit === 'hours' ? t('crm:internalListing.hour') : t('crm:internalListing.unit')}</span>
                   </label>
                   <div className="flex gap-2">
                     <ValidatedNumberInput
