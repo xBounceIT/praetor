@@ -330,6 +330,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setFormData({
       ...formData,
       type,
+      costUnit: type === 'supply' ? 'unit' : 'hours',
       category: '', // Reset category as it depends on type
       subcategory: '', // Reset subcategory as it depends on category
     });
