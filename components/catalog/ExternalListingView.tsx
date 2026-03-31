@@ -220,9 +220,10 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     }
 
     try {
+      const { costUnit: _costUnit, ...productPayload } = formData;
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
-          ...formData,
+          ...productPayload,
           costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
           molPercentage:
             formData.molPercentage !== undefined
@@ -231,7 +232,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         });
       } else {
         await onAddProduct({
-          ...formData,
+          ...productPayload,
           costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
           molPercentage:
             formData.molPercentage !== undefined

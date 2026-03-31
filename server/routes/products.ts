@@ -166,7 +166,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxRate,
         type,
         supplierId,
-        costUnit,
       } = request.body as {
         name: unknown;
         productCode: unknown;
@@ -178,7 +177,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxRate: unknown;
         type: unknown;
         supplierId: unknown;
-        costUnit: unknown;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -243,20 +241,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
-      // Auto-derive costUnit from type (frontend should not send costUnit)
+      // Auto-derive costUnit from type (always ignore frontend-supplied costUnit)
       const expectedCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
-
-      // If costUnit is provided, validate it matches the expected value for the type
-      if (costUnit !== undefined && costUnit !== null && costUnit !== '') {
-        const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
-        if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-        if (costUnitResult.value !== expectedCostUnit) {
-          return badRequest(
-            reply,
-            `costUnit must be '${expectedCostUnit}' for type '${typeResult.value}'`,
-          );
-        }
-      }
 
       const id = 'p-' + Date.now();
       const result = await query(
