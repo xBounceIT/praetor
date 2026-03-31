@@ -201,9 +201,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
 
     try {
+      const { costUnit: _costUnit, ...productPayload } = formData;
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
-          ...formData,
+          ...productPayload,
           costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
           molPercentage:
             formData.molPercentage !== undefined
@@ -212,7 +213,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         });
       } else {
         await onAddProduct({
-          ...formData,
+          ...productPayload,
           costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
           molPercentage:
             formData.molPercentage !== undefined
