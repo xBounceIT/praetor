@@ -1297,6 +1297,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               disabled={isReadOnly}
                               className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                             />
+                            <span className="text-xs font-semibold text-slate-400 whitespace-nowrap text-center block mt-0.5">
+                              {products.find((p) => p.id === item.productId)?.costUnit === 'hours'
+                                ? t('crm:internalListing.hour')
+                                : t('crm:internalListing.unit')}
+                            </span>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
@@ -1397,6 +1402,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 disabled={isReadOnly}
                                 className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               />
+                              <span className="text-xs font-semibold text-slate-400 whitespace-nowrap text-center block">
+                                {products.find((p) => p.id === item.productId)?.costUnit === 'hours'
+                                  ? t('crm:internalListing.hour')
+                                  : t('crm:internalListing.unit')}
+                              </span>
                             </div>
                             <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                               {selectedBid && (
