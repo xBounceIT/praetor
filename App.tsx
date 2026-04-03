@@ -29,7 +29,6 @@ import AiReportingView from './components/reports/AiReportingView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import ClientOffersView from './components/sales/ClientOffersView';
 import ClientQuotesView from './components/sales/ClientQuotesView';
-import SupplierOffersView from './components/sales/SupplierOffersView';
 import SupplierQuotesView from './components/sales/SupplierQuotesView';
 import Calendar from './components/shared/Calendar';
 import CustomSelect from './components/shared/CustomSelect';
@@ -60,7 +59,6 @@ import type {
   SpecialBid,
   Supplier,
   SupplierInvoice,
-  SupplierOffer,
   SupplierQuote,
   SupplierSaleOrder,
   TimeEntry,
@@ -124,6 +122,7 @@ const getModuleFromView = (view: View | '404'): string | null => {
 const canonicalizeLegacyHash = (hash: string) => {
   if (hash === 'suppliers/manage') return 'crm/suppliers';
   if (hash === 'suppliers/quotes') return 'sales/supplier-quotes';
+  if (hash === 'sales/supplier-offers') return 'sales/supplier-quotes';
   if (hash === 'administration/work-units') return 'hr/work-units';
   return hash;
 };
@@ -564,7 +563,6 @@ const App: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuote[]>([]);
-  const [supplierOffers, setSupplierOffers] = useState<SupplierOffer[]>([]);
   const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -645,7 +643,6 @@ const App: React.FC = () => {
       'sales/client-quotes',
       'sales/client-offers',
       'sales/supplier-quotes',
-      'sales/supplier-offers',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
@@ -695,7 +692,6 @@ const App: React.FC = () => {
       'sales/client-quotes',
       'sales/client-offers',
       'sales/supplier-quotes',
-      'sales/supplier-offers',
       // Accounting module
       'accounting/clients-orders',
       'accounting/clients-invoices',
@@ -727,7 +723,6 @@ const App: React.FC = () => {
   const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
-  const [supplierOfferFilterId, setSupplierOfferFilterId] = useState<string | null>(null);
 
   const quoteIdsWithOffers = useMemo(() => {
     const ids = new Set<string>();
@@ -754,12 +749,6 @@ const App: React.FC = () => {
       clientsOrders.map((order) => order.linkedOfferId).filter((id): id is string => Boolean(id)),
     );
   }, [clientsOrders]);
-
-  const supplierQuoteIdsWithOffers = useMemo(() => {
-    return new Set(
-      supplierOffers.map((offer) => offer.linkedQuoteId).filter((id): id is string => Boolean(id)),
-    );
-  }, [supplierOffers]);
 
   const orderIdsWithInvoices = useMemo(() => {
     const ids = new Set<string>();
@@ -817,7 +806,6 @@ const App: React.FC = () => {
     }
     if (
       activeView !== 'sales/supplier-quotes' &&
-      activeView !== 'sales/supplier-offers' &&
       activeView !== 'accounting/supplier-orders' &&
       supplierQuoteFilterId
     ) {
@@ -864,9 +852,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (activeView !== 'sales/client-offers' && activeView !== 'accounting/clients-orders') {
       setClientOfferFilterId(null);
-    }
-    if (activeView !== 'sales/supplier-offers') {
-      setSupplierOfferFilterId(null);
     }
   }, [activeView]);
 
@@ -1038,7 +1023,6 @@ const App: React.FC = () => {
           buildPermission('sales.client_quotes', 'view'),
           buildPermission('sales.client_offers', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
-          buildPermission('sales.supplier_offers', 'view'),
         ]);
         const canViewCatalog = hasAnyPermission(permissions, [
           buildPermission('catalog.internal_listing', 'view'),
@@ -1113,7 +1097,6 @@ const App: React.FC = () => {
           buildPermission('catalog.external_listing', 'view'),
           buildPermission('catalog.special_bids', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
-          buildPermission('sales.supplier_offers', 'view'),
           buildPermission('sales.client_offers', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
@@ -1127,17 +1110,12 @@ const App: React.FC = () => {
           buildPermission('crm.suppliers_all', 'view'),
           buildPermission('catalog.external_listing', 'view'),
           buildPermission('sales.supplier_quotes', 'view'),
-          buildPermission('sales.supplier_offers', 'view'),
           buildPermission('accounting.supplier_orders', 'view'),
           buildPermission('accounting.supplier_invoices', 'view'),
         ]);
         const canListSupplierQuotes = hasPermission(
           permissions,
           buildPermission('sales.supplier_quotes', 'view'),
-        );
-        const canListSupplierOffers = hasPermission(
-          permissions,
-          buildPermission('sales.supplier_offers', 'view'),
         );
         const canListOrders = hasPermission(
           permissions,
@@ -1362,12 +1340,6 @@ const App: React.FC = () => {
                 enabled: canListSupplierQuotes,
                 load: () => api.supplierQuotes.list(),
                 apply: (data) => setSupplierQuotes(data as SupplierQuote[]),
-              },
-              {
-                dataset: 'supplier offers',
-                enabled: canListSupplierOffers,
-                load: () => api.supplierOffers.list(),
-                apply: (data) => setSupplierOffers(data as SupplierOffer[]),
               },
               {
                 dataset: 'clients',
@@ -2133,13 +2105,11 @@ const App: React.FC = () => {
   };
 
   const refreshSupplierQuoteFlow = async () => {
-    const [quotesData, offersData, ordersData] = await Promise.all([
+    const [quotesData, ordersData] = await Promise.all([
       api.supplierQuotes.list(),
-      api.supplierOffers.list(),
       api.supplierOrders.list(),
     ]);
     setSupplierQuotes(quotesData);
-    setSupplierOffers(offersData);
     setSupplierOrders(ordersData);
   };
 
@@ -2404,66 +2374,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateSupplierOffer = async (id: string, updates: Partial<SupplierOffer>) => {
-    try {
-      const updated = await api.supplierOffers.update(id, updates);
-      if (supplierOfferFilterId === id) {
-        setSupplierOfferFilterId(updated.id);
-      }
-      await refreshSupplierQuoteFlow();
-    } catch (err) {
-      console.error('Failed to update supplier offer:', err);
-      throw err;
-    }
-  };
-
-  const handleDeleteSupplierOffer = async (id: string) => {
-    try {
-      await api.supplierOffers.delete(id);
-      setSupplierOffers((prev) => prev.filter((offer) => offer.id !== id));
-      setSupplierQuotes((prev) =>
-        prev.map((quote) =>
-          quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
-        ),
-      );
-    } catch (err) {
-      console.error('Failed to delete supplier offer:', err);
-      throw err;
-    }
-  };
-
-  const handleCreateSupplierOfferFromQuote = async (quote: SupplierQuote) => {
-    try {
-      const offer = await api.supplierOffers.create({
-        id: `${quote.id}-OF`,
-        linkedQuoteId: quote.id,
-        supplierId: quote.supplierId,
-        supplierName: quote.supplierName,
-        paymentTerms: quote.paymentTerms,
-        discount: quote.discount,
-        status: 'draft',
-        expirationDate: quote.expirationDate,
-        notes: quote.notes,
-        items: quote.items.map((item) => ({
-          ...item,
-          id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
-          offerId: '',
-          productTaxRate: products.find((product) => product.id === item.productId)?.taxRate || 0,
-        })),
-      });
-      setSupplierOffers((prev) => [offer, ...prev]);
-      setSupplierQuotes((prev) =>
-        prev.map((entry) =>
-          entry.id === quote.id ? { ...entry, linkedOfferId: offer.id } : entry,
-        ),
-      );
-      setActiveView('sales/supplier-offers');
-    } catch (err) {
-      console.error('Failed to create supplier offer from quote:', err);
-      alert((err as Error).message || 'Failed to create supplier offer from quote');
-    }
-  };
-
   const handleUpdateSupplierOrder = async (id: string, updates: Partial<SupplierSaleOrder>) => {
     try {
       await api.supplierOrders.update(id, updates);
@@ -2484,33 +2394,29 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateSupplierOrderFromOffer = async (offer: SupplierOffer) => {
+  const handleCreateSupplierOrderFromQuote = async (quote: SupplierQuote) => {
     try {
-      const order = await api.supplierOrders.create({
-        linkedOfferId: offer.id,
-        linkedQuoteId: offer.linkedQuoteId,
-        supplierId: offer.supplierId,
-        supplierName: offer.supplierName,
-        paymentTerms: offer.paymentTerms,
-        discount: offer.discount,
+      await api.supplierOrders.create({
+        linkedQuoteId: quote.id,
+        supplierId: quote.supplierId,
+        supplierName: quote.supplierName,
+        paymentTerms: quote.paymentTerms,
+        discount: quote.discount,
         status: 'draft',
-        notes: offer.notes,
-        items: offer.items.map((item) => ({
+        notes: quote.notes,
+        items: quote.items.map((item) => ({
           ...item,
           id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
           orderId: '',
+          productTaxRate: products.find((product) => product.id === item.productId)?.taxRate || 0,
         })),
       });
-      setSupplierOrders((prev) => [order, ...prev]);
-      setSupplierOffers((prev) =>
-        prev.map((entry) =>
-          entry.id === offer.id ? { ...entry, linkedOrderId: order.id } : entry,
-        ),
-      );
+      await refreshSupplierQuoteFlow();
+      setSupplierQuoteFilterId(quote.id);
       setActiveView('accounting/supplier-orders');
     } catch (err) {
-      console.error('Failed to create supplier order from offer:', err);
-      alert((err as Error).message || 'Failed to create supplier order from offer');
+      console.error('Failed to create supplier order from quote:', err);
+      alert((err as Error).message || 'Failed to create supplier order from quote');
     }
   };
 
@@ -2851,7 +2757,6 @@ const App: React.FC = () => {
     setInvoices([]);
     setSuppliers([]);
     setSupplierQuotes([]);
-    setSupplierOffers([]);
     setSupplierOrders([]);
     setSupplierInvoices([]);
     setEntries([]);
@@ -2881,7 +2786,6 @@ const App: React.FC = () => {
       setInvoices([]);
       setSuppliers([]);
       setSupplierQuotes([]);
-      setSupplierOffers([]);
       setSupplierOrders([]);
       setSupplierInvoices([]);
       setEntries([]);
@@ -3095,9 +2999,7 @@ const App: React.FC = () => {
         onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
-        isAiReportingEnabled={
-          !hasLoadedGeneralSettings || generalSettings.enableAiReporting
-        }
+        isAiReportingEnabled={!hasLoadedGeneralSettings || generalSettings.enableAiReporting}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
@@ -3255,41 +3157,13 @@ const App: React.FC = () => {
                   onAddQuote={addSupplierQuote}
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}
-                  onCreateOffer={handleCreateSupplierOfferFromQuote}
-                  offers={supplierOffers}
+                  onCreateOrder={handleCreateSupplierOrderFromQuote}
                   quoteFilterId={supplierQuoteFilterId}
-                  quoteIdsWithOffers={supplierQuoteIdsWithOffers}
-                  onViewOffer={(offerId) => {
-                    setSupplierQuoteFilterId(null);
-                    setSupplierOfferFilterId(offerId);
-                    setActiveView('sales/supplier-offers');
-                  }}
                   currency={generalSettings.currency}
-                  onViewOffers={(quoteId) => {
-                    setSupplierOfferFilterId(null);
+                  onViewOrders={(quoteId) => {
                     setSupplierQuoteFilterId(quoteId);
-                    setActiveView('sales/supplier-offers');
+                    setActiveView('accounting/supplier-orders');
                   }}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-offers']) &&
-              activeView === 'sales/supplier-offers' && (
-                <SupplierOffersView
-                  offers={supplierOffers}
-                  suppliers={suppliers}
-                  products={products}
-                  onUpdateOffer={handleUpdateSupplierOffer}
-                  onDeleteOffer={handleDeleteSupplierOffer}
-                  onCreateOrder={handleCreateSupplierOrderFromOffer}
-                  onViewQuote={(quoteId) => {
-                    setSupplierOfferFilterId(null);
-                    setSupplierQuoteFilterId(quoteId);
-                    setActiveView('sales/supplier-quotes');
-                  }}
-                  currency={generalSettings.currency}
-                  quoteFilterId={supplierQuoteFilterId}
-                  offerFilterId={supplierOfferFilterId}
                 />
               )}
 
@@ -3348,7 +3222,6 @@ const App: React.FC = () => {
                   onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
                   onViewQuote={(quoteId) => {
                     setSupplierQuoteFilterId(quoteId);
-                    setSupplierOfferFilterId(null);
                     setActiveView('sales/supplier-quotes');
                   }}
                   currency={generalSettings.currency}
