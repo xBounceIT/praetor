@@ -194,7 +194,15 @@
     "subcategoryNamePlaceholder": "e.g. SaaS Software",
     "addSubcategory": "Add Subcategory",
     "selectCategoryFirst": "Select category first",
-    "add": "Add"
+    "add": "Add",
+    "manageSubcategories": "Manage Subcategories",
+    "categoryNameRequired": "Category name is required",
+    "subcategoryNameRequired": "Subcategory name is required",
+    "noCategories": "No categories found. Create your first category.",
+    "noSubcategories": "No subcategories found. Create your first subcategory.",
+    "products": "products",
+    "deleteCategoryWithProducts": "Category '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will become uncategorized.",
+    "deleteSubcategoryWithProducts": "Subcategory '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will lose their subcategory."
   },
   "externalProducts": {
     "title": "External Listing",

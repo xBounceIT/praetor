@@ -1386,3 +1386,104 @@ VALUES
     ('manager', 'projects.assignments.update'),
     ('top_manager', 'projects.assignments.update')
 ON CONFLICT DO NOTHING;
+
+-- Internal product categories table
+CREATE TABLE IF NOT EXISTS internal_product_categories (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('supply', 'service', 'consulting')),
+    cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit' CHECK (cost_unit IN ('unit', 'hours')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (name, type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_internal_product_categories_type 
+    ON internal_product_categories(type);
+
+-- Migration: Backfill internal product categories from existing products
+DO $$
+DECLARE
+    rec RECORD;
+    default_unit VARCHAR(20);
+    existing_id VARCHAR(50);
+BEGIN
+    FOR rec IN 
+        SELECT DISTINCT category, type, 
+               COALESCE(
+                   (SELECT cost_unit FROM products WHERE category = p.category AND type = p.type AND supplier_id IS NULL LIMIT 1),
+                   CASE p.type 
+                       WHEN 'supply' THEN 'unit'
+                       WHEN 'service' THEN 'hours'
+                       WHEN 'consulting' THEN 'hours'
+                       ELSE 'unit'
+                   END
+               ) as derived_cost_unit
+        FROM products p 
+        WHERE category IS NOT NULL 
+          AND category != ''
+          AND supplier_id IS NULL
+          AND type IN ('supply', 'service', 'consulting')
+    LOOP
+        -- Check if this category/type already exists
+        SELECT id INTO existing_id
+        FROM internal_product_categories
+        WHERE name = rec.category AND type = rec.type;
+        
+        IF existing_id IS NULL THEN
+            INSERT INTO internal_product_categories (id, name, type, cost_unit)
+            VALUES (
+                'ipc-' || EXTRACT(EPOCH FROM NOW())::TEXT || '-' || MD5(RANDOM()::TEXT)::TEXT,
+                rec.category,
+                rec.type,
+                rec.derived_cost_unit
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- Migration: Seed default internal product categories if not already present
+DO $$
+BEGIN
+    -- Supply defaults
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Hardware' AND type = 'supply') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-supply-hardware', 'Hardware', 'supply', 'unit');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'License' AND type = 'supply') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-supply-license', 'License', 'supply', 'unit');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Subscription' AND type = 'supply') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-supply-subscription', 'Subscription', 'supply', 'unit');
+    END IF;
+    
+    -- Consulting defaults
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Specialistic' AND type = 'consulting') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-consulting-specialistic', 'Specialistic', 'consulting', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Technical' AND type = 'consulting') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-consulting-technical', 'Technical', 'consulting', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Governance' AND type = 'consulting') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-consulting-governance', 'Governance', 'consulting', 'hours');
+    END IF;
+    
+    -- Service defaults
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Reports' AND type = 'service') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-service-reports', 'Reports', 'service', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Monitoring' AND type = 'service') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-service-monitoring', 'Monitoring', 'service', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Maintenance' AND type = 'service') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-service-maintenance', 'Maintenance', 'service', 'hours');
+    END IF;
+END $$;

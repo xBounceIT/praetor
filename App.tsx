@@ -2112,6 +2112,98 @@ const App: React.FC = () => {
     }
   };
 
+  // Internal Product Category Management Handlers
+  const handleListInternalCategories = async (type: string) => {
+    return api.products.listInternalCategories(type);
+  };
+
+  const handleCreateInternalCategory = async (categoryData: {
+    name: string;
+    type: string;
+    costUnit: 'unit' | 'hours';
+  }) => {
+    try {
+      await api.products.createInternalCategory(categoryData);
+    } catch (err) {
+      console.error('Failed to create internal category:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateInternalCategory = async (
+    id: string,
+    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
+  ) => {
+    try {
+      await api.products.updateInternalCategory(id, updates);
+      // Refresh products to get updated costUnit values
+      const updatedProducts = await api.products.list();
+      setProducts(updatedProducts);
+    } catch (err) {
+      console.error('Failed to update internal category:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteInternalCategory = async (id: string) => {
+    try {
+      await api.products.deleteInternalCategory(id);
+      // Refresh products to clear category/subcategory values
+      const updatedProducts = await api.products.list();
+      setProducts(updatedProducts);
+    } catch (err) {
+      console.error('Failed to delete internal category:', err);
+      throw err;
+    }
+  };
+
+  // Internal Product Subcategory Management Handlers
+  const handleListInternalSubcategories = async (type: string, category: string) => {
+    return api.products.listInternalSubcategories(type, category);
+  };
+
+  const handleCreateInternalSubcategory = async (subcategoryData: {
+    name: string;
+    type: string;
+    category: string;
+  }) => {
+    try {
+      await api.products.createInternalSubcategory(subcategoryData);
+    } catch (err) {
+      console.error('Failed to create internal subcategory:', err);
+      throw err;
+    }
+  };
+
+  const handleRenameInternalSubcategory = async (
+    oldName: string,
+    newName: string,
+    type: string,
+    category: string,
+  ) => {
+    try {
+      await api.products.renameInternalSubcategory(oldName, newName, type, category);
+      // Refresh products to get updated subcategory values
+      const updatedProducts = await api.products.list();
+      setProducts(updatedProducts);
+    } catch (err) {
+      console.error('Failed to rename internal subcategory:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteInternalSubcategory = async (name: string, type: string, category: string) => {
+    try {
+      await api.products.deleteInternalSubcategory(name, type, category);
+      // Refresh products to clear subcategory values
+      const updatedProducts = await api.products.list();
+      setProducts(updatedProducts);
+    } catch (err) {
+      console.error('Failed to delete internal subcategory:', err);
+      throw err;
+    }
+  };
+
   const refreshClientQuoteFlow = async () => {
     const [quotesData, offersData, ordersData] = await Promise.all([
       api.quotes.list(),
@@ -3095,9 +3187,7 @@ const App: React.FC = () => {
         onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
-        isAiReportingEnabled={
-          !hasLoadedGeneralSettings || generalSettings.enableAiReporting
-        }
+        isAiReportingEnabled={!hasLoadedGeneralSettings || generalSettings.enableAiReporting}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
@@ -3164,6 +3254,14 @@ const App: React.FC = () => {
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
                   currency={generalSettings.currency}
+                  onListInternalCategories={handleListInternalCategories}
+                  onCreateInternalCategory={handleCreateInternalCategory}
+                  onUpdateInternalCategory={handleUpdateInternalCategory}
+                  onDeleteInternalCategory={handleDeleteInternalCategory}
+                  onListInternalSubcategories={handleListInternalSubcategories}
+                  onCreateInternalSubcategory={handleCreateInternalSubcategory}
+                  onRenameInternalSubcategory={handleRenameInternalSubcategory}
+                  onDeleteInternalSubcategory={handleDeleteInternalSubcategory}
                 />
               )}
 

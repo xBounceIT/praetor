@@ -1,5 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type {
+  InternalProductCategory,
+  InternalProductSubcategory,
+} from '../../services/api/products';
 import type { Product } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
@@ -11,10 +16,38 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface InternalListingViewProps {
   products: Product[];
-  onAddProduct: (productData: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
-  onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>; // Updated to Promise for error handling
+  onAddProduct: (productData: Partial<Product>) => Promise<void>;
+  onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   onDeleteProduct: (id: string) => void;
   currency: string;
+  // Category/Subcategory management
+  onListInternalCategories: (type: string) => Promise<InternalProductCategory[]>;
+  onCreateInternalCategory: (categoryData: {
+    name: string;
+    type: string;
+    costUnit: 'unit' | 'hours';
+  }) => Promise<void>;
+  onUpdateInternalCategory: (
+    id: string,
+    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
+  ) => Promise<void>;
+  onDeleteInternalCategory: (id: string) => Promise<void>;
+  onListInternalSubcategories: (
+    type: string,
+    category: string,
+  ) => Promise<InternalProductSubcategory[]>;
+  onCreateInternalSubcategory: (subcategoryData: {
+    name: string;
+    type: string;
+    category: string;
+  }) => Promise<void>;
+  onRenameInternalSubcategory: (
+    oldName: string,
+    newName: string,
+    type: string,
+    category: string,
+  ) => Promise<void>;
+  onDeleteInternalSubcategory: (name: string, type: string, category: string) => Promise<void>;
 }
 
 const InternalListingView: React.FC<InternalListingViewProps> = ({
@@ -23,8 +56,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onUpdateProduct,
   onDeleteProduct,
   currency,
+  onListInternalCategories,
+  onCreateInternalCategory,
+  onUpdateInternalCategory,
+  onDeleteInternalCategory,
+  onListInternalSubcategories,
+  onCreateInternalSubcategory,
+  onRenameInternalSubcategory,
+  onDeleteInternalSubcategory,
 }) => {
   const { t } = useTranslation(['crm', 'common']);
+
+  // Main product modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -33,32 +76,25 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const [serverError, setServerError] = useState<string | null>(null);
 
   // Category Management State
-  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
-  const [isAddSubcategoryModalOpen, setIsAddSubcategoryModalOpen] = useState(false);
+  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false);
+  const [categories, setCategories] = useState<InternalProductCategory[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<InternalProductCategory | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [newCategoryCostUnit, setNewCategoryCostUnit] = useState<'unit' | 'hours'>('unit');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
 
-  // Default categories per type
-  const defaultCategoriesMap = useMemo<Record<string, string[]>>(
-    () => ({
-      supply: [
-        t('crm:internalListing.defaultCategories.hardware'),
-        t('crm:internalListing.defaultCategories.license'),
-        t('crm:internalListing.defaultCategories.subscription'),
-      ],
-      consulting: [
-        t('crm:internalListing.defaultCategories.specialistic'),
-        t('crm:internalListing.defaultCategories.technical'),
-        t('crm:internalListing.defaultCategories.governance'),
-      ],
-      service: [
-        t('crm:internalListing.defaultCategories.reports'),
-        t('crm:internalListing.defaultCategories.monitoring'),
-        t('crm:internalListing.defaultCategories.maintenance'),
-      ],
-    }),
-    [t],
+  // Subcategory Management State
+  const [isManageSubcategoriesModalOpen, setIsManageSubcategoriesModalOpen] = useState(false);
+  const [subcategories, setSubcategories] = useState<InternalProductSubcategory[]>([]);
+  const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(false);
+  const [editingSubcategory, setEditingSubcategory] = useState<InternalProductSubcategory | null>(
+    null,
   );
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [subcategoryError, setSubcategoryError] = useState<string | null>(null);
+  const [isSavingSubcategory, setIsSavingSubcategory] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -73,6 +109,69 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     taxRate: 22,
     type: 'supply',
   });
+
+  // Load categories when type changes or category modal opens
+  const loadCategories = useCallback(
+    async (type: string) => {
+      if (!type) return;
+      setIsLoadingCategories(true);
+      try {
+        const cats = await onListInternalCategories(type);
+        setCategories(cats);
+      } catch (err) {
+        console.error('Failed to load categories:', err);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    },
+    [onListInternalCategories],
+  );
+
+  // Load subcategories when category changes or subcategory modal opens
+  const loadSubcategories = useCallback(
+    async (type: string, category: string) => {
+      if (!type || !category) return;
+      setIsLoadingSubcategories(true);
+      try {
+        const subs = await onListInternalSubcategories(type, category);
+        setSubcategories(subs);
+      } catch (err) {
+        console.error('Failed to load subcategories:', err);
+      } finally {
+        setIsLoadingSubcategories(false);
+      }
+    },
+    [onListInternalSubcategories],
+  );
+
+  // When modal opens, load categories for current type
+  useEffect(() => {
+    if (isManageCategoriesModalOpen && formData.type) {
+      loadCategories(formData.type);
+    }
+  }, [isManageCategoriesModalOpen, formData.type, loadCategories]);
+
+  // When subcategory modal opens, load subcategories for current type + category
+  useEffect(() => {
+    if (isManageSubcategoriesModalOpen && formData.type && formData.category) {
+      loadSubcategories(formData.type, formData.category);
+    }
+  }, [isManageSubcategoriesModalOpen, formData.type, formData.category, loadSubcategories]);
+
+  // When category selection changes, update costUnit from category
+  useEffect(() => {
+    if (formData.category && formData.type) {
+      const category = categories.find(
+        (c) => c.name === formData.category && c.type === formData.type,
+      );
+      if (category) {
+        setFormData((prev) => {
+          if (prev.costUnit === category.costUnit) return prev;
+          return { ...prev, costUnit: category.costUnit };
+        });
+      }
+    }
+  }, [formData.category, formData.type, categories]);
 
   // Calculated values
   const calcSalePrice = (costo: number, molPercentage: number) => {
@@ -97,14 +196,15 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const openAddModal = () => {
     setEditingProduct(null);
+    const defaultCategory = categories[0];
     setFormData({
       name: '',
       productCode: '',
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: 'unit',
-      category: '',
+      costUnit: defaultCategory?.costUnit || 'unit',
+      category: defaultCategory?.name || '',
       subcategory: '',
       taxRate: 22,
       type: 'supply',
@@ -148,10 +248,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     } else if (!/^[a-zA-Z0-9_-]+$/.test(trimmedProductCode)) {
       newErrors.productCode = t('common:validation.productCodeInvalid');
     }
-
-    // Frontend uniqueness check (optional, but good UX)
-    // const isDuplicate = products.some(p => p.name.toLowerCase() === formData.name?.trim().toLowerCase() && p.id !== editingProduct?.id);
-    // if (isDuplicate) newErrors.name = t('common:validation.productNameUnique');
 
     if (formData.costo === undefined || formData.costo === null || Number.isNaN(formData.costo)) {
       newErrors.costo = t('common:validation.costRequired');
@@ -235,24 +331,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
   };
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const name = newCategoryName.trim();
-      setFormData({ ...formData, category: name, subcategory: '' });
-      setNewCategoryName('');
-      setIsAddCategoryModalOpen(false);
-    }
-  };
-
-  const handleAddSubcategory = () => {
-    if (newSubcategoryName.trim()) {
-      const name = newSubcategoryName.trim();
-      setFormData({ ...formData, subcategory: name });
-      setNewSubcategoryName('');
-      setIsAddSubcategoryModalOpen(false);
-    }
-  };
-
   const confirmDelete = (product: Product) => {
     setProductToDelete(product);
     setIsDeleteConfirmOpen(true);
@@ -266,37 +344,192 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
   };
 
-  // Get unique categories from existing products + defaults
-  const availableCategories = React.useMemo(() => {
-    const type = formData.type || 'supply';
-    // If type is item, treat as supply for categories
-    const normalizedType = type === 'item' ? 'supply' : type;
-    const defaults = defaultCategoriesMap[normalizedType] || [];
+  // Category Management Handlers
+  const handleOpenManageCategories = () => {
+    setIsManageCategoriesModalOpen(true);
+    setEditingCategory(null);
+    setNewCategoryName('');
+    setNewCategoryCostUnit('unit');
+    setCategoryError(null);
+  };
 
-    // Also include categories currently used by products of this type
-    const used = products
-      .filter((p) => (p.type === 'item' ? 'supply' : p.type) === normalizedType)
-      .map((p) => p.category)
-      .filter((category): category is string => Boolean(category));
+  const handleSaveCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setCategoryError(t('crm:internalListing.categoryNameRequired'));
+      return;
+    }
 
-    return Array.from(new Set([...defaults, ...used])).sort();
-  }, [formData.type, products, defaultCategoriesMap]);
+    setIsSavingCategory(true);
+    setCategoryError(null);
+
+    try {
+      if (editingCategory) {
+        await onUpdateInternalCategory(editingCategory.id, {
+          name: newCategoryName.trim(),
+          costUnit: newCategoryCostUnit,
+        });
+      } else {
+        await onCreateInternalCategory({
+          name: newCategoryName.trim(),
+          type: formData.type || 'supply',
+          costUnit: newCategoryCostUnit,
+        });
+      }
+
+      // Reload categories
+      await loadCategories(formData.type || 'supply');
+
+      // Reset form
+      setEditingCategory(null);
+      setNewCategoryName('');
+      setNewCategoryCostUnit('unit');
+    } catch (err: unknown) {
+      setCategoryError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleEditCategory = (category: InternalProductCategory) => {
+    setEditingCategory(category);
+    setNewCategoryName(category.name);
+    setNewCategoryCostUnit(category.costUnit);
+    setCategoryError(null);
+  };
+
+  const handleDeleteCategory = async (category: InternalProductCategory) => {
+    if (category.productCount > 0) {
+      const confirmed = window.confirm(
+        t('crm:internalListing.deleteCategoryWithProducts', {
+          count: category.productCount,
+          name: category.name,
+        }),
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      await onDeleteInternalCategory(category.id);
+
+      // If the deleted category was selected, clear it
+      if (formData.category === category.name && formData.type === category.type) {
+        setFormData((prev) => ({ ...prev, category: '', subcategory: '' }));
+      }
+
+      // Reload categories
+      await loadCategories(category.type);
+    } catch (err: unknown) {
+      setCategoryError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleCancelCategoryEdit = () => {
+    setEditingCategory(null);
+    setNewCategoryName('');
+    setNewCategoryCostUnit('unit');
+    setCategoryError(null);
+  };
+
+  // Subcategory Management Handlers
+  const handleOpenManageSubcategories = () => {
+    if (!formData.category) return;
+    setIsManageSubcategoriesModalOpen(true);
+    setEditingSubcategory(null);
+    setNewSubcategoryName('');
+    setSubcategoryError(null);
+  };
+
+  const handleSaveSubcategory = async () => {
+    if (!newSubcategoryName.trim()) {
+      setSubcategoryError(t('crm:internalListing.subcategoryNameRequired'));
+      return;
+    }
+
+    setIsSavingSubcategory(true);
+    setSubcategoryError(null);
+
+    try {
+      if (editingSubcategory) {
+        await onRenameInternalSubcategory(
+          editingSubcategory.name,
+          newSubcategoryName.trim(),
+          formData.type || 'supply',
+          formData.category || '',
+        );
+      } else {
+        await onCreateInternalSubcategory({
+          name: newSubcategoryName.trim(),
+          type: formData.type || 'supply',
+          category: formData.category || '',
+        });
+      }
+
+      // Reload subcategories
+      await loadSubcategories(formData.type || 'supply', formData.category || '');
+
+      // Reset form
+      setEditingSubcategory(null);
+      setNewSubcategoryName('');
+    } catch (err: unknown) {
+      setSubcategoryError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsSavingSubcategory(false);
+    }
+  };
+
+  const handleEditSubcategory = (subcategory: InternalProductSubcategory) => {
+    setEditingSubcategory(subcategory);
+    setNewSubcategoryName(subcategory.name);
+    setSubcategoryError(null);
+  };
+
+  const handleDeleteSubcategory = async (subcategory: InternalProductSubcategory) => {
+    if (subcategory.productCount > 0) {
+      const confirmed = window.confirm(
+        t('crm:internalListing.deleteSubcategoryWithProducts', {
+          count: subcategory.productCount,
+          name: subcategory.name,
+        }),
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      await onDeleteInternalSubcategory(
+        subcategory.name,
+        formData.type || 'supply',
+        formData.category || '',
+      );
+
+      // If the deleted subcategory was selected, clear it
+      if (formData.subcategory === subcategory.name) {
+        setFormData((prev) => ({ ...prev, subcategory: '' }));
+      }
+
+      // Reload subcategories
+      await loadSubcategories(formData.type || 'supply', formData.category || '');
+    } catch (err: unknown) {
+      setSubcategoryError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleCancelSubcategoryEdit = () => {
+    setEditingSubcategory(null);
+    setNewSubcategoryName('');
+    setSubcategoryError(null);
+  };
+
+  // Get unique categories from the API (includes both persisted and product-derived)
+  const availableCategories = useMemo(() => {
+    return categories.map((c) => c.name).sort();
+  }, [categories]);
 
   const categoryOptions: Option[] = availableCategories.map((c) => ({ id: c, name: c }));
 
   // Get available subcategories based on category
-  const availableSubcategories = React.useMemo(() => {
-    const category = formData.category;
-    if (!category) return [];
-
-    // Include subcategories currently used by products with this category
-    const used = products
-      .filter((p) => p.category === category)
-      .map((p) => p.subcategory)
-      .filter((subcategory): subcategory is string => Boolean(subcategory));
-
-    return Array.from(new Set(used)).sort();
-  }, [formData.category, products]);
+  const availableSubcategories = useMemo(() => {
+    return subcategories.map((s) => s.name).sort();
+  }, [subcategories]);
 
   const subcategoryOptions: Option[] = availableSubcategories.map((s) => ({ id: s, name: s }));
 
@@ -304,6 +537,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     { id: 'supply', name: t('crm:internalListing.typeSupply') },
     { id: 'service', name: t('crm:internalListing.typeService') },
     { id: 'consulting', name: t('crm:internalListing.typeConsulting') },
+  ];
+
+  const costUnitOptions: Option[] = [
+    { id: 'unit', name: t('crm:internalListing.unit') },
+    { id: 'hours', name: t('crm:internalListing.hour') },
   ];
 
   // Helper to get localized name for product types
@@ -324,15 +562,16 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const handleTypeChange = (val: string) => {
     const type = val as Product['type'];
-    // costUnit is auto-derived from type on backend:
-    // supply -> 'unit', service/consulting -> 'hours'
+
+    // Find first category of this type and use its costUnit
+    const firstCategory = categories.find((c) => c.type === type);
 
     setFormData({
       ...formData,
       type,
-      costUnit: type === 'supply' ? 'unit' : 'hours',
-      category: '', // Reset category as it depends on type
-      subcategory: '', // Reset subcategory as it depends on category
+      costUnit: firstCategory?.costUnit || 'unit',
+      category: firstCategory?.name || '',
+      subcategory: '',
     });
     if (errors.type) {
       setErrors({ ...errors, type: '' });
@@ -359,112 +598,249 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Add Category Modal */}
+      {/* Manage Categories Modal */}
       <Modal
-        isOpen={isAddCategoryModalOpen}
-        onClose={() => setIsAddCategoryModalOpen(false)}
+        isOpen={isManageCategoriesModalOpen}
+        onClose={() => setIsManageCategoriesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
-                <i className="fa-solid fa-plus"></i>
+                <i className="fa-solid fa-folder-tree"></i>
               </div>
-              {t('crm:internalListing.addCategoryModalTitle')}
+              {t('crm:internalListing.manageCategories')}
             </h3>
             <button
-              onClick={() => setIsAddCategoryModalOpen(false)}
+              onClick={() => setIsManageCategoriesModalOpen(false)}
               className="text-slate-400 hover:text-slate-600"
             >
               <i className="fa-solid fa-xmark"></i>
             </button>
           </div>
-          <div className="p-6 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('crm:internalListing.categoryName')}
-              </label>
-              <input
-                type="text"
-                autoFocus
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                placeholder={t('crm:internalListing.categoryNamePlaceholder')}
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-              />
+
+          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            {/* Add/Edit Category Form */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:internalListing.categoryName')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder={t('crm:internalListing.categoryNamePlaceholder')}
+                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:internalListing.costUnit')}
+                  </label>
+                  <CustomSelect
+                    options={costUnitOptions}
+                    value={newCategoryCostUnit}
+                    onChange={(val) => setNewCategoryCostUnit(val as 'unit' | 'hours')}
+                    searchable={false}
+                    buttonClassName="py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              {categoryError && <p className="text-red-500 text-xs font-bold">{categoryError}</p>}
+
+              <div className="flex justify-end gap-2">
+                {editingCategory && (
+                  <button
+                    onClick={handleCancelCategoryEdit}
+                    className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    {t('common:buttons.cancel')}
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveCategory}
+                  disabled={isSavingCategory || !newCategoryName.trim()}
+                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingCategory
+                    ? t('common:buttons.saving')
+                    : editingCategory
+                      ? t('common:buttons.update')
+                      : t('common:buttons.add')}
+                </button>
+              </div>
             </div>
-            <div className="flex justify-between gap-3">
-              <button
-                onClick={() => setIsAddCategoryModalOpen(false)}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-              >
-                {t('crm:internalListing.cancel')}
-              </button>
-              <button
-                onClick={handleAddCategory}
-                className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-              >
-                {t('crm:internalListing.addCategory')}
-              </button>
+
+            {/* Categories List */}
+            <div className="space-y-2">
+              {isLoadingCategories ? (
+                <div className="flex items-center justify-center py-8">
+                  <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+                </div>
+              ) : categories.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p>{t('crm:internalListing.noCategories')}</p>
+                </div>
+              ) : (
+                categories.map((category) => (
+                  <div
+                    key={category.id}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-slate-700">{category.name}</span>
+                      <span className="text-[10px] px-2 py-0.5 bg-slate-200 rounded-full text-slate-600 font-semibold">
+                        {category.costUnit === 'hours'
+                          ? t('crm:internalListing.hour')
+                          : t('crm:internalListing.unit')}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {category.productCount} {t('crm:internalListing.products')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleEditCategory(category)}
+                        className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                        title={t('common:buttons.edit')}
+                      >
+                        <i className="fa-solid fa-pen"></i>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(category)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title={t('common:buttons.delete')}
+                      >
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       </Modal>
 
-      {/* Add Subcategory Modal */}
+      {/* Manage Subcategories Modal */}
       <Modal
-        isOpen={isAddSubcategoryModalOpen}
-        onClose={() => setIsAddSubcategoryModalOpen(false)}
+        isOpen={isManageSubcategoriesModalOpen}
+        onClose={() => setIsManageSubcategoriesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
-              {t('crm:internalListing.addSubcategoryModalTitle')}
+              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                <i className="fa-solid fa-folder-open"></i>
+              </div>
+              {t('crm:internalListing.manageSubcategories')}
+              <span className="text-sm font-normal text-slate-500">({formData.category})</span>
             </h3>
             <button
-              onClick={() => setIsAddSubcategoryModalOpen(false)}
+              onClick={() => setIsManageSubcategoriesModalOpen(false)}
               className="text-slate-400 hover:text-slate-600"
             >
               <i className="fa-solid fa-xmark"></i>
             </button>
           </div>
-          <div className="p-6 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 ml-1">
-                {t('crm:internalListing.subcategoryName')}
-              </label>
-              <input
-                type="text"
-                autoFocus
-                value={newSubcategoryName}
-                onChange={(e) => setNewSubcategoryName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddSubcategory()}
-                placeholder={t('crm:internalListing.subcategoryNamePlaceholder')}
-                className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-              />
+
+          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            {/* Add/Edit Subcategory Form */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('crm:internalListing.subcategoryName')}
+                </label>
+                <input
+                  type="text"
+                  value={newSubcategoryName}
+                  onChange={(e) => setNewSubcategoryName(e.target.value)}
+                  placeholder={t('crm:internalListing.subcategoryNamePlaceholder')}
+                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveSubcategory()}
+                />
+              </div>
+
+              {subcategoryError && (
+                <p className="text-red-500 text-xs font-bold">{subcategoryError}</p>
+              )}
+
+              <div className="flex justify-end gap-2">
+                {editingSubcategory && (
+                  <button
+                    onClick={handleCancelSubcategoryEdit}
+                    className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    {t('common:buttons.cancel')}
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveSubcategory}
+                  disabled={isSavingSubcategory || !newSubcategoryName.trim()}
+                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingSubcategory
+                    ? t('common:buttons.saving')
+                    : editingSubcategory
+                      ? t('common:buttons.update')
+                      : t('common:buttons.add')}
+                </button>
+              </div>
             </div>
-            <div className="flex justify-between gap-3">
-              <button
-                onClick={() => setIsAddSubcategoryModalOpen(false)}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-              >
-                {t('crm:internalListing.cancel')}
-              </button>
-              <button
-                onClick={handleAddSubcategory}
-                className="px-6 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95"
-              >
-                {t('crm:internalListing.add')}
-              </button>
+
+            {/* Subcategories List */}
+            <div className="space-y-2">
+              {isLoadingSubcategories ? (
+                <div className="flex items-center justify-center py-8">
+                  <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+                </div>
+              ) : subcategories.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p>{t('crm:internalListing.noSubcategories')}</p>
+                </div>
+              ) : (
+                subcategories.map((subcategory) => (
+                  <div
+                    key={subcategory.name}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-slate-700">{subcategory.name}</span>
+                      <span className="text-xs text-slate-400">
+                        {subcategory.productCount} {t('crm:internalListing.products')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleEditSubcategory(subcategory)}
+                        className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                        title={t('common:buttons.edit')}
+                      >
+                        <i className="fa-solid fa-pen"></i>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubcategory(subcategory)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title={t('common:buttons.delete')}
+                      >
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       </Modal>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Product Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -583,10 +959,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => setIsAddCategoryModalOpen(true)}
+                      onClick={handleOpenManageCategories}
                       className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
                     >
-                      <i className="fa-solid fa-plus"></i> {t('crm:internalListing.addCategory')}
+                      <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                     </button>
                   </div>
                   <CustomSelect
@@ -607,11 +983,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => setIsAddSubcategoryModalOpen(true)}
-                      disabled={!formData.category} // Disable if no category selected
+                      onClick={handleOpenManageSubcategories}
+                      disabled={!formData.category}
                       className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 ${!formData.category ? 'text-slate-300 cursor-not-allowed' : 'text-praetor hover:text-slate-700'}`}
                     >
-                      <i className="fa-solid fa-plus"></i> {t('crm:internalListing.addSubcategory')}
+                      <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
                     </button>
                   </div>
                   <CustomSelect
@@ -661,7 +1037,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:internalListing.cost')}<span className="text-slate-400 font-semibold">/{formData.costUnit === 'hours' ? t('crm:internalListing.hour') : t('crm:internalListing.unit')}</span>
+                    {t('crm:internalListing.cost')}
+                    <span className="text-slate-400 font-semibold">
+                      /
+                      {formData.costUnit === 'hours'
+                        ? t('crm:internalListing.hour')
+                        : t('crm:internalListing.unit')}
+                    </span>
                   </label>
                   <div className="flex gap-2">
                     <ValidatedNumberInput
@@ -846,7 +1228,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             header: t('crm:internalListing.cost'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
-            accessorFn: (row) => Number(row.costo), // Numeric for sorting
+            accessorFn: (row) => Number(row.costo),
             filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ row: p }) => (
               <span className="text-sm font-semibold text-slate-500">
@@ -873,7 +1255,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             header: t('crm:internalListing.salePrice'),
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
-            id: 'salePrice', // calculated
+            id: 'salePrice',
             accessorFn: (row) => calcSalePrice(Number(row.costo), Number(row.molPercentage)),
             filterFormat: (val) => Number(val).toFixed(2),
             cell: ({ row: p, value }) => (
@@ -909,7 +1291,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           },
           {
             header: t('common:labels.status'),
-            accessorKey: 'isDisabled', // Use as accessor for filtering (true/false)
+            accessorKey: 'isDisabled',
             id: 'status',
             cell: ({ row: p }) => (
               <StatusBadge
@@ -919,8 +1301,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 }
               />
             ),
-            // We might want to customize filter options for boolean, but string logic 'true'/'false' works basic.
-            // Ideally we map true->Disabled, false->Active for filtering value.
             accessorFn: (row) =>
               row.isDisabled ? t('crm:internalListing.disabled') : t('crm:internalListing.active'),
           },
