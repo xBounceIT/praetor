@@ -614,7 +614,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                   </div>
                   <CustomSelect
                     options={typeOptions}
-                    value={formData.type || 'supply'}
+                    value={formData.type || (productTypes[0]?.name ?? '')}
                     onChange={(val) => handleTypeChange(val as string)}
                     searchable={false}
                     buttonClassName={

@@ -961,23 +961,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Update category
-      const updateResult = await query(
-        `UPDATE internal_product_categories 
-         SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3
-         RETURNING id, name, type, cost_unit as "costUnit", 
-                    created_at as "createdAt", updated_at as "updatedAt"`,
-        [newName, expectedCostUnit, idResult.value],
-      );
-
-      // If name changed, update all matching products
-      if (newName !== current.name) {
-        await query(
-          'UPDATE products SET category = $1, cost_unit = $2 WHERE category = $3 AND type = $4 AND supplier_id IS NULL',
-          [newName, expectedCostUnit, current.name, current.type],
+      // Update category and products atomically
+      const updateResult = await withTransaction(async (tx) => {
+        const result = await tx.query(
+          `UPDATE internal_product_categories
+           SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3
+           RETURNING id, name, type, cost_unit as "costUnit",
+                      created_at as "createdAt", updated_at as "updatedAt"`,
+          [newName, expectedCostUnit, idResult.value],
         );
-      }
+
+        if (newName !== current.name) {
+          await tx.query(
+            'UPDATE products SET category = $1, cost_unit = $2 WHERE category = $3 AND type = $4 AND supplier_id IS NULL',
+            [newName, expectedCostUnit, current.name, current.type],
+          );
+        }
+
+        return result;
+      });
 
       await bumpNamespaceVersion('products');
       await logAudit({
