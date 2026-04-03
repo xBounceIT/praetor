@@ -404,7 +404,7 @@ const TrackerView: React.FC<{
           )}
 
           <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
               <DailyView
                 clients={clients}
                 projects={projects}
@@ -418,7 +418,7 @@ const TrackerView: React.FC<{
                 defaultLocation={defaultLocation}
               />
 
-              <div className="w-full xl:max-w-[300px]">
+              <div className="w-full xl:max-w-[300px] xl:h-full">
                 <Calendar
                   selectedDate={selectedDate}
                   onDateSelect={setSelectedDate}

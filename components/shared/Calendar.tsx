@@ -233,7 +233,7 @@ const Calendar: React.FC<CalendarProps> = ({
   return (
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm w-full relative ${
-        isCompact ? 'p-3' : 'p-4'
+        isCompact ? 'p-3 h-full flex flex-col' : 'p-4'
       }`}
       ref={containerRef}
     >
@@ -377,7 +377,7 @@ const Calendar: React.FC<CalendarProps> = ({
       {selectionMode === 'single' && (
         <div
           className={`border-t border-slate-100 flex items-center gap-2 ${
-            isCompact ? 'mt-3 pt-2' : 'mt-4 pt-3'
+            isCompact ? 'mt-auto pt-2' : 'mt-4 pt-3'
           }`}
         >
           <div className="w-2 h-2 rounded-full bg-red-500"></div>
