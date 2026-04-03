@@ -2117,11 +2117,7 @@ const App: React.FC = () => {
     return api.products.listInternalCategories(type);
   };
 
-  const handleCreateInternalCategory = async (categoryData: {
-    name: string;
-    type: string;
-    costUnit: 'unit' | 'hours';
-  }) => {
+  const handleCreateInternalCategory = async (categoryData: { name: string; type: string }) => {
     try {
       await api.products.createInternalCategory(categoryData);
     } catch (err) {
@@ -2130,13 +2126,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateInternalCategory = async (
-    id: string,
-    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
-  ) => {
+  const handleUpdateInternalCategory = async (id: string, updates: Partial<{ name: string }>) => {
     try {
       await api.products.updateInternalCategory(id, updates);
-      // Refresh products to get updated costUnit values
+      // Refresh products to pick up category renames in existing rows.
       const updatedProducts = await api.products.list();
       setProducts(updatedProducts);
     } catch (err) {

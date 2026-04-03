@@ -22,15 +22,8 @@ export interface InternalListingViewProps {
   currency: string;
   // Category/Subcategory management
   onListInternalCategories: (type: string) => Promise<InternalProductCategory[]>;
-  onCreateInternalCategory: (categoryData: {
-    name: string;
-    type: string;
-    costUnit: 'unit' | 'hours';
-  }) => Promise<void>;
-  onUpdateInternalCategory: (
-    id: string,
-    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
-  ) => Promise<void>;
+  onCreateInternalCategory: (categoryData: { name: string; type: string }) => Promise<void>;
+  onUpdateInternalCategory: (id: string, updates: Partial<{ name: string }>) => Promise<void>;
   onDeleteInternalCategory: (id: string) => Promise<void>;
   onListInternalSubcategories: (
     type: string,
@@ -49,6 +42,10 @@ export interface InternalListingViewProps {
   ) => Promise<void>;
   onDeleteInternalSubcategory: (name: string, type: string, category: string) => Promise<void>;
 }
+
+const getCostUnitForType = (type: Product['type'] | undefined): Product['costUnit'] => {
+  return type === 'service' || type === 'consulting' ? 'hours' : 'unit';
+};
 
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
@@ -81,7 +78,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [editingCategory, setEditingCategory] = useState<InternalProductCategory | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryCostUnit, setNewCategoryCostUnit] = useState<'unit' | 'hours'>('unit');
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
 
@@ -103,7 +99,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     description: '',
     costo: undefined,
     molPercentage: undefined,
-    costUnit: 'unit',
+    costUnit: getCostUnitForType('supply'),
     category: '',
     subcategory: '',
     taxRate: 22,
@@ -158,20 +154,16 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
   }, [isModalOpen, formData.type, formData.category, loadSubcategories]);
 
-  // When category selection changes, update costUnit from category
+  // Keep the displayed unit aligned with the selected internal product type.
   useEffect(() => {
-    if (formData.category && formData.type) {
-      const category = categories.find(
-        (c) => c.name === formData.category && c.type === formData.type,
-      );
-      if (category) {
-        setFormData((prev) => {
-          if (prev.costUnit === category.costUnit) return prev;
-          return { ...prev, costUnit: category.costUnit };
-        });
-      }
-    }
-  }, [formData.category, formData.type, categories]);
+    if (!formData.type) return;
+
+    const nextCostUnit = getCostUnitForType(formData.type);
+    setFormData((prev) => {
+      if (prev.costUnit === nextCostUnit) return prev;
+      return { ...prev, costUnit: nextCostUnit };
+    });
+  }, [formData.type]);
 
   // Auto-select first category when categories load (only for new products, not when editing)
   useEffect(() => {
@@ -180,7 +172,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       setFormData((prev) => ({
         ...prev,
         category: firstCategory.name,
-        costUnit: firstCategory.costUnit,
         subcategory: '',
       }));
     }
@@ -195,7 +186,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: 'unit',
+      costUnit: getCostUnitForType('supply'),
       category: '',
       subcategory: '',
       taxRate: 22,
@@ -214,7 +205,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       description: product.description || '',
       costo: product.costo || 0,
       molPercentage: product.molPercentage || 0,
-      costUnit: product.costUnit || 'unit',
+      costUnit: getCostUnitForType(product.type),
       category: product.category || '',
       subcategory: product.subcategory || '',
       taxRate: product.taxRate || 0,
@@ -362,7 +353,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setIsManageCategoriesModalOpen(true);
     setEditingCategory(null);
     setNewCategoryName('');
-    setNewCategoryCostUnit('unit');
     setCategoryError(null);
   };
 
@@ -379,13 +369,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       if (editingCategory) {
         await onUpdateInternalCategory(editingCategory.id, {
           name: newCategoryName.trim(),
-          costUnit: newCategoryCostUnit,
         });
       } else {
         await onCreateInternalCategory({
           name: newCategoryName.trim(),
           type: formData.type || 'supply',
-          costUnit: newCategoryCostUnit,
         });
       }
 
@@ -404,7 +392,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       // Reset form
       setEditingCategory(null);
       setNewCategoryName('');
-      setNewCategoryCostUnit('unit');
     } catch (err: unknown) {
       setCategoryError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -415,7 +402,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const handleEditCategory = (category: InternalProductCategory) => {
     setEditingCategory(category);
     setNewCategoryName(category.name);
-    setNewCategoryCostUnit(category.costUnit);
     setCategoryError(null);
   };
 
@@ -448,7 +434,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const handleCancelCategoryEdit = () => {
     setEditingCategory(null);
     setNewCategoryName('');
-    setNewCategoryCostUnit('unit');
     setCategoryError(null);
   };
 
@@ -566,11 +551,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     { id: 'consulting', name: t('crm:internalListing.typeConsulting') },
   ];
 
-  const costUnitOptions: Option[] = [
-    { id: 'unit', name: t('crm:internalListing.unit') },
-    { id: 'hours', name: t('crm:internalListing.hour') },
-  ];
-
   // Helper to get localized name for product types
   const getLocalizedTypeName = (type: string) => {
     switch (type) {
@@ -593,7 +573,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setFormData({
       ...formData,
       type,
-      costUnit: 'unit',
+      costUnit: getCostUnitForType(type),
       category: '',
       subcategory: '',
     });
@@ -647,32 +627,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
             {/* Add/Edit Category Form */}
             <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:internalListing.categoryName')}
-                  </label>
-                  <input
-                    type="text"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder={t('crm:internalListing.categoryNamePlaceholder')}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:internalListing.costUnit')}
-                  </label>
-                  <CustomSelect
-                    options={costUnitOptions}
-                    value={newCategoryCostUnit}
-                    onChange={(val) => setNewCategoryCostUnit(val as 'unit' | 'hours')}
-                    searchable={false}
-                    buttonClassName="py-2 text-sm"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('crm:internalListing.categoryName')}
+                </label>
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder={t('crm:internalListing.categoryNamePlaceholder')}
+                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
+                />
               </div>
 
               {categoryError && <p className="text-red-500 text-xs font-bold">{categoryError}</p>}
@@ -718,11 +684,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   >
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-slate-700">{category.name}</span>
-                      <span className="text-[10px] px-2 py-0.5 bg-slate-200 rounded-full text-slate-600 font-semibold">
-                        {category.costUnit === 'hours'
-                          ? t('crm:internalListing.hour')
-                          : t('crm:internalListing.unit')}
-                      </span>
                       <span className="text-xs text-slate-400">
                         {category.productCount} {t('crm:internalListing.products')}
                       </span>
@@ -1257,7 +1218,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p }) => (
               <span className="text-sm font-semibold text-slate-500">
                 {Number(p.costo).toFixed(2)} {currency} /{' '}
-                {p.costUnit === 'hours'
+                {getCostUnitForType(p.type) === 'hours'
                   ? t('crm:internalListing.hour')
                   : t('crm:internalListing.unit')}
               </span>
@@ -1285,7 +1246,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p, value }) => (
               <span className="text-sm font-semibold text-slate-700">
                 {Number(value).toFixed(2)} {currency} /{' '}
-                {p.costUnit === 'hours'
+                {getCostUnitForType(p.type) === 'hours'
                   ? t('crm:internalListing.hour')
                   : t('crm:internalListing.unit')}
               </span>

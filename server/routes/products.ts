@@ -84,6 +84,10 @@ const productUpdateBodySchema = {
   },
 } as const;
 
+const getCostUnitForType = (type: string): 'unit' | 'hours' => {
+  return type === 'service' || type === 'consulting' ? 'hours' : 'unit';
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // All product routes require authentication
   fastify.addHook('onRequest', authenticateToken);
@@ -243,33 +247,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
-      // Derive costUnit:
-      // - For external products (with supplierId): use frontend-supplied costUnit or default by type
-      // - For internal products: derive from the selected category's cost_unit if category exists
+      // Internal products always derive their unit from type.
+      // External products keep their explicitly configured unit.
       let expectedCostUnit: string;
       if (supplierId) {
         const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
         expectedCostUnit = costUnitResult.ok
           ? costUnitResult.value
-          : typeResult.value === 'supply'
-            ? 'unit'
-            : 'hours';
+          : getCostUnitForType(typeResult.value);
       } else {
-        // Internal product: derive from category if provided
-        if (category) {
-          const catResult = await query(
-            'SELECT cost_unit FROM internal_product_categories WHERE name = $1 AND type = $2',
-            [category, typeResult.value],
-          );
-          expectedCostUnit =
-            catResult.rows.length > 0
-              ? catResult.rows[0].cost_unit
-              : typeResult.value === 'supply'
-                ? 'unit'
-                : 'hours';
-        } else {
-          expectedCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
-        }
+        expectedCostUnit = getCostUnitForType(typeResult.value);
       }
 
       const id = 'p-' + Date.now();
@@ -453,8 +440,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Type - when type changes, handle costUnit appropriately
       let updatedType = currentProduct.type;
-      const updatedCategory =
-        body.category !== undefined ? body.category || null : currentProduct.category;
       const updatedSupplierId =
         body.supplierId !== undefined
           ? body.supplierId
@@ -488,31 +473,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(body.supplierId ? body.supplierId : null);
       }
 
-      // Cost Unit handling:
-      // - For external products (with supplierId): accept from request body if provided
-      // - For internal products: derive from category if category is set, otherwise from type
-      // Only recalculate costUnit when type, category, or supplierId changes (relevant for internal products)
+      // Internal products always derive their unit from type.
+      // External products keep an explicitly configurable unit.
       const isExternal = updatedSupplierId !== null;
       const costUnitRelevantFieldsChanged =
         body.type !== undefined || body.category !== undefined || body.supplierId !== undefined;
       let costUnitToSet: string | null = null;
 
       if (!isExternal && costUnitRelevantFieldsChanged) {
-        // Internal product: derive from category if available
-        if (updatedCategory) {
-          const catResult = await query(
-            'SELECT cost_unit FROM internal_product_categories WHERE name = $1 AND type = $2',
-            [updatedCategory, updatedType],
-          );
-          costUnitToSet =
-            catResult.rows.length > 0
-              ? catResult.rows[0].cost_unit
-              : updatedType === 'supply'
-                ? 'unit'
-                : 'hours';
-        } else {
-          costUnitToSet = updatedType === 'supply' ? 'unit' : 'hours';
-        }
+        costUnitToSet = getCostUnitForType(updatedType);
         fields.push(`cost_unit = $${paramIndex++}`);
         values.push(costUnitToSet);
       } else if (isExternal && body.costUnit !== undefined) {
@@ -764,7 +733,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       const result = await query(
-        `SELECT c.id, c.name, c.type, c.cost_unit as "costUnit", 
+        `SELECT c.id, c.name, c.type,
+                CASE c.type
+                  WHEN 'service' THEN 'hours'
+                  WHEN 'consulting' THEN 'hours'
+                  ELSE 'unit'
+                END as "costUnit",
                 c.created_at as "createdAt", c.updated_at as "updatedAt",
                 COALESCE(p.count, 0) as "productCount"
          FROM internal_product_categories c
@@ -801,9 +775,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           properties: {
             name: { type: 'string' },
             type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
-            costUnit: { type: 'string', enum: ['unit', 'hours'] },
           },
-          required: ['name', 'type', 'costUnit'],
+          required: ['name', 'type'],
         },
         response: {
           201: categorySchema,
@@ -812,10 +785,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name, type, costUnit } = request.body as {
+      const { name, type } = request.body as {
         name: unknown;
         type: unknown;
-        costUnit: unknown;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -823,9 +795,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
-
-      const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
-      if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
 
       // Check uniqueness within type
       const existingResult = await query(
@@ -837,12 +806,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const id = 'ipc-' + crypto.randomUUID();
+      const costUnit = getCostUnitForType(typeResult.value);
       const result = await query(
         `INSERT INTO internal_product_categories (id, name, type, cost_unit) 
          VALUES ($1, $2, $3, $4)
          RETURNING id, name, type, cost_unit as "costUnit", 
                    created_at as "createdAt", updated_at as "updatedAt"`,
-        [id, nameResult.value, typeResult.value, costUnitResult.value],
+        [id, nameResult.value, typeResult.value, costUnit],
       );
 
       await bumpNamespaceVersion('products');
@@ -879,7 +849,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: 'object',
           properties: {
             name: { type: 'string' },
-            costUnit: { type: 'string', enum: ['unit', 'hours'] },
           },
         },
         response: {
@@ -890,14 +859,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as { name?: unknown; costUnit?: unknown };
+      const body = request.body as { name?: unknown };
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Get current category
       const currentResult = await query(
-        'SELECT id, name, type, cost_unit as "costUnit" FROM internal_product_categories WHERE id = $1',
+        'SELECT id, name, type FROM internal_product_categories WHERE id = $1',
         [idResult.value],
       );
       if (currentResult.rows.length === 0) {
@@ -906,20 +875,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const current = currentResult.rows[0];
 
       let newName = current.name;
-      let newCostUnit = current.costUnit;
+      const expectedCostUnit = getCostUnitForType(current.type);
 
       // Validate name update
       if (body.name !== undefined) {
         const nameResult = requireNonEmptyString(body.name, 'name');
         if (!nameResult.ok) return badRequest(reply, nameResult.message);
         newName = nameResult.value;
-      }
-
-      // Validate costUnit update
-      if (body.costUnit !== undefined) {
-        const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
-        if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-        newCostUnit = costUnitResult.value;
       }
 
       // Check uniqueness if name is changing
@@ -939,23 +901,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
          WHERE id = $3
          RETURNING id, name, type, cost_unit as "costUnit", 
-                   created_at as "createdAt", updated_at as "updatedAt"`,
-        [newName, newCostUnit, idResult.value],
+                    created_at as "createdAt", updated_at as "updatedAt"`,
+        [newName, expectedCostUnit, idResult.value],
       );
 
       // If name changed, update all matching products
       if (newName !== current.name) {
         await query(
-          'UPDATE products SET category = $1 WHERE category = $2 AND type = $3 AND supplier_id IS NULL',
-          [newName, current.name, current.type],
-        );
-      }
-
-      // If costUnit changed, update all matching products
-      if (newCostUnit !== current.costUnit) {
-        await query(
-          'UPDATE products SET cost_unit = $1 WHERE category = $2 AND type = $3 AND supplier_id IS NULL',
-          [newCostUnit, newName, current.type],
+          'UPDATE products SET category = $1, cost_unit = $2 WHERE category = $3 AND type = $4 AND supplier_id IS NULL',
+          [newName, expectedCostUnit, current.name, current.type],
         );
       }
 

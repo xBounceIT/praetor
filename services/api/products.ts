@@ -6,7 +6,6 @@ export interface InternalProductCategory {
   id: string;
   name: string;
   type: 'supply' | 'service' | 'consulting';
-  costUnit: 'unit' | 'hours';
   createdAt?: number;
   updatedAt?: number;
   productCount: number;
@@ -44,7 +43,6 @@ export const productsApi = {
   createInternalCategory: (categoryData: {
     name: string;
     type: string;
-    costUnit: 'unit' | 'hours';
   }): Promise<InternalProductCategory> =>
     fetchApi<InternalProductCategory>('/products/internal-categories', {
       method: 'POST',
@@ -53,7 +51,7 @@ export const productsApi = {
 
   updateInternalCategory: (
     id: string,
-    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
+    updates: Partial<{ name: string }>,
   ): Promise<InternalProductCategory> =>
     fetchApi<InternalProductCategory>(`/products/internal-categories/${id}`, {
       method: 'PUT',

@@ -1488,6 +1488,33 @@ BEGIN
     END IF;
 END $$;
 
+-- Normalize internal category and product units to follow product type.
+UPDATE internal_product_categories
+SET cost_unit = CASE type
+    WHEN 'service' THEN 'hours'
+    WHEN 'consulting' THEN 'hours'
+    ELSE 'unit'
+END
+WHERE cost_unit IS DISTINCT FROM CASE type
+    WHEN 'service' THEN 'hours'
+    WHEN 'consulting' THEN 'hours'
+    ELSE 'unit'
+END;
+
+UPDATE products
+SET cost_unit = CASE type
+    WHEN 'service' THEN 'hours'
+    WHEN 'consulting' THEN 'hours'
+    ELSE 'unit'
+END
+WHERE supplier_id IS NULL
+  AND type IN ('supply', 'service', 'consulting')
+  AND cost_unit IS DISTINCT FROM CASE type
+      WHEN 'service' THEN 'hours'
+      WHEN 'consulting' THEN 'hours'
+      ELSE 'unit'
+  END;
+
 -- Internal product subcategories table
 CREATE TABLE IF NOT EXISTS internal_product_subcategories (
     id VARCHAR(50) PRIMARY KEY,
