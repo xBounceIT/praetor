@@ -174,10 +174,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const taxAmount = lineNetAfterGlobal * (taxRate / 100);
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-      const cost = item.specialBidId
+      const baseCost = item.specialBidId
         ? Number(item.specialBidUnitPrice ?? 0)
         : Number(item.productCost ?? 0);
-      totalCost += item.quantity * cost;
+      const costMultiplier = item.unitType === 'days' ? 8 : 1;
+      totalCost += item.quantity * baseCost * costMultiplier;
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
