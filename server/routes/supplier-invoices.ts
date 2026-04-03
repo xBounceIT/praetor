@@ -421,10 +421,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (orderResult.rows.length === 0) {
           return reply.code(404).send({ error: 'Source order not found' });
         }
-        if (orderResult.rows[0].status !== 'confirmed') {
-          return reply
-            .code(409)
-            .send({ error: 'Invoices can only be created from confirmed orders' });
+        if (orderResult.rows[0].status !== 'sent') {
+          return reply.code(409).send({ error: 'Invoices can only be created from sent orders' });
         }
 
         const existingInvoiceResult = await query(

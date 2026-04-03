@@ -248,7 +248,7 @@ INSERT INTO suppliers (
         'IT20000000003',
         'SCRVRL80A03A944W',
         '60gg',
-        'Security supplier used for confirmed purchase flow and paid supplier invoice coverage.',
+        'Security supplier used for sent purchase flow and paid supplier invoice coverage.',
         CURRENT_TIMESTAMP - INTERVAL '160 days'
     ),
     (
@@ -898,9 +898,9 @@ INSERT INTO supplier_quotes (
     ('dm_sq_09', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '39 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
     ('dm_sq_10', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '6 days', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days'),
     ('dm_sq_11', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '14 days', 'Accepted supplier quote linked to a draft order for editable procurement flow.', CURRENT_TIMESTAMP - INTERVAL '52 days', CURRENT_TIMESTAMP - INTERVAL '48 days'),
-    ('dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '11 days', 'Accepted supplier quote linked to a confirmed licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
-    ('dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '8 days', 'Accepted supplier quote linked to a confirmed order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
-    ('dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '6 days', 'Accepted supplier quote linked to a denied supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
+    ('dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '11 days', 'Accepted supplier quote linked to a sent licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
+    ('dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '8 days', 'Accepted supplier quote linked to a sent order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
+    ('dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '6 days', 'Accepted supplier quote linked to a sent supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
 ON CONFLICT (id) DO UPDATE SET
     supplier_id = EXCLUDED.supplier_id,
     supplier_name = EXCLUDED.supplier_name,
@@ -944,10 +944,10 @@ FROM (
         ('dm_sqi_09', 'dm_sq_09', 'dm_prd_06', 40.00, 183.00, 0.00, 'Denied supplier licensing quote'),
         ('dm_sqi_10', 'dm_sq_10', 'dm_prd_08', 150.00, 119.00, 0.00, 'Expired print procurement request'),
         ('dm_sqi_11', 'dm_sq_11', 'dm_prd_05', 4.00, 960.00, 0.00, 'Accepted quote feeding the editable draft procurement order'),
-        ('dm_sqi_12', 'dm_sq_12', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted quote feeding the confirmed licensing order'),
+        ('dm_sqi_12', 'dm_sq_12', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted quote feeding the sent licensing order'),
         ('dm_sqi_13', 'dm_sq_13', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted quote feeding the invoiced security order'),
         ('dm_sqi_14', 'dm_sq_13', 'dm_prd_08', 40.00, 118.00, 0.00, 'Accepted quote feeding the invoiced print materials order'),
-        ('dm_sqi_15', 'dm_sq_14', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted quote feeding the denied supplier order')
+        ('dm_sqi_15', 'dm_sq_14', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted quote feeding the sent supplier order')
 ) AS v(id, quote_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -978,9 +978,9 @@ INSERT INTO supplier_offers (
     ('dm_sfo_04', 'dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted supplier offer already converted into a supplier order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
     ('dm_sfo_05', 'dm_sq_08', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier offer for historical coverage.', CURRENT_TIMESTAMP - INTERVAL '44 days', CURRENT_TIMESTAMP - INTERVAL '42 days'),
     ('dm_sfo_06', 'dm_sq_11', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '13 days', 'Accepted supplier offer already converted into an editable draft order.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '42 days'),
-    ('dm_sfo_07', 'dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '10 days', 'Accepted supplier offer already converted into a confirmed licensing order.', CURRENT_TIMESTAMP - INTERVAL '35 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
-    ('dm_sfo_08', 'dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '7 days', 'Accepted supplier offer already converted into a confirmed invoiced order.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days'),
-    ('dm_sfo_09', 'dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '5 days', 'Accepted supplier offer already converted into a denied supplier order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '15 days')
+    ('dm_sfo_07', 'dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '10 days', 'Accepted supplier offer already converted into a sent licensing order.', CURRENT_TIMESTAMP - INTERVAL '35 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
+    ('dm_sfo_08', 'dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '7 days', 'Accepted supplier offer already converted into a sent invoiced order.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days'),
+    ('dm_sfo_09', 'dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '5 days', 'Accepted supplier offer already converted into a sent supplier order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '15 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     supplier_id = EXCLUDED.supplier_id,
@@ -1022,10 +1022,10 @@ FROM (
         ('dm_sfoi_04', 'dm_sfo_04', 'dm_prd_08', 200.00, 118.00, 2.00, 'Accepted print offer already linked to an order'),
         ('dm_sfoi_05', 'dm_sfo_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Denied hardware offer'),
         ('dm_sfoi_06', 'dm_sfo_06', 'dm_prd_05', 4.00, 960.00, 0.00, 'Accepted hardware offer already linked to a draft order'),
-        ('dm_sfoi_07', 'dm_sfo_07', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted licensing offer already linked to a confirmed order'),
+        ('dm_sfoi_07', 'dm_sfo_07', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted licensing offer already linked to a sent order'),
         ('dm_sfoi_08', 'dm_sfo_08', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security offer already linked to an invoiced order'),
         ('dm_sfoi_09', 'dm_sfo_08', 'dm_prd_08', 40.00, 118.00, 0.00, 'Accepted print materials offer already linked to an invoiced order'),
-        ('dm_sfoi_10', 'dm_sfo_09', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted hardware offer already linked to a denied order')
+        ('dm_sfoi_10', 'dm_sfo_09', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted hardware offer already linked to a sent order')
 ) AS v(id, offer_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -1053,9 +1053,9 @@ INSERT INTO supplier_sales (
 ) VALUES
     ('dm_ss_01', 'dm_sq_11', 'dm_sfo_06', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware offer.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
     ('dm_ss_02', 'dm_sq_07', 'dm_sfo_04', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
-    ('dm_ss_03', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'confirmed', 'Confirmed supplier order generated from an accepted security offer and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_ss_05', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', 'Denied supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
+    ('dm_ss_03', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'sent', 'Sent supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'sent', 'Sent supplier order generated from an accepted security offer and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_ss_05', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'sent', 'Sent supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     linked_offer_id = EXCLUDED.linked_offer_id,
@@ -1093,10 +1093,10 @@ FROM (
     VALUES
         ('dm_ssi_01', 'dm_ss_01', 'dm_prd_05', 4.00, 960.00, 0.00, 'Draft hardware procurement order'),
         ('dm_ssi_02', 'dm_ss_02', 'dm_prd_08', 200.00, 118.00, 2.00, 'Linked print procurement order in sent status'),
-        ('dm_ssi_03', 'dm_ss_03', 'dm_prd_06', 80.00, 182.00, 0.00, 'Confirmed licensing order without invoice'),
-        ('dm_ssi_04', 'dm_ss_04', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Confirmed security appliance order'),
-        ('dm_ssi_05', 'dm_ss_04', 'dm_prd_08', 40.00, 118.00, 0.00, 'Confirmed print materials order'),
-        ('dm_ssi_06', 'dm_ss_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Denied supplier hardware order')
+        ('dm_ssi_03', 'dm_ss_03', 'dm_prd_06', 80.00, 182.00, 0.00, 'Sent licensing order without invoice'),
+        ('dm_ssi_04', 'dm_ss_04', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Sent security appliance order'),
+        ('dm_ssi_05', 'dm_ss_04', 'dm_prd_08', 40.00, 118.00, 0.00, 'Sent print materials order'),
+        ('dm_ssi_06', 'dm_ss_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Sent supplier hardware order')
 ) AS v(id, sale_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -1127,7 +1127,7 @@ INSERT INTO supplier_invoices (
 ) VALUES
     ('dm_sinv_01', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 422.40, 2342.40, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
     ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 3203.20, 17763.20, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
-    ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 1348.60, 7478.60, 7478.60, 'Paid supplier invoice linked to a confirmed order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 1348.60, 7478.60, 7478.60, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
     ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 5192.00, 28792.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
     ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 211.20, 1171.20, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
 ON CONFLICT (id) DO UPDATE SET
