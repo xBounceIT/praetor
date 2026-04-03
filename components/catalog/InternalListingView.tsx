@@ -126,6 +126,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     taxRate: 22,
     type: '',
   });
+  const defaultProductType = productTypes[0];
+  const defaultTypeName = defaultProductType?.name || '';
+  const defaultTypeCostUnit = defaultProductType?.costUnit || 'unit';
 
   // Load product types on mount
   useEffect(() => {
@@ -230,20 +233,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const openAddModal = () => {
     setEditingProduct(null);
-    // Set initial state with first available type
-    const initialType = productTypes[0]?.name || '';
-    const initialCostUnit = productTypes[0]?.costUnit || 'unit';
     setFormData({
       name: '',
       productCode: '',
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: initialCostUnit,
+      costUnit: defaultTypeCostUnit,
       category: '',
       subcategory: '',
       taxRate: 22,
-      type: initialType,
+      type: defaultTypeName,
     });
     setErrors({});
     setServerError(null);
@@ -346,7 +346,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       }
     }
     const typeValue = formData.type;
-    if (!typeValue || !['supply', 'service', 'consulting', 'item'].includes(typeValue)) {
+    const isKnownType = productTypes.some((type) => type.name === typeValue);
+    if (!typeValue || (productTypes.length > 0 && !isKnownType)) {
       newErrors.type = t('common:validation.typeRequired');
     }
 
@@ -417,6 +418,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       return;
     }
 
+    const selectedType = formData.type || defaultTypeName;
+    if (!selectedType) {
+      setCategoryError(t('common:validation.typeRequired'));
+      return;
+    }
+
     setIsSavingCategory(true);
     setCategoryError(null);
 
@@ -428,12 +435,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       } else {
         await onCreateInternalCategory({
           name: newCategoryName.trim(),
-          type: formData.type || 'supply',
+          type: selectedType,
         });
       }
 
       // Reload categories
-      await loadCategories(formData.type || 'supply');
+      await loadCategories(selectedType);
 
       // If the renamed category was selected, update formData
       if (
@@ -556,17 +563,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const handleDeleteType = async (type: InternalProductType) => {
     if (type.productCount > 0 || type.categoryCount > 0) {
-      const confirmed = window.confirm(
-        t('crm:internalListing.deleteTypeWithProducts', {
+      setTypeError(
+        t('crm:internalListing.typeDeleteBlocked', {
           productCount: type.productCount,
           categoryCount: type.categoryCount,
           name: type.name,
         }),
       );
-      if (!confirmed) return;
+      return;
     }
 
     try {
+      setTypeError(null);
       await onDeleteProductType(type.id);
 
       // If the deleted type was selected, clear it
@@ -613,6 +621,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       return;
     }
 
+    const selectedType = formData.type || defaultTypeName;
+    if (!selectedType) {
+      setSubcategoryError(t('common:validation.typeRequired'));
+      return;
+    }
+
     setIsSavingSubcategory(true);
     setSubcategoryError(null);
 
@@ -621,19 +635,19 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         await onRenameInternalSubcategory(
           editingSubcategory.name,
           newSubcategoryName.trim(),
-          formData.type || 'supply',
+          selectedType,
           formData.category || '',
         );
       } else {
         await onCreateInternalSubcategory({
           name: newSubcategoryName.trim(),
-          type: formData.type || 'supply',
+          type: selectedType,
           category: formData.category || '',
         });
       }
 
       // Reload subcategories
-      await loadSubcategories(formData.type || 'supply', formData.category || '');
+      await loadSubcategories(selectedType, formData.category || '');
 
       // If the renamed subcategory was selected, update formData
       if (editingSubcategory && formData.subcategory === editingSubcategory.name) {
@@ -657,6 +671,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   };
 
   const handleDeleteSubcategory = async (subcategory: InternalProductSubcategory) => {
+    const selectedType = formData.type || defaultTypeName;
+    if (!selectedType) {
+      setSubcategoryError(t('common:validation.typeRequired'));
+      return;
+    }
+
     if (subcategory.productCount > 0) {
       const confirmed = window.confirm(
         t('crm:internalListing.deleteSubcategoryWithProducts', {
@@ -668,11 +688,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
 
     try {
-      await onDeleteInternalSubcategory(
-        subcategory.name,
-        formData.type || 'supply',
-        formData.category || '',
-      );
+      await onDeleteInternalSubcategory(subcategory.name, selectedType, formData.category || '');
 
       // If the deleted subcategory was selected, clear it
       if (formData.subcategory === subcategory.name) {
@@ -680,7 +696,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       }
 
       // Reload subcategories
-      await loadSubcategories(formData.type || 'supply', formData.category || '');
+      await loadSubcategories(selectedType, formData.category || '');
     } catch (err: unknown) {
       setSubcategoryError(err instanceof Error ? err.message : 'An error occurred');
     }
@@ -712,9 +728,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   };
 
   // Build type options from API-loaded product types
-  const typeOptions: Option[] = useMemo(() => {
-    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
-  }, [productTypes]);
+  const typeOptions: Option[] = productTypes.map((t) => ({
+    id: t.name,
+    name: getDisplayTypeName(t.name),
+  }));
 
   const handleTypeChange = (val: string) => {
     const typeName = val;
@@ -839,47 +856,68 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   <p>{t('crm:internalListing.noTypes')}</p>
                 </div>
               ) : (
-                productTypes.map((type) => (
-                  <div
-                    key={type.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-700">
-                        {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
-                      </span>
-                      <span className="text-xs font-medium px-2 py-1 bg-white rounded-lg text-slate-500 border border-slate-200">
-                        {type.costUnit === 'hours'
-                          ? t('crm:internalListing.hour')
-                          : t('crm:internalListing.unit')}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        {type.productCount} {t('crm:internalListing.products')}
-                        {type.categoryCount > 0 && (
-                          <>
-                            , {type.categoryCount} {t('crm:internalListing.categories')}
-                          </>
-                        )}
-                      </span>
+                productTypes.map((type) => {
+                  const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
+                  const deleteBlockedMessage = t('crm:internalListing.typeDeleteBlocked', {
+                    productCount: type.productCount,
+                    categoryCount: type.categoryCount,
+                    name: type.name,
+                  });
+
+                  return (
+                    <div
+                      key={type.id}
+                      className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-slate-700">
+                          {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
+                        </span>
+                        <span className="text-xs font-medium px-2 py-1 bg-white rounded-lg text-slate-500 border border-slate-200">
+                          {type.costUnit === 'hours'
+                            ? t('crm:internalListing.hour')
+                            : t('crm:internalListing.unit')}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {type.productCount} {t('crm:internalListing.products')}
+                          {type.categoryCount > 0 && (
+                            <>
+                              , {type.categoryCount} {t('crm:internalListing.categories')}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEditType(type)}
+                          className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                          title={t('common:buttons.edit')}
+                        >
+                          <i className="fa-solid fa-pen"></i>
+                        </button>
+                        <Tooltip
+                          label={isDeleteBlocked ? deleteBlockedMessage : ''}
+                          disabled={!isDeleteBlocked}
+                        >
+                          {() => (
+                            <button
+                              onClick={() => handleDeleteType(type)}
+                              disabled={isDeleteBlocked}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                isDeleteBlocked
+                                  ? 'text-slate-300 cursor-not-allowed'
+                                  : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                              }`}
+                              title={t('common:buttons.delete')}
+                            >
+                              <i className="fa-solid fa-trash"></i>
+                            </button>
+                          )}
+                        </Tooltip>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditType(type)}
-                        className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                        title={t('common:buttons.edit')}
-                      >
-                        <i className="fa-solid fa-pen"></i>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteType(type)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title={t('common:buttons.delete')}
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

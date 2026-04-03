@@ -166,6 +166,7 @@
     "typeNameRequired": "Type name is required",
     "noTypes": "No types found. Create your first product type.",
     "deleteTypeWithProducts": "Type '{{name}}' has {{productCount}} product(s) and {{categoryCount}} category(s). Are you sure you want to delete it?",
+    "typeDeleteBlocked": "Type '{{name}}' cannot be deleted while {{productCount}} product(s) and {{categoryCount}} category(s) still use it.",
     "editProductTooltip": "Edit Product",
     "disableProduct": "Disable Product",
     "enableProduct": "Enable Product",

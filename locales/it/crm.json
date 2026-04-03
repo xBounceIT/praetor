@@ -162,6 +162,7 @@
     "typeNameRequired": "Il nome del tipo è obbligatorio",
     "noTypes": "Nessun tipo trovato. Crea il tuo primo tipo di prodotto.",
     "deleteTypeWithProducts": "Il tipo '{{name}}' ha {{productCount}} prodotto(i) e {{categoryCount}} categoria(e). Sei sicuro di volerlo eliminare?",
+    "typeDeleteBlocked": "Il tipo '{{name}}' non puo essere eliminato mentre {{productCount}} prodotto(i) e {{categoryCount}} categoria(e) lo stanno ancora utilizzando.",
     "editProductTooltip": "Modifica Prodotto",
     "disableProduct": "Disabilita Prodotto",
     "enableProduct": "Abilita Prodotto",

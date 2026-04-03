@@ -72,6 +72,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     type: '',
     supplierId: '',
   });
+  const defaultProductType = productTypes[0];
 
   // Update default type when productTypes load (only once when types first load and no type selected)
   useEffect(() => {
@@ -127,11 +128,11 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: 'unit',
+      costUnit: defaultProductType?.costUnit || 'unit',
       category: '',
       subcategory: '',
       taxRate: 22,
-      type: 'supply',
+      type: defaultProductType?.name || '',
       supplierId: '',
     });
     setErrors({});
@@ -147,11 +148,11 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       description: product.description || '',
       costo: product.costo || 0,
       molPercentage: product.molPercentage || 0,
-      costUnit: product.costUnit || 'unit',
+      costUnit: product.costUnit || defaultProductType?.costUnit || 'unit',
       category: product.category || '',
       subcategory: product.subcategory || '',
       taxRate: product.taxRate || 0,
-      type: product.type || 'supply',
+      type: product.type || defaultProductType?.name || '',
       supplierId: product.supplierId || '',
     });
     setErrors({});
@@ -221,7 +222,8 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       }
     }
     const typeValue = formData.type;
-    if (!typeValue || !['supply', 'service', 'consulting', 'item'].includes(typeValue)) {
+    const isKnownType = productTypes.some((type) => type.name === typeValue);
+    if (!typeValue || (productTypes.length > 0 && !isKnownType)) {
       newErrors.type = t('common:validation.typeRequired');
     }
 
