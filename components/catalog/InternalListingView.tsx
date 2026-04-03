@@ -708,7 +708,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   // Build type options from API-loaded product types
   const typeOptions: Option[] = useMemo(() => {
-    return productTypes.map((t) => ({ id: t.name, name: t.name }));
+    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
   }, [productTypes]);
 
   // Helper to display type name (now just returns the name since types are user-managed)
@@ -781,43 +781,25 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <label className="text-xs font-bold text-slate-500 ml-1">
                   {t('crm:internalListing.typeName')}
                 </label>
-                <input
-                  type="text"
-                  value={newTypeName}
-                  onChange={(e) => setNewTypeName(e.target.value)}
-                  placeholder={t('crm:internalListing.typeNamePlaceholder')}
-                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('crm:internalListing.costUnit')}
-                </label>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewTypeCostUnit('unit')}
-                    className={`flex-1 px-3 py-2 text-sm font-bold rounded-xl transition-all ${
-                      newTypeCostUnit === 'unit'
-                        ? 'bg-praetor text-white'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {t('crm:internalListing.unit')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewTypeCostUnit('hours')}
-                    className={`flex-1 px-3 py-2 text-sm font-bold rounded-xl transition-all ${
-                      newTypeCostUnit === 'hours'
-                        ? 'bg-praetor text-white'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {t('crm:internalListing.hour')}
-                  </button>
+                  <input
+                    type="text"
+                    value={newTypeName}
+                    onChange={(e) => setNewTypeName(e.target.value)}
+                    placeholder={t('crm:internalListing.typeNamePlaceholder')}
+                    className="flex-1 text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
+                  />
+                  <CustomSelect
+                    options={[
+                      { id: 'unit', name: t('crm:internalListing.unit') },
+                      { id: 'hours', name: t('crm:internalListing.hour') },
+                    ]}
+                    value={newTypeCostUnit}
+                    onChange={(val) => setNewTypeCostUnit(val as 'unit' | 'hours')}
+                    searchable={false}
+                    buttonClassName="py-2 text-sm w-28"
+                  />
                 </div>
               </div>
 
@@ -880,7 +862,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                         )}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleEditType(type)}
                         className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
@@ -990,7 +972,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                         {category.productCount} {t('crm:internalListing.products')}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleEditCategory(category)}
                         className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
@@ -1103,7 +1085,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                         {subcategory.productCount} {t('crm:internalListing.products')}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleEditSubcategory(subcategory)}
                         className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
