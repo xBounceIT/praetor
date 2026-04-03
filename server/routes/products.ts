@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
@@ -1337,36 +1337,52 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // Update subcategory in the table
-      const subResult = await query(
-        `UPDATE internal_product_subcategories 
-         SET name = $1, updated_at = CURRENT_TIMESTAMP
-         WHERE category_id = $2 AND name = $3
-         RETURNING id`,
-        [newNameResult.value, categoryId, oldNameResult.value],
-      );
-      if (subResult.rows.length === 0) {
-        return reply.code(404).send({ error: 'Subcategory not found' });
-      }
+      // Update subcategory and products atomically
+      let subId: string;
+      let productCount: number;
+      try {
+        const result = await withTransaction(async (tx) => {
+          const subResult = await tx.query(
+            `UPDATE internal_product_subcategories
+             SET name = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE category_id = $2 AND name = $3
+             RETURNING id`,
+            [newNameResult.value, categoryId, oldNameResult.value],
+          );
+          if (subResult.rows.length === 0) {
+            const err = new Error('Subcategory not found');
+            (err as any).statusCode = 404;
+            throw err;
+          }
 
-      // Update all products with this subcategory
-      const updateResult = await query(
-        `UPDATE products 
-         SET subcategory = $1
-         WHERE type = $2 
-           AND category = $3 
-           AND supplier_id IS NULL
-           AND subcategory = $4
-         RETURNING id`,
-        [newNameResult.value, typeResult.value, categoryResult.value, oldNameResult.value],
-      );
+          const updateResult = await tx.query(
+            `UPDATE products
+             SET subcategory = $1
+             WHERE type = $2
+               AND category = $3
+               AND supplier_id IS NULL
+               AND subcategory = $4
+             RETURNING id`,
+            [newNameResult.value, typeResult.value, categoryResult.value, oldNameResult.value],
+          );
+
+          return { subId: subResult.rows[0].id as string, productCount: updateResult.rows.length };
+        });
+        subId = result.subId;
+        productCount = result.productCount;
+      } catch (err: any) {
+        if (err.statusCode === 404) {
+          return reply.code(404).send({ error: err.message });
+        }
+        throw err;
+      }
 
       await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_subcategory.renamed',
         entityType: 'internal_product_subcategory',
-        entityId: subResult.rows[0].id,
+        entityId: subId,
         details: {
           targetLabel: newNameResult.value,
           secondaryLabel: `From: ${oldNameResult.value}`,
@@ -1375,7 +1391,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return {
         name: newNameResult.value,
-        productCount: updateResult.rows.length,
+        productCount,
         hasLinkedProducts: false, // Rename only succeeds if no products were linked to transactions
       };
     },
@@ -1686,38 +1702,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // If name changed, update all products and internal_product_categories
-      if (newName !== current.name) {
-        // Update products
-        await query('UPDATE products SET type = $1 WHERE type = $2', [newName, current.name]);
-        // Update internal_product_categories
-        await query('UPDATE internal_product_categories SET type = $1 WHERE type = $2', [
-          newName,
-          current.name,
-        ]);
-      }
+      // Perform all mutations atomically
+      const updateResult = await withTransaction(async (tx) => {
+        if (newName !== current.name) {
+          await tx.query('UPDATE products SET type = $1 WHERE type = $2', [newName, current.name]);
+          await tx.query('UPDATE internal_product_categories SET type = $1 WHERE type = $2', [
+            newName,
+            current.name,
+          ]);
+        }
 
-      // If costUnit changed, update all matching internal products and categories
-      if (newCostUnit !== current.cost_unit) {
-        await query('UPDATE products SET cost_unit = $1 WHERE type = $2 AND supplier_id IS NULL', [
-          newCostUnit,
-          newName,
-        ]);
-        await query('UPDATE internal_product_categories SET cost_unit = $1 WHERE type = $2', [
-          newCostUnit,
-          newName,
-        ]);
-      }
+        if (newCostUnit !== current.cost_unit) {
+          await tx.query(
+            'UPDATE products SET cost_unit = $1 WHERE type = $2 AND supplier_id IS NULL',
+            [newCostUnit, newName],
+          );
+          await tx.query('UPDATE internal_product_categories SET cost_unit = $1 WHERE type = $2', [
+            newCostUnit,
+            newName,
+          ]);
+        }
 
-      // Update the type record
-      const updateResult = await query(
-        `UPDATE product_types 
-         SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3
-         RETURNING id, name, cost_unit as "costUnit",
-                   created_at as "createdAt", updated_at as "updatedAt"`,
-        [newName, newCostUnit, idResult.value],
-      );
+        const result = await tx.query(
+          `UPDATE product_types
+           SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3
+           RETURNING id, name, cost_unit as "costUnit",
+                     created_at as "createdAt", updated_at as "updatedAt"`,
+          [newName, newCostUnit, idResult.value],
+        );
+        return result;
+      });
 
       await bumpNamespaceVersion('products');
       await logAudit({

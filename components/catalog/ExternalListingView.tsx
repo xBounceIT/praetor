@@ -343,15 +343,15 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     return options;
   }, [activeSuppliers, formData.supplierId, suppliers, t]);
 
-  // Build type options from API-loaded product types
-  const typeOptions: Option[] = React.useMemo(() => {
-    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
-  }, [productTypes]);
-
   // Helper to display type name
   const getDisplayTypeName = (typeName: string) => {
     return typeName.charAt(0).toUpperCase() + typeName.slice(1);
   };
+
+  // Build type options from API-loaded product types
+  const typeOptions: Option[] = React.useMemo(() => {
+    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
+  }, [productTypes]);
 
   const handleTypeChange = (val: string) => {
     const typeName = val;
