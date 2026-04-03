@@ -555,7 +555,7 @@ const StandardTable = <T extends object>({
         className={`${tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
-          <table className="w-max text-left border-collapse">
+          <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
                 {visibleColumns.map((col, colIdx) => {
@@ -576,7 +576,7 @@ const StandardTable = <T extends object>({
                     <th
                       key={colId}
                       style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                      className={`relative group px-3 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.headerClassName || ''}`}
+                      className={`relative group px-3 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.headerClassName || ''}`}
                     >
                       {/* Inline wrapper for button beside text */}
                       <span className="inline-flex items-center gap-1">
@@ -670,7 +670,7 @@ const StandardTable = <T extends object>({
                         <td
                           key={colId}
                           style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                          className={`px-3 py-0.5 whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
+                          className={`px-3 py-px whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
