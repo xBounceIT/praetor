@@ -400,14 +400,32 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         ? (prev.items || []).map((item) => {
             if (!item.productId) {
               if (item.specialBidId) {
-                return { ...item, specialBidId: '' };
+                return {
+                  ...item,
+                  specialBidId: '',
+                  supplierQuoteId: null,
+                  supplierQuoteItemId: null,
+                  supplierQuoteSupplierName: null,
+                  supplierQuoteUnitPrice: null,
+                  supplierQuoteItemDiscount: null,
+                  supplierQuoteDiscount: null,
+                };
               }
               return item;
             }
 
             const product = products.find((p) => p.id === item.productId);
             if (!product) {
-              return { ...item, specialBidId: '' };
+              return {
+                ...item,
+                specialBidId: '',
+                supplierQuoteId: null,
+                supplierQuoteItemId: null,
+                supplierQuoteSupplierName: null,
+                supplierQuoteUnitPrice: null,
+                supplierQuoteItemDiscount: null,
+                supplierQuoteDiscount: null,
+              };
             }
 
             const applicableBid = activeSpecialBids.find(
@@ -424,6 +442,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   ? `temp-reprice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
                   : item.id,
               specialBidId: applicableBid ? applicableBid.id : '',
+              supplierQuoteId: null,
+              supplierQuoteItemId: null,
+              supplierQuoteSupplierName: null,
+              supplierQuoteUnitPrice: null,
+              supplierQuoteItemDiscount: null,
+              supplierQuoteDiscount: null,
               unitPrice: calcProductSalePrice(cost, mol),
               productCost: Number(product.costo),
               productTaxRate: Number(product.taxRate ?? 0),

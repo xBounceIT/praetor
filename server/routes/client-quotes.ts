@@ -126,6 +126,12 @@ const getProductSnapshots = async (productIds: string[]) => {
           : Number(row.molPercentage),
       specialBidUnitPrice: null,
       specialBidMolPercentage: null,
+      supplierQuoteId: null,
+      supplierQuoteItemId: null,
+      supplierQuoteSupplierName: null,
+      supplierQuoteUnitPrice: null,
+      supplierQuoteItemDiscount: null,
+      supplierQuoteDiscount: null,
     });
   });
   return snapshots;
@@ -1102,6 +1108,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             productId: productIdResult.value,
             productName: productNameResult.value,
             specialBidId: normalizeSpecialBidId(item.specialBidId),
+            supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
             quantity: quantityResult.value,
             unitPrice: unitPriceResult.value,
             discount: itemDiscountResult.value || 0,
@@ -1118,7 +1125,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               product_tax_rate as "productTaxRate",
               product_mol_percentage as "productMolPercentage",
               special_bid_unit_price as "specialBidUnitPrice",
-              special_bid_mol_percentage as "specialBidMolPercentage"
+              special_bid_mol_percentage as "specialBidMolPercentage",
+              supplier_quote_id as "supplierQuoteId",
+              supplier_quote_item_id as "supplierQuoteItemId",
+              supplier_quote_supplier_name as "supplierQuoteSupplierName",
+              supplier_quote_unit_price as "supplierQuoteUnitPrice",
+              supplier_quote_item_discount as "supplierQuoteItemDiscount",
+              supplier_quote_discount as "supplierQuoteDiscount"
            FROM quote_items
            WHERE quote_id = $1`,
           [idResult.value],
@@ -1147,6 +1160,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
                 ? null
                 : Number(item.specialBidMolPercentage),
+            supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
+            supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
+            supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
+            supplierQuoteUnitPrice:
+              item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
+                ? null
+                : Number(item.supplierQuoteUnitPrice),
+            supplierQuoteItemDiscount:
+              item.supplierQuoteItemDiscount === undefined ||
+              item.supplierQuoteItemDiscount === null
+                ? null
+                : Number(item.supplierQuoteItemDiscount),
+            supplierQuoteDiscount:
+              item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
+                ? null
+                : Number(item.supplierQuoteDiscount),
           });
         });
 
@@ -1249,23 +1278,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of normalizedItems) {
           const itemId = 'qi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
-            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-                     RETURNING
-                        id,
-                        quote_id as "quoteId",
-                        product_id as "productId",
-                        product_name as "productName",
-                        special_bid_id as "specialBidId",
-                        quantity,
-                        unit_price as "unitPrice",
-                        product_cost as "productCost",
-                        product_tax_rate as "productTaxRate",
-                        product_mol_percentage as "productMolPercentage",
-                        special_bid_unit_price as "specialBidUnitPrice",
-                        special_bid_mol_percentage as "specialBidMolPercentage",
-                        discount,
-                        note`,
+            `INSERT INTO quote_items (
+              id, quote_id, product_id, product_name, special_bid_id,
+              quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage,
+              special_bid_unit_price, special_bid_mol_percentage, discount, note,
+              supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name,
+              supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            RETURNING
+              id,
+              quote_id as "quoteId",
+              product_id as "productId",
+              product_name as "productName",
+              special_bid_id as "specialBidId",
+              quantity,
+              unit_price as "unitPrice",
+              product_cost as "productCost",
+              product_tax_rate as "productTaxRate",
+              product_mol_percentage as "productMolPercentage",
+              special_bid_unit_price as "specialBidUnitPrice",
+              special_bid_mol_percentage as "specialBidMolPercentage",
+              discount,
+              note,
+              supplier_quote_id as "supplierQuoteId",
+              supplier_quote_item_id as "supplierQuoteItemId",
+              supplier_quote_supplier_name as "supplierQuoteSupplierName",
+              supplier_quote_unit_price as "supplierQuoteUnitPrice",
+              supplier_quote_item_discount as "supplierQuoteItemDiscount",
+              supplier_quote_discount as "supplierQuoteDiscount"`,
             [
               itemId,
               updatedQuoteId,
@@ -1281,6 +1322,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage ?? null,
               item.discount || 0,
               item.note || null,
+              item.supplierQuoteId ?? null,
+              item.supplierQuoteItemId ?? null,
+              item.supplierQuoteSupplierName ?? null,
+              item.supplierQuoteUnitPrice ?? null,
+              item.supplierQuoteItemDiscount ?? null,
+              item.supplierQuoteDiscount ?? null,
             ],
           );
           updatedItems.push(normalizeQuoteItemRow(itemResult.rows[0] as Record<string, unknown>));
@@ -1301,6 +1348,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     product_mol_percentage as "productMolPercentage",
                     special_bid_unit_price as "specialBidUnitPrice",
                     special_bid_mol_percentage as "specialBidMolPercentage",
+                    supplier_quote_id as "supplierQuoteId",
+                    supplier_quote_item_id as "supplierQuoteItemId",
+                    supplier_quote_supplier_name as "supplierQuoteSupplierName",
+                    supplier_quote_unit_price as "supplierQuoteUnitPrice",
+                    supplier_quote_item_discount as "supplierQuoteItemDiscount",
+                    supplier_quote_discount as "supplierQuoteDiscount",
                     discount,
                     note
                 FROM quote_items
