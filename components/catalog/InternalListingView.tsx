@@ -874,7 +874,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 }
                 columns={[
                   {
-                    header: t('crm:internalListing.typeName'),
+                    header: t('crm:internalListing.name'),
                     accessorFn: (row) => row.name.charAt(0).toUpperCase() + row.name.slice(1),
                     cell: ({ row }) => (
                       <span className="font-bold text-slate-700">
@@ -885,16 +885,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   },
                   {
                     header: t('crm:internalListing.measurement'),
-                    accessorFn: (row) => row.name.charAt(0).toUpperCase() + row.name.slice(1),
-                    cell: ({ row }) => (
-                      <span className="font-bold text-slate-700">
-                        {row.name.charAt(0).toUpperCase() + row.name.slice(1)}
-                      </span>
-                    ),
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('crm:internalListing.pricingAndUnit'),
                     accessorFn: (row) =>
                       row.costUnit === 'hours'
                         ? t('crm:internalListing.hour')

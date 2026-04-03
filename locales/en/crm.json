@@ -164,6 +164,7 @@
     "unusualTaxRate": "Unusual tax rate (over 30%).",
     "manageTypes": "Manage Types",
     "typeName": "Type Name",
+    "name": "Name",
     "typeNamePlaceholder": "e.g. Equipment",
     "typeNameRequired": "Type name is required",
     "noTypes": "No types found. Create your first product type.",

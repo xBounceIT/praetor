@@ -160,6 +160,7 @@
     "unusualTaxRate": "Aliquota insolita (superiore al 30%).",
     "manageTypes": "Gestisci Tipi",
     "typeName": "Nome Tipo",
+    "name": "Nome",
     "typeNamePlaceholder": "es. Attrezzatura",
     "typeNameRequired": "Il nome del tipo è obbligatorio",
     "noTypes": "Nessun tipo trovato. Crea il tuo primo tipo di prodotto.",
