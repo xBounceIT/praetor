@@ -15176,7 +15176,11 @@
                         "type": "number"
                       },
                       "status": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                          "draft",
+                          "sent"
+                        ]
                       },
                       "notes": {
                         "type": [
@@ -15430,7 +15434,11 @@
                     "type": "number"
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "sent"
+                    ]
                   },
                   "notes": {
                     "type": "string"
@@ -15480,7 +15488,11 @@
                       "type": "number"
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -15714,7 +15726,11 @@
                     "type": "number"
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "sent"
+                    ]
                   },
                   "notes": {
                     "type": "string"
@@ -15767,7 +15783,11 @@
                       "type": "number"
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent"
+                      ]
                     },
                     "notes": {
                       "type": [

@@ -1092,7 +1092,7 @@ CREATE TABLE IF NOT EXISTS supplier_sales (
     supplier_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
     discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'confirmed', 'denied')),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent')),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1156,7 +1156,7 @@ BEGIN
             CASE so.status
                 WHEN 'draft' THEN 'draft'
                 WHEN 'sent' THEN 'sent'
-                WHEN 'denied' THEN 'denied'
+                WHEN 'denied' THEN 'sent'
                 -- Accepted offers without downstream orders become draft orders to preserve data.
                 ELSE 'draft'
             END,
@@ -1250,6 +1250,29 @@ ALTER TABLE supplier_sales DROP COLUMN IF EXISTS linked_offer_id;
 
 DROP TABLE IF EXISTS supplier_offer_items;
 DROP TABLE IF EXISTS supplier_offers;
+
+DO $$
+BEGIN
+    UPDATE supplier_sales
+    SET status = CASE
+        WHEN status = 'confirmed' THEN 'sent'
+        WHEN status = 'denied' THEN 'sent'
+        ELSE status
+    END
+    WHERE status IN ('confirmed', 'denied');
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'supplier_sales_status_check'
+    ) THEN
+        ALTER TABLE supplier_sales DROP CONSTRAINT supplier_sales_status_check;
+    END IF;
+
+    ALTER TABLE supplier_sales
+        ADD CONSTRAINT supplier_sales_status_check
+        CHECK (status IN ('draft', 'sent'));
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_linked_quote_id ON supplier_sales(linked_quote_id);
 

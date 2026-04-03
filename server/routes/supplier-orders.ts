@@ -52,7 +52,7 @@ const orderSchema = {
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -95,7 +95,7 @@ const createBodySchema = {
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
   required: ['linkedQuoteId', 'supplierId', 'supplierName', 'items'],
@@ -110,7 +110,7 @@ const updateBodySchema = {
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
 } as const;
@@ -123,6 +123,24 @@ type SupplierOrderItemInput = {
   productTaxRate?: string | number;
   discount?: string | number;
   note?: string;
+};
+
+const parseSupplierOrderStatus = (status: unknown) => {
+  if (status === undefined || status === null || status === '') {
+    return { ok: true as const, value: undefined };
+  }
+
+  if (status !== 'draft' && status !== 'sent') {
+    return {
+      ok: false as const,
+      message: 'status must be one of: draft, sent',
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: status,
+  };
 };
 
 const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) => {
@@ -338,6 +356,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const statusResult = parseSupplierOrderStatus(status);
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
@@ -366,7 +386,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
-            status || 'draft',
+            statusResult.value || 'draft',
             notes,
           ],
         );
@@ -566,6 +586,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountValue = discountResult.value;
       }
 
+      const statusResult = parseSupplierOrderStatus(status);
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
+
       let updatedOrderResult: Awaited<ReturnType<typeof query>>;
       try {
         updatedOrderResult = await query(
@@ -596,7 +619,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameValue,
             paymentTerms,
             discountValue,
-            status,
+            statusResult.value,
             notes,
             idResult.value,
           ],
@@ -676,11 +699,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
-      const nextStatus =
-        typeof status === 'string'
-          ? status
-          : String(updatedOrderResult.rows[0].status ?? existingOrder.status);
-      const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
+      const nextStatus = String(updatedOrderResult.rows[0].status ?? existingOrder.status);
+      const didStatusChange =
+        statusResult.value !== undefined && existingOrder.status !== nextStatus;
       await logAudit({
         request,
         action: 'supplier_order.updated',

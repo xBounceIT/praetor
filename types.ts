@@ -549,7 +549,7 @@ export interface SupplierSaleOrder {
     | '240gg'
     | '365gg';
   discount: number;
-  status: 'draft' | 'sent' | 'confirmed' | 'denied';
+  status: 'draft' | 'sent';
   notes?: string;
   createdAt: number;
   updatedAt: number;
