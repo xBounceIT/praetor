@@ -277,8 +277,8 @@ const DailyView: React.FC<DailyViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-4">
-          <div className="min-w-0 xl:col-span-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_140px] gap-4 items-start">
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.client')}
               options={clientOptions}
@@ -295,7 +295,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             )}
           </div>
 
-          <div className="min-w-0 xl:col-span-4">
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.project')}
               options={projectOptions}
@@ -315,7 +315,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             )}
           </div>
 
-          <div className="min-w-0 xl:col-span-4">
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.task')}
               options={taskOptions}
@@ -348,7 +348,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             )}
           </div>
 
-          <div className="min-w-0 xl:col-span-3">
+          <div className="min-w-0">
             <CustomSelect
               label={t('entry.location')}
               options={[
@@ -362,7 +362,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <div className="min-w-0 xl:col-span-2">
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
             </label>
@@ -378,8 +378,10 @@ const DailyView: React.FC<DailyViewProps> = ({
               </p>
             )}
           </div>
+        </div>
 
-          <div className="min-w-0 lg:col-span-2 xl:col-span-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.notesDescription')}
             </label>
@@ -392,7 +394,7 @@ const DailyView: React.FC<DailyViewProps> = ({
             />
           </div>
 
-          <div className="min-w-0 lg:col-span-2 xl:col-span-2 flex items-end">
+          <div className="min-w-0 flex items-end">
             <button
               type="submit"
               className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
