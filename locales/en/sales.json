@@ -94,6 +94,12 @@
     "selectSupplierQuote": "Select supplier quote...",
     "selectProduct": "Select product...",
     "qty": "Qty",
+    "hour": "Hour",
+    "hours": "Hours",
+    "day": "Day",
+    "days": "Days",
+    "unit": "Unit",
+    "units": "Units",
     "bidBadge": "Bid",
     "supplierQuoteBadge": "Supplier",
     "createYourFirstQuote": "Create your first quote",
@@ -232,6 +238,12 @@
       "supplierRequired": "Supplier is required",
       "quoteCodeRequired": "Quote Code is required",
       "itemsRequired": "At least one item is required"
-    }
+    },
+    "hour": "Hour",
+    "hours": "Hours",
+    "day": "Day",
+    "days": "Days",
+    "unit": "Unit",
+    "units": "Units"
   }
 }

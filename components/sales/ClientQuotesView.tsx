@@ -197,7 +197,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
       const cost = getEffectiveCost(item);
-      totalCost += item.quantity * cost;
+      const costMultiplier = item.unitType === 'days' ? 8 : 1;
+      totalCost += item.quantity * cost * costMultiplier;
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
@@ -434,6 +435,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const molSource = applicableBid?.molPercentage ?? product.molPercentage;
             const mol = molSource ? Number(molSource) : 0;
             const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
+            let unitPrice = calcProductSalePrice(cost, mol);
+            if (item.unitType === 'days') {
+              unitPrice = Math.round(unitPrice * 8 * 100) / 100;
+            }
 
             return {
               ...item,
@@ -448,7 +453,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               supplierQuoteUnitPrice: null,
               supplierQuoteItemDiscount: null,
               supplierQuoteDiscount: null,
-              unitPrice: calcProductSalePrice(cost, mol),
+              unitPrice,
               productCost: Number(product.costo),
               productTaxRate: Number(product.taxRate ?? 0),
               productMolPercentage: product.molPercentage,
@@ -522,6 +527,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       productId: '',
       productName: '',
       quantity: 1,
+      unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
       productTaxRate: 0,
@@ -579,9 +585,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].specialBidUnitPrice = null;
         newItems[index].specialBidMolPercentage = null;
 
-        // Use standard product cost
+        // Use standard product cost with unit type handling
+        if (product.type === 'supply') {
+          newItems[index].unitType = 'hours';
+        }
         const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+        let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
+        if (newItems[index].unitType === 'days') {
+          newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+        }
+        newItems[index].unitPrice = newUnitPrice;
         newItems[index].productCost = Number(product.costo);
         newItems[index].productTaxRate = Number(product.taxRate ?? 0);
         newItems[index].productMolPercentage = product.molPercentage;
@@ -607,18 +620,32 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
           if (applicableBid) {
             newItems[index].specialBidId = applicableBid.id;
+            if (product.type === 'supply') {
+              newItems[index].unitType = 'hours';
+            }
             const molSource = applicableBid.molPercentage ?? product.molPercentage;
             const mol = molSource ? Number(molSource) : 0;
-            newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+            let newUnitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+            if (newItems[index].unitType === 'days') {
+              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+            }
+            newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
             newItems[index].productTaxRate = Number(product.taxRate ?? 0);
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
             newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
           } else {
+            if (product.type === 'supply') {
+              newItems[index].unitType = 'hours';
+            }
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+            let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
+            if (newItems[index].unitType === 'days') {
+              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+            }
             newItems[index].specialBidId = '';
-            newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+            newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
             newItems[index].productTaxRate = Number(product.taxRate ?? 0);
             newItems[index].productMolPercentage = product.molPercentage;
@@ -715,11 +742,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         if (newItems[index].supplierQuoteItemId) {
           // Keep supplier quote data
         } else {
-          // Revert to standard product cost
+          // Revert to standard product cost with unit type handling
           const product = products.find((p) => p.id === newItems[index].productId);
           if (product) {
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+            let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
+            if (newItems[index].unitType === 'days') {
+              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+            }
+            newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
             newItems[index].productTaxRate = Number(product.taxRate ?? 0);
             newItems[index].productMolPercentage = product.molPercentage;
@@ -735,10 +766,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         if (product) {
           newItems[index].productId = bid.productId;
           newItems[index].productName = product.name;
-          // Bid selected: Use bid price as COST
+          if (product.type === 'supply') {
+            newItems[index].unitType = 'hours';
+          }
           const molSource = bid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
+          if (newItems[index].unitType === 'days') {
+            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+          }
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
@@ -779,7 +815,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
       const cost = getEffectiveCost(item);
-      totalCost += item.quantity * cost;
+      const costMultiplier = item.unitType === 'days' ? 8 : 1;
+      totalCost += item.quantity * cost * costMultiplier;
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
@@ -857,7 +894,47 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
   };
 
-  // Helper functions are now defined above with useCallback
+  const handleUnitTypeChange = (index: number, newType: 'hours' | 'days') => {
+    if (isReadOnly) return;
+    const item = formData.items?.[index];
+    if (!item) return;
+    const oldType = item.unitType || 'hours';
+    if (oldType === newType) return;
+    const adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+    const newItems = [...(formData.items || [])];
+    newItems[index] = {
+      ...newItems[index],
+      unitType: newType,
+      unitPrice: Math.round(adjustedPrice * 100) / 100,
+    };
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const renderUnitSelector = (index: number, item: Partial<QuoteItem>) => {
+    const product = products.find((p) => p.id === item.productId);
+    const isSupply = product?.type === 'supply';
+    const qty = Number(item.quantity) || 0;
+
+    if (isSupply) {
+      return (
+        <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
+        </span>
+      );
+    }
+
+    return (
+      <select
+        value={item.unitType || 'hours'}
+        onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
+        disabled={isReadOnly}
+        className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
+        <option value="days">{t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`)}</option>
+      </select>
+    );
+  };
 
   // Column definitions for StandardTable
   const columns = useMemo<Column<Quote>[]>(
@@ -1429,7 +1506,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       : undefined;
 
                     // Cost is from supplier quote if available, then special bid, then product cost
-                    const cost = getEffectiveCost(item);
+                    const baseCost = getEffectiveCost(item);
+                    const unitMultiplier = item.unitType === 'days' ? 8 : 1;
+                    const cost = baseCost * unitMultiplier;
 
                     const molSource = item.specialBidId
                       ? item.specialBidMolPercentage
@@ -1437,7 +1516,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const molPercentage = molSource ? Number(molSource) : 0;
                     const quantity = Number(item.quantity || 0);
                     const lineCost = cost * quantity;
-                    const unitSalePrice = calcProductSalePrice(cost, molPercentage);
+                    const unitSalePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
                     return (
@@ -1509,28 +1588,29 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.qty')}
                             </div>
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              required
-                              placeholder={t('sales:clientQuotes.qty')}
-                              value={item.quantity}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateProductRow(
-                                  index,
-                                  'quantity',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              disabled={isReadOnly}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                            <span className="text-xs font-semibold text-slate-400 whitespace-nowrap text-center block mt-0.5">
-                              {products.find((p) => p.id === item.productId)?.costUnit === 'hours'
-                                ? t('crm:internalListing.hour')
-                                : t('crm:internalListing.unit')}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                step="0.01"
+                                min="0"
+                                required
+                                placeholder={t('sales:clientQuotes.qty')}
+                                value={item.quantity}
+                                onValueChange={(value) => {
+                                  const parsed = parseFloat(value);
+                                  updateProductRow(
+                                    index,
+                                    'quantity',
+                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                  );
+                                }}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                              />
+                              <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                /
+                              </span>
+                              {renderUnitSelector(index, item)}
+                            </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
@@ -1621,28 +1701,29 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               />
                             </div>
                             <div className="col-span-1">
-                              <ValidatedNumberInput
-                                step="0.01"
-                                min="0"
-                                required
-                                placeholder={t('sales:clientQuotes.qty')}
-                                value={item.quantity}
-                                onValueChange={(value) => {
-                                  const parsed = parseFloat(value);
-                                  updateProductRow(
-                                    index,
-                                    'quantity',
-                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                  );
-                                }}
-                                disabled={isReadOnly}
-                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                              <span className="text-xs font-semibold text-slate-400 whitespace-nowrap text-center block">
-                                {products.find((p) => p.id === item.productId)?.costUnit === 'hours'
-                                  ? t('crm:internalListing.hour')
-                                  : t('crm:internalListing.unit')}
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  step="0.01"
+                                  min="0"
+                                  required
+                                  placeholder={t('sales:clientQuotes.qty')}
+                                  value={item.quantity}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateProductRow(
+                                      index,
+                                      'quantity',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  disabled={isReadOnly}
+                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  /
+                                </span>
+                                {renderUnitSelector(index, item)}
+                              </div>
                             </div>
                             <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                               {selectedSupplierQuote && (

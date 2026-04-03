@@ -806,6 +806,7 @@ SET product_tax_rate = 0
 WHERE product_tax_rate IS NULL;
 ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET DEFAULT 0;
 ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET NOT NULL;
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
 
@@ -1106,6 +1107,7 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_supplier_quote_items_quote_id ON supplier_quote_items(quote_id);
+ALTER TABLE supplier_quote_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
 -- Supplier sale orders
 CREATE TABLE IF NOT EXISTS supplier_sales (

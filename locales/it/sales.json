@@ -94,6 +94,12 @@
     "selectSupplierQuote": "Seleziona quotazione fornitore...",
     "selectProduct": "Seleziona prodotto...",
     "qty": "Qtà",
+    "hour": "Ora",
+    "hours": "Ore",
+    "day": "Giorno",
+    "days": "Giorni",
+    "unit": "Unità",
+    "units": "Unità",
     "bidBadge": "Offerta",
     "supplierQuoteBadge": "Fornitore",
     "createYourFirstQuote": "Crea il tuo primo preventivo",
@@ -232,6 +238,12 @@
       "supplierRequired": "Il fornitore è obbligatorio",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
       "itemsRequired": "Almeno un articolo è obbligatorio"
-    }
+    },
+    "hour": "Ora",
+    "hours": "Ore",
+    "day": "Giorno",
+    "days": "Giorni",
+    "unit": "Unità",
+    "units": "Unità"
   }
 }
