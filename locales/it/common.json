@@ -239,7 +239,12 @@
     "search": "Cerca...",
     "selectAll": "Seleziona Tutto",
     "noResults": "Nessun risultato",
-    "clearFilter": "Pulisci Filtri"
+    "clearFilter": "Pulisci Filtri",
+    "increaseFont": "Aumenta dimensione testo",
+    "decreaseFont": "Riduci dimensione testo",
+    "columnSettings": "Impostazioni colonne",
+    "columns": "Colonne",
+    "resetColumns": "Ripristina colonne"
   },
   "select": {
     "placeholder": "Seleziona...",

@@ -1,11 +1,16 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import Checkbox from './Checkbox';
 import CustomSelect from './CustomSelect';
 import TableFilter from './TableFilter';
+import Tooltip from './Tooltip';
 
-const getStorageKey = (t: string) =>
-  `praetor_table_rows_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+const getStorageKey = (t: string, suffix: string) =>
+  `praetor_table_${suffix}_${t.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+
+const FONT_SIZES = ['xs', 'sm', 'base'] as const;
+type FontSize = (typeof FONT_SIZES)[number];
 
 export type Column<T> = {
   header: string;
@@ -67,8 +72,12 @@ const StandardTable = <T extends object>({
   initialFilterState,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
-  const filterRef = useRef<HTMLButtonElement>(null); // Ref for the filter button
-  const popupRef = useRef<HTMLDivElement>(null); // Ref for the Portal popup
+  const filterRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const gearButtonRef = useRef<HTMLButtonElement>(null);
+  const gearPopupRef = useRef<HTMLDivElement>(null);
+  const resizeStartXRef = useRef(0);
+  const resizeStartWidthRef = useRef(0);
 
   // Internal State for Data Mode
   const [sortState, setSortState] = useState<{ colId: string; px: 'asc' | 'desc' } | null>(null);
@@ -79,14 +88,17 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     setFilterState(initialFilterState ?? {});
   }, [initialFilterState]);
+
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [gearOpen, setGearOpen] = useState(false);
+  const [resizingColId, setResizingColId] = useState<string | null>(null);
 
   // Lazy initialization for rowsPerPage
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return defaultRowsPerPage;
-    const key = getStorageKey(title);
+    const key = getStorageKey(title, 'rows');
     const saved = localStorage.getItem(key);
     if (saved) {
       const val = Number(saved);
@@ -97,16 +109,65 @@ const StandardTable = <T extends object>({
     return defaultRowsPerPage;
   });
 
-  const storageKey = useMemo(() => getStorageKey(title), [title]);
-  const visibleColumns = useMemo(
-    () => columns?.filter((column) => !column.hidden) ?? [],
-    [columns],
+  // Lazy initialization for fontSize
+  const [fontSize, setFontSize] = useState<FontSize>(() => {
+    if (typeof window === 'undefined') return 'sm';
+    const saved = localStorage.getItem(getStorageKey(title, 'fontsize'));
+    if (saved && (FONT_SIZES as readonly string[]).includes(saved)) return saved as FontSize;
+    return 'sm';
+  });
+
+  // Lazy initialization for hiddenColIds
+  const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set<string>();
+    const saved = localStorage.getItem(getStorageKey(title, 'hidden'));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return new Set<string>(parsed);
+      } catch {}
+    }
+    return new Set<string>();
+  });
+
+  // Lazy initialization for columnWidths
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    const saved = localStorage.getItem(getStorageKey(title, 'colwidths'));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed === 'object' && parsed !== null) return parsed as Record<string, number>;
+      } catch {}
+    }
+    return {};
+  });
+
+  const storageKey = useMemo(() => getStorageKey(title, 'rows'), [title]);
+
+  const getColId = useCallback(
+    (col: Column<T>) =>
+      col.id || (col.accessorKey ? String(col.accessorKey) : undefined) || col.header,
+    [],
   );
+
+  const visibleColumns = useMemo(
+    () =>
+      columns?.filter((col) => {
+        if (col.hidden) return false;
+        return !hiddenColIds.has(getColId(col));
+      }) ?? [],
+    [columns, hiddenColIds, getColId],
+  );
+
+  // Columns listed in gear popup (excludes statically hidden filter-only columns)
+  const gearColumns = useMemo(() => columns?.filter((col) => !col.hidden) ?? [], [columns]);
+
+  const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
   // Close filter popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Check if click is outside BOTH the trigger button (filterRef) AND the popup (popupRef)
       if (
         filterRef.current &&
         !filterRef.current.contains(event.target as Node) &&
@@ -126,18 +187,59 @@ const StandardTable = <T extends object>({
     };
   }, [activeFilterCol]);
 
+  // Close gear popup when clicking outside
+  useEffect(() => {
+    if (!gearOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        gearButtonRef.current &&
+        !gearButtonRef.current.contains(event.target as Node) &&
+        gearPopupRef.current &&
+        !gearPopupRef.current.contains(event.target as Node)
+      ) {
+        setGearOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [gearOpen]);
+
+  // Column resize mouse events
+  useEffect(() => {
+    if (!resizingColId) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartXRef.current;
+      const newWidth = Math.max(40, resizeStartWidthRef.current + delta);
+      setColumnWidths((prev) => ({ ...prev, [resizingColId]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      setResizingColId(null);
+      document.body.style.cursor = '';
+      setColumnWidths((prev) => {
+        localStorage.setItem(getStorageKey(title, 'colwidths'), JSON.stringify(prev));
+        return prev;
+      });
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+    };
+  }, [resizingColId, title]);
+
   // Helper to resolve value
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
     if (col.accessorKey) return row[col.accessorKey];
     return null;
   }, []);
-
-  const getColId = useCallback(
-    (col: Column<T>) =>
-      col.id || (col.accessorKey ? String(col.accessorKey) : undefined) || col.header,
-    [],
-  );
 
   // Derived Data
   const processedData = useMemo(() => {
@@ -220,7 +322,57 @@ const StandardTable = <T extends object>({
     setCurrentPage(1); // Reset to page 1 on filter
   };
 
-  // Close popup on click outside (simplified, relies on conditional rendering)
+  const handleIncreaseFontSize = () => {
+    setFontSize((prev) => {
+      const idx = FONT_SIZES.indexOf(prev);
+      const next = idx < FONT_SIZES.length - 1 ? FONT_SIZES[idx + 1] : prev;
+      localStorage.setItem(getStorageKey(title, 'fontsize'), next);
+      return next;
+    });
+  };
+
+  const handleDecreaseFontSize = () => {
+    setFontSize((prev) => {
+      const idx = FONT_SIZES.indexOf(prev);
+      const next = idx > 0 ? FONT_SIZES[idx - 1] : prev;
+      localStorage.setItem(getStorageKey(title, 'fontsize'), next);
+      return next;
+    });
+  };
+
+  const toggleColumnVisibility = (colId: string) => {
+    setHiddenColIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) {
+        next.delete(colId);
+      } else {
+        next.add(colId);
+        if (sortState?.colId === colId) setSortState(null);
+        setFilterState((fs) => {
+          if (!fs[colId]) return fs;
+          const nextFs = { ...fs };
+          delete nextFs[colId];
+          return nextFs;
+        });
+      }
+      localStorage.setItem(getStorageKey(title, 'hidden'), JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
+  const resetColumnVisibility = () => {
+    setHiddenColIds(new Set<string>());
+    localStorage.removeItem(getStorageKey(title, 'hidden'));
+  };
+
+  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.currentTarget.parentElement as HTMLTableCellElement;
+    resizeStartXRef.current = e.clientX;
+    resizeStartWidthRef.current = th.getBoundingClientRect().width;
+    setResizingColId(colId);
+  };
 
   // Internal Footer Render
   const renderInternalFooter = () => (
@@ -296,7 +448,7 @@ const StandardTable = <T extends object>({
     </>
   );
 
-  // Render Columns
+  // Render
   return (
     <div
       className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${containerClassName ?? ''}`.trim()}
@@ -312,15 +464,106 @@ const StandardTable = <T extends object>({
             </span>
           )}
         </div>
-        {(headerExtras || headerAction) && (
+        {(data != null && columns != null) || headerExtras != null || headerAction != null ? (
           <div className="flex items-center gap-3">
+            {data != null && columns != null && (
+              <div className="flex items-center gap-1">
+                <Tooltip label={t('table.decreaseFont')} position="bottom">
+                  {() => (
+                    <button
+                      onClick={handleDecreaseFontSize}
+                      disabled={fontSize === 'xs'}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                    >
+                      <i className="fa-solid fa-minus text-[10px]"></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <Tooltip label={t('table.increaseFont')} position="bottom">
+                  {() => (
+                    <button
+                      onClick={handleIncreaseFontSize}
+                      disabled={fontSize === 'base'}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                    >
+                      <i className="fa-solid fa-plus text-[10px]"></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <div className="relative">
+                  <Tooltip label={t('table.columnSettings')} position="bottom" disabled={gearOpen}>
+                    {() => (
+                      <button
+                        ref={gearButtonRef}
+                        onClick={() => setGearOpen((prev) => !prev)}
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white transition-colors ${gearOpen ? 'text-praetor bg-slate-100' : 'text-slate-500 hover:bg-slate-100'}`}
+                      >
+                        <i className="fa-solid fa-gear text-[10px]"></i>
+                      </button>
+                    )}
+                  </Tooltip>
+                  {gearOpen && (
+                    <div
+                      ref={gearPopupRef}
+                      className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
+                    >
+                      <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                          {t('table.columns')}
+                        </span>
+                        <button
+                          onClick={() => setGearOpen(false)}
+                          className="text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
+                        {gearColumns.map((col) => {
+                          const colId = getColId(col);
+                          const isVisible = !hiddenColIds.has(colId);
+                          const isLastVisible = visibleColumns.length === 1 && isVisible;
+                          return (
+                            <label
+                              key={colId}
+                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
+                            >
+                              <Checkbox
+                                size="sm"
+                                checked={isVisible}
+                                disabled={isLastVisible}
+                                onChange={() => toggleColumnVisibility(colId)}
+                              />
+                              <span className="text-[11px] text-slate-600 select-none">
+                                {col.header}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="p-2 border-t border-slate-100">
+                        <button
+                          onClick={resetColumnVisibility}
+                          className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <i className="fa-solid fa-rotate-left text-[10px]"></i>
+                          <span>{t('table.resetColumns')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {headerExtras}
             {headerAction}
           </div>
-        )}
+        ) : null}
       </div>
 
-      <div className={tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'}>
+      <div
+        className={`${tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'} ${resizingColId ? 'select-none' : ''}`}
+      >
         {columns && data ? (
           <table className="w-max min-w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
@@ -337,11 +580,13 @@ const StandardTable = <T extends object>({
                     : isLastColumn
                       ? 'right'
                       : col.align;
+                  const colWidth = columnWidths[colId];
 
                   return (
                     <th
                       key={colId}
-                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
+                      style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
+                      className={`relative group px-3 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.headerClassName || ''}`}
                     >
                       {/* Inline wrapper for button beside text */}
                       <span className="inline-flex items-center gap-1">
@@ -374,6 +619,12 @@ const StandardTable = <T extends object>({
                           </button>
                         )}
                       </span>
+
+                      {/* Column resize handle */}
+                      <div
+                        className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 opacity-0 group-hover:opacity-100 hover:bg-praetor/30 ${resizingColId === colId ? 'opacity-100 bg-praetor/50' : ''}`}
+                        onMouseDown={(e) => handleResizeStart(e, colId)}
+                      />
 
                       {/* Portal for filter popup - outside the wrapper */}
                       {activeFilterCol === colId &&
@@ -411,9 +662,10 @@ const StandardTable = <T extends object>({
                   <tr
                     key={idx}
                     onClick={() => onRowClick?.(row)}
-                    className={`transition-colors text-sm ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
+                    className={`transition-colors ${fontSizeClass} ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
                   >
                     {visibleColumns.map((col, colIdx) => {
+                      const colId = getColId(col);
                       const val = getValue(row, col);
                       const isFirstColumn = colIdx === 0;
                       const isLastColumn = colIdx === visibleColumns.length - 1;
@@ -423,10 +675,12 @@ const StandardTable = <T extends object>({
                         : isLastColumn
                           ? 'right'
                           : col.align;
+                      const colWidth = columnWidths[colId];
                       return (
                         <td
-                          key={getColId(col)}
-                          className={`px-6 py-5 whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.className || ''}`}
+                          key={colId}
+                          style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
+                          className={`px-3 py-2 whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })

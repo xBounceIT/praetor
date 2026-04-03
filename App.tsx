@@ -3095,9 +3095,7 @@ const App: React.FC = () => {
         onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
-        isAiReportingEnabled={
-          !hasLoadedGeneralSettings || generalSettings.enableAiReporting
-        }
+        isAiReportingEnabled={!hasLoadedGeneralSettings || generalSettings.enableAiReporting}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
