@@ -230,6 +230,13 @@ export interface QuoteItem {
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
+  // Supplier quote source tracking
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+  supplierQuoteSupplierName?: string | null;
+  supplierQuoteUnitPrice?: number | null;
+  supplierQuoteItemDiscount?: number | null;
+  supplierQuoteDiscount?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
   unitType?: 'hours' | 'days';
@@ -275,6 +282,13 @@ export interface ClientOfferItem {
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
+  // Supplier quote source tracking
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+  supplierQuoteSupplierName?: string | null;
+  supplierQuoteUnitPrice?: number | null;
+  supplierQuoteItemDiscount?: number | null;
+  supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
 }
@@ -317,6 +331,13 @@ export interface ClientsOrderItem {
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
+  // Supplier quote source tracking
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+  supplierQuoteSupplierName?: string | null;
+  supplierQuoteUnitPrice?: number | null;
+  supplierQuoteItemDiscount?: number | null;
+  supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
 }

@@ -8291,6 +8291,42 @@
                                 "number"
                               ]
                             },
+                            "supplierQuoteId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteItemDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
                             "discount": {
                               "type": "number"
                             },
@@ -8298,6 +8334,13 @@
                               "type": [
                                 "null",
                                 "string"
+                              ]
+                            },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days"
                               ]
                             }
                           },
@@ -8481,6 +8524,9 @@
                         "specialBidId": {
                           "type": "string"
                         },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -8507,6 +8553,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -8653,6 +8706,42 @@
                               "number"
                             ]
                           },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
                           "discount": {
                             "type": "number"
                           },
@@ -8660,6 +8749,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -8826,6 +8922,9 @@
                         "specialBidId": {
                           "type": "string"
                         },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -8852,6 +8951,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -9003,6 +9109,42 @@
                               "number"
                             ]
                           },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
                           "discount": {
                             "type": "number"
                           },
@@ -9010,6 +9152,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -9364,6 +9513,42 @@
                                 "number"
                               ]
                             },
+                            "supplierQuoteId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteItemDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
                             "note": {
                               "type": [
                                 "null",
@@ -9574,6 +9759,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -9720,6 +9923,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -9915,6 +10154,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -10062,6 +10319,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -11460,6 +11753,42 @@
                                 "number"
                               ]
                             },
+                            "supplierQuoteId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteItemDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
                             "note": {
                               "type": [
                                 "null",
@@ -11672,6 +12001,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -11813,6 +12160,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -12010,6 +12393,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -12155,6 +12556,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -14307,6 +14744,13 @@
                                 "null",
                                 "string"
                               ]
+                            },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days"
+                              ]
                             }
                           },
                           "required": [
@@ -14487,6 +14931,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -14612,6 +15063,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -14776,6 +15234,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -14903,6 +15368,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -17136,6 +17608,13 @@
                                 "null",
                                 "string"
                               ]
+                            },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days"
+                              ]
                             }
                           },
                           "required": [
@@ -17316,6 +17795,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -17441,6 +17927,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -17605,6 +18098,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -17732,6 +18232,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },

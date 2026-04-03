@@ -3107,6 +3107,7 @@ const App: React.FC = () => {
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
+                  supplierQuotes={supplierQuotes}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}

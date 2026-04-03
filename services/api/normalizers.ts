@@ -133,6 +133,22 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
     item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
       ? null
       : Number(item.specialBidMolPercentage),
+  // Supplier quote fields
+  supplierQuoteId: item.supplierQuoteId ?? null,
+  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
+  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
+  supplierQuoteUnitPrice:
+    item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
+      ? null
+      : Number(item.supplierQuoteUnitPrice),
+  supplierQuoteItemDiscount:
+    item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
+      ? null
+      : Number(item.supplierQuoteItemDiscount),
+  supplierQuoteDiscount:
+    item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
+      ? null
+      : Number(item.supplierQuoteDiscount),
   discount: Number(item.discount || 0),
   note: item.note || '',
 });
@@ -165,6 +181,22 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
     item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
       ? null
       : Number(item.specialBidMolPercentage),
+  // Supplier quote fields
+  supplierQuoteId: item.supplierQuoteId ?? null,
+  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
+  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
+  supplierQuoteUnitPrice:
+    item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
+      ? null
+      : Number(item.supplierQuoteUnitPrice),
+  supplierQuoteItemDiscount:
+    item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
+      ? null
+      : Number(item.supplierQuoteItemDiscount),
+  supplierQuoteDiscount:
+    item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
+      ? null
+      : Number(item.supplierQuoteDiscount),
   discount: Number(item.discount || 0),
   note: item.note || '',
 });
@@ -197,6 +229,22 @@ export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderI
     item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
       ? null
       : Number(item.specialBidMolPercentage),
+  // Supplier quote fields
+  supplierQuoteId: item.supplierQuoteId ?? null,
+  supplierQuoteItemId: item.supplierQuoteItemId ?? null,
+  supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
+  supplierQuoteUnitPrice:
+    item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
+      ? null
+      : Number(item.supplierQuoteUnitPrice),
+  supplierQuoteItemDiscount:
+    item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
+      ? null
+      : Number(item.supplierQuoteItemDiscount),
+  supplierQuoteDiscount:
+    item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
+      ? null
+      : Number(item.supplierQuoteDiscount),
   discount: Number(item.discount || 0),
 });
 
