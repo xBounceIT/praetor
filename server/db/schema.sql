@@ -936,7 +936,7 @@ CREATE TABLE IF NOT EXISTS sales (
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
     discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'confirmed', 'denied')),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed', 'denied')),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -951,7 +951,7 @@ BEGIN
         WHERE conname = 'sales_status_check'
     ) THEN
         ALTER TABLE sales DROP CONSTRAINT sales_status_check;
-        ALTER TABLE sales ADD CONSTRAINT sales_status_check CHECK (status IN ('draft', 'sent', 'confirmed', 'denied', 'pending', 'completed', 'cancelled'));
+        ALTER TABLE sales ADD CONSTRAINT sales_status_check CHECK (status IN ('draft', 'confirmed', 'denied'));
     END IF;
 END $$;
 

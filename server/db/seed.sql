@@ -739,7 +739,7 @@ INSERT INTO sales (
     updated_at
 ) VALUES
     ('dm_so_01', NULL, NULL, 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'draft', 'Editable manual sale order used for direct accounting workflow.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '41 days'),
-    ('dm_so_02', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'sent', 'Linked order generated from an accepted offer and now pending confirmation.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
+    ('dm_so_02', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'confirmed', 'Linked order generated from an accepted offer and confirmed.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
     ('dm_so_03', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
     ('dm_so_04', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 5.00, 'confirmed', 'Confirmed order already invoiced and mirrored into demo projects.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
     ('dm_so_05', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
@@ -789,8 +789,8 @@ SELECT
 FROM (
     VALUES
         ('dm_soi_01', 'dm_so_01', 'dm_prd_08', NULL::varchar(50), 25.00, 160.00, 0.00, 'Draft order for event print materials'),
-        ('dm_soi_02', 'dm_so_02', 'dm_prd_01', NULL::varchar(50), 2.00, 1230.00, 0.00, 'Linked assessment lot pending customer confirmation'),
-        ('dm_soi_03', 'dm_so_02', 'dm_prd_02', NULL::varchar(50), 1.00, 1715.00, 0.00, 'Linked deployment lot pending customer confirmation'),
+        ('dm_soi_02', 'dm_so_02', 'dm_prd_01', NULL::varchar(50), 2.00, 1230.00, 0.00, 'Linked assessment lot on a confirmed order'),
+        ('dm_soi_03', 'dm_so_02', 'dm_prd_02', NULL::varchar(50), 1.00, 1715.00, 0.00, 'Linked deployment lot on a confirmed order'),
         ('dm_soi_04', 'dm_so_03', 'dm_prd_03', NULL::varchar(50), 6.00, 835.00, 0.00, 'Confirmed support retainer kept open without invoice'),
         ('dm_soi_05', 'dm_so_03', 'dm_prd_06', 'dm_bid_01', 20.00, 210.00, 0.00, 'Confirmed software add-on still ready for invoicing'),
         ('dm_soi_06', 'dm_so_04', 'dm_prd_01', NULL::varchar(50), 4.00, 1230.00, 5.00, 'Assessment track for operations'),

@@ -253,18 +253,18 @@ const DailyView: React.FC<DailyViewProps> = ({
   }, [filteredTasks, canCreateCustomTask, t]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5">
+      <div className="flex justify-between items-start gap-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            <span className="text-sm font-bold uppercase tracking-wider text-slate-400 leading-none mb-0.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-none mb-1">
               {t('entry.loggingFor')}
             </span>
-            <div className="flex items-baseline gap-1.5 leading-none">
-              <span className="text-lg font-black text-praetor uppercase">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
+              <span className="text-base sm:text-lg font-black text-praetor uppercase">
                 {new Date(date).toLocaleDateString(undefined, { weekday: 'long' })}
               </span>
-              <span className="text-lg font-medium text-slate-400">
+              <span className="text-sm sm:text-base font-medium text-slate-400">
                 {new Date(date).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
@@ -276,11 +276,8 @@ const DailyView: React.FC<DailyViewProps> = ({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 md:grid-cols-[2fr_2fr_2fr_1.5fr_1fr] gap-4"
-        >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_140px] gap-4 items-start">
           <div className="min-w-0">
             <CustomSelect
               label={t('entry.client')}
@@ -297,6 +294,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.clientId}</p>
             )}
           </div>
+
           <div className="min-w-0">
             <CustomSelect
               label={t('entry.project')}
@@ -316,6 +314,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.projectId}</p>
             )}
           </div>
+
           <div className="min-w-0">
             <CustomSelect
               label={t('entry.task')}
@@ -348,6 +347,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               />
             )}
           </div>
+
           <div className="min-w-0">
             <CustomSelect
               label={t('entry.location')}
@@ -361,6 +361,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onChange={(val) => setLocation(val as TimeEntryLocation)}
             />
           </div>
+
           <div className="min-w-0">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
@@ -377,10 +378,10 @@ const DailyView: React.FC<DailyViewProps> = ({
               </p>
             )}
           </div>
-        </form>
+        </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="w-full">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.notesDescription')}
             </label>
@@ -389,91 +390,85 @@ const DailyView: React.FC<DailyViewProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('entry.notesPlaceholder')}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
             />
           </div>
 
-          <div className="flex items-end justify-between gap-4">
-            <div className="flex-1">
-              {isExceedingGoal && (
-                <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
-                  <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                  <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
-                    {t('entry.warningExceedGoal', { goal: dailyGoal })}
-                  </p>
-                </div>
-              )}
-              {selectedTaskId && (
-                <div
-                  className={`transition-all duration-300 border rounded-xl py-1 ${makeRecurring ? 'bg-slate-50 border-slate-200' : 'bg-transparent border-transparent'}`}
-                >
-                  <div className="flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => setMakeRecurring(!makeRecurring)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
-                      {t('entry.repeatTask')}
-                    </button>
-
-                    {makeRecurring && (
-                      <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-200 flex-wrap">
-                        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0"></div>
-                        <CustomSelect
-                          options={[
-                            { id: 'daily', name: t('entry.recurrencePatterns.daily') },
-                            { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
-                            { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
-                            {
-                              id: 'custom',
-                              name: recurrencePattern.startsWith('monthly:')
-                                ? getRecurrenceLabel(recurrencePattern)
-                                : t('entry.recurrencePatterns.custom'),
-                            },
-                          ]}
-                          value={
-                            recurrencePattern.startsWith('monthly:') ? 'custom' : recurrencePattern
-                          }
-                          onChange={(val) => handleRecurrenceChange(val as string)}
-                          className="text-xs min-w-[120px]"
-                          placeholder="Pattern..."
-                          buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs whitespace-nowrap"
-                        />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                          {t('entry.until')}
-                        </span>
-                        <input
-                          type="date"
-                          value={recurrenceEndDate}
-                          onChange={(e) => {
-                            setRecurrenceEndDate(e.target.value);
-                            if (errors.recurrenceEndDate)
-                              setErrors({ ...errors, recurrenceEndDate: '' });
-                          }}
-                          className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
-                        />
-                        {errors.recurrenceEndDate && (
-                          <p className="text-red-500 text-[10px] font-bold mt-1">
-                            {errors.recurrenceEndDate}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
+          <div className="min-w-0 flex items-end">
             <button
-              onClick={handleSubmit}
-              className="bg-praetor text-white px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap"
+              type="submit"
+              className="w-full bg-praetor text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-md hover:shadow-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
             >
               {t('entry.logTime')}
             </button>
           </div>
         </div>
-      </div>
+
+        {isExceedingGoal && (
+          <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
+            <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+            <p className="text-[10px] font-bold text-amber-700 uppercase leading-none">
+              {t('entry.warningExceedGoal', { goal: dailyGoal })}
+            </p>
+          </div>
+        )}
+
+        {selectedTaskId && (
+          <div
+            className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-slate-50 border-slate-200' : 'bg-transparent border-transparent'}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMakeRecurring(!makeRecurring)}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${makeRecurring ? 'text-praetor' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+              >
+                <i className={`fa-solid fa-repeat ${makeRecurring ? 'fa-spin' : ''}`}></i>
+                {t('entry.repeatTask')}
+              </button>
+
+              {makeRecurring && (
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
+                  <div className="hidden sm:block h-4 w-px bg-slate-200 mx-1 shrink-0"></div>
+                  <CustomSelect
+                    options={[
+                      { id: 'daily', name: t('entry.recurrencePatterns.daily') },
+                      { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
+                      { id: 'monthly', name: t('entry.recurrencePatterns.monthly') },
+                      {
+                        id: 'custom',
+                        name: recurrencePattern.startsWith('monthly:')
+                          ? getRecurrenceLabel(recurrencePattern)
+                          : t('entry.recurrencePatterns.custom'),
+                      },
+                    ]}
+                    value={recurrencePattern.startsWith('monthly:') ? 'custom' : recurrencePattern}
+                    onChange={(val) => handleRecurrenceChange(val as string)}
+                    className="text-xs min-w-[120px]"
+                    placeholder="Pattern..."
+                    buttonClassName="bg-white border border-slate-200 text-praetor font-medium py-2 px-2 text-xs whitespace-nowrap"
+                  />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    {t('entry.until')}
+                  </span>
+                  <input
+                    type="date"
+                    value={recurrenceEndDate}
+                    onChange={(e) => {
+                      setRecurrenceEndDate(e.target.value);
+                      if (errors.recurrenceEndDate) setErrors({ ...errors, recurrenceEndDate: '' });
+                    }}
+                    className={`text-xs bg-white border rounded-md px-2 py-2 outline-none focus:ring-1 shrink-0 ${errors.recurrenceEndDate ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-200 text-praetor focus:ring-praetor'} font-medium`}
+                  />
+                  {errors.recurrenceEndDate && (
+                    <p className="text-red-500 text-[10px] font-bold">{errors.recurrenceEndDate}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </form>
       <CustomRepeatModal
         isOpen={isCustomRepeatModalOpen}
         onClose={() => setIsCustomRepeatModalOpen(false)}

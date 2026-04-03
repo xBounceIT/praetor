@@ -340,7 +340,7 @@ export interface ClientsOrder {
     | '240gg'
     | '365gg';
   discount: number;
-  status: 'draft' | 'sent' | 'confirmed' | 'denied';
+  status: 'draft' | 'confirmed' | 'denied';
   notes?: string;
   createdAt: number;
   updatedAt: number;
