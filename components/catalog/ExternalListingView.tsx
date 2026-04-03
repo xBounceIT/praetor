@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../../services/api';
+import type { InternalProductType } from '../../services/api/products';
 import type { Product, Supplier } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
@@ -34,33 +36,27 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
+  // Product Types State (loaded from API)
+  const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
+
   // Category Management State
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddSubcategoryModalOpen, setIsAddSubcategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
 
-  // Default categories per type
-  const defaultCategoriesMap = useMemo<Record<string, string[]>>(
-    () => ({
-      supply: [
-        t('crm:internalListing.defaultCategories.hardware'),
-        t('crm:internalListing.defaultCategories.license'),
-        t('crm:internalListing.defaultCategories.subscription'),
-      ],
-      consulting: [
-        t('crm:internalListing.defaultCategories.specialistic'),
-        t('crm:internalListing.defaultCategories.technical'),
-        t('crm:internalListing.defaultCategories.governance'),
-      ],
-      service: [
-        t('crm:internalListing.defaultCategories.reports'),
-        t('crm:internalListing.defaultCategories.monitoring'),
-        t('crm:internalListing.defaultCategories.maintenance'),
-      ],
-    }),
-    [t],
-  );
+  // Load product types on mount
+  useEffect(() => {
+    const loadTypes = async () => {
+      try {
+        const types = await api.products.listProductTypes();
+        setProductTypes(types);
+      } catch (err) {
+        console.error('Failed to load product types:', err);
+      }
+    };
+    loadTypes();
+  }, []);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -73,9 +69,25 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     category: '',
     subcategory: '',
     taxRate: 22,
-    type: 'supply',
+    type: '',
     supplierId: '',
   });
+  const defaultProductType = productTypes[0];
+
+  // Update default type when productTypes load (only once when types first load and no type selected)
+  useEffect(() => {
+    if (productTypes.length > 0) {
+      const defaultType = productTypes[0];
+      setFormData((prev) => {
+        if (prev.type) return prev;
+        return {
+          ...prev,
+          type: defaultType.name,
+          costUnit: defaultType.costUnit,
+        };
+      });
+    }
+  }, [productTypes]);
 
   // Calculated values
   const calcSalePrice = (costo: number, molPercentage: number) => {
@@ -116,11 +128,11 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: 'unit',
+      costUnit: defaultProductType?.costUnit || 'unit',
       category: '',
       subcategory: '',
       taxRate: 22,
-      type: 'supply',
+      type: defaultProductType?.name || '',
       supplierId: '',
     });
     setErrors({});
@@ -136,11 +148,11 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       description: product.description || '',
       costo: product.costo || 0,
       molPercentage: product.molPercentage || 0,
-      costUnit: product.costUnit || 'unit',
+      costUnit: product.costUnit || defaultProductType?.costUnit || 'unit',
       category: product.category || '',
       subcategory: product.subcategory || '',
       taxRate: product.taxRate || 0,
-      type: product.type || 'supply',
+      type: product.type || defaultProductType?.name || '',
       supplierId: product.supplierId || '',
     });
     setErrors({});
@@ -210,7 +222,8 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       }
     }
     const typeValue = formData.type;
-    if (!typeValue || !['supply', 'service', 'consulting', 'item'].includes(typeValue)) {
+    const isKnownType = productTypes.some((type) => type.name === typeValue);
+    if (!typeValue || (productTypes.length > 0 && !isKnownType)) {
       newErrors.type = t('common:validation.typeRequired');
     }
 
@@ -220,10 +233,9 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     }
 
     try {
-      const { costUnit: _costUnit, ...productPayload } = formData;
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
-          ...productPayload,
+          ...formData,
           costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
           molPercentage:
             formData.molPercentage !== undefined
@@ -232,7 +244,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
         });
       } else {
         await onAddProduct({
-          ...productPayload,
+          ...formData,
           costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
           molPercentage:
             formData.molPercentage !== undefined
@@ -285,21 +297,19 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     }
   };
 
-  // Get unique categories from existing products + defaults
+  // Get unique categories from existing products
   const availableCategories = React.useMemo(() => {
-    const type = formData.type || 'supply';
-    // If type is item, treat as supply for categories
-    const normalizedType = type === 'item' ? 'supply' : type;
-    const defaults = defaultCategoriesMap[normalizedType] || [];
+    const type = formData.type;
+    if (!type) return [];
 
-    // Also include categories currently used by products of this type
+    // Include categories currently used by products of this type
     const used = products
-      .filter((p) => (p.type === 'item' ? 'supply' : p.type) === normalizedType)
+      .filter((p) => p.type === type)
       .map((p) => p.category)
       .filter((category): category is string => Boolean(category));
 
-    return Array.from(new Set([...defaults, ...used])).sort();
-  }, [formData.type, products, defaultCategoriesMap]);
+    return Array.from(new Set(used)).sort();
+  }, [formData.type, products]);
 
   const categoryOptions: Option[] = availableCategories.map((c) => ({ id: c, name: c }));
 
@@ -333,37 +343,23 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     return options;
   }, [activeSuppliers, formData.supplierId, suppliers, t]);
 
-  const typeOptions: Option[] = [
-    { id: 'supply', name: t('crm:internalListing.typeSupply') },
-    { id: 'service', name: t('crm:internalListing.typeService') },
-    { id: 'consulting', name: t('crm:internalListing.typeConsulting') },
-  ];
-
-  // Helper to get localized name for product types
-  const getLocalizedTypeName = (type: string) => {
-    switch (type) {
-      case 'supply':
-        return t('crm:internalListing.typeSupply');
-      case 'service':
-        return t('crm:internalListing.typeService');
-      case 'consulting':
-        return t('crm:internalListing.typeConsulting');
-      case 'item':
-        return t('crm:internalListing.typeItem');
-      default:
-        return type.charAt(0).toUpperCase() + type.slice(1);
-    }
+  // Helper to display type name
+  const getDisplayTypeName = (typeName: string) => {
+    return typeName.charAt(0).toUpperCase() + typeName.slice(1);
   };
 
-  const handleTypeChange = (val: string) => {
-    const type = val as Product['type'];
-    // costUnit is auto-derived from type on backend:
-    // supply -> 'unit', service/consulting -> 'hours'
+  // Build type options from API-loaded product types
+  const typeOptions: Option[] = React.useMemo(() => {
+    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
+  }, [productTypes]);
 
+  const handleTypeChange = (val: string) => {
+    const typeName = val;
+    const typeData = productTypes.find((t) => t.name === typeName);
     setFormData({
       ...formData,
-      type,
-      costUnit: type === 'supply' ? 'unit' : 'hours',
+      type: typeName,
+      costUnit: typeData?.costUnit || 'unit',
       category: '', // Reset category as it depends on type
       subcategory: '', // Reset subcategory as it depends on category
     });
@@ -618,7 +614,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                   </div>
                   <CustomSelect
                     options={typeOptions}
-                    value={formData.type || 'supply'}
+                    value={formData.type || (productTypes[0]?.name ?? '')}
                     onChange={(val) => handleTypeChange(val as string)}
                     searchable={false}
                     buttonClassName={
@@ -911,9 +907,9 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
             header: t('crm:internalListing.type'),
             accessorKey: 'type',
             cell: ({ row: p }) => (
-              <StatusBadge type={p.type as StatusType} label={getLocalizedTypeName(p.type)} />
+              <StatusBadge type={p.type as StatusType} label={getDisplayTypeName(p.type)} />
             ),
-            accessorFn: (row) => getLocalizedTypeName(row.type),
+            accessorFn: (row) => getDisplayTypeName(row.type),
           },
           {
             header: t('crm:internalListing.cost'),

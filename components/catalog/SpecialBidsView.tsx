@@ -68,9 +68,7 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
   });
 
   const activeClients = clients.filter((c) => !c.isDisabled);
-  const activeProducts = products.filter(
-    (p) => !p.isDisabled && (p.type === 'item' || p.type === 'supply'),
-  );
+  const activeProducts = products.filter((p) => !p.isDisabled && p.costUnit === 'unit');
   const externalProducts = activeProducts.filter((p) => p.supplierId);
   const hasExternalProducts = externalProducts.length > 0;
 

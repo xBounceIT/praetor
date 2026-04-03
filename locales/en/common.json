@@ -28,7 +28,9 @@
     "paste": "Paste",
     "print": "Print",
     "view": "View",
-    "send": "Send"
+    "send": "Send",
+    "manage": "Manage",
+    "saving": "Saving..."
   },
   "labels": {
     "name": "Name",

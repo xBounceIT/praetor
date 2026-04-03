@@ -1599,3 +1599,237 @@ VALUES
     ('manager', 'projects.assignments.update'),
     ('top_manager', 'projects.assignments.update')
 ON CONFLICT DO NOTHING;
+
+-- Internal product categories table
+CREATE TABLE IF NOT EXISTS internal_product_categories (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('supply', 'service', 'consulting')),
+    cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit' CHECK (cost_unit IN ('unit', 'hours')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (name, type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_internal_product_categories_type 
+    ON internal_product_categories(type);
+
+-- Migration: Backfill internal product categories from existing products
+DO $$
+DECLARE
+    rec RECORD;
+    default_unit VARCHAR(20);
+    existing_id VARCHAR(50);
+BEGIN
+    FOR rec IN 
+        SELECT DISTINCT category, type, 
+               COALESCE(
+                   (SELECT cost_unit FROM products WHERE category = p.category AND type = p.type AND supplier_id IS NULL LIMIT 1),
+                   CASE p.type 
+                       WHEN 'supply' THEN 'unit'
+                       WHEN 'service' THEN 'hours'
+                       WHEN 'consulting' THEN 'hours'
+                       ELSE 'unit'
+                   END
+               ) as derived_cost_unit
+        FROM products p 
+        WHERE category IS NOT NULL 
+          AND category != ''
+          AND supplier_id IS NULL
+          AND type IN ('supply', 'service', 'consulting')
+    LOOP
+        -- Check if this category/type already exists
+        SELECT id INTO existing_id
+        FROM internal_product_categories
+        WHERE name = rec.category AND type = rec.type;
+        
+        IF existing_id IS NULL THEN
+            INSERT INTO internal_product_categories (id, name, type, cost_unit)
+            VALUES (
+                'ipc-' || gen_random_uuid(),
+                rec.category,
+                rec.type,
+                rec.derived_cost_unit
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- Migration: Seed default internal product categories if not already present
+DO $$
+BEGIN
+    -- Supply defaults
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Hardware' AND type = 'supply') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-supply-hardware', 'Hardware', 'supply', 'unit');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'License' AND type = 'supply') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-supply-license', 'License', 'supply', 'unit');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Subscription' AND type = 'supply') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-supply-subscription', 'Subscription', 'supply', 'unit');
+    END IF;
+    
+    -- Consulting defaults
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Specialistic' AND type = 'consulting') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-consulting-specialistic', 'Specialistic', 'consulting', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Technical' AND type = 'consulting') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-consulting-technical', 'Technical', 'consulting', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Governance' AND type = 'consulting') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-consulting-governance', 'Governance', 'consulting', 'hours');
+    END IF;
+    
+    -- Service defaults
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Reports' AND type = 'service') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-service-reports', 'Reports', 'service', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Monitoring' AND type = 'service') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-service-monitoring', 'Monitoring', 'service', 'hours');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM internal_product_categories WHERE name = 'Maintenance' AND type = 'service') THEN
+        INSERT INTO internal_product_categories (id, name, type, cost_unit)
+        VALUES ('ipc-service-maintenance', 'Maintenance', 'service', 'hours');
+    END IF;
+END $$;
+
+-- ============================================
+-- Product Types Table (User-Managed)
+-- ============================================
+
+-- Create product_types table for user-managed product types
+CREATE TABLE IF NOT EXISTS product_types (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit' CHECK (cost_unit IN ('unit', 'hours')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_types_name ON product_types(name);
+
+-- Seed default product types (matching legacy hardcoded values)
+-- These will be created on fresh installations; migrations handle existing data
+DO $$
+BEGIN
+    -- Supply type (default for products, uses 'unit' cost unit)
+    IF NOT EXISTS (SELECT 1 FROM product_types WHERE name = 'supply') THEN
+        INSERT INTO product_types (id, name, cost_unit)
+        VALUES ('pt-supply', 'supply', 'unit');
+    END IF;
+    
+    -- Service type (uses 'hours' cost unit)
+    IF NOT EXISTS (SELECT 1 FROM product_types WHERE name = 'service') THEN
+        INSERT INTO product_types (id, name, cost_unit)
+        VALUES ('pt-service', 'service', 'hours');
+    END IF;
+    
+    -- Consulting type (uses 'hours' cost unit)
+    IF NOT EXISTS (SELECT 1 FROM product_types WHERE name = 'consulting') THEN
+        INSERT INTO product_types (id, name, cost_unit)
+        VALUES ('pt-consulting', 'consulting', 'hours');
+    END IF;
+END $$;
+
+-- ============================================
+-- Migration: Relax fixed type constraints
+-- ============================================
+
+-- Drop the fixed enum constraint from internal_product_categories
+-- Note: This allows any string value; validation is now done in the API layer
+ALTER TABLE internal_product_categories
+DROP CONSTRAINT IF EXISTS internal_product_categories_type_check;
+
+-- Migrate legacy 'item' type products to 'supply'
+UPDATE products
+SET type = 'supply'
+WHERE type = 'item' AND supplier_id IS NULL;
+
+-- Create index for faster type lookups on products
+CREATE INDEX IF NOT EXISTS idx_products_type ON products(type);
+
+-- Normalize internal category and product units to follow product type.
+UPDATE internal_product_categories
+SET cost_unit = CASE type
+    WHEN 'service' THEN 'hours'
+    WHEN 'consulting' THEN 'hours'
+    ELSE 'unit'
+END
+WHERE cost_unit IS DISTINCT FROM CASE type
+    WHEN 'service' THEN 'hours'
+    WHEN 'consulting' THEN 'hours'
+    ELSE 'unit'
+END;
+
+UPDATE products
+SET cost_unit = CASE type
+    WHEN 'service' THEN 'hours'
+    WHEN 'consulting' THEN 'hours'
+    ELSE 'unit'
+END
+WHERE supplier_id IS NULL
+  AND type IN ('supply', 'service', 'consulting')
+  AND cost_unit IS DISTINCT FROM CASE type
+      WHEN 'service' THEN 'hours'
+      WHEN 'consulting' THEN 'hours'
+      ELSE 'unit'
+  END;
+
+-- Internal product subcategories table
+CREATE TABLE IF NOT EXISTS internal_product_subcategories (
+    id VARCHAR(50) PRIMARY KEY,
+    category_id VARCHAR(50) NOT NULL REFERENCES internal_product_categories(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (category_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_internal_product_subcategories_category_id 
+    ON internal_product_subcategories(category_id);
+
+-- Migration: Backfill internal product subcategories from existing products
+DO $$
+DECLARE
+    rec RECORD;
+    cat_id VARCHAR(50);
+BEGIN
+    FOR rec IN 
+        SELECT DISTINCT p.category, p.type, p.subcategory
+        FROM products p
+        WHERE p.category IS NOT NULL 
+          AND p.category != ''
+          AND p.subcategory IS NOT NULL
+          AND p.subcategory != ''
+          AND p.supplier_id IS NULL
+          AND p.type IN ('supply', 'service', 'consulting')
+    LOOP
+        -- Find the category id
+        SELECT id INTO cat_id
+        FROM internal_product_categories
+        WHERE name = rec.category AND type = rec.type;
+        
+        IF cat_id IS NOT NULL THEN
+            -- Check if subcategory already exists
+            IF NOT EXISTS (
+                SELECT 1 FROM internal_product_subcategories 
+                WHERE category_id = cat_id AND LOWER(name) = LOWER(rec.subcategory)
+            ) THEN
+                INSERT INTO internal_product_subcategories (id, category_id, name)
+                VALUES (
+                    'ips-' || gen_random_uuid(),
+                    cat_id,
+                    rec.subcategory
+                );
+            END IF;
+        END IF;
+    END LOOP;
+END $$;
