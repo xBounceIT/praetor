@@ -23,6 +23,7 @@ export interface CalendarProps {
 
   // Allow weekend selection (e.g., for time tracker)
   allowWeekendSelection?: boolean;
+  size?: 'default' | 'compact';
 }
 
 const Calendar: React.FC<CalendarProps> = ({
@@ -37,8 +38,10 @@ const Calendar: React.FC<CalendarProps> = ({
   endDate,
   onRangeSelect,
   allowWeekendSelection = false,
+  size = 'default',
 }) => {
   const { t } = useTranslation('timesheets');
+  const isCompact = size === 'compact';
   const [viewDate, setViewDate] = useState(() => {
     if (selectedDate) return dateOnlyStringToLocalDate(selectedDate);
     if (startDate) return dateOnlyStringToLocalDate(startDate);
@@ -130,7 +133,7 @@ const Calendar: React.FC<CalendarProps> = ({
   };
 
   for (let i = 0; i < offset; i++) {
-    days.push(<div key={`empty-${i}`} className="h-9 w-full"></div>);
+    days.push(<div key={`empty-${i}`} className={`${isCompact ? 'h-8' : 'h-9'} w-full`}></div>);
   }
 
   for (let d = 1; d <= totalDays; d++) {
@@ -175,7 +178,7 @@ const Calendar: React.FC<CalendarProps> = ({
             onClick={() => {
               if (!isForbidden) handleDateClick(dateStr);
             }}
-            className={`relative h-9 w-full flex flex-col items-center justify-center rounded-lg transition-all border 
+            className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border 
               ${
                 isSelected
                   ? 'bg-praetor text-white border-praetor shadow-md scale-105 z-10'
@@ -191,7 +194,7 @@ const Calendar: React.FC<CalendarProps> = ({
               }`}
           >
             <span
-              className={`text-sm font-bold ${
+              className={`${isCompact ? 'text-[13px]' : 'text-sm'} font-bold ${
                 isSelected || isInRange
                   ? ''
                   : isWeekendOrHoliday
@@ -229,10 +232,12 @@ const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 w-full relative"
+      className={`bg-white rounded-3xl border border-slate-200 shadow-sm w-full relative ${
+        isCompact ? 'p-3 h-full flex flex-col' : 'p-4'
+      }`}
       ref={containerRef}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className={`flex items-center justify-between ${isCompact ? 'mb-3' : 'mb-4'}`}>
         <div className="relative flex items-center gap-1">
           <button
             type="button"
@@ -240,7 +245,9 @@ const Calendar: React.FC<CalendarProps> = ({
               setIsMonthPickerOpen(!isMonthPickerOpen);
               setIsYearPickerOpen(false);
             }}
-            className="font-bold text-slate-800 text-sm hover:bg-slate-50 px-2 py-1 rounded-md transition-colors flex items-center gap-1"
+            className={`font-bold text-slate-800 hover:bg-slate-50 rounded-md transition-colors flex items-center gap-1 ${
+              isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
+            }`}
           >
             {monthNames[month]}
             <i
@@ -254,7 +261,9 @@ const Calendar: React.FC<CalendarProps> = ({
               setIsYearPickerOpen(!isYearPickerOpen);
               setIsMonthPickerOpen(false);
             }}
-            className="text-slate-400 font-medium text-sm hover:bg-slate-50 px-2 py-1 rounded-md transition-colors flex items-center gap-1"
+            className={`text-slate-400 font-medium hover:bg-slate-50 rounded-md transition-colors flex items-center gap-1 ${
+              isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
+            }`}
           >
             {year}
             <i
@@ -316,28 +325,34 @@ const Calendar: React.FC<CalendarProps> = ({
           <button
             type="button"
             onClick={prevMonth}
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
+            className={`hover:bg-slate-100 rounded-lg text-slate-400 transition-colors ${
+              isCompact ? 'p-1' : 'p-1.5'
+            }`}
           >
             <i className="fa-solid fa-chevron-left text-xs"></i>
           </button>
           <button
             type="button"
             onClick={handleTodayClick}
-            className="px-2 text-[10px] font-bold uppercase tracking-wider text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+            className={`font-bold uppercase tracking-wider text-praetor hover:bg-slate-100 rounded-lg transition-colors ${
+              isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
+            }`}
           >
             Oggi
           </button>
           <button
             type="button"
             onClick={nextMonth}
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
+            className={`hover:bg-slate-100 rounded-lg text-slate-400 transition-colors ${
+              isCompact ? 'p-1' : 'p-1.5'
+            }`}
           >
             <i className="fa-solid fa-chevron-right text-xs"></i>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5 mb-1">
+      <div className={`grid grid-cols-7 gap-0.5 ${isCompact ? 'mb-0.5' : 'mb-1'}`}>
         {dayHeaders.map((day, idx) => {
           const isSundayHeader =
             (startOfWeek === 'Monday' && idx === 6) || (startOfWeek === 'Sunday' && idx === 0);
@@ -347,7 +362,9 @@ const Calendar: React.FC<CalendarProps> = ({
           return (
             <div
               key={day}
-              className={`text-center text-[10px] font-bold uppercase tracking-widest py-1 ${isHolidayHeader ? 'text-red-400' : 'text-slate-400'}`}
+              className={`text-center font-bold uppercase tracking-widest ${
+                isCompact ? 'py-0.5 text-[9px]' : 'py-1 text-[10px]'
+              } ${isHolidayHeader ? 'text-red-400' : 'text-slate-400'}`}
             >
               {day}
             </div>
@@ -358,14 +375,22 @@ const Calendar: React.FC<CalendarProps> = ({
       <div className="grid grid-cols-7 gap-0.5">{days}</div>
 
       {selectionMode === 'single' && (
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
+        <div
+          className={`border-t border-slate-100 flex items-center gap-2 ${
+            isCompact ? 'mt-auto pt-2' : 'mt-4 pt-3'
+          }`}
+        >
           <div className="w-2 h-2 rounded-full bg-red-500"></div>
-          <span className="text-[10px] font-bold text-slate-400 uppercase">
+          <span
+            className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} font-bold text-slate-400 uppercase`}
+          >
             {t('calendar.holidayWeekend')}
           </span>
           <div className="flex items-center gap-2 ml-auto">
             <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">
+            <span
+              className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} font-bold text-slate-400 uppercase`}
+            >
               {t('calendar.goalReached')}
             </span>
           </div>
