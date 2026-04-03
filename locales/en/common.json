@@ -239,7 +239,12 @@
     "search": "Search...",
     "selectAll": "Select All",
     "noResults": "No results found",
-    "clearFilter": "Clear Filter"
+    "clearFilter": "Clear Filter",
+    "increaseFont": "Increase font size",
+    "decreaseFont": "Decrease font size",
+    "columnSettings": "Column settings",
+    "columns": "Columns",
+    "resetColumns": "Reset columns"
   },
   "select": {
     "placeholder": "Select...",

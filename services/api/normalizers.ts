@@ -16,8 +16,6 @@ import type {
   SpecialBid,
   SupplierInvoice,
   SupplierInvoiceItem,
-  SupplierOffer,
-  SupplierOfferItem,
   SupplierQuote,
   SupplierQuoteItem,
   SupplierSaleOrder,
@@ -303,25 +301,6 @@ export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
   discount: Number(q.discount || 0),
   items: (q.items || []).map(normalizeSupplierQuoteItem),
-});
-
-export const normalizeSupplierOfferItem = (item: SupplierOfferItem): SupplierOfferItem => ({
-  ...item,
-  quantity: Number(item.quantity || 0),
-  unitPrice: Number(item.unitPrice || 0),
-  productTaxRate:
-    item.productTaxRate === undefined || item.productTaxRate === null
-      ? 0
-      : Number(item.productTaxRate),
-  discount: Number(item.discount || 0),
-  note: item.note || '',
-});
-
-export const normalizeSupplierOffer = (offer: SupplierOffer): SupplierOffer => ({
-  ...offer,
-  linkedOrderId: offer.linkedOrderId ?? undefined,
-  discount: Number(offer.discount || 0),
-  items: (offer.items || []).map(normalizeSupplierOfferItem),
 });
 
 export const normalizeSupplierSaleOrderItem = (

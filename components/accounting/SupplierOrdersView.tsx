@@ -27,8 +27,6 @@ const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknow
 const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
   { id: 'draft', name: t('accounting:supplierOrders.statusDraft') },
   { id: 'sent', name: t('accounting:supplierOrders.statusSent') },
-  { id: 'confirmed', name: t('accounting:supplierOrders.statusConfirmed') },
-  { id: 'denied', name: t('accounting:supplierOrders.statusDenied') },
 ];
 
 const getOrderStatusLabel = (
@@ -36,8 +34,6 @@ const getOrderStatusLabel = (
   t: (key: string, options?: Record<string, unknown>) => string,
 ) => {
   if (status === 'sent') return t('accounting:supplierOrders.statusSent');
-  if (status === 'confirmed') return t('accounting:supplierOrders.statusConfirmed');
-  if (status === 'denied') return t('accounting:supplierOrders.statusDenied');
   return t('accounting:supplierOrders.statusDraft');
 };
 
@@ -116,7 +112,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<SupplierSaleOrder>>({
-    linkedOfferId: '',
     linkedQuoteId: '',
     supplierId: '',
     supplierName: '',
@@ -223,7 +218,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         id: 'supplierName',
         accessorFn: (row: SupplierSaleOrder) => row.supplierName,
         cell: ({ row }: { row: SupplierSaleOrder }) => {
-          const isMuted = row.status === 'confirmed' || row.status === 'denied';
+          const isMuted = row.status === 'sent';
 
           return (
             <div>
@@ -231,9 +226,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 {row.supplierName}
               </div>
               <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
-                {row.linkedOfferId}
-              </div>
-              <div className="text-[10px] text-slate-400">
                 {row.linkedQuoteId ||
                   t('accounting:supplierOrders.noQuoteLink', {
                     defaultValue: 'No quote link',
@@ -251,7 +243,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           const { total } = calculateTotals(row.items, row.discount);
-          const isMuted = row.status === 'confirmed' || row.status === 'denied';
+          const isMuted = row.status === 'sent';
 
           return (
             <span className={`text-sm font-bold ${isMuted ? 'text-slate-400' : 'text-slate-700'}`}>
@@ -268,7 +260,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
-          const isMuted = row.status === 'confirmed' || row.status === 'denied';
+          const isMuted = row.status === 'sent';
 
           return (
             <span
@@ -286,9 +278,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: SupplierSaleOrder }) => (
-          <div
-            className={row.status === 'confirmed' || row.status === 'denied' ? 'opacity-60' : ''}
-          >
+          <div className={row.status === 'sent' ? 'opacity-60' : ''}>
             <StatusBadge
               type={row.status as StatusType}
               label={getOrderStatusLabel(row.status, t)}
@@ -363,38 +353,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </Tooltip>
               )}
 
-              {row.status === 'sent' && (
-                <>
-                  <Tooltip label={t('accounting:supplierOrders.markConfirmed')}>
-                    {() => (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void onUpdateOrder(row.id, { status: 'confirmed' });
-                        }}
-                        className="rounded-lg p-2 text-slate-400 transition-all hover:bg-emerald-50 hover:text-emerald-600"
-                      >
-                        <i className="fa-solid fa-check"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                  <Tooltip label={t('accounting:supplierOrders.markDenied')}>
-                    {() => (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void onUpdateOrder(row.id, { status: 'denied' });
-                        }}
-                        className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    )}
-                  </Tooltip>
-                </>
-              )}
-
-              {row.status === 'confirmed' && !hasInvoice && onCreateInvoice && (
+              {row.status === 'sent' && !hasInvoice && onCreateInvoice && (
                 <Tooltip label={t('accounting:supplierOrders.createInvoice')}>
                   {() => (
                     <button
@@ -742,7 +701,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('sales:supplierOffers.noItemsAdded')}
+                  {t('accounting:supplierOrders.noItemsAdded', {
+                    defaultValue: 'No items added yet',
+                  })}
                 </div>
               )}
             </div>
@@ -842,7 +803,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 })}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                {orderToDelete?.supplierName} · {orderToDelete?.linkedOfferId}
+                {orderToDelete?.supplierName} · {orderToDelete?.linkedQuoteId || orderToDelete?.id}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
@@ -873,7 +834,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </h2>
             <p className="text-sm text-slate-500">
               {t('accounting:supplierOrders.subtitle', {
-                defaultValue: 'Orders created from supplier offers.',
+                defaultValue: 'Orders created from supplier quotes.',
               })}
             </p>
           </div>
@@ -887,9 +848,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierSaleOrder) =>
-          row.status === 'confirmed' || row.status === 'denied'
-            ? 'bg-slate-50 text-slate-400'
-            : 'hover:bg-slate-50/50'
+          row.status === 'sent' ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50/50'
         }
         onRowClick={(row: SupplierSaleOrder) => openEditModal(row)}
       />

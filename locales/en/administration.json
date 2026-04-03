@@ -32,8 +32,7 @@
     "sales": {
       "client_quotes": "Client Quotes",
       "client_offers": "Client Offers",
-      "supplier_quotes": "Supplier Quotes",
-      "supplier_offers": "Supplier Offers"
+      "supplier_quotes": "Supplier Quotes"
     },
     "catalog": {
       "internal_listing": "Internal Listing",
@@ -142,7 +141,6 @@
         "special_bid": "special bid",
         "supplier": "supplier",
         "supplier_invoice": "supplier invoice",
-        "supplier_offer": "supplier offer",
         "supplier_order": "supplier order",
         "supplier_quote": "supplier quote",
         "task": "task",

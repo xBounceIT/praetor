@@ -48,12 +48,11 @@ const orderSchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: ['string', 'null'] },
-    linkedOfferId: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -61,7 +60,7 @@ const orderSchema = {
   },
   required: [
     'id',
-    'linkedOfferId',
+    'linkedQuoteId',
     'supplierId',
     'supplierName',
     'discount',
@@ -91,16 +90,15 @@ const createBodySchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
-    linkedOfferId: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
-  required: ['linkedOfferId', 'supplierId', 'supplierName', 'items'],
+  required: ['linkedQuoteId', 'supplierId', 'supplierName', 'items'],
 } as const;
 
 const updateBodySchema = {
@@ -112,7 +110,7 @@ const updateBodySchema = {
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
 } as const;
@@ -125,6 +123,24 @@ type SupplierOrderItemInput = {
   productTaxRate?: string | number;
   discount?: string | number;
   note?: string;
+};
+
+const parseSupplierOrderStatus = (status: unknown) => {
+  if (status === undefined || status === null || status === '') {
+    return { ok: true as const, value: undefined };
+  }
+
+  if (status !== 'draft' && status !== 'sent') {
+    return {
+      ok: false as const,
+      message: 'status must be one of: draft, sent',
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: status,
+  };
 };
 
 const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) => {
@@ -214,7 +230,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT
             id,
             linked_quote_id as "linkedQuoteId",
-            linked_offer_id as "linkedOfferId",
             supplier_id as "supplierId",
             supplier_name as "supplierName",
             payment_terms as "paymentTerms",
@@ -275,7 +290,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const {
         id: nextId,
         linkedQuoteId,
-        linkedOfferId,
         supplierId,
         supplierName,
         items,
@@ -285,8 +299,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
-        linkedQuoteId?: unknown;
-        linkedOfferId: unknown;
+        linkedQuoteId: unknown;
         supplierId: unknown;
         supplierName: unknown;
         items: SupplierOrderItemInput[] | unknown;
@@ -296,9 +309,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const linkedOfferIdResult = requireNonEmptyString(linkedOfferId, 'linkedOfferId');
-      if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
-      const linkedQuoteIdResult = optionalNonEmptyString(linkedQuoteId, 'linkedQuoteId');
+      const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
       const supplierIdResult = requireNonEmptyString(supplierId, 'supplierId');
       if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
@@ -310,35 +321,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const offerResult = await query(
-        'SELECT id, linked_quote_id as "linkedQuoteId", status FROM supplier_offers WHERE id = $1',
-        [linkedOfferIdResult.value],
+      const quoteResult = await query(
+        `SELECT
+            id,
+            supplier_id as "supplierId",
+            supplier_name as "supplierName",
+            status
+         FROM supplier_quotes
+         WHERE id = $1`,
+        [linkedQuoteIdResult.value],
       );
-      if (offerResult.rows.length === 0) {
-        return reply.code(404).send({ error: 'Source offer not found' });
+      if (quoteResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Source quote not found' });
       }
-      if (offerResult.rows[0].status !== 'accepted') {
+      if (quoteResult.rows[0].status !== 'accepted') {
         return reply
           .code(409)
-          .send({ error: 'Sale orders can only be created from accepted offers' });
+          .send({ error: 'Supplier orders can only be created from accepted quotes' });
       }
 
       const existingOrderResult = await query(
-        'SELECT id FROM supplier_sales WHERE linked_offer_id = $1 LIMIT 1',
-        [linkedOfferIdResult.value],
+        'SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1',
+        [linkedQuoteIdResult.value],
       );
       if (existingOrderResult.rows.length > 0) {
-        return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+        return reply.code(409).send({ error: 'A supplier order already exists for this quote' });
       }
       if (
-        linkedQuoteIdResult.value !== null &&
-        linkedQuoteIdResult.value !== offerResult.rows[0].linkedQuoteId
+        supplierIdResult.value !== quoteResult.rows[0].supplierId ||
+        supplierNameResult.value !== quoteResult.rows[0].supplierName
       ) {
-        return reply.code(409).send({ error: 'linkedQuoteId must match the source offer quote' });
+        return reply.code(409).send({ error: 'Supplier details must match the source quote' });
       }
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const statusResult = parseSupplierOrderStatus(status);
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
@@ -347,12 +366,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         createdOrderResult = await query(
           `INSERT INTO supplier_sales
-            (id, linked_quote_id, linked_offer_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING
+            (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING
               id,
               linked_quote_id as "linkedQuoteId",
-              linked_offer_id as "linkedOfferId",
               supplier_id as "supplierId",
               supplier_name as "supplierName",
               payment_terms as "paymentTerms",
@@ -363,13 +381,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
             orderId,
-            offerResult.rows[0].linkedQuoteId || null,
-            linkedOfferIdResult.value,
+            linkedQuoteIdResult.value,
             supplierIdResult.value,
             supplierNameResult.value,
             paymentTerms || 'immediate',
             discountResult.value || 0,
-            status || 'draft',
+            statusResult.value || 'draft',
             notes,
           ],
         );
@@ -384,10 +401,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         if (
           databaseError.code === '23505' &&
-          (databaseError.constraint === 'idx_supplier_sales_linked_offer_id' ||
-            databaseError.detail?.includes('(linked_offer_id)'))
+          (databaseError.constraint === 'idx_supplier_sales_linked_quote_id_unique' ||
+            databaseError.detail?.includes('(linked_quote_id)'))
         ) {
-          return reply.code(409).send({ error: 'A sale order already exists for this offer' });
+          return reply.code(409).send({ error: 'A supplier order already exists for this quote' });
         }
         throw error;
       }
@@ -498,7 +515,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const existingOrderResult = await query(
-        `SELECT id, linked_offer_id as "linkedOfferId",
+        `SELECT id,
+                linked_quote_id as "linkedQuoteId",
                 supplier_id as "supplierId", supplier_name as "supplierName", status
          FROM supplier_sales WHERE id = $1`,
         [idResult.value],
@@ -537,7 +555,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierNameValue = supplierNameResult.value;
       }
 
-      if (existingOrder.linkedOfferId) {
+      if (existingOrder.linkedQuoteId) {
         const lockedFields: string[] = [];
         if (
           supplierIdValue !== undefined &&
@@ -555,7 +573,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         if (lockedFields.length > 0) {
           return reply.code(409).send({
-            error: 'Offer-linked order supplier details are read-only',
+            error: 'Quote-linked order supplier details are read-only',
             fields: lockedFields,
           });
         }
@@ -567,6 +585,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
         discountValue = discountResult.value;
       }
+
+      const statusResult = parseSupplierOrderStatus(status);
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
 
       let updatedOrderResult: Awaited<ReturnType<typeof query>>;
       try {
@@ -580,14 +601,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                status = COALESCE($6, status),
                notes = COALESCE($7, notes),
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $8
-           RETURNING
-              id,
-              linked_quote_id as "linkedQuoteId",
-              linked_offer_id as "linkedOfferId",
-              supplier_id as "supplierId",
-              supplier_name as "supplierName",
-              payment_terms as "paymentTerms",
+            WHERE id = $8
+            RETURNING
+               id,
+               linked_quote_id as "linkedQuoteId",
+               supplier_id as "supplierId",
+               supplier_name as "supplierName",
+               payment_terms as "paymentTerms",
               discount,
               status,
               notes,
@@ -599,7 +619,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierNameValue,
             paymentTerms,
             discountValue,
-            status,
+            statusResult.value,
             notes,
             idResult.value,
           ],
@@ -679,11 +699,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         updatedItems = itemsResult.rows;
       }
 
-      const nextStatus =
-        typeof status === 'string'
-          ? status
-          : String(updatedOrderResult.rows[0].status ?? existingOrder.status);
-      const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
+      const nextStatus = String(updatedOrderResult.rows[0].status ?? existingOrder.status);
+      const didStatusChange =
+        statusResult.value !== undefined && existingOrder.status !== nextStatus;
       await logAudit({
         request,
         action: 'supplier_order.updated',
