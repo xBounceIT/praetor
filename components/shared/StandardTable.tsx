@@ -670,7 +670,7 @@ const StandardTable = <T extends object>({
                         <td
                           key={colId}
                           style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px align-middle whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
+                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn ? 'w-full flex justify-end items-center' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
