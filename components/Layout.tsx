@@ -16,12 +16,7 @@ interface Module {
 const moduleRoutes: Record<string, View[]> = {
   timesheets: ['timesheets/tracker', 'timesheets/recurring'],
   crm: ['crm/clients', 'crm/suppliers'],
-  sales: [
-    'sales/client-quotes',
-    'sales/client-offers',
-    'sales/supplier-quotes',
-    'sales/supplier-offers',
-  ],
+  sales: ['sales/client-quotes', 'sales/client-offers', 'sales/supplier-quotes'],
   catalog: ['catalog/internal-listing', 'catalog/external-listing', 'catalog/special-bids'],
   projects: ['projects/manage', 'projects/tasks'],
   accounting: [
@@ -290,19 +285,6 @@ const Layout: React.FC<LayoutProps> = ({
                 isCollapsed={isCollapsed}
                 onClick={() => {
                   onViewChange('sales/supplier-quotes');
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            )}
-            {canAccessView('sales/supplier-offers') && (
-              <NavItem
-                entityIcon="fa-truck"
-                icon="fa-file-signature"
-                label={t('routes.supplierOffers')}
-                active={activeView === 'sales/supplier-offers'}
-                isCollapsed={isCollapsed}
-                onClick={() => {
-                  onViewChange('sales/supplier-offers');
                   setIsMobileMenuOpen(false);
                 }}
               />
