@@ -210,7 +210,9 @@
     "products": "products",
     "costUnit": "Cost Unit",
     "deleteCategoryWithProducts": "Category '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will become uncategorized.",
-    "deleteSubcategoryWithProducts": "Subcategory '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will lose their subcategory."
+    "deleteCategoryWithLinkedProducts": "Cannot delete category '{{name}}'. It has {{count}} product(s) linked to transactions (offers, orders, invoices). Remove the products from transactions first.",
+    "deleteSubcategoryWithProducts": "Subcategory '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will lose their subcategory.",
+    "deleteSubcategoryWithLinkedProducts": "Cannot delete subcategory '{{name}}'. It has {{count}} product(s) linked to transactions (offers, orders, invoices). Remove the products from transactions first."
   },
   "externalProducts": {
     "title": "External Listing",

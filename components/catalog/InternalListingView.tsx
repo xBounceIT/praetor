@@ -468,6 +468,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   };
 
   const handleDeleteCategory = async (category: InternalProductCategory) => {
+    // Check if any products are linked to transactions
+    if (category.hasLinkedProducts) {
+      window.alert(
+        t('crm:internalListing.deleteCategoryWithLinkedProducts', {
+          count: category.productCount,
+          name: category.name,
+        }) ||
+          `Cannot delete category "${category.name}". Some products in this category are linked to transactions (offers, orders, invoices). Remove the products from transactions first.`,
+      );
+      return;
+    }
+
     if (category.productCount > 0) {
       const confirmed = window.confirm(
         t('crm:internalListing.deleteCategoryWithProducts', {
@@ -674,6 +686,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     const selectedType = formData.type || defaultTypeName;
     if (!selectedType) {
       setSubcategoryError(t('common:validation.typeRequired'));
+      return;
+    }
+
+    // Check if any products are linked to transactions
+    if (subcategory.hasLinkedProducts) {
+      window.alert(
+        t('crm:internalListing.deleteSubcategoryWithLinkedProducts', {
+          count: subcategory.productCount,
+          name: subcategory.name,
+        }) ||
+          `Cannot delete subcategory "${subcategory.name}". Some products in this subcategory are linked to transactions (offers, orders, invoices). Remove the products from transactions first.`,
+      );
       return;
     }
 

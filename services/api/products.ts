@@ -20,11 +20,13 @@ export interface InternalProductCategory {
   updatedAt?: number;
   productCount: number;
   costUnit: 'unit' | 'hours';
+  hasLinkedProducts: boolean;
 }
 
 export interface InternalProductSubcategory {
   name: string;
   productCount: number;
+  hasLinkedProducts: boolean;
 }
 
 export const productsApi = {

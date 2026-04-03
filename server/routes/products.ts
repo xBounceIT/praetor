@@ -671,8 +671,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       createdAt: { type: 'number' },
       updatedAt: { type: 'number' },
       productCount: { type: 'number' },
+      hasLinkedProducts: { type: 'boolean' },
     },
-    required: ['id', 'name', 'type', 'costUnit'],
+    required: ['id', 'name', 'type', 'costUnit', 'hasLinkedProducts'],
   } as const;
 
   // Subcategory schema
@@ -681,8 +682,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     properties: {
       name: { type: 'string' },
       productCount: { type: 'number' },
+      hasLinkedProducts: { type: 'boolean' },
     },
-    required: ['name', 'productCount'],
+    required: ['name', 'productCount', 'hasLinkedProducts'],
   } as const;
 
   // Helper: Check if internal products by category/subcategory are linked to offers/orders
@@ -766,7 +768,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         `SELECT c.id, c.name, c.type,
                 c.cost_unit as "costUnit",
                 c.created_at as "createdAt", c.updated_at as "updatedAt",
-                COALESCE(p.count, 0) as "productCount"
+                COALESCE(p.count, 0) as "productCount",
+                COALESCE(lp.has_linked, false) as "hasLinkedProducts"
          FROM internal_product_categories c
          LEFT JOIN (
            SELECT category, COUNT(*) as count
@@ -774,6 +777,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            WHERE type = $1 AND supplier_id IS NULL
            GROUP BY category
          ) p ON c.name = p.category
+         LEFT JOIN (
+           SELECT pr.category, true as has_linked
+           FROM products pr
+           WHERE pr.type = $1 
+             AND pr.supplier_id IS NULL
+             AND EXISTS (
+               SELECT 1 FROM quote_items qi WHERE qi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM customer_offer_items coi WHERE coi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM sale_items si WHERE si.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM invoice_items ii WHERE ii.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM special_bids sb WHERE sb.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_quote_items sqi WHERE sqi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_offer_items soi WHERE soi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_sale_items ssi WHERE ssi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_invoice_items sii WHERE sii.product_id = pr.id
+             )
+           GROUP BY pr.category
+         ) lp ON c.name = lp.category
          WHERE c.type = $1
          ORDER BY c.name ASC`,
         [typeResult.value],
@@ -858,6 +887,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdAt: result.rows[0].createdAt ? new Date(result.rows[0].createdAt).getTime() : null,
         updatedAt: result.rows[0].updatedAt ? new Date(result.rows[0].updatedAt).getTime() : null,
         productCount: 0,
+        hasLinkedProducts: false,
       });
     },
   );
@@ -919,6 +949,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (existingResult.rows.length > 0) {
           return badRequest(reply, 'Category with this name already exists for this type');
         }
+
+        // Check for linked transactions BEFORE any updates
+        const linkedCheck = await checkProductsLinkedToTransactions(current.name, current.type);
+        if (linkedCheck.linked) {
+          return reply.code(409).send({
+            error: 'Cannot rename category',
+            message: `Category "${current.name}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
+            linkedCount: linkedCheck.count,
+          });
+        }
       }
 
       // Update category
@@ -966,6 +1006,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? new Date(updateResult.rows[0].updatedAt).getTime()
           : null,
         productCount: parseInt(countResult.rows[0].count, 10),
+        hasLinkedProducts: false, // Rename only succeeds if no products were linked
       };
     },
   );
@@ -1079,9 +1120,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const categoryId = categoryIdResult.rows[0].id;
 
-      // Then get subcategories with product counts
+      // Then get subcategories with product counts and linked status
       const result = await query(
-        `SELECT s.name, COALESCE(p.count, 0) as "productCount"
+        `SELECT s.name, 
+                COALESCE(p.count, 0) as "productCount",
+                COALESCE(lp.has_linked, false) as "hasLinkedProducts"
          FROM internal_product_subcategories s
          LEFT JOIN (
            SELECT subcategory, COUNT(*) as count
@@ -1089,6 +1132,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            WHERE type = $1 AND category = $2 AND supplier_id IS NULL
            GROUP BY subcategory
          ) p ON s.name = p.subcategory
+         LEFT JOIN (
+           SELECT pr.subcategory, true as has_linked
+           FROM products pr
+           WHERE pr.type = $1 
+             AND pr.category = $2
+             AND pr.supplier_id IS NULL
+             AND EXISTS (
+               SELECT 1 FROM quote_items qi WHERE qi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM customer_offer_items coi WHERE coi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM sale_items si WHERE si.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM invoice_items ii WHERE ii.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM special_bids sb WHERE sb.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_quote_items sqi WHERE sqi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_offer_items soi WHERE soi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_sale_items ssi WHERE ssi.product_id = pr.id
+               UNION ALL
+               SELECT 1 FROM supplier_invoice_items sii WHERE sii.product_id = pr.id
+             )
+           GROUP BY pr.subcategory
+         ) lp ON s.name = lp.subcategory
          WHERE s.category_id = $3
          ORDER BY s.name ASC`,
         [typeResult.value, categoryResult.value, categoryId],
@@ -1181,6 +1251,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return reply.code(201).send({
         name: result.rows[0].name,
         productCount: 0,
+        hasLinkedProducts: false,
       });
     },
   );
@@ -1252,6 +1323,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      // Check for linked transactions BEFORE any updates
+      const linkedCheck = await checkProductsLinkedToTransactions(
+        categoryResult.value,
+        typeResult.value,
+        oldNameResult.value,
+      );
+      if (linkedCheck.linked) {
+        return reply.code(409).send({
+          error: 'Cannot rename subcategory',
+          message: `Subcategory "${oldNameResult.value}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
+          linkedCount: linkedCheck.count,
+        });
+      }
+
       // Update subcategory in the table
       const subResult = await query(
         `UPDATE internal_product_subcategories 
@@ -1291,6 +1376,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return {
         name: newNameResult.value,
         productCount: updateResult.rows.length,
+        hasLinkedProducts: false, // Rename only succeeds if no products were linked to transactions
       };
     },
   );
