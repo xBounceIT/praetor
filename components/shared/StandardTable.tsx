@@ -652,7 +652,7 @@ const StandardTable = <T extends object>({
                   <tr
                     key={idx}
                     onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                    className={`transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-100 text-slate-400' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
+                    className={`transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-300 text-slate-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
                   >
                     {visibleColumns.map((col, colIdx) => {
                       const colId = getColId(col);
