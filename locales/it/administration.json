@@ -32,8 +32,7 @@
     "sales": {
       "client_quotes": "Preventivi Clienti",
       "client_offers": "Offerte Clienti",
-      "supplier_quotes": "Preventivi Fornitori",
-      "supplier_offers": "Offerte Fornitori"
+      "supplier_quotes": "Preventivi Fornitori"
     },
     "catalog": {
       "internal_listing": "Listino Interno",
@@ -142,7 +141,6 @@
         "special_bid": "offerta speciale",
         "supplier": "fornitore",
         "supplier_invoice": "fattura fornitore",
-        "supplier_offer": "offerta fornitore",
         "supplier_order": "ordine fornitore",
         "supplier_quote": "preventivo fornitore",
         "task": "attività",

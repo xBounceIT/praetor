@@ -189,24 +189,12 @@ export const DEMO_SUPPLIER_QUOTES = [
   { id: 'dm_sq_14' },
 ] as const;
 
-export const DEMO_SUPPLIER_OFFERS = [
-  { id: 'dm_sfo_01', linkedQuoteId: 'dm_sq_04' },
-  { id: 'dm_sfo_02', linkedQuoteId: 'dm_sq_05' },
-  { id: 'dm_sfo_03', linkedQuoteId: 'dm_sq_06' },
-  { id: 'dm_sfo_04', linkedQuoteId: 'dm_sq_07' },
-  { id: 'dm_sfo_05', linkedQuoteId: 'dm_sq_08' },
-  { id: 'dm_sfo_06', linkedQuoteId: 'dm_sq_11' },
-  { id: 'dm_sfo_07', linkedQuoteId: 'dm_sq_12' },
-  { id: 'dm_sfo_08', linkedQuoteId: 'dm_sq_13' },
-  { id: 'dm_sfo_09', linkedQuoteId: 'dm_sq_14' },
-] as const;
-
 export const DEMO_SUPPLIER_SALES = [
-  { id: 'dm_ss_01', linkedOfferId: 'dm_sfo_06' },
-  { id: 'dm_ss_02', linkedOfferId: 'dm_sfo_04' },
-  { id: 'dm_ss_03', linkedOfferId: 'dm_sfo_07' },
-  { id: 'dm_ss_04', linkedOfferId: 'dm_sfo_08' },
-  { id: 'dm_ss_05', linkedOfferId: 'dm_sfo_09' },
+  { id: 'dm_ss_01', linkedQuoteId: 'dm_sq_11' },
+  { id: 'dm_ss_02', linkedQuoteId: 'dm_sq_07' },
+  { id: 'dm_ss_03', linkedQuoteId: 'dm_sq_12' },
+  { id: 'dm_ss_04', linkedQuoteId: 'dm_sq_13' },
+  { id: 'dm_ss_05', linkedQuoteId: 'dm_sq_14' },
 ] as const;
 
 export const DEMO_SUPPLIER_INVOICES = [
@@ -273,7 +261,6 @@ export const DEMO_ITEM_IDS = {
   saleItems: rangeIds('dm_soi_', 8),
   invoiceItems: rangeIds('dm_inv_item_', 6),
   supplierQuoteItems: rangeIds('dm_sqi_', 15),
-  supplierOfferItems: rangeIds('dm_sfoi_', 10),
   supplierSaleItems: rangeIds('dm_ssi_', 6),
   supplierInvoiceItems: rangeIds('dm_sinv_item_', 6),
 } as const;
@@ -288,7 +275,6 @@ export const DEMO_IDS = {
   sales: DEMO_SALES.map((item) => item.id),
   invoices: DEMO_INVOICES.map((item) => item.id),
   supplierQuotes: DEMO_SUPPLIER_QUOTES.map((item) => item.id),
-  supplierOffers: DEMO_SUPPLIER_OFFERS.map((item) => item.id),
   supplierSales: DEMO_SUPPLIER_SALES.map((item) => item.id),
   supplierInvoices: DEMO_SUPPLIER_INVOICES.map((item) => item.id),
   projects: DEMO_PROJECTS.map((item) => item.id),
@@ -316,8 +302,6 @@ export const DEMO_EXPECTED_COUNTS = {
   invoice_items: DEMO_ITEM_IDS.invoiceItems.length,
   supplier_quotes: DEMO_SUPPLIER_QUOTES.length,
   supplier_quote_items: DEMO_ITEM_IDS.supplierQuoteItems.length,
-  supplier_offers: DEMO_SUPPLIER_OFFERS.length,
-  supplier_offer_items: DEMO_ITEM_IDS.supplierOfferItems.length,
   supplier_sales: DEMO_SUPPLIER_SALES.length,
   supplier_sale_items: DEMO_ITEM_IDS.supplierSaleItems.length,
   supplier_invoices: DEMO_SUPPLIER_INVOICES.length,
