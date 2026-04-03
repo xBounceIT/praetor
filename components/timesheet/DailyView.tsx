@@ -361,7 +361,7 @@ const DailyView: React.FC<DailyViewProps> = ({
               onChange={(val) => setLocation(val as TimeEntryLocation)}
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 sticky right-0 bg-white">
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               {t('entry.hours')} <span className="text-red-500">*</span>
             </label>
