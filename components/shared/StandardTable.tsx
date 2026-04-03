@@ -48,6 +48,7 @@ export type StandardTableProps<T extends object = object> = {
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
   rowClassName?: (row: T) => string;
+  disabledRow?: (row: T) => boolean;
   onRowClick?: (row: T) => void;
   initialFilterState?: Record<string, string[]>;
 };
@@ -68,6 +69,7 @@ const StandardTable = <T extends object>({
   columns,
   defaultRowsPerPage = 10,
   rowClassName,
+  disabledRow,
   onRowClick,
   initialFilterState,
 }: StandardTableProps<T>) => {
@@ -649,8 +651,8 @@ const StandardTable = <T extends object>({
                 paginatedData.map((row, idx) => (
                   <tr
                     key={idx}
-                    onClick={() => onRowClick?.(row)}
-                    className={`transition-colors ${fontSizeClass} ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}
+                    onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
+                    className={`transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-100 text-slate-400' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
                   >
                     {visibleColumns.map((col, colIdx) => {
                       const colId = getColId(col);
