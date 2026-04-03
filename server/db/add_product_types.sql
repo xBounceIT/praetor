@@ -53,7 +53,7 @@ DROP CONSTRAINT IF EXISTS internal_product_categories_type_check;
 -- ============================================
 UPDATE products
 SET type = 'supply'
-WHERE type = 'item' AND supplier_id IS NULL;
+WHERE type = 'item';
 
 -- ============================================
 -- 4. Remove the legacy 'item' type after migration
