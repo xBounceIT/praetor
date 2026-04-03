@@ -345,7 +345,7 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
 
   // Build type options from API-loaded product types
   const typeOptions: Option[] = React.useMemo(() => {
-    return productTypes.map((t) => ({ id: t.name, name: t.name }));
+    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
   }, [productTypes]);
 
   // Helper to display type name
