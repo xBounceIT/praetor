@@ -98,21 +98,21 @@ const Layout: React.FC<LayoutProps> = ({
   /* Removed module switcher state and refs */
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Create modules array with localized names
+  // Create modules array with localized names - custom order as requested
   const modules: Module[] = useMemo(
     () => [
-      { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
-      { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
-      { id: 'sales', name: t('modules.sales'), icon: 'fa-file-invoice-dollar', active: false },
-      { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
-      { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
-      { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
       { id: 'hr', name: t('modules.hr'), icon: 'fa-users-gear', active: false },
+      { id: 'crm', name: t('modules.crm'), icon: 'fa-handshake', active: false },
+      { id: 'catalog', name: t('modules.catalog'), icon: 'fa-box-open', active: false },
+      { id: 'sales', name: t('modules.sales'), icon: 'fa-file-invoice-dollar', active: false },
+      { id: 'accounting', name: t('modules.accounting'), icon: 'fa-calculator', active: false },
+      { id: 'projects', name: t('modules.projects'), icon: 'fa-folder-tree', active: false },
+      { id: 'timesheets', name: t('modules.timesheets'), icon: 'fa-clock', active: true },
       { id: 'reports', name: t('modules.reports'), icon: 'fa-chart-simple', active: false },
       { id: 'administration', name: t('modules.administration'), icon: 'fa-gears', active: false },
     ],
     [t],
-  ).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
+  );
 
   const canAccessView = (view: View) => {
     if (view === 'reports/ai-reporting' && !isAiReportingEnabled) {
