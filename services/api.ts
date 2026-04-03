@@ -26,7 +26,6 @@ export { rolesApi } from './api/roles';
 export { settingsApi } from './api/settings';
 export { specialBidsApi } from './api/specialBids';
 export { supplierInvoicesApi } from './api/supplierInvoices';
-export { supplierOffersApi } from './api/supplierOffers';
 export { supplierOrdersApi } from './api/supplierOrders';
 export { supplierQuotesApi } from './api/supplierQuotes';
 export { suppliersApi } from './api/suppliers';
@@ -56,7 +55,6 @@ import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
 import { specialBidsApi } from './api/specialBids';
 import { supplierInvoicesApi } from './api/supplierInvoices';
-import { supplierOffersApi } from './api/supplierOffers';
 import { supplierOrdersApi } from './api/supplierOrders';
 import { supplierQuotesApi } from './api/supplierQuotes';
 import { suppliersApi } from './api/suppliers';
@@ -81,7 +79,6 @@ export default {
   invoices: invoicesApi,
   suppliers: suppliersApi,
   supplierQuotes: supplierQuotesApi,
-  supplierOffers: supplierOffersApi,
   supplierOrders: supplierOrdersApi,
   supplierInvoices: supplierInvoicesApi,
   specialBids: specialBidsApi,

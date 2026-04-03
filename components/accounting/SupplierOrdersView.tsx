@@ -112,7 +112,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<SupplierSaleOrder>>({
-    linkedOfferId: '',
     linkedQuoteId: '',
     supplierId: '',
     supplierName: '',
@@ -227,9 +226,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 {row.supplierName}
               </div>
               <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
-                {row.linkedOfferId}
-              </div>
-              <div className="text-[10px] text-slate-400">
                 {row.linkedQuoteId ||
                   t('accounting:supplierOrders.noQuoteLink', {
                     defaultValue: 'No quote link',
@@ -705,7 +701,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('sales:supplierOffers.noItemsAdded')}
+                  {t('accounting:supplierOrders.noItemsAdded', {
+                    defaultValue: 'No items added yet',
+                  })}
                 </div>
               )}
             </div>
@@ -805,7 +803,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 })}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                {orderToDelete?.supplierName} · {orderToDelete?.linkedOfferId}
+                {orderToDelete?.supplierName} · {orderToDelete?.linkedQuoteId || orderToDelete?.id}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
@@ -836,7 +834,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </h2>
             <p className="text-sm text-slate-500">
               {t('accounting:supplierOrders.subtitle', {
-                defaultValue: 'Orders created from supplier offers.',
+                defaultValue: 'Orders created from supplier quotes.',
               })}
             </p>
           </div>

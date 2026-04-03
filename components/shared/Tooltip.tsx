@@ -87,13 +87,20 @@ const Tooltip: React.FC<TooltipProps> = ({
 
     const handleScroll = () => updatePosition();
     const handleResize = () => updatePosition();
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsVisible(false);
+      }
+    };
 
     window.addEventListener('scroll', handleScroll, true);
     window.addEventListener('resize', handleResize);
+    document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
       window.removeEventListener('scroll', handleScroll, true);
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isVisible, updatePosition]);
 

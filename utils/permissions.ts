@@ -39,7 +39,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'sales.client_quotes', actions: CRUD, module: 'sales' },
   { id: 'sales.client_offers', actions: CRUD, module: 'sales' },
   { id: 'sales.supplier_quotes', actions: CRUD, module: 'sales' },
-  { id: 'sales.supplier_offers', actions: CRUD, module: 'sales' },
 
   // Catalog
   { id: 'catalog.internal_listing', actions: CRUD, module: 'catalog' },
@@ -144,7 +143,6 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'sales/client-quotes': buildPermission('sales.client_quotes', 'view'),
   'sales/client-offers': buildPermission('sales.client_offers', 'view'),
   'sales/supplier-quotes': buildPermission('sales.supplier_quotes', 'view'),
-  'sales/supplier-offers': buildPermission('sales.supplier_offers', 'view'),
   'catalog/internal-listing': buildPermission('catalog.internal_listing', 'view'),
   'catalog/external-listing': buildPermission('catalog.external_listing', 'view'),
   'catalog/special-bids': buildPermission('catalog.special_bids', 'view'),

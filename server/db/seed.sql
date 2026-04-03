@@ -935,12 +935,12 @@ FROM (
     VALUES
         ('dm_sqi_01', 'dm_sq_01', 'dm_prd_05', 8.00, 960.00, 0.00, 'Draft laptop procurement lot'),
         ('dm_sqi_02', 'dm_sq_02', 'dm_prd_06', 120.00, 182.00, 0.00, 'Pending licensing quote'),
-        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security appliance quote without downstream offer'),
-        ('dm_sqi_04', 'dm_sq_04', 'dm_prd_05', 10.00, 958.00, 1.00, 'Accepted quote feeding a draft offer'),
-        ('dm_sqi_05', 'dm_sq_05', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted quote feeding a sent offer'),
-        ('dm_sqi_06', 'dm_sq_06', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted quote feeding an accepted offer without order'),
+        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security appliance quote without downstream order'),
+        ('dm_sqi_04', 'dm_sq_04', 'dm_prd_05', 10.00, 958.00, 1.00, 'Accepted quote pending supplier order creation'),
+        ('dm_sqi_05', 'dm_sq_05', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted licensing quote pending supplier order creation'),
+        ('dm_sqi_06', 'dm_sq_06', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security quote intentionally left without order'),
         ('dm_sqi_07', 'dm_sq_07', 'dm_prd_08', 200.00, 118.00, 2.00, 'Accepted quote feeding an order already in progress'),
-        ('dm_sqi_08', 'dm_sq_08', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted quote feeding a denied offer'),
+        ('dm_sqi_08', 'dm_sq_08', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted quote without a supplier order'),
         ('dm_sqi_09', 'dm_sq_09', 'dm_prd_06', 40.00, 183.00, 0.00, 'Denied supplier licensing quote'),
         ('dm_sqi_10', 'dm_sq_10', 'dm_prd_08', 150.00, 119.00, 0.00, 'Expired print procurement request'),
         ('dm_sqi_11', 'dm_sq_11', 'dm_prd_05', 4.00, 960.00, 0.00, 'Accepted quote feeding the editable draft procurement order'),
@@ -959,89 +959,9 @@ ON CONFLICT (id) DO UPDATE SET
     discount = EXCLUDED.discount,
     note = EXCLUDED.note;
 
-INSERT INTO supplier_offers (
-    id,
-    linked_quote_id,
-    supplier_id,
-    supplier_name,
-    payment_terms,
-    discount,
-    status,
-    expiration_date,
-    notes,
-    created_at,
-    updated_at
-) VALUES
-    ('dm_sfo_01', 'dm_sq_04', 'dm_sup_01', 'TechSource Distribution', '30gg', 1.50, 'draft', CURRENT_DATE + INTERVAL '20 days', 'Editable supplier offer.', CURRENT_TIMESTAMP - INTERVAL '92 days', CURRENT_TIMESTAMP - INTERVAL '90 days'),
-    ('dm_sfo_02', 'dm_sq_05', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.50, 'sent', CURRENT_DATE + INTERVAL '18 days', 'Sent supplier offer awaiting confirmation.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
-    ('dm_sfo_03', 'dm_sq_06', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '15 days', 'Accepted supplier offer intentionally left without an order.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
-    ('dm_sfo_04', 'dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted supplier offer already converted into a supplier order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
-    ('dm_sfo_05', 'dm_sq_08', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier offer for historical coverage.', CURRENT_TIMESTAMP - INTERVAL '44 days', CURRENT_TIMESTAMP - INTERVAL '42 days'),
-    ('dm_sfo_06', 'dm_sq_11', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '13 days', 'Accepted supplier offer already converted into an editable draft order.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '42 days'),
-    ('dm_sfo_07', 'dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '10 days', 'Accepted supplier offer already converted into a sent licensing order.', CURRENT_TIMESTAMP - INTERVAL '35 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
-    ('dm_sfo_08', 'dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '7 days', 'Accepted supplier offer already converted into a sent invoiced order.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days'),
-    ('dm_sfo_09', 'dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '5 days', 'Accepted supplier offer already converted into a sent supplier order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '15 days')
-ON CONFLICT (id) DO UPDATE SET
-    linked_quote_id = EXCLUDED.linked_quote_id,
-    supplier_id = EXCLUDED.supplier_id,
-    supplier_name = EXCLUDED.supplier_name,
-    payment_terms = EXCLUDED.payment_terms,
-    discount = EXCLUDED.discount,
-    status = EXCLUDED.status,
-    expiration_date = EXCLUDED.expiration_date,
-    notes = EXCLUDED.notes,
-    created_at = EXCLUDED.created_at,
-    updated_at = EXCLUDED.updated_at;
-
-INSERT INTO supplier_offer_items (
-    id,
-    offer_id,
-    product_id,
-    product_name,
-    quantity,
-    unit_price,
-    product_tax_rate,
-    discount,
-    note
-)
-SELECT
-    v.id,
-    v.offer_id,
-    p.id,
-    p.name,
-    v.quantity,
-    v.unit_price,
-    p.tax_rate,
-    v.discount,
-    v.note
-FROM (
-    VALUES
-        ('dm_sfoi_01', 'dm_sfo_01', 'dm_prd_05', 10.00, 958.00, 1.00, 'Draft hardware offer'),
-        ('dm_sfoi_02', 'dm_sfo_02', 'dm_prd_06', 80.00, 182.00, 0.00, 'Sent licensing offer'),
-        ('dm_sfoi_03', 'dm_sfo_03', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security offer without order'),
-        ('dm_sfoi_04', 'dm_sfo_04', 'dm_prd_08', 200.00, 118.00, 2.00, 'Accepted print offer already linked to an order'),
-        ('dm_sfoi_05', 'dm_sfo_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Denied hardware offer'),
-        ('dm_sfoi_06', 'dm_sfo_06', 'dm_prd_05', 4.00, 960.00, 0.00, 'Accepted hardware offer already linked to a draft order'),
-        ('dm_sfoi_07', 'dm_sfo_07', 'dm_prd_06', 80.00, 182.00, 0.00, 'Accepted licensing offer already linked to a sent order'),
-        ('dm_sfoi_08', 'dm_sfo_08', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Accepted security offer already linked to an invoiced order'),
-        ('dm_sfoi_09', 'dm_sfo_08', 'dm_prd_08', 40.00, 118.00, 0.00, 'Accepted print materials offer already linked to an invoiced order'),
-        ('dm_sfoi_10', 'dm_sfo_09', 'dm_prd_05', 2.00, 965.00, 0.00, 'Accepted hardware offer already linked to a sent order')
-) AS v(id, offer_id, product_id, quantity, unit_price, discount, note)
-JOIN products p ON p.id = v.product_id
-ON CONFLICT (id) DO UPDATE SET
-    offer_id = EXCLUDED.offer_id,
-    product_id = EXCLUDED.product_id,
-    product_name = EXCLUDED.product_name,
-    quantity = EXCLUDED.quantity,
-    unit_price = EXCLUDED.unit_price,
-    product_tax_rate = EXCLUDED.product_tax_rate,
-    discount = EXCLUDED.discount,
-    note = EXCLUDED.note;
-
 INSERT INTO supplier_sales (
     id,
     linked_quote_id,
-    linked_offer_id,
     supplier_id,
     supplier_name,
     payment_terms,
@@ -1051,14 +971,13 @@ INSERT INTO supplier_sales (
     created_at,
     updated_at
 ) VALUES
-    ('dm_ss_01', 'dm_sq_11', 'dm_sfo_06', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware offer.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
-    ('dm_ss_02', 'dm_sq_07', 'dm_sfo_04', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
-    ('dm_ss_03', 'dm_sq_12', 'dm_sfo_07', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'sent', 'Sent supplier order generated from an accepted licensing offer and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_ss_04', 'dm_sq_13', 'dm_sfo_08', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'sent', 'Sent supplier order generated from an accepted security offer and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_ss_05', 'dm_sq_14', 'dm_sfo_09', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'sent', 'Sent supplier order generated from an accepted offer for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
+    ('dm_ss_01', 'dm_sq_11', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware quote.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
+    ('dm_ss_02', 'dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
+    ('dm_ss_03', 'dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'sent', 'Sent supplier order generated from an accepted licensing quote and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    ('dm_ss_04', 'dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'sent', 'Sent supplier order generated from an accepted security quote and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_ss_05', 'dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'sent', 'Sent supplier order generated from an accepted quote for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
-    linked_offer_id = EXCLUDED.linked_offer_id,
     supplier_id = EXCLUDED.supplier_id,
     supplier_name = EXCLUDED.supplier_name,
     payment_terms = EXCLUDED.payment_terms,

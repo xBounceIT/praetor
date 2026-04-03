@@ -114,12 +114,11 @@
   },
   "supplierOrders": {
     "title": "Ordini Fornitori",
-    "subtitle": "Ordini creati dalle offerte fornitori.",
+    "subtitle": "Ordini creati dai preventivi fornitori.",
     "editOrder": "Modifica Ordine",
     "viewOrder": "Visualizza Ordine",
     "readOnlyStatus": "Gli ordini non in bozza sono in sola lettura. Cambia lo stato dalle azioni nella lista.",
     "supplier": "Fornitore",
-    "linkedOffer": "Offerta Collegata",
     "noQuoteLink": "Nessun preventivo collegato",
     "paymentTerms": "Termini di Pagamento",
     "discount": "Sconto %",
@@ -136,7 +135,8 @@
     "linkedQuote": "Preventivo Collegato",
     "linkedQuoteInfo": "Questo ordine è stato creato dal preventivo #{{number}}",
     "quoteDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
-    "viewQuote": "Visualizza Preventivo"
+    "viewQuote": "Visualizza Preventivo",
+    "noItemsAdded": "Nessun articolo aggiunto"
   },
   "supplierInvoices": {
     "title": "Fatture Fornitori",

@@ -1038,7 +1038,6 @@ const buildBusinessDataset = async (
 
     const supplierWorkflowViewPermissions = [
       'sales.supplier_quotes.view',
-      'sales.supplier_offers.view',
       'accounting.supplier_orders.view',
       'accounting.supplier_invoices.view',
     ];

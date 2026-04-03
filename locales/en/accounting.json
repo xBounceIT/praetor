@@ -114,12 +114,11 @@
   },
   "supplierOrders": {
     "title": "Supplier Orders",
-    "subtitle": "Orders created from supplier offers.",
+    "subtitle": "Orders created from supplier quotes.",
     "editOrder": "Edit Order",
     "viewOrder": "View Order",
     "readOnlyStatus": "Non-draft orders are read-only. Change status from the list actions.",
     "supplier": "Supplier",
-    "linkedOffer": "Linked Offer",
     "noQuoteLink": "No quote link",
     "paymentTerms": "Payment Terms",
     "discount": "Discount %",
@@ -136,7 +135,8 @@
     "linkedQuote": "Linked Quote",
     "linkedQuoteInfo": "This order was created from quote #{{number}}",
     "quoteDetailsReadOnly": "(Quote details are read-only)",
-    "viewQuote": "View Quote"
+    "viewQuote": "View Quote",
+    "noItemsAdded": "No items added yet"
   },
   "supplierInvoices": {
     "title": "Supplier Invoices",
