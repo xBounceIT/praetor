@@ -706,15 +706,15 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const subcategoryOptions: Option[] = availableSubcategories.map((s) => ({ id: s, name: s }));
 
-  // Build type options from API-loaded product types
-  const typeOptions: Option[] = useMemo(() => {
-    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
-  }, [productTypes]);
-
   // Helper to display type name (now just returns the name since types are user-managed)
   const getDisplayTypeName = (typeName: string) => {
     return typeName.charAt(0).toUpperCase() + typeName.slice(1);
   };
+
+  // Build type options from API-loaded product types
+  const typeOptions: Option[] = useMemo(() => {
+    return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
+  }, [productTypes]);
 
   const handleTypeChange = (val: string) => {
     const typeName = val;
