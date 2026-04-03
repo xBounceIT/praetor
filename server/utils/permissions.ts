@@ -34,7 +34,6 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'sales.client_quotes', actions: CRUD },
   { id: 'sales.client_offers', actions: CRUD },
   { id: 'sales.supplier_quotes', actions: CRUD },
-  { id: 'sales.supplier_offers', actions: CRUD },
 
   // Catalog
   { id: 'catalog.internal_listing', actions: CRUD },
@@ -127,7 +126,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('sales.client_quotes', CRUD),
     ...buildPermissions('sales.client_offers', CRUD),
     ...buildPermissions('sales.supplier_quotes', CRUD),
-    ...buildPermissions('sales.supplier_offers', CRUD),
     ...buildPermissions('catalog.internal_listing', CRUD),
     ...buildPermissions('catalog.external_listing', CRUD),
     ...buildPermissions('catalog.special_bids', CRUD),
@@ -163,7 +161,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ...buildPermissions('sales.client_quotes', CRUD),
     ...buildPermissions('sales.client_offers', CRUD),
     ...buildPermissions('sales.supplier_quotes', CRUD),
-    ...buildPermissions('sales.supplier_offers', CRUD),
     ...buildPermissions('catalog.internal_listing', CRUD),
     ...buildPermissions('catalog.external_listing', CRUD),
     ...buildPermissions('catalog.special_bids', CRUD),

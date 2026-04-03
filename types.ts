@@ -341,7 +341,7 @@ export interface ClientsOrder {
     | '240gg'
     | '365gg';
   discount: number;
-  status: 'draft' | 'sent' | 'confirmed' | 'denied';
+  status: 'draft' | 'confirmed' | 'denied';
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -365,7 +365,6 @@ export type View =
   | 'sales/client-quotes'
   | 'sales/client-offers'
   | 'sales/supplier-quotes'
-  | 'sales/supplier-offers'
   // Catalog module
   | 'catalog/internal-listing'
   | 'catalog/external-listing'
@@ -515,46 +514,7 @@ export interface SupplierQuote {
   discount: number;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
-  linkedOfferId?: string;
-  notes?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface SupplierOfferItem {
-  id: string;
-  offerId: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  productTaxRate?: number;
-  discount?: number;
-  note?: string;
-}
-
-export interface SupplierOffer {
-  id: string;
-  linkedQuoteId: string;
   linkedOrderId?: string;
-  supplierId: string;
-  supplierName: string;
-  items: SupplierOfferItem[];
-  paymentTerms:
-    | 'immediate'
-    | '15gg'
-    | '21gg'
-    | '30gg'
-    | '45gg'
-    | '60gg'
-    | '90gg'
-    | '120gg'
-    | '180gg'
-    | '240gg'
-    | '365gg';
-  discount: number;
-  status: 'draft' | 'sent' | 'accepted' | 'denied';
-  expirationDate: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -575,7 +535,6 @@ export interface SupplierSaleOrderItem {
 export interface SupplierSaleOrder {
   id: string;
   linkedQuoteId?: string;
-  linkedOfferId: string;
   supplierId: string;
   supplierName: string;
   items: SupplierSaleOrderItem[];

@@ -65,7 +65,7 @@ const supplierQuoteSchema = {
     discount: { type: 'number' },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
-    linkedOfferId: { type: ['string', 'null'] },
+    linkedOrderId: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -171,11 +171,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status,
         expiration_date as "expirationDate",
         (
-          SELECT so.id
-          FROM supplier_offers so
-          WHERE so.linked_quote_id = supplier_quotes.id
+          SELECT ss.id
+          FROM supplier_sales ss
+          WHERE ss.linked_quote_id = supplier_quotes.id
           LIMIT 1
-        ) as "linkedOfferId",
+        ) as "linkedOrderId",
         notes,
         EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
         EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
@@ -321,7 +321,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           discount,
           status,
           expiration_date as "expirationDate",
-          null::varchar as "linkedOfferId",
+          null::varchar as "linkedOrderId",
           notes,
           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
@@ -460,12 +460,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate === undefined &&
         notes === undefined;
 
-      const linkedOfferResult = await query(
-        'SELECT id FROM supplier_offers WHERE linked_quote_id = $1 LIMIT 1',
+      const linkedOrderResult = await query(
+        'SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1',
         [idResult.value],
       );
-      if (linkedOfferResult.rows.length > 0 && !isIdOnlyUpdate) {
-        return reply.code(409).send({ error: 'Quotes become read-only once an offer exists' });
+      if (linkedOrderResult.rows.length > 0 && !isIdOnlyUpdate) {
+        return reply.code(409).send({ error: 'Quotes become read-only once an order exists' });
       }
 
       let supplierIdValue: string | undefined | null = supplierId;
@@ -529,13 +529,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          RETURNING
           id,
           supplier_id as "supplierId",
-          supplier_name as "supplierName",
-          payment_terms as "paymentTerms",
-          discount,
-          status,
-          expiration_date as "expirationDate",
-          null::varchar as "linkedOfferId",
-          notes,
+           supplier_name as "supplierName",
+           payment_terms as "paymentTerms",
+           discount,
+           status,
+           expiration_date as "expirationDate",
+           null::varchar as "linkedOrderId",
+           notes,
           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"`,
           [
@@ -696,14 +696,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const linkedOfferResult = await query(
-        'SELECT id FROM supplier_offers WHERE linked_quote_id = $1 LIMIT 1',
+      const linkedOrderResult = await query(
+        'SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1',
         [idResult.value],
       );
-      if (linkedOfferResult.rows.length > 0) {
+      if (linkedOrderResult.rows.length > 0) {
         return reply
           .code(409)
-          .send({ error: 'Cannot delete a quote once an offer has been created from it' });
+          .send({ error: 'Cannot delete a quote once an order has been created from it' });
       }
       const result = await query(
         'DELETE FROM supplier_quotes WHERE id = $1 RETURNING id, supplier_name as "supplierName"',

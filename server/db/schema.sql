@@ -129,10 +129,6 @@ VALUES
     ('manager', 'sales.supplier_quotes.create'),
     ('manager', 'sales.supplier_quotes.update'),
     ('manager', 'sales.supplier_quotes.delete'),
-    ('manager', 'sales.supplier_offers.view'),
-    ('manager', 'sales.supplier_offers.create'),
-    ('manager', 'sales.supplier_offers.update'),
-    ('manager', 'sales.supplier_offers.delete'),
     ('manager', 'accounting.supplier_orders.view'),
     ('manager', 'accounting.supplier_orders.create'),
     ('manager', 'accounting.supplier_orders.update'),
@@ -148,6 +144,39 @@ SELECT role_id, REPLACE(permission, 'suppliers.quotes', 'sales.supplier_quotes')
 FROM role_permissions
 WHERE permission LIKE 'suppliers.quotes.%'
 ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission)
+SELECT role_id, permission
+FROM (
+    SELECT role_id, 'sales.supplier_quotes.view' AS permission
+    FROM role_permissions
+    WHERE permission LIKE 'sales.supplier_offers.%'
+    UNION
+    SELECT role_id, 'accounting.supplier_orders.view' AS permission
+    FROM role_permissions
+    WHERE permission LIKE 'sales.supplier_offers.%'
+    UNION
+    SELECT role_id, 'accounting.supplier_orders.create' AS permission
+    FROM role_permissions
+    WHERE permission = 'sales.supplier_offers.create'
+    UNION
+    SELECT role_id, 'accounting.supplier_orders.update' AS permission
+    FROM role_permissions
+    WHERE permission = 'sales.supplier_offers.update'
+    UNION
+    SELECT role_id, 'accounting.supplier_orders.delete' AS permission
+    FROM role_permissions
+    WHERE permission = 'sales.supplier_offers.delete'
+) remapped_permissions
+ON CONFLICT DO NOTHING;
+
+DELETE FROM role_permissions
+WHERE permission IN (
+    'sales.supplier_offers.view',
+    'sales.supplier_offers.create',
+    'sales.supplier_offers.update',
+    'sales.supplier_offers.delete'
+);
 
 -- Migration: Remove previously-seeded admin permissions so admin only has
 -- Administration access (from is_admin flag). Other modules must be added
@@ -908,7 +937,7 @@ CREATE TABLE IF NOT EXISTS sales (
     client_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
     discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'confirmed', 'denied')),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed', 'denied')),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -923,7 +952,7 @@ BEGIN
         WHERE conname = 'sales_status_check'
     ) THEN
         ALTER TABLE sales DROP CONSTRAINT sales_status_check;
-        ALTER TABLE sales ADD CONSTRAINT sales_status_check CHECK (status IN ('draft', 'sent', 'confirmed', 'denied', 'pending', 'completed', 'cancelled'));
+        ALTER TABLE sales ADD CONSTRAINT sales_status_check CHECK (status IN ('draft', 'confirmed', 'denied'));
     END IF;
 END $$;
 
@@ -1057,46 +1086,10 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
 CREATE INDEX IF NOT EXISTS idx_supplier_quote_items_quote_id ON supplier_quote_items(quote_id);
 ALTER TABLE supplier_quote_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
--- Supplier offers
-CREATE TABLE IF NOT EXISTS supplier_offers (
-    id VARCHAR(100) PRIMARY KEY,
-    linked_quote_id VARCHAR(100) NOT NULL REFERENCES supplier_quotes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
-    supplier_name VARCHAR(255) NOT NULL,
-    payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
-    discount DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'accepted', 'denied')),
-    expiration_date DATE NOT NULL,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_offers_linked_quote_id
-    ON supplier_offers(linked_quote_id);
-CREATE INDEX IF NOT EXISTS idx_supplier_offers_supplier_id ON supplier_offers(supplier_id);
-CREATE INDEX IF NOT EXISTS idx_supplier_offers_status ON supplier_offers(status);
-
-CREATE TABLE IF NOT EXISTS supplier_offer_items (
-    id VARCHAR(50) PRIMARY KEY,
-    offer_id VARCHAR(100) NOT NULL REFERENCES supplier_offers(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
-    product_name VARCHAR(255) NOT NULL,
-    quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
-    discount DECIMAL(5, 2) DEFAULT 0,
-    note TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_supplier_offer_items_offer_id ON supplier_offer_items(offer_id);
-
 -- Supplier sale orders
 CREATE TABLE IF NOT EXISTS supplier_sales (
     id VARCHAR(100) PRIMARY KEY,
     linked_quote_id VARCHAR(100) REFERENCES supplier_quotes(id) ON DELETE SET NULL ON UPDATE CASCADE,
-    linked_offer_id VARCHAR(100) NOT NULL REFERENCES supplier_offers(id) ON DELETE RESTRICT ON UPDATE CASCADE,
     supplier_id VARCHAR(50) NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
     supplier_name VARCHAR(255) NOT NULL,
     payment_terms VARCHAR(20) NOT NULL DEFAULT 'immediate',
@@ -1107,9 +1100,181 @@ CREATE TABLE IF NOT EXISTS supplier_sales (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_sales_linked_offer_id
-    ON supplier_sales(linked_offer_id);
+ALTER TABLE supplier_sales ADD COLUMN IF NOT EXISTS linked_quote_id VARCHAR(100);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'supplier_sales_linked_quote_id_fkey'
+    ) THEN
+        ALTER TABLE supplier_sales
+            ADD CONSTRAINT supplier_sales_linked_quote_id_fkey
+            FOREIGN KEY (linked_quote_id) REFERENCES supplier_quotes(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'supplier_offers'
+    ) AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'supplier_sales'
+          AND column_name = 'linked_offer_id'
+    ) THEN
+        UPDATE supplier_sales ss
+        SET linked_quote_id = COALESCE(ss.linked_quote_id, so.linked_quote_id)
+        FROM supplier_offers so
+        WHERE ss.linked_offer_id = so.id;
+
+        INSERT INTO supplier_sales (
+            id,
+            linked_quote_id,
+            linked_offer_id,
+            supplier_id,
+            supplier_name,
+            payment_terms,
+            discount,
+            status,
+            notes,
+            created_at,
+            updated_at
+        )
+        SELECT
+            CONCAT('MIG-SORD-', so.id),
+            so.linked_quote_id,
+            so.id,
+            so.supplier_id,
+            so.supplier_name,
+            so.payment_terms,
+            so.discount,
+            CASE so.status
+                WHEN 'draft' THEN 'draft'
+                WHEN 'sent' THEN 'sent'
+                WHEN 'denied' THEN 'denied'
+                -- Accepted offers without downstream orders become draft orders to preserve data.
+                ELSE 'draft'
+            END,
+            so.notes,
+            so.created_at,
+            so.updated_at
+        FROM supplier_offers so
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM supplier_sales ss
+            WHERE ss.linked_offer_id = so.id
+               OR ss.linked_quote_id = so.linked_quote_id
+        );
+
+        IF EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'supplier_offer_items'
+        ) AND EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'supplier_sale_items'
+        ) THEN
+            INSERT INTO supplier_sale_items (
+                id,
+                sale_id,
+                product_id,
+                product_name,
+                quantity,
+                unit_price,
+                product_tax_rate,
+                discount,
+                note,
+                created_at
+            )
+            SELECT
+                CONCAT('mig-', soi.id),
+                CONCAT('MIG-SORD-', soi.offer_id),
+                soi.product_id,
+                soi.product_name,
+                soi.quantity,
+                soi.unit_price,
+                soi.product_tax_rate,
+                soi.discount,
+                soi.note,
+                soi.created_at
+            FROM supplier_offer_items soi
+            WHERE EXISTS (
+                SELECT 1
+                FROM supplier_sales ss
+                WHERE ss.id = CONCAT('MIG-SORD-', soi.offer_id)
+            ) AND NOT EXISTS (
+                SELECT 1
+                FROM supplier_sale_items ssi
+                WHERE ssi.id = CONCAT('mig-', soi.id)
+            );
+        END IF;
+    END IF;
+END $$;
+
+DROP INDEX IF EXISTS idx_supplier_sales_linked_offer_id;
+DROP INDEX IF EXISTS idx_supplier_sales_linked_offer_id_unique;
+
+DO $$
+DECLARE
+    supplier_sales_linked_offer_fk TEXT;
+BEGIN
+    SELECT tc.constraint_name
+    INTO supplier_sales_linked_offer_fk
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name
+     AND tc.table_schema = kcu.table_schema
+    WHERE tc.table_schema = 'public'
+      AND tc.table_name = 'supplier_sales'
+      AND tc.constraint_type = 'FOREIGN KEY'
+      AND kcu.column_name = 'linked_offer_id'
+    LIMIT 1;
+
+    IF supplier_sales_linked_offer_fk IS NOT NULL THEN
+        EXECUTE format(
+            'ALTER TABLE supplier_sales DROP CONSTRAINT %I',
+            supplier_sales_linked_offer_fk
+        );
+    END IF;
+END $$;
+
+ALTER TABLE supplier_sales DROP COLUMN IF EXISTS linked_offer_id;
+
+DROP TABLE IF EXISTS supplier_offer_items;
+DROP TABLE IF EXISTS supplier_offers;
+
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_linked_quote_id ON supplier_sales(linked_quote_id);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'idx_supplier_sales_linked_quote_id_unique'
+    ) AND NOT EXISTS (
+        SELECT linked_quote_id
+        FROM supplier_sales
+        WHERE linked_quote_id IS NOT NULL
+        GROUP BY linked_quote_id
+        HAVING COUNT(*) > 1
+    ) THEN
+        EXECUTE 'CREATE UNIQUE INDEX idx_supplier_sales_linked_quote_id_unique
+            ON supplier_sales(linked_quote_id)
+            WHERE linked_quote_id IS NOT NULL';
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_supplier_id ON supplier_sales(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_sales_status ON supplier_sales(status);
 

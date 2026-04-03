@@ -20,7 +20,6 @@ import {
   DEMO_SALES,
   DEMO_SETTINGS_CACHE_NAMESPACES,
   DEMO_SUPPLIER_INVOICES,
-  DEMO_SUPPLIER_OFFERS,
   DEMO_SUPPLIER_SALES,
   DEMO_SUPPLIERS,
   DEMO_USER_IDS,
@@ -331,32 +330,8 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIdsToDelete: str
       pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
       pushTextArrayPredicate(
         builder,
-        'linked_offer_id',
-        nonEmpty(DEMO_SUPPLIER_SALES.map((sale) => sale.linkedOfferId)),
-      );
-    }),
-  );
-
-  incrementCount(
-    cleanupCountsByTable,
-    'supplier_offer_items',
-    await executeDelete(client, 'supplier_offer_items', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierOfferItems);
-      pushTextArrayPredicate(builder, 'offer_id', DEMO_IDS.supplierOffers);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
-    }),
-  );
-
-  incrementCount(
-    cleanupCountsByTable,
-    'supplier_offers',
-    await executeDelete(client, 'supplier_offers', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.supplierOffers);
-      pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
-      pushTextArrayPredicate(
-        builder,
         'linked_quote_id',
-        DEMO_SUPPLIER_OFFERS.map((offer) => offer.linkedQuoteId),
+        nonEmpty(DEMO_SUPPLIER_SALES.map((sale) => sale.linkedQuoteId)),
       );
     }),
   );
@@ -664,16 +639,6 @@ const verificationSteps: VerificationStep[] = [
     table: 'supplier_quote_items',
     ids: DEMO_ITEM_IDS.supplierQuoteItems,
     expected: DEMO_EXPECTED_COUNTS.supplier_quote_items,
-  },
-  {
-    table: 'supplier_offers',
-    ids: DEMO_IDS.supplierOffers,
-    expected: DEMO_EXPECTED_COUNTS.supplier_offers,
-  },
-  {
-    table: 'supplier_offer_items',
-    ids: DEMO_ITEM_IDS.supplierOfferItems,
-    expected: DEMO_EXPECTED_COUNTS.supplier_offer_items,
   },
   {
     table: 'supplier_sales',

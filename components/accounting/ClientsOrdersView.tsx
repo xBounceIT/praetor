@@ -27,7 +27,6 @@ const getPaymentTermsOptions = (t: (key: string) => string) => [
 
 const getStatusOptions = (t: (key: string) => string) => [
   { id: 'draft', name: t('accounting:clientsOrders.statusDraft') },
-  { id: 'sent', name: t('accounting:clientsOrders.statusSent') },
   { id: 'confirmed', name: t('accounting:clientsOrders.statusConfirmed') },
   { id: 'denied', name: t('accounting:clientsOrders.statusDenied') },
 ];
@@ -50,7 +49,6 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
 };
 
 const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) => string) => {
-  if (status === 'sent') return t('accounting:clientsOrders.statusSent');
   if (status === 'confirmed') return t('accounting:clientsOrders.statusConfirmed');
   if (status === 'denied') return t('accounting:clientsOrders.statusDenied');
   return t('accounting:clientsOrders.statusDraft');
@@ -530,21 +528,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               )}
             </Tooltip>
             {row.status === 'draft' && (
-              <Tooltip label={t('accounting:clientsOrders.markAsSent')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUpdateClientsOrder(row.id, { status: 'sent' });
-                    }}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-paper-plane"></i>
-                  </button>
-                )}
-              </Tooltip>
-            )}
-            {row.status === 'sent' && (
               <>
                 <Tooltip label={t('accounting:clientsOrders.markAsConfirmed')}>
                   {() => (
@@ -572,35 +555,20 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     </button>
                   )}
                 </Tooltip>
-                <Tooltip label={t('accounting:clientsOrders.revertToDraft')}>
+                <Tooltip label={t('accounting:clientsOrders.deleteOrder')}>
                   {() => (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUpdateClientsOrder(row.id, { status: 'draft' });
+                        confirmDelete(row);
                       }}
-                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
-                      <i className="fa-solid fa-rotate-left"></i>
+                      <i className="fa-solid fa-trash-can"></i>
                     </button>
                   )}
                 </Tooltip>
               </>
-            )}
-            {row.status === 'draft' && (
-              <Tooltip label={t('accounting:clientsOrders.deleteOrder')}>
-                {() => (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      confirmDelete(row);
-                    }}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
-                )}
-              </Tooltip>
             )}
           </div>
         ),
@@ -723,7 +691,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     </label>
                     <CustomSelect
                       options={getStatusOptions(t)}
-                      value={formData.status || 'pending'}
+                      value={formData.status || 'draft'}
                       onChange={(val) =>
                         setFormData({ ...formData, status: val as ClientsOrder['status'] })
                       }
