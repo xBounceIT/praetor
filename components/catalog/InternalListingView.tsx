@@ -844,7 +844,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <button
                   onClick={handleSaveType}
                   disabled={isSavingType || !newTypeName.trim()}
-                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-28 px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingType
                     ? t('common:buttons.saving')
@@ -856,80 +856,117 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             </div>
 
             {/* Types List */}
-            <div className="space-y-2">
-              {isLoadingTypes ? (
-                <div className="flex items-center justify-center py-8">
-                  <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-                </div>
-              ) : productTypes.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <p>{t('crm:internalListing.noTypes')}</p>
-                </div>
-              ) : (
-                productTypes.map((type) => {
-                  const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
-                  const deleteBlockedMessage = t('crm:internalListing.typeDeleteBlocked', {
-                    productCount: type.productCount,
-                    categoryCount: type.categoryCount,
-                    name: type.name,
-                  });
+            {isLoadingTypes ? (
+              <div className="flex items-center justify-center py-8">
+                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+              </div>
+            ) : (
+              <StandardTable<InternalProductType>
+                title={t('crm:internalListing.manageTypes')}
+                data={productTypes}
+                defaultRowsPerPage={5}
+                containerClassName="shadow-none rounded-xl border-slate-200"
+                tableContainerClassName="max-h-[35vh] overflow-y-auto"
+                emptyState={
+                  <div className="text-center py-6 text-slate-500">
+                    <p>{t('crm:internalListing.noTypes')}</p>
+                  </div>
+                }
+                columns={[
+                  {
+                    header: t('crm:internalListing.typeName'),
+                    accessorFn: (row) => row.name.charAt(0).toUpperCase() + row.name.slice(1),
+                    cell: ({ row }) => (
+                      <span className="font-bold text-slate-700">
+                        {row.name.charAt(0).toUpperCase() + row.name.slice(1)}
+                      </span>
+                    ),
+                    disableFiltering: true,
+                  },
+                  {
+                    header: t('crm:internalListing.pricingAndUnit'),
+                    accessorFn: (row) => row.costUnit,
+                    cell: ({ row }) => (
+                      <span className="text-xs font-medium px-2 py-1 bg-white rounded-lg text-slate-500 border border-slate-200">
+                        {row.costUnit === 'hours'
+                          ? t('crm:internalListing.hour')
+                          : t('crm:internalListing.unit')}
+                      </span>
+                    ),
+                    disableFiltering: true,
+                  },
+                  {
+                    header: t('crm:internalListing.products'),
+                    accessorFn: (row) => {
+                      const parts = [`${row.productCount} ${t('crm:internalListing.products')}`];
+                      if (row.categoryCount > 0) {
+                        parts.push(`${row.categoryCount} ${t('crm:internalListing.categories')}`);
+                      }
+                      return parts.join(', ');
+                    },
+                    cell: ({ row }) => (
+                      <span className="text-xs text-slate-400">
+                        {row.productCount} {t('crm:internalListing.products')}
+                        {row.categoryCount > 0 && (
+                          <>
+                            , {row.categoryCount} {t('crm:internalListing.categories')}
+                          </>
+                        )}
+                      </span>
+                    ),
+                    disableFiltering: true,
+                  },
+                  {
+                    header: '',
+                    id: 'actions',
+                    disableSorting: true,
+                    disableFiltering: true,
+                    cell: ({ row: type }) => {
+                      const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
+                      const deleteBlockedMessage = t('crm:internalListing.typeDeleteBlocked', {
+                        productCount: type.productCount,
+                        categoryCount: type.categoryCount,
+                        name: type.name,
+                      });
 
-                  return (
-                    <div
-                      key={type.id}
-                      className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-slate-700">
-                          {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
-                        </span>
-                        <span className="text-xs font-medium px-2 py-1 bg-white rounded-lg text-slate-500 border border-slate-200">
-                          {type.costUnit === 'hours'
-                            ? t('crm:internalListing.hour')
-                            : t('crm:internalListing.unit')}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          {type.productCount} {t('crm:internalListing.products')}
-                          {type.categoryCount > 0 && (
-                            <>
-                              , {type.categoryCount} {t('crm:internalListing.categories')}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleEditType(type)}
-                          className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                          title={t('common:buttons.edit')}
-                        >
-                          <i className="fa-solid fa-pen"></i>
-                        </button>
-                        <Tooltip
-                          label={isDeleteBlocked ? deleteBlockedMessage : ''}
-                          disabled={!isDeleteBlocked}
-                        >
-                          {() => (
-                            <button
-                              onClick={() => handleDeleteType(type)}
-                              disabled={isDeleteBlocked}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                isDeleteBlocked
-                                  ? 'text-slate-300 cursor-not-allowed'
-                                  : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
-                              }`}
-                              title={t('common:buttons.delete')}
-                            >
-                              <i className="fa-solid fa-trash"></i>
-                            </button>
-                          )}
-                        </Tooltip>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                      return (
+                        <div className="flex items-center gap-1">
+                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
+                            {() => (
+                              <button
+                                onClick={() => handleEditType(type)}
+                                className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                          <Tooltip
+                            label={isDeleteBlocked ? deleteBlockedMessage : ''}
+                            disabled={!isDeleteBlocked}
+                            tooltipClassName="z-[80]"
+                          >
+                            {() => (
+                              <button
+                                onClick={() => handleDeleteType(type)}
+                                disabled={isDeleteBlocked}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isDeleteBlocked
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                }`}
+                              >
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                        </div>
+                      );
+                    },
+                  },
+                ]}
+              />
+            )}
           </div>
         </div>
       </Modal>
