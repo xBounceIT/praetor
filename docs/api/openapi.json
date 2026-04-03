@@ -8335,6 +8335,13 @@
                                 "null",
                                 "string"
                               ]
+                            },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days"
+                              ]
                             }
                           },
                           "required": [
@@ -8546,6 +8553,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -8735,6 +8749,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -8930,6 +8951,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -9124,6 +9152,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -14709,6 +14744,13 @@
                                 "null",
                                 "string"
                               ]
+                            },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days"
+                              ]
                             }
                           },
                           "required": [
@@ -14889,6 +14931,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -15014,6 +15063,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -15178,6 +15234,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -15305,6 +15368,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -17538,6 +17608,13 @@
                                 "null",
                                 "string"
                               ]
+                            },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days"
+                              ]
                             }
                           },
                           "required": [
@@ -17718,6 +17795,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -17843,6 +17927,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
@@ -18007,6 +18098,13 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days"
+                          ]
                         }
                       },
                       "required": [
@@ -18134,6 +18232,13 @@
                             "type": [
                               "null",
                               "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
                             ]
                           }
                         },
