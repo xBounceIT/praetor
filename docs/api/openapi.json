@@ -3770,6 +3770,276 @@
         }
       }
     },
+    "/api/projects/{id}/users": {
+      "get": {
+        "summary": "Get project user assignments",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Update project user assignments",
+        "tags": [
+          "projects"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "userIds"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tasks/": {
       "get": {
         "summary": "List tasks",
@@ -8021,6 +8291,42 @@
                                 "number"
                               ]
                             },
+                            "supplierQuoteId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteItemDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
                             "discount": {
                               "type": "number"
                             },
@@ -8211,6 +8517,9 @@
                         "specialBidId": {
                           "type": "string"
                         },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -8378,6 +8687,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -8556,6 +8901,9 @@
                         "specialBidId": {
                           "type": "string"
                         },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
                         "quantity": {
                           "type": "number"
                         },
@@ -8728,6 +9076,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -9094,6 +9478,42 @@
                                 "number"
                               ]
                             },
+                            "supplierQuoteId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteItemDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
                             "note": {
                               "type": [
                                 "null",
@@ -9304,6 +9724,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -9450,6 +9888,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -9645,6 +10119,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -9792,6 +10284,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -11190,6 +11718,42 @@
                                 "number"
                               ]
                             },
+                            "supplierQuoteId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteItemId": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteSupplierName": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "supplierQuoteUnitPrice": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteItemDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
+                            "supplierQuoteDiscount": {
+                              "type": [
+                                "null",
+                                "number"
+                              ]
+                            },
                             "note": {
                               "type": [
                                 "null",
@@ -11402,6 +11966,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -11543,6 +12125,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
@@ -11740,6 +12358,24 @@
                         "specialBidMolPercentage": {
                           "type": "number"
                         },
+                        "supplierQuoteId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteItemId": {
+                          "type": "string"
+                        },
+                        "supplierQuoteSupplierName": {
+                          "type": "string"
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": "number"
+                        },
+                        "supplierQuoteItemDiscount": {
+                          "type": "number"
+                        },
+                        "supplierQuoteDiscount": {
+                          "type": "number"
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -11885,6 +12521,42 @@
                             ]
                           },
                           "specialBidMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteItemDiscount": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteDiscount": {
                             "type": [
                               "null",
                               "number"
