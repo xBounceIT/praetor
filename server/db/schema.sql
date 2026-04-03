@@ -1488,6 +1488,61 @@ BEGIN
     END IF;
 END $$;
 
+-- ============================================
+-- Product Types Table (User-Managed)
+-- ============================================
+
+-- Create product_types table for user-managed product types
+CREATE TABLE IF NOT EXISTS product_types (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit' CHECK (cost_unit IN ('unit', 'hours')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_types_name ON product_types(name);
+
+-- Seed default product types (matching legacy hardcoded values)
+-- These will be created on fresh installations; migrations handle existing data
+DO $$
+BEGIN
+    -- Supply type (default for products, uses 'unit' cost unit)
+    IF NOT EXISTS (SELECT 1 FROM product_types WHERE name = 'supply') THEN
+        INSERT INTO product_types (id, name, cost_unit)
+        VALUES ('pt-supply', 'supply', 'unit');
+    END IF;
+    
+    -- Service type (uses 'hours' cost unit)
+    IF NOT EXISTS (SELECT 1 FROM product_types WHERE name = 'service') THEN
+        INSERT INTO product_types (id, name, cost_unit)
+        VALUES ('pt-service', 'service', 'hours');
+    END IF;
+    
+    -- Consulting type (uses 'hours' cost unit)
+    IF NOT EXISTS (SELECT 1 FROM product_types WHERE name = 'consulting') THEN
+        INSERT INTO product_types (id, name, cost_unit)
+        VALUES ('pt-consulting', 'consulting', 'hours');
+    END IF;
+END $$;
+
+-- ============================================
+-- Migration: Relax fixed type constraints
+-- ============================================
+
+-- Drop the fixed enum constraint from internal_product_categories
+-- Note: This allows any string value; validation is now done in the API layer
+ALTER TABLE internal_product_categories
+DROP CONSTRAINT IF EXISTS internal_product_categories_type_check;
+
+-- Migrate legacy 'item' type products to 'supply'
+UPDATE products
+SET type = 'supply'
+WHERE type = 'item' AND supplier_id IS NULL;
+
+-- Create index for faster type lookups on products
+CREATE INDEX IF NOT EXISTS idx_products_type ON products(type);
+
 -- Normalize internal category and product units to follow product type.
 UPDATE internal_product_categories
 SET cost_unit = CASE type

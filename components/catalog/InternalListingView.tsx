@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type {
   InternalProductCategory,
   InternalProductSubcategory,
+  InternalProductType,
 } from '../../services/api/products';
 import type { Product } from '../../types';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
@@ -20,6 +21,14 @@ export interface InternalListingViewProps {
   onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   onDeleteProduct: (id: string) => void;
   currency: string;
+  // Product Type management
+  onListProductTypes: () => Promise<InternalProductType[]>;
+  onCreateProductType: (typeData: { name: string; costUnit: 'unit' | 'hours' }) => Promise<void>;
+  onUpdateProductType: (
+    id: string,
+    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
+  ) => Promise<void>;
+  onDeleteProductType: (id: string) => Promise<void>;
   // Category/Subcategory management
   onListInternalCategories: (type: string) => Promise<InternalProductCategory[]>;
   onCreateInternalCategory: (categoryData: { name: string; type: string }) => Promise<void>;
@@ -43,16 +52,16 @@ export interface InternalListingViewProps {
   onDeleteInternalSubcategory: (name: string, type: string, category: string) => Promise<void>;
 }
 
-const getCostUnitForType = (type: Product['type'] | undefined): Product['costUnit'] => {
-  return type === 'service' || type === 'consulting' ? 'hours' : 'unit';
-};
-
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
   currency,
+  onListProductTypes,
+  onCreateProductType,
+  onUpdateProductType,
+  onDeleteProductType,
   onListInternalCategories,
   onCreateInternalCategory,
   onUpdateInternalCategory,
@@ -63,6 +72,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onDeleteInternalSubcategory,
 }) => {
   const { t } = useTranslation(['crm', 'common']);
+
+  // Product Types State
+  const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
+  const [isLoadingTypes, setIsLoadingTypes] = useState(false);
+
+  // Type Management State
+  const [isManageTypesModalOpen, setIsManageTypesModalOpen] = useState(false);
+  const [editingType, setEditingType] = useState<InternalProductType | null>(null);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeCostUnit, setNewTypeCostUnit] = useState<'unit' | 'hours'>('unit');
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const [isSavingType, setIsSavingType] = useState(false);
 
   // Main product modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,12 +120,39 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     description: '',
     costo: undefined,
     molPercentage: undefined,
-    costUnit: getCostUnitForType('supply'),
+    costUnit: 'unit',
     category: '',
     subcategory: '',
     taxRate: 22,
-    type: 'supply',
+    type: '',
   });
+
+  // Load product types on mount
+  useEffect(() => {
+    const loadTypes = async () => {
+      setIsLoadingTypes(true);
+      try {
+        const types = await onListProductTypes();
+        setProductTypes(types);
+        if (types.length > 0) {
+          const defaultType = types[0];
+          setFormData((prev) => {
+            if (prev.type) return prev;
+            return {
+              ...prev,
+              type: defaultType.name,
+              costUnit: defaultType.costUnit,
+            };
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load product types:', err);
+      } finally {
+        setIsLoadingTypes(false);
+      }
+    };
+    loadTypes();
+  }, [onListProductTypes]);
 
   // Load categories when type changes or category modal opens
   const loadCategories = useCallback(
@@ -156,14 +204,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   // Keep the displayed unit aligned with the selected internal product type.
   useEffect(() => {
-    if (!formData.type) return;
+    if (!formData.type || productTypes.length === 0) return;
 
-    const nextCostUnit = getCostUnitForType(formData.type);
+    const typeData = productTypes.find((t) => t.name === formData.type);
+    if (!typeData) return;
+
+    const nextCostUnit = typeData.costUnit;
     setFormData((prev) => {
       if (prev.costUnit === nextCostUnit) return prev;
       return { ...prev, costUnit: nextCostUnit };
     });
-  }, [formData.type]);
+  }, [formData.type, productTypes]);
 
   // Auto-select first category when categories load (only for new products, not when editing)
   useEffect(() => {
@@ -179,18 +230,20 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const openAddModal = () => {
     setEditingProduct(null);
-    // Set initial state with type supply, will load categories on effect
+    // Set initial state with first available type
+    const initialType = productTypes[0]?.name || '';
+    const initialCostUnit = productTypes[0]?.costUnit || 'unit';
     setFormData({
       name: '',
       productCode: '',
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: getCostUnitForType('supply'),
+      costUnit: initialCostUnit,
       category: '',
       subcategory: '',
       taxRate: 22,
-      type: 'supply',
+      type: initialType,
     });
     setErrors({});
     setServerError(null);
@@ -199,17 +252,19 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
+    // Look up cost unit from product types, fallback to the product's current value
+    const typeData = productTypes.find((t) => t.name === product.type);
     setFormData({
       name: product.name || '',
       productCode: product.productCode || '',
       description: product.description || '',
       costo: product.costo || 0,
       molPercentage: product.molPercentage || 0,
-      costUnit: getCostUnitForType(product.type),
+      costUnit: typeData?.costUnit || product.costUnit || 'unit',
       category: product.category || '',
       subcategory: product.subcategory || '',
       taxRate: product.taxRate || 0,
-      type: product.type || 'supply',
+      type: product.type || (productTypes[0]?.name ?? ''),
     });
     setErrors({});
     setServerError(null);
@@ -437,6 +492,112 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setCategoryError(null);
   };
 
+  // Product Type Management Handlers
+  const handleOpenManageTypes = () => {
+    setIsManageTypesModalOpen(true);
+    setEditingType(null);
+    setNewTypeName('');
+    setNewTypeCostUnit('unit');
+    setTypeError(null);
+  };
+
+  const handleSaveType = async () => {
+    if (!newTypeName.trim()) {
+      setTypeError(t('crm:internalListing.typeNameRequired'));
+      return;
+    }
+
+    setIsSavingType(true);
+    setTypeError(null);
+
+    try {
+      if (editingType) {
+        await onUpdateProductType(editingType.id, {
+          name: newTypeName.trim(),
+          costUnit: newTypeCostUnit,
+        });
+      } else {
+        await onCreateProductType({
+          name: newTypeName.trim(),
+          costUnit: newTypeCostUnit,
+        });
+      }
+
+      // Reload types
+      const types = await onListProductTypes();
+      setProductTypes(types);
+
+      // If the renamed type was selected, update formData
+      if (editingType && formData.type === editingType.name) {
+        setFormData((prev) => ({
+          ...prev,
+          type: newTypeName.trim(),
+          costUnit: newTypeCostUnit,
+        }));
+      }
+
+      // Reset form
+      setEditingType(null);
+      setNewTypeName('');
+      setNewTypeCostUnit('unit');
+    } catch (err: unknown) {
+      setTypeError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsSavingType(false);
+    }
+  };
+
+  const handleEditType = (type: InternalProductType) => {
+    setEditingType(type);
+    setNewTypeName(type.name);
+    setNewTypeCostUnit(type.costUnit);
+    setTypeError(null);
+  };
+
+  const handleDeleteType = async (type: InternalProductType) => {
+    if (type.productCount > 0 || type.categoryCount > 0) {
+      const confirmed = window.confirm(
+        t('crm:internalListing.deleteTypeWithProducts', {
+          productCount: type.productCount,
+          categoryCount: type.categoryCount,
+          name: type.name,
+        }),
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      await onDeleteProductType(type.id);
+
+      // If the deleted type was selected, clear it
+      if (formData.type === type.name) {
+        const remainingTypes = productTypes.filter((t) => t.id !== type.id);
+        const nextType = remainingTypes[0]?.name || '';
+        const nextCostUnit = remainingTypes[0]?.costUnit || 'unit';
+        setFormData((prev) => ({
+          ...prev,
+          type: nextType,
+          costUnit: nextCostUnit,
+          category: '',
+          subcategory: '',
+        }));
+      }
+
+      // Reload types
+      const types = await onListProductTypes();
+      setProductTypes(types);
+    } catch (err: unknown) {
+      setTypeError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleCancelTypeEdit = () => {
+    setEditingType(null);
+    setNewTypeName('');
+    setNewTypeCostUnit('unit');
+    setTypeError(null);
+  };
+
   // Subcategory Management Handlers
   const handleOpenManageSubcategories = () => {
     if (!formData.category) return;
@@ -545,35 +706,24 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const subcategoryOptions: Option[] = availableSubcategories.map((s) => ({ id: s, name: s }));
 
-  const typeOptions: Option[] = [
-    { id: 'supply', name: t('crm:internalListing.typeSupply') },
-    { id: 'service', name: t('crm:internalListing.typeService') },
-    { id: 'consulting', name: t('crm:internalListing.typeConsulting') },
-  ];
+  // Build type options from API-loaded product types
+  const typeOptions: Option[] = useMemo(() => {
+    return productTypes.map((t) => ({ id: t.name, name: t.name }));
+  }, [productTypes]);
 
-  // Helper to get localized name for product types
-  const getLocalizedTypeName = (type: string) => {
-    switch (type) {
-      case 'supply':
-        return t('crm:internalListing.typeSupply');
-      case 'service':
-        return t('crm:internalListing.typeService');
-      case 'consulting':
-        return t('crm:internalListing.typeConsulting');
-      case 'item':
-        return t('crm:internalListing.typeItem');
-      default:
-        return type.charAt(0).toUpperCase() + type.slice(1);
-    }
+  // Helper to display type name (now just returns the name since types are user-managed)
+  const getDisplayTypeName = (typeName: string) => {
+    return typeName.charAt(0).toUpperCase() + typeName.slice(1);
   };
 
   const handleTypeChange = (val: string) => {
-    const type = val as Product['type'];
+    const typeName = val;
+    const typeData = productTypes.find((t) => t.name === typeName);
     // Reset category and subcategory - new categories will be loaded by useEffect
     setFormData({
       ...formData,
-      type,
-      costUnit: getCostUnitForType(type),
+      type: typeName,
+      costUnit: typeData?.costUnit || 'unit',
       category: '',
       subcategory: '',
     });
@@ -602,6 +752,158 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Manage Types Modal */}
+      <Modal
+        isOpen={isManageTypesModalOpen}
+        onClose={() => setIsManageTypesModalOpen(false)}
+        zIndex={70}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
+                <i className="fa-solid fa-tags"></i>
+              </div>
+              {t('crm:internalListing.manageTypes')}
+            </h3>
+            <button
+              onClick={() => setIsManageTypesModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            {/* Add/Edit Type Form */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('crm:internalListing.typeName')}
+                </label>
+                <input
+                  type="text"
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  placeholder={t('crm:internalListing.typeNamePlaceholder')}
+                  className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 ml-1">
+                  {t('crm:internalListing.costUnit')}
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewTypeCostUnit('unit')}
+                    className={`flex-1 px-3 py-2 text-sm font-bold rounded-xl transition-all ${
+                      newTypeCostUnit === 'unit'
+                        ? 'bg-praetor text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t('crm:internalListing.unit')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewTypeCostUnit('hours')}
+                    className={`flex-1 px-3 py-2 text-sm font-bold rounded-xl transition-all ${
+                      newTypeCostUnit === 'hours'
+                        ? 'bg-praetor text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t('crm:internalListing.hour')}
+                  </button>
+                </div>
+              </div>
+
+              {typeError && <p className="text-red-500 text-xs font-bold">{typeError}</p>}
+
+              <div className="flex justify-end gap-2">
+                {editingType && (
+                  <button
+                    onClick={handleCancelTypeEdit}
+                    className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    {t('common:buttons.cancel')}
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveType}
+                  disabled={isSavingType || !newTypeName.trim()}
+                  className="px-4 py-2 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingType
+                    ? t('common:buttons.saving')
+                    : editingType
+                      ? t('common:buttons.update')
+                      : t('common:buttons.add')}
+                </button>
+              </div>
+            </div>
+
+            {/* Types List */}
+            <div className="space-y-2">
+              {isLoadingTypes ? (
+                <div className="flex items-center justify-center py-8">
+                  <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+                </div>
+              ) : productTypes.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p>{t('crm:internalListing.noTypes')}</p>
+                </div>
+              ) : (
+                productTypes.map((type) => (
+                  <div
+                    key={type.id}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-slate-700">
+                        {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
+                      </span>
+                      <span className="text-xs font-medium px-2 py-1 bg-white rounded-lg text-slate-500 border border-slate-200">
+                        {type.costUnit === 'hours'
+                          ? t('crm:internalListing.hour')
+                          : t('crm:internalListing.unit')}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {type.productCount} {t('crm:internalListing.products')}
+                        {type.categoryCount > 0 && (
+                          <>
+                            , {type.categoryCount} {t('crm:internalListing.categories')}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleEditType(type)}
+                        className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                        title={t('common:buttons.edit')}
+                      >
+                        <i className="fa-solid fa-pen"></i>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteType(type)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title={t('common:buttons.delete')}
+                      >
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       {/* Manage Categories Modal */}
       <Modal
         isOpen={isManageCategoriesModalOpen}
@@ -920,10 +1222,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     <label className="text-xs font-bold text-slate-500">
                       {t('crm:internalListing.type')}
                     </label>
+                    <button
+                      type="button"
+                      onClick={handleOpenManageTypes}
+                      className="text-[10px] font-black text-praetor hover:text-slate-700 uppercase tracking-tighter flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
+                    </button>
                   </div>
                   <CustomSelect
                     options={typeOptions}
-                    value={formData.type || 'supply'}
+                    value={formData.type || (productTypes[0]?.name ?? '')}
                     onChange={(val) => handleTypeChange(val as string)}
                     searchable={false}
                     buttonClassName={
@@ -1204,10 +1513,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           {
             header: t('crm:internalListing.type'),
             accessorKey: 'type',
-            cell: ({ row: p }) => (
-              <StatusBadge type={p.type as StatusType} label={getLocalizedTypeName(p.type)} />
-            ),
-            accessorFn: (row) => getLocalizedTypeName(row.type),
+            cell: ({ row: p }) => {
+              const _typeData = productTypes.find((t) => t.name === p.type);
+              return <StatusBadge type={p.type as StatusType} label={getDisplayTypeName(p.type)} />;
+            },
+            accessorFn: (row) => getDisplayTypeName(row.type),
           },
           {
             header: t('crm:internalListing.cost'),
@@ -1215,14 +1525,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorFn: (row) => Number(row.costo),
             filterFormat: (val) => Number(val).toFixed(2),
-            cell: ({ row: p }) => (
-              <span className="text-sm font-semibold text-slate-500">
-                {Number(p.costo).toFixed(2)} {currency} /{' '}
-                {getCostUnitForType(p.type) === 'hours'
-                  ? t('crm:internalListing.hour')
-                  : t('crm:internalListing.unit')}
-              </span>
-            ),
+            cell: ({ row: p }) => {
+              const typeData = productTypes.find((t) => t.name === p.type);
+              const costUnit = typeData?.costUnit || p.costUnit || 'unit';
+              return (
+                <span className="text-sm font-semibold text-slate-500">
+                  {Number(p.costo).toFixed(2)} {currency} /{' '}
+                  {costUnit === 'hours'
+                    ? t('crm:internalListing.hour')
+                    : t('crm:internalListing.unit')}
+                </span>
+              );
+            },
           },
           {
             header: t('crm:internalListing.mol'),
@@ -1243,14 +1557,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             id: 'salePrice',
             accessorFn: (row) => calcSalePrice(Number(row.costo), Number(row.molPercentage)),
             filterFormat: (val) => Number(val).toFixed(2),
-            cell: ({ row: p, value }) => (
-              <span className="text-sm font-semibold text-slate-700">
-                {Number(value).toFixed(2)} {currency} /{' '}
-                {getCostUnitForType(p.type) === 'hours'
-                  ? t('crm:internalListing.hour')
-                  : t('crm:internalListing.unit')}
-              </span>
-            ),
+            cell: ({ row: p, value }) => {
+              const typeData = productTypes.find((t) => t.name === p.type);
+              const costUnit = typeData?.costUnit || p.costUnit || 'unit';
+              return (
+                <span className="text-sm font-semibold text-slate-700">
+                  {Number(value).toFixed(2)} {currency} /{' '}
+                  {costUnit === 'hours'
+                    ? t('crm:internalListing.hour')
+                    : t('crm:internalListing.unit')}
+                </span>
+              );
+            },
           },
           {
             header: t('crm:internalListing.margin'),

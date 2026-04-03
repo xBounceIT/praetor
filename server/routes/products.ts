@@ -40,7 +40,7 @@ const productSchema = {
     category: { type: ['string', 'null'] },
     subcategory: { type: ['string', 'null'] },
     taxRate: { type: 'number' },
-    type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+    type: { type: 'string' },
     supplierId: { type: ['string', 'null'] },
     supplierName: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
@@ -59,7 +59,7 @@ const productCreateBodySchema = {
     category: { type: 'string' },
     subcategory: { type: 'string' },
     taxRate: { type: 'number' },
-    type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+    type: { type: 'string' },
     supplierId: { type: 'string' },
     costUnit: { type: 'string', enum: ['unit', 'hours'] },
   },
@@ -77,15 +77,45 @@ const productUpdateBodySchema = {
     category: { type: 'string' },
     subcategory: { type: 'string' },
     taxRate: { type: 'number' },
-    type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+    type: { type: 'string' },
     supplierId: { type: 'string' },
     costUnit: { type: 'string', enum: ['unit', 'hours'] },
     isDisabled: { type: 'boolean' },
   },
 } as const;
 
-const getCostUnitForType = (type: string): 'unit' | 'hours' => {
-  return type === 'service' || type === 'consulting' ? 'hours' : 'unit';
+const getCostUnitForType = async (typeName: string): Promise<'unit' | 'hours'> => {
+  const result = await query('SELECT cost_unit FROM product_types WHERE name = $1', [typeName]);
+  if (result.rows.length > 0) {
+    return result.rows[0].cost_unit;
+  }
+  // Default fallback for backward compatibility or orphaned types
+  return typeName === 'service' || typeName === 'consulting' ? 'hours' : 'unit';
+};
+
+// Helper to validate that a type exists in product_types table
+const requireValidType = async (
+  typeName: unknown,
+): Promise<{ ok: true; value: string } | { ok: false; message: string }> => {
+  if (typeName === undefined || typeName === null || typeName === '') {
+    return { ok: false, message: 'type is required' };
+  }
+  if (typeof typeName !== 'string') {
+    return { ok: false, message: 'type must be a string' };
+  }
+  const trimmed = typeName.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, message: 'type is required' };
+  }
+  // Check if type exists in product_types
+  const result = await query('SELECT 1 FROM product_types WHERE name = $1', [trimmed]);
+  if (result.rows.length === 0) {
+    return {
+      ok: false,
+      message: `Invalid type "${trimmed}". Type must be a registered product type.`,
+    };
+  }
+  return { ok: true, value: trimmed };
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -243,8 +273,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (type === undefined || type === null || type === '') {
         return badRequest(reply, 'type is required');
       }
-      // Updated types: supply, service, consulting. (item is legacy, strictly we expect new types)
-      const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+      // Validate type exists in product_types table
+      const typeResult = await requireValidType(type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       // Internal products always derive their unit from type.
@@ -254,9 +284,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
         expectedCostUnit = costUnitResult.ok
           ? costUnitResult.value
-          : getCostUnitForType(typeResult.value);
+          : await getCostUnitForType(typeResult.value);
       } else {
-        expectedCostUnit = getCostUnitForType(typeResult.value);
+        expectedCostUnit = await getCostUnitForType(typeResult.value);
       }
 
       const id = 'p-' + Date.now();
@@ -448,7 +478,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : currentProduct.supplier_id;
 
       if (body.type !== undefined) {
-        const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
+        const typeResult = await requireValidType(body.type);
         if (!typeResult.ok) return badRequest(reply, typeResult.message);
         fields.push(`type = $${paramIndex++}`);
         values.push(typeResult.value);
@@ -481,7 +511,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let costUnitToSet: string | null = null;
 
       if (!isExternal && costUnitRelevantFieldsChanged) {
-        costUnitToSet = getCostUnitForType(updatedType);
+        costUnitToSet = await getCostUnitForType(updatedType);
         fields.push(`cost_unit = $${paramIndex++}`);
         values.push(costUnitToSet);
       } else if (isExternal && body.costUnit !== undefined) {
@@ -636,7 +666,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     properties: {
       id: { type: 'string' },
       name: { type: 'string' },
-      type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+      type: { type: 'string' },
       costUnit: { type: 'string', enum: ['unit', 'hours'] },
       createdAt: { type: 'number' },
       updatedAt: { type: 'number' },
@@ -716,7 +746,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         querystring: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+            type: { type: 'string' },
           },
           required: ['type'],
         },
@@ -729,16 +759,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { type } = request.query as { type: string };
 
-      const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+      const typeResult = await requireValidType(type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       const result = await query(
         `SELECT c.id, c.name, c.type,
-                CASE c.type
-                  WHEN 'service' THEN 'hours'
-                  WHEN 'consulting' THEN 'hours'
-                  ELSE 'unit'
-                END as "costUnit",
+                c.cost_unit as "costUnit",
                 c.created_at as "createdAt", c.updated_at as "updatedAt",
                 COALESCE(p.count, 0) as "productCount"
          FROM internal_product_categories c
@@ -774,7 +800,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: 'object',
           properties: {
             name: { type: 'string' },
-            type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+            type: { type: 'string' },
           },
           required: ['name', 'type'],
         },
@@ -793,7 +819,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+      const typeResult = await requireValidType(type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       // Check uniqueness within type
@@ -806,7 +832,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const id = 'ipc-' + crypto.randomUUID();
-      const costUnit = getCostUnitForType(typeResult.value);
+      const costUnit = await getCostUnitForType(typeResult.value);
       const result = await query(
         `INSERT INTO internal_product_categories (id, name, type, cost_unit) 
          VALUES ($1, $2, $3, $4)
@@ -875,7 +901,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const current = currentResult.rows[0];
 
       let newName = current.name;
-      const expectedCostUnit = getCostUnitForType(current.type);
+      const expectedCostUnit = await getCostUnitForType(current.type);
 
       // Validate name update
       if (body.name !== undefined) {
@@ -1023,7 +1049,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         querystring: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+            type: { type: 'string' },
             category: { type: 'string' },
           },
           required: ['type', 'category'],
@@ -1037,7 +1063,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { type, category } = request.query as { type: string; category: string };
 
-      const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+      const typeResult = await requireValidType(type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       const categoryResult = requireNonEmptyString(category, 'category');
@@ -1084,7 +1110,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: 'object',
           properties: {
             name: { type: 'string' },
-            type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+            type: { type: 'string' },
             category: { type: 'string' },
           },
           required: ['name', 'type', 'category'],
@@ -1105,7 +1131,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+      const typeResult = await requireValidType(type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       const categoryResult = requireNonEmptyString(category, 'category');
@@ -1178,7 +1204,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           type: 'object',
           properties: {
             newName: { type: 'string' },
-            type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+            type: { type: 'string' },
             category: { type: 'string' },
           },
           required: ['newName', 'type', 'category'],
@@ -1199,7 +1225,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const newNameResult = requireNonEmptyString(body.newName, 'newName');
       if (!newNameResult.ok) return badRequest(reply, newNameResult.message);
 
-      const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
+      const typeResult = await requireValidType(body.type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       const categoryResult = requireNonEmptyString(body.category, 'category');
@@ -1287,7 +1313,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         querystring: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['supply', 'service', 'consulting'] },
+            type: { type: 'string' },
             category: { type: 'string' },
           },
           required: ['type', 'category'],
@@ -1305,7 +1331,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
+      const typeResult = await requireValidType(type);
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
       const categoryResult = requireNonEmptyString(category, 'category');
@@ -1364,6 +1390,352 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: nameResult.value,
           secondaryLabel: categoryResult.value,
+        },
+      });
+
+      return reply.code(204).send();
+    },
+  );
+
+  // ============================================
+  // Product Types Endpoints (User-Managed)
+  // ============================================
+
+  // Product Type schema
+  const productTypeSchema = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      name: { type: 'string' },
+      costUnit: { type: 'string', enum: ['unit', 'hours'] },
+      createdAt: { type: 'number' },
+      updatedAt: { type: 'number' },
+      productCount: { type: 'number' },
+      categoryCount: { type: 'number' },
+    },
+    required: ['id', 'name', 'costUnit'],
+  } as const;
+
+  // GET /internal-types - List all product types
+  fastify.get(
+    '/internal-types',
+    {
+      onRequest: [requireAnyPermission('catalog.internal_listing.view')],
+      schema: {
+        tags: ['products'],
+        summary: 'List all product types',
+        response: {
+          200: { type: 'array', items: productTypeSchema },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (_request: FastifyRequest, _reply: FastifyReply) => {
+      const result = await query(
+        `SELECT 
+          t.id,
+          t.name,
+          t.cost_unit as "costUnit",
+          t.created_at as "createdAt",
+          t.updated_at as "updatedAt",
+          COALESCE(p.count, 0) as "productCount",
+          COALESCE(c.count, 0) as "categoryCount"
+         FROM product_types t
+         LEFT JOIN (
+           SELECT type, COUNT(*) as count FROM products GROUP BY type
+         ) p ON t.name = p.type
+         LEFT JOIN (
+           SELECT type, COUNT(*) as count FROM internal_product_categories GROUP BY type
+         ) c ON t.name = c.type
+         ORDER BY t.name ASC`,
+      );
+
+      return result.rows.map((row) => ({
+        ...row,
+        createdAt: row.createdAt ? new Date(row.createdAt).getTime() : null,
+        updatedAt: row.updatedAt ? new Date(row.updatedAt).getTime() : null,
+      }));
+    },
+  );
+
+  // POST /internal-types - Create a new product type
+  fastify.post(
+    '/internal-types',
+    {
+      onRequest: [requireAnyPermission('catalog.internal_listing.create')],
+      schema: {
+        tags: ['products'],
+        summary: 'Create a new product type',
+        body: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            costUnit: { type: 'string', enum: ['unit', 'hours'] },
+          },
+          required: ['name', 'costUnit'],
+        },
+        response: {
+          201: productTypeSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { name, costUnit } = request.body as {
+        name: unknown;
+        costUnit: unknown;
+      };
+
+      const nameResult = requireNonEmptyString(name, 'name');
+      if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      // Validate costUnit
+      const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
+      if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+
+      // Check uniqueness (case-insensitive)
+      const existingResult = await query(
+        'SELECT id FROM product_types WHERE LOWER(name) = LOWER($1)',
+        [nameResult.value],
+      );
+      if (existingResult.rows.length > 0) {
+        return badRequest(reply, 'Product type with this name already exists');
+      }
+
+      const id = 'pt-' + crypto.randomUUID();
+      const result = await query(
+        `INSERT INTO product_types (id, name, cost_unit)
+         VALUES ($1, $2, $3)
+         RETURNING id, name, cost_unit as "costUnit",
+                   created_at as "createdAt", updated_at as "updatedAt"`,
+        [id, nameResult.value, costUnitResult.value],
+      );
+
+      await bumpNamespaceVersion('products');
+      await logAudit({
+        request,
+        action: 'product_type.created',
+        entityType: 'product_type',
+        entityId: id,
+        details: {
+          targetLabel: nameResult.value,
+          secondaryLabel: costUnitResult.value,
+        },
+      });
+
+      return reply.code(201).send({
+        ...result.rows[0],
+        createdAt: result.rows[0].createdAt ? new Date(result.rows[0].createdAt).getTime() : null,
+        updatedAt: result.rows[0].updatedAt ? new Date(result.rows[0].updatedAt).getTime() : null,
+        productCount: 0,
+        categoryCount: 0,
+      });
+    },
+  );
+
+  // PUT /internal-types/:id - Update a product type
+  fastify.put(
+    '/internal-types/:id',
+    {
+      onRequest: [requireAnyPermission('catalog.internal_listing.update')],
+      schema: {
+        tags: ['products'],
+        summary: 'Update a product type',
+        params: idParamSchema,
+        body: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            costUnit: { type: 'string', enum: ['unit', 'hours'] },
+          },
+        },
+        response: {
+          200: productTypeSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as { name?: unknown; costUnit?: unknown };
+
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      // Get current type
+      const currentResult = await query(
+        'SELECT id, name, cost_unit FROM product_types WHERE id = $1',
+        [idResult.value],
+      );
+      if (currentResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Product type not found' });
+      }
+      const current = currentResult.rows[0];
+
+      let newName = current.name;
+      let newCostUnit = current.cost_unit;
+
+      // Validate and update name if provided
+      if (body.name !== undefined) {
+        const nameResult = requireNonEmptyString(body.name, 'name');
+        if (!nameResult.ok) return badRequest(reply, nameResult.message);
+        newName = nameResult.value;
+      }
+
+      // Validate and update costUnit if provided
+      if (body.costUnit !== undefined) {
+        const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
+        if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
+        newCostUnit = costUnitResult.value;
+      }
+
+      // Check uniqueness if name is changing (case-insensitive)
+      if (newName !== current.name) {
+        const existingResult = await query(
+          'SELECT id FROM product_types WHERE LOWER(name) = LOWER($1) AND id != $2',
+          [newName, idResult.value],
+        );
+        if (existingResult.rows.length > 0) {
+          return badRequest(reply, 'Product type with this name already exists');
+        }
+      }
+
+      // If name changed, update all products and internal_product_categories
+      if (newName !== current.name) {
+        // Update products
+        await query('UPDATE products SET type = $1 WHERE type = $2', [newName, current.name]);
+        // Update internal_product_categories
+        await query('UPDATE internal_product_categories SET type = $1 WHERE type = $2', [
+          newName,
+          current.name,
+        ]);
+      }
+
+      // If costUnit changed, update all matching internal products and categories
+      if (newCostUnit !== current.cost_unit) {
+        await query('UPDATE products SET cost_unit = $1 WHERE type = $2 AND supplier_id IS NULL', [
+          newCostUnit,
+          newName,
+        ]);
+        await query('UPDATE internal_product_categories SET cost_unit = $1 WHERE type = $2', [
+          newCostUnit,
+          newName,
+        ]);
+      }
+
+      // Update the type record
+      const updateResult = await query(
+        `UPDATE product_types 
+         SET name = $1, cost_unit = $2, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3
+         RETURNING id, name, cost_unit as "costUnit",
+                   created_at as "createdAt", updated_at as "updatedAt"`,
+        [newName, newCostUnit, idResult.value],
+      );
+
+      await bumpNamespaceVersion('products');
+      await logAudit({
+        request,
+        action: 'product_type.updated',
+        entityType: 'product_type',
+        entityId: idResult.value,
+        details: {
+          targetLabel: newName,
+          secondaryLabel: newCostUnit,
+        },
+      });
+
+      // Get updated counts
+      const productCountResult = await query(
+        'SELECT COUNT(*) as count FROM products WHERE type = $1',
+        [newName],
+      );
+      const categoryCountResult = await query(
+        'SELECT COUNT(*) as count FROM internal_product_categories WHERE type = $1',
+        [newName],
+      );
+
+      return {
+        ...updateResult.rows[0],
+        createdAt: updateResult.rows[0].createdAt
+          ? new Date(updateResult.rows[0].createdAt).getTime()
+          : null,
+        updatedAt: updateResult.rows[0].updatedAt
+          ? new Date(updateResult.rows[0].updatedAt).getTime()
+          : null,
+        productCount: parseInt(productCountResult.rows[0].count, 10),
+        categoryCount: parseInt(categoryCountResult.rows[0].count, 10),
+      };
+    },
+  );
+
+  // DELETE /internal-types/:id - Delete a product type
+  fastify.delete(
+    '/internal-types/:id',
+    {
+      onRequest: [requireAnyPermission('catalog.internal_listing.delete')],
+      schema: {
+        tags: ['products'],
+        summary: 'Delete a product type',
+        params: idParamSchema,
+        response: {
+          204: { type: 'null' },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      // Get type details before deletion
+      const typeResult = await query('SELECT name FROM product_types WHERE id = $1', [
+        idResult.value,
+      ]);
+      if (typeResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Product type not found' });
+      }
+      const { name } = typeResult.rows[0];
+
+      // Check if any products use this type
+      const productCountResult = await query(
+        'SELECT COUNT(*) as count FROM products WHERE type = $1',
+        [name],
+      );
+      const productCount = parseInt(productCountResult.rows[0].count, 10);
+
+      if (productCount > 0) {
+        return reply.code(409).send({
+          error: `Cannot delete type "${name}" because ${productCount} product(s) are using it`,
+        });
+      }
+
+      // Check if any categories use this type
+      const categoryCountResult = await query(
+        'SELECT COUNT(*) as count FROM internal_product_categories WHERE type = $1',
+        [name],
+      );
+      const categoryCount = parseInt(categoryCountResult.rows[0].count, 10);
+
+      if (categoryCount > 0) {
+        return reply.code(409).send({
+          error: `Cannot delete type "${name}" because ${categoryCount} category(s) are using it`,
+        });
+      }
+
+      // Delete the type
+      await query('DELETE FROM product_types WHERE id = $1', [idResult.value]);
+
+      await bumpNamespaceVersion('products');
+      await logAudit({
+        request,
+        action: 'product_type.deleted',
+        entityType: 'product_type',
+        entityId: idResult.value,
+        details: {
+          targetLabel: name,
         },
       });
 

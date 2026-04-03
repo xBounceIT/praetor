@@ -2,13 +2,24 @@ import type { Product } from '../../types';
 import { fetchApi } from './client';
 import { normalizeProduct } from './normalizers';
 
-export interface InternalProductCategory {
+export interface InternalProductType {
   id: string;
   name: string;
-  type: 'supply' | 'service' | 'consulting';
+  costUnit: 'unit' | 'hours';
   createdAt?: number;
   updatedAt?: number;
   productCount: number;
+  categoryCount: number;
+}
+
+export interface InternalProductCategory {
+  id: string;
+  name: string;
+  type: string;
+  createdAt?: number;
+  updatedAt?: number;
+  productCount: number;
+  costUnit: 'unit' | 'hours';
 }
 
 export interface InternalProductSubcategory {
@@ -33,6 +44,31 @@ export const productsApi = {
     }).then(normalizeProduct),
 
   delete: (id: string): Promise<void> => fetchApi(`/products/${id}`, { method: 'DELETE' }),
+
+  // Product Types (User-Managed)
+  listProductTypes: (): Promise<InternalProductType[]> =>
+    fetchApi<InternalProductType[]>('/products/internal-types'),
+
+  createProductType: (typeData: {
+    name: string;
+    costUnit: 'unit' | 'hours';
+  }): Promise<InternalProductType> =>
+    fetchApi<InternalProductType>('/products/internal-types', {
+      method: 'POST',
+      body: JSON.stringify(typeData),
+    }),
+
+  updateProductType: (
+    id: string,
+    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
+  ): Promise<InternalProductType> =>
+    fetchApi<InternalProductType>(`/products/internal-types/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    }),
+
+  deleteProductType: (id: string): Promise<void> =>
+    fetchApi(`/products/internal-types/${id}`, { method: 'DELETE' }),
 
   // Internal Product Categories
   listInternalCategories: (type: string): Promise<InternalProductCategory[]> =>

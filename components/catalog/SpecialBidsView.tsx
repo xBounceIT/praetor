@@ -1,6 +1,8 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../../services/api';
+import type { InternalProductType } from '../../services/api/products';
 import type { Client, Product, SpecialBid } from '../../types';
 import {
   formatDateOnlyForLocale,
@@ -67,9 +69,31 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
     endDate: getLocalDateString(),
   });
 
+  // Product Types State
+  const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
+
+  // Load product types on mount
+  useEffect(() => {
+    const loadTypes = async () => {
+      try {
+        const types = await api.products.listProductTypes();
+        setProductTypes(types);
+      } catch (err) {
+        console.error('Failed to load product types:', err);
+      }
+    };
+    loadTypes();
+  }, []);
+
+  // Get unit-based type names for filtering
+  const unitBasedTypeNames = useMemo(() => {
+    return productTypes.filter((t) => t.costUnit === 'unit').map((t) => t.name);
+  }, [productTypes]);
+
   const activeClients = clients.filter((c) => !c.isDisabled);
+  // Filter for unit-based types only (matches original behavior of item/supply)
   const activeProducts = products.filter(
-    (p) => !p.isDisabled && (p.type === 'item' || p.type === 'supply'),
+    (p) => !p.isDisabled && unitBasedTypeNames.includes(p.type),
   );
   const externalProducts = activeProducts.filter((p) => p.supplierId);
   const hasExternalProducts = externalProducts.length > 0;

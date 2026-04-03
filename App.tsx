@@ -2197,6 +2197,47 @@ const App: React.FC = () => {
     }
   };
 
+  // Product Type Management Handlers
+  const handleListProductTypes = async () => {
+    return api.products.listProductTypes();
+  };
+
+  const handleCreateProductType = async (typeData: {
+    name: string;
+    costUnit: 'unit' | 'hours';
+  }) => {
+    try {
+      await api.products.createProductType(typeData);
+    } catch (err) {
+      console.error('Failed to create product type:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateProductType = async (
+    id: string,
+    updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
+  ) => {
+    try {
+      await api.products.updateProductType(id, updates);
+      // Refresh products to pick up type renames and cost_unit changes
+      const updatedProducts = await api.products.list();
+      setProducts(updatedProducts);
+    } catch (err) {
+      console.error('Failed to update product type:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteProductType = async (id: string) => {
+    try {
+      await api.products.deleteProductType(id);
+    } catch (err) {
+      console.error('Failed to delete product type:', err);
+      throw err;
+    }
+  };
+
   const refreshClientQuoteFlow = async () => {
     const [quotesData, offersData, ordersData] = await Promise.all([
       api.quotes.list(),
@@ -3255,6 +3296,10 @@ const App: React.FC = () => {
                   onCreateInternalSubcategory={handleCreateInternalSubcategory}
                   onRenameInternalSubcategory={handleRenameInternalSubcategory}
                   onDeleteInternalSubcategory={handleDeleteInternalSubcategory}
+                  onListProductTypes={handleListProductTypes}
+                  onCreateProductType={handleCreateProductType}
+                  onUpdateProductType={handleUpdateProductType}
+                  onDeleteProductType={handleDeleteProductType}
                 />
               )}
 
