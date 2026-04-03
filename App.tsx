@@ -377,33 +377,35 @@ const TrackerView: React.FC<{
             <div className="flex-1 space-y-6">
               {/* Manager Selection Header */}
               {availableUsers.length > 1 && (
-                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
-                    >
-                      {viewingUser?.avatarInitials}
+                <div className="max-w-[70%] mx-auto">
+                  <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
+                      >
+                        {viewingUser?.avatarInitials}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
+                        </p>
+                        <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
-                      </p>
-                      <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
+                    <div className="w-64">
+                      <CustomSelect
+                        options={userOptions}
+                        value={viewingUserId}
+                        onChange={(val) => onViewUserChange(val as string)}
+                        label={t('tracker.switchUserView')}
+                        searchable={true}
+                      />
                     </div>
-                  </div>
-                  <div className="w-64">
-                    <CustomSelect
-                      options={userOptions}
-                      value={viewingUserId}
-                      onChange={(val) => onViewUserChange(val as string)}
-                      label={t('tracker.switchUserView')}
-                      searchable={true}
-                    />
                   </div>
                 </div>
               )}
 
-              <div className="max-w-[70%]">
+              <div className="max-w-[70%] mx-auto">
                 <DailyView
                   clients={clients}
                   projects={projects}
@@ -432,7 +434,7 @@ const TrackerView: React.FC<{
             </div>
           </div>
 
-          <div className="max-w-[70%]">
+          <div className="max-w-[70%] mx-auto">
             <StandardTable<TimeEntry>
               title={
                 selectedDate
