@@ -491,10 +491,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Cost Unit handling:
       // - For external products (with supplierId): accept from request body if provided
       // - For internal products: derive from category if category is set, otherwise from type
+      // Only recalculate costUnit when type, category, or supplierId changes (relevant for internal products)
       const isExternal = updatedSupplierId !== null;
+      const costUnitRelevantFieldsChanged =
+        body.type !== undefined || body.category !== undefined || body.supplierId !== undefined;
       let costUnitToSet: string | null = null;
 
-      if (!isExternal) {
+      if (!isExternal && costUnitRelevantFieldsChanged) {
         // Internal product: derive from category if available
         if (updatedCategory) {
           const catResult = await query(
@@ -512,7 +515,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         fields.push(`cost_unit = $${paramIndex++}`);
         values.push(costUnitToSet);
-      } else if (body.costUnit !== undefined) {
+      } else if (isExternal && body.costUnit !== undefined) {
         // External product: accept costUnit from request body
         const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
         if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);

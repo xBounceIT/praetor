@@ -392,6 +392,15 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       // Reload categories
       await loadCategories(formData.type || 'supply');
 
+      // If the renamed category was selected, update formData
+      if (
+        editingCategory &&
+        formData.category === editingCategory.name &&
+        formData.type === editingCategory.type
+      ) {
+        setFormData((prev) => ({ ...prev, category: newCategoryName.trim() }));
+      }
+
       // Reset form
       setEditingCategory(null);
       setNewCategoryName('');
@@ -479,6 +488,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
       // Reload subcategories
       await loadSubcategories(formData.type || 'supply', formData.category || '');
+
+      // If the renamed subcategory was selected, update formData
+      if (editingSubcategory && formData.subcategory === editingSubcategory.name) {
+        setFormData((prev) => ({ ...prev, subcategory: newSubcategoryName.trim() }));
+      }
 
       // Reset form
       setEditingSubcategory(null);
