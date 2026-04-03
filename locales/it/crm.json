@@ -114,6 +114,8 @@
     "costPerUnit": "Costo per {{unit}}",
     "hour": "Ora",
     "unit": "Unità",
+    "measurement": "Misura",
+    "linkedItems": "Collegamenti",
     "addCategory": "Aggiungi Categoria",
     "newCategory": "Nuova Categoria",
     "manageCategories": "Gestisci Categorie",
