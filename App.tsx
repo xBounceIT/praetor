@@ -3095,9 +3095,7 @@ const App: React.FC = () => {
         onSwitchRole={handleSwitchRole}
         roles={roles}
         isNotFound={!isRouteAccessible}
-        isAiReportingEnabled={
-          !hasLoadedGeneralSettings || generalSettings.enableAiReporting
-        }
+        isAiReportingEnabled={!hasLoadedGeneralSettings || generalSettings.enableAiReporting}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
@@ -3202,6 +3200,7 @@ const App: React.FC = () => {
                   clients={clients}
                   products={products}
                   specialBids={specialBids}
+                  supplierQuotes={supplierQuotes}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onDeleteQuote={handleDeleteQuote}

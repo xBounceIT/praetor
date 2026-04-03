@@ -1,7 +1,16 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, ClientOffer, Product, Quote, QuoteItem, SpecialBid } from '../../types';
+import type {
+  Client,
+  ClientOffer,
+  Product,
+  Quote,
+  QuoteItem,
+  SpecialBid,
+  SupplierQuote,
+  SupplierQuoteItem,
+} from '../../types';
 import {
   formatDateOnlyForLocale,
   getLocalDateString,
@@ -22,6 +31,7 @@ export interface ClientQuotesViewProps {
   clients: Client[];
   products: Product[];
   specialBids: SpecialBid[];
+  supplierQuotes: SupplierQuote[];
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void;
@@ -40,11 +50,23 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
   return costo / (1 - molPercentage / 100);
 };
 
+// Helper: Get effective cost from item (supplier quote > special bid > product)
+const getEffectiveCost = (item: QuoteItem): number => {
+  if (item.supplierQuoteItemId) {
+    return Number(item.supplierQuoteUnitPrice ?? 0);
+  }
+  if (item.specialBidId) {
+    return Number(item.specialBidUnitPrice ?? 0);
+  }
+  return Number(item.productCost ?? 0);
+};
+
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
   clients,
   products,
   specialBids,
+  supplierQuotes,
   onAddQuote,
   onUpdateQuote,
   onDeleteQuote,
@@ -174,9 +196,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const taxAmount = lineNetAfterGlobal * (taxRate / 100);
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-      const cost = item.specialBidId
-        ? Number(item.specialBidUnitPrice ?? 0)
-        : Number(item.productCost ?? 0);
+      const cost = getEffectiveCost(item);
       totalCost += item.quantity * cost;
     });
 
@@ -326,6 +346,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
             ? null
             : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
+        // Supplier quote snapshot fields
+        supplierQuoteId: item.supplierQuoteId ?? null,
+        supplierQuoteItemId: item.supplierQuoteItemId ?? null,
+        supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
+        supplierQuoteUnitPrice:
+          item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
+            ? null
+            : roundToTwoDecimals(Number(item.supplierQuoteUnitPrice)),
+        supplierQuoteItemDiscount:
+          item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
+            ? null
+            : roundToTwoDecimals(Number(item.supplierQuoteItemDiscount)),
+        supplierQuoteDiscount:
+          item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
+            ? null
+            : roundToTwoDecimals(Number(item.supplierQuoteDiscount)),
       };
     });
 
@@ -468,6 +504,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       productMolPercentage: null,
       specialBidUnitPrice: null,
       specialBidMolPercentage: null,
+      // Supplier quote fields
+      supplierQuoteId: null,
+      supplierQuoteItemId: null,
+      supplierQuoteSupplierName: null,
+      supplierQuoteUnitPrice: null,
+      supplierQuoteItemDiscount: null,
+      supplierQuoteDiscount: null,
       discount: 0,
       note: '',
     };
@@ -501,32 +544,103 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       if (product) {
         newItems[index].productName = product.name;
 
-        // Check for applicable special bid
-        const applicableBid = activeSpecialBids.find(
-          (b) => b.clientId === formData.clientId && b.productId === value,
-        );
+        // Clear any existing supplier quote or special bid when product changes
+        newItems[index].supplierQuoteId = null;
+        newItems[index].supplierQuoteItemId = null;
+        newItems[index].supplierQuoteSupplierName = null;
+        newItems[index].supplierQuoteUnitPrice = null;
+        newItems[index].supplierQuoteItemDiscount = null;
+        newItems[index].supplierQuoteDiscount = null;
+        newItems[index].specialBidId = '';
+        newItems[index].specialBidUnitPrice = null;
+        newItems[index].specialBidMolPercentage = null;
 
-        if (applicableBid) {
-          newItems[index].specialBidId = applicableBid.id;
-          // Bid price is the new COST. Calculate sale price based on this cost and margin.
-          const molSource = applicableBid.molPercentage ?? product.molPercentage;
-          const mol = molSource ? Number(molSource) : 0;
-          console.log(`[SpecialBid] Bid: ${applicableBid.unitPrice}, Mol: ${mol}`);
-          newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
-          newItems[index].productMolPercentage = product.molPercentage;
-          newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
-          newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
-        } else {
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+        // Use standard product cost
+        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+        newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+        newItems[index].productCost = Number(product.costo);
+        newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+        newItems[index].productMolPercentage = product.molPercentage;
+      }
+    }
+
+    if (field === 'supplierQuoteItemId') {
+      if (!value || value === 'none') {
+        // Clear supplier quote and revert to product cost or special bid if available
+        newItems[index].supplierQuoteId = null;
+        newItems[index].supplierQuoteItemId = null;
+        newItems[index].supplierQuoteSupplierName = null;
+        newItems[index].supplierQuoteUnitPrice = null;
+        newItems[index].supplierQuoteItemDiscount = null;
+        newItems[index].supplierQuoteDiscount = null;
+
+        // Check for applicable special bid as fallback
+        const product = products.find((p) => p.id === newItems[index].productId);
+        if (product) {
+          const applicableBid = activeSpecialBids.find(
+            (b) => b.clientId === formData.clientId && b.productId === newItems[index].productId,
+          );
+
+          if (applicableBid) {
+            newItems[index].specialBidId = applicableBid.id;
+            const molSource = applicableBid.molPercentage ?? product.molPercentage;
+            const mol = molSource ? Number(molSource) : 0;
+            newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+            newItems[index].productCost = Number(product.costo);
+            newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+            newItems[index].productMolPercentage = product.molPercentage;
+            newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
+            newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
+          } else {
+            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+            newItems[index].specialBidId = '';
+            newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+            newItems[index].productCost = Number(product.costo);
+            newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+            newItems[index].productMolPercentage = product.molPercentage;
+            newItems[index].specialBidUnitPrice = null;
+            newItems[index].specialBidMolPercentage = null;
+          }
+        }
+        setFormData({ ...formData, items: newItems });
+        return;
+      }
+
+      // Find the supplier quote item
+      const selectedQuote = acceptedSupplierQuotes.find((quote) =>
+        quote.items.some((item) => item.id === value),
+      );
+      const selectedQuoteItem = selectedQuote?.items.find((item) => item.id === value);
+
+      if (selectedQuote && selectedQuoteItem) {
+        const product = products.find((p) => p.id === selectedQuoteItem.productId);
+        if (product) {
+          // Calculate net cost after supplier discounts
+          const lineDiscountedCost =
+            selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
+          const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
+
+          // Store supplier quote data
+          newItems[index].productId = selectedQuoteItem.productId;
+          newItems[index].productName = product.name;
+          newItems[index].supplierQuoteId = selectedQuote.id;
+          newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
+          newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
+          newItems[index].supplierQuoteUnitPrice = netCost;
+          newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
+          newItems[index].supplierQuoteDiscount = selectedQuote.discount;
+
+          // Clear special bid when supplier quote is selected
           newItems[index].specialBidId = '';
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
-          newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = null;
           newItems[index].specialBidMolPercentage = null;
+
+          // Calculate sale price using net cost
+          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+          newItems[index].unitPrice = calcProductSalePrice(netCost, mol);
+          newItems[index].productCost = Number(product.costo);
+          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+          newItems[index].productMolPercentage = product.molPercentage;
         }
       }
     }
@@ -536,14 +650,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].specialBidId = '';
         newItems[index].specialBidUnitPrice = null;
         newItems[index].specialBidMolPercentage = null;
-        // Revert to standard product cost
-        const product = products.find((p) => p.id === newItems[index].productId);
-        if (product) {
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
-          newItems[index].productCost = Number(product.costo);
-          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
-          newItems[index].productMolPercentage = product.molPercentage;
+
+        // Check for supplier quote first, then revert to product cost
+        if (newItems[index].supplierQuoteItemId) {
+          // Keep supplier quote data
+        } else {
+          // Revert to standard product cost
+          const product = products.find((p) => p.id === newItems[index].productId);
+          if (product) {
+            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+            newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+            newItems[index].productCost = Number(product.costo);
+            newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+            newItems[index].productMolPercentage = product.molPercentage;
+          }
         }
         setFormData({ ...formData, items: newItems });
         return;
@@ -562,8 +682,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
+          newItems[index].specialBidId = bid.id;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
           newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
+
+          // Clear supplier quote when special bid is selected
+          newItems[index].supplierQuoteId = null;
+          newItems[index].supplierQuoteItemId = null;
+          newItems[index].supplierQuoteSupplierName = null;
+          newItems[index].supplierQuoteUnitPrice = null;
+          newItems[index].supplierQuoteItemDiscount = null;
+          newItems[index].supplierQuoteDiscount = null;
         }
       }
     }
@@ -589,9 +718,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const taxAmount = lineNetAfterGlobal * (taxRate / 100);
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-      const cost = item.specialBidId
-        ? Number(item.specialBidUnitPrice ?? 0)
-        : Number(item.productCost ?? 0);
+      const cost = getEffectiveCost(item);
       totalCost += item.quantity * cost;
     });
 
@@ -624,11 +751,50 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)
     : activeSpecialBids;
 
+  // Filter accepted supplier quotes for sourcing
+  const acceptedSupplierQuotes = useMemo(
+    () => supplierQuotes.filter((q) => q.status === 'accepted'),
+    [supplierQuotes],
+  );
+
+  // Build supplier quote items for selection (flattened with quote context)
+  const supplierQuoteItemOptions = useMemo(() => {
+    const options: Array<{
+      id: string;
+      name: string;
+      quoteId: string;
+      productId: string;
+      unitPrice: number;
+      discount: number;
+      quoteDiscount: number;
+    }> = [];
+    for (const quote of acceptedSupplierQuotes) {
+      for (const item of quote.items) {
+        options.push({
+          id: item.id,
+          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)}${item.discount ? ` -${item.discount}%` : ''})`,
+          quoteId: quote.id,
+          productId: item.productId,
+          unitPrice: item.unitPrice,
+          discount: item.discount ?? 0,
+          quoteDiscount: quote.discount,
+        });
+      }
+    }
+    return options;
+  }, [acceptedSupplierQuotes]);
+
   const getBidDisplayValue = (bidId?: string) => {
     if (!bidId) return t('sales:clientQuotes.noSpecialBid');
     const bid =
       activeSpecialBids.find((b) => b.id === bidId) || specialBids.find((b) => b.id === bidId);
     return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
+  };
+
+  const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
+    if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
+    const option = supplierQuoteItemOptions.find((o) => o.id === itemId);
+    return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
   };
 
   // Helper functions are now defined above with useCallback
@@ -1198,11 +1364,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const selectedBid = item.specialBidId
                       ? specialBids.find((b) => b.id === item.specialBidId)
                       : undefined;
+                    const selectedSupplierQuote = item.supplierQuoteItemId
+                      ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
+                      : undefined;
 
-                    // Cost is the bid price if selected, otherwise product cost
-                    const cost = item.specialBidId
-                      ? Number(item.specialBidUnitPrice ?? 0)
-                      : Number(item.productCost ?? 0);
+                    // Cost is from supplier quote if available, then special bid, then product cost
+                    const cost = getEffectiveCost(item);
 
                     const molSource = item.specialBidId
                       ? item.specialBidMolPercentage
@@ -1226,22 +1393,24 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </div>
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
-                                  ...clientSpecialBids.map((b) => ({
-                                    id: b.id,
-                                    name: `${b.clientName} · ${b.productName}`,
+                                  { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
+                                  ...supplierQuoteItemOptions.map((o) => ({
+                                    id: o.id,
+                                    name: o.name,
                                   })),
                                 ]}
-                                value={item.specialBidId || 'none'}
+                                value={item.supplierQuoteItemId || 'none'}
                                 onChange={(val) =>
                                   updateProductRow(
                                     index,
-                                    'specialBidId',
+                                    'supplierQuoteItemId',
                                     val === 'none' ? '' : (val as string),
                                   )
                                 }
-                                placeholder={t('sales:clientQuotes.selectBid')}
-                                displayValue={getBidDisplayValue(item.specialBidId)}
+                                placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+                                displayValue={getSupplierQuoteItemDisplayValue(
+                                  item.supplierQuoteItemId,
+                                )}
                                 searchable={true}
                                 disabled={isReadOnly}
                                 className="min-w-0"
@@ -1307,7 +1476,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('crm:internalListing.cost')}
                             </div>
-                            {selectedBid && (
+                            {selectedSupplierQuote && (
+                              <span className="inline-flex px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
+                                {t('sales:clientQuotes.supplierQuoteBadge')}
+                              </span>
+                            )}
+                            {selectedBid && !selectedSupplierQuote && (
                               <span className="inline-flex px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
                                 {t('sales:clientQuotes.bidBadge')}
                               </span>
@@ -1337,7 +1511,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               {t('crm:internalListing.salePrice')}
                             </div>
                             <div
-                              className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                              className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                             >
                               {lineSalePrice.toFixed(2)} {currency}
                             </div>
@@ -1348,22 +1522,24 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
-                                  { id: 'none', name: t('sales:clientQuotes.noSpecialBidOption') },
-                                  ...clientSpecialBids.map((b) => ({
-                                    id: b.id,
-                                    name: `${b.clientName} · ${b.productName}`,
+                                  { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
+                                  ...supplierQuoteItemOptions.map((o) => ({
+                                    id: o.id,
+                                    name: o.name,
                                   })),
                                 ]}
-                                value={item.specialBidId || 'none'}
+                                value={item.supplierQuoteItemId || 'none'}
                                 onChange={(val) =>
                                   updateProductRow(
                                     index,
-                                    'specialBidId',
+                                    'supplierQuoteItemId',
                                     val === 'none' ? '' : (val as string),
                                   )
                                 }
-                                placeholder={t('sales:clientQuotes.selectBid')}
-                                displayValue={getBidDisplayValue(item.specialBidId)}
+                                placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+                                displayValue={getSupplierQuoteItemDisplayValue(
+                                  item.supplierQuoteItemId,
+                                )}
                                 searchable={true}
                                 disabled={isReadOnly}
                                 className="min-w-0"
@@ -1409,7 +1585,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </span>
                             </div>
                             <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                              {selectedBid && (
+                              {selectedSupplierQuote && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
+                                  {t('sales:clientQuotes.supplierQuoteBadge')}
+                                </span>
+                              )}
+                              {selectedBid && !selectedSupplierQuote && (
                                 <span className="px-2 py-0.5 rounded-full bg-praetor text-white text-[8px] font-black uppercase tracking-wider">
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
@@ -1430,7 +1611,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                             <div className="col-span-2 flex items-center justify-center">
                               <span
-                                className={`text-sm font-semibold whitespace-nowrap ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                               >
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>

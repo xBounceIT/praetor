@@ -760,6 +760,13 @@ ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS note TEXT;
+-- Supplier quote source tracking columns
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
 UPDATE quote_items qi
 SET product_tax_rate = p.tax_rate
 FROM products p
@@ -813,6 +820,14 @@ CREATE TABLE IF NOT EXISTS customer_offer_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_customer_offer_items_offer_id ON customer_offer_items(offer_id);
+
+-- Supplier quote source tracking columns for customer_offer_items
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
 
 -- Special bids table
 CREATE TABLE IF NOT EXISTS special_bids (
@@ -1003,6 +1018,14 @@ ALTER TABLE sale_items ALTER COLUMN product_tax_rate SET NOT NULL;
 
 -- Ensure note column exists for sale items (mirrors quote_items structure)
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS note TEXT;
+
+-- Supplier quote source tracking columns for sale_items
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 
