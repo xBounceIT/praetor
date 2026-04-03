@@ -333,8 +333,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }`}
                   >
-                    <span className="truncate">{option.name}</span>
-                    {isSelected(option.id) && <i className="fa-solid fa-check text-[10px]"></i>}
+                    <span className="truncate flex-1">{option.name}</span>
+                    {isSelected(option.id) && (
+                      <i className="fa-solid fa-check text-[10px] ml-2"></i>
+                    )}
                   </button>
                 ))}
               </>
