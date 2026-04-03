@@ -665,6 +665,42 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].productCost = Number(product.costo);
           newItems[index].productTaxRate = Number(product.taxRate ?? 0);
           newItems[index].productMolPercentage = product.molPercentage;
+        } else {
+          // Product not found for supplier quote item - clear supplier quote and revert
+          newItems[index].supplierQuoteItemId = null;
+          newItems[index].supplierQuoteId = null;
+          newItems[index].supplierQuoteSupplierName = null;
+          newItems[index].supplierQuoteUnitPrice = null;
+          newItems[index].supplierQuoteItemDiscount = null;
+          newItems[index].supplierQuoteDiscount = null;
+
+          // Revert to product cost if product exists on the item
+          const existingProduct = products.find((p) => p.id === newItems[index].productId);
+          if (existingProduct) {
+            const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
+            newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
+            newItems[index].productCost = Number(existingProduct.costo);
+            newItems[index].productTaxRate = Number(existingProduct.taxRate ?? 0);
+            newItems[index].productMolPercentage = existingProduct.molPercentage;
+          }
+        }
+      } else {
+        // Supplier quote item not found - clear supplier quote and revert
+        newItems[index].supplierQuoteItemId = null;
+        newItems[index].supplierQuoteId = null;
+        newItems[index].supplierQuoteSupplierName = null;
+        newItems[index].supplierQuoteUnitPrice = null;
+        newItems[index].supplierQuoteItemDiscount = null;
+        newItems[index].supplierQuoteDiscount = null;
+
+        // Revert to product cost if product exists on the item
+        const existingProduct = products.find((p) => p.id === newItems[index].productId);
+        if (existingProduct) {
+          const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
+          newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
+          newItems[index].productCost = Number(existingProduct.costo);
+          newItems[index].productTaxRate = Number(existingProduct.taxRate ?? 0);
+          newItems[index].productMolPercentage = existingProduct.molPercentage;
         }
       }
     }
