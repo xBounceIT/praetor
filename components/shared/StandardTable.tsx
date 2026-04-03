@@ -117,18 +117,8 @@ const StandardTable = <T extends object>({
     return 'sm';
   });
 
-  // Lazy initialization for hiddenColIds
-  const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set<string>();
-    const saved = localStorage.getItem(getStorageKey(title, 'hidden'));
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return new Set<string>(parsed);
-      } catch {}
-    }
-    return new Set<string>();
-  });
+  // Session-only: column visibility resets on page reload
+  const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set<string>());
 
   // Lazy initialization for columnWidths
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -355,14 +345,12 @@ const StandardTable = <T extends object>({
           return nextFs;
         });
       }
-      localStorage.setItem(getStorageKey(title, 'hidden'), JSON.stringify(Array.from(next)));
       return next;
     });
   };
 
   const resetColumnVisibility = () => {
     setHiddenColIds(new Set<string>());
-    localStorage.removeItem(getStorageKey(title, 'hidden'));
   };
 
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>, colId: string) => {
@@ -680,7 +668,7 @@ const StandardTable = <T extends object>({
                         <td
                           key={colId}
                           style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                          className={`px-3 py-2 whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
+                          className={`px-3 py-1 whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
