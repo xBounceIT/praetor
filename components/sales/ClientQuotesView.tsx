@@ -380,6 +380,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const molSource = applicableBid?.molPercentage ?? product.molPercentage;
             const mol = molSource ? Number(molSource) : 0;
             const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
+            let unitPrice = calcProductSalePrice(cost, mol);
+            if (item.unitType === 'days') {
+              unitPrice = Math.round(unitPrice * 8 * 100) / 100;
+            }
 
             return {
               ...item,
@@ -388,7 +392,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   ? `temp-reprice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
                   : item.id,
               specialBidId: applicableBid ? applicableBid.id : '',
-              unitPrice: calcProductSalePrice(cost, mol),
+              unitPrice,
               productCost: Number(product.costo),
               productTaxRate: Number(product.taxRate ?? 0),
               productMolPercentage: product.molPercentage,
@@ -509,6 +513,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
         if (applicableBid) {
           newItems[index].specialBidId = applicableBid.id;
+          if (product.type === 'supply') {
+            newItems[index].unitType = 'hours';
+          }
           const molSource = applicableBid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
           console.log(`[SpecialBid] Bid: ${applicableBid.unitPrice}, Mol: ${mol}`);
@@ -522,6 +529,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
           newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
         } else {
+          if (product.type === 'supply') {
+            newItems[index].unitType = 'hours';
+          }
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           if (newItems[index].unitType === 'days') {
