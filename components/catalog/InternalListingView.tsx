@@ -913,7 +913,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     disableFiltering: true,
                   },
                   {
-                    header: '',
+                    header: t('common:table.actions'),
                     id: 'actions',
                     disableSorting: true,
                     disableFiltering: true,
