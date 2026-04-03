@@ -30,6 +30,15 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
+const normalizeUnitType = (value: unknown): 'hours' | 'days' => {
+  return value === 'days' ? 'days' : 'hours';
+};
+
+const normalizeSupplierQuoteItemRow = (item: Record<string, unknown>) => ({
+  ...item,
+  unitType: normalizeUnitType(item.unitType),
+});
+
 const supplierQuoteItemSchema = {
   type: 'object',
   properties: {
@@ -41,6 +50,7 @@ const supplierQuoteItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
+    unitType: { type: 'string', enum: ['hours', 'days'] },
   },
   required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -82,6 +92,7 @@ const supplierQuoteItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
+    unitType: { type: 'string', enum: ['hours', 'days'] },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -181,7 +192,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         quantity,
         unit_price as "unitPrice",
         discount,
-        note
+        note,
+        unit_type as "unitType"
        FROM supplier_quote_items
        ORDER BY created_at ASC`,
       );
@@ -192,7 +204,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!itemsByQuote[quoteId]) {
           itemsByQuote[quoteId] = [];
         }
-        itemsByQuote[quoteId].push(item);
+        itemsByQuote[quoteId].push(normalizeSupplierQuoteItemRow(item as Record<string, unknown>));
       });
 
       return quotesResult.rows.map((quote) => ({
@@ -238,6 +250,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice?: string | number;
           discount?: string | number;
           note?: string;
+          unitType?: 'hours' | 'days';
         }>;
         paymentTerms?: string;
         discount?: string | number;
@@ -284,6 +297,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
           discount: itemDiscountResult.value || 0,
+          unitType: normalizeUnitType(item.unitType),
         });
       }
 
@@ -339,8 +353,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
           `INSERT INTO supplier_quote_items (
-          id, quote_id, product_id, product_name, quantity, unit_price, discount, note
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          id, quote_id, product_id, product_name, quantity, unit_price, discount, note, unit_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING
           id,
           quote_id as "quoteId",
@@ -349,7 +363,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quantity,
           unit_price as "unitPrice",
           discount,
-          note`,
+          note,
+          unit_type as "unitType"`,
           [
             itemId,
             nextIdResult.value,
@@ -359,9 +374,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.unitPrice,
             item.discount || 0,
             item.note || null,
+            item.unitType || 'hours',
           ],
         );
-        createdItems.push(itemResult.rows[0]);
+        createdItems.push(
+          normalizeSupplierQuoteItemRow(itemResult.rows[0] as Record<string, unknown>),
+        );
       }
 
       await logAudit({
@@ -419,6 +437,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice?: string | number;
           discount?: string | number;
           note?: string;
+          unitType?: 'hours' | 'days';
         }>;
         paymentTerms?: string;
         discount?: string | number;
@@ -583,6 +602,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             quantity: quantityResult.value,
             unitPrice: unitPriceResult.value,
             discount: itemDiscountResult.value || 0,
+            unitType: normalizeUnitType(item.unitType),
           });
         }
 
@@ -592,8 +612,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'sqi-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
             `INSERT INTO supplier_quote_items (
-            id, quote_id, product_id, product_name, quantity, unit_price, discount, note
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            id, quote_id, product_id, product_name, quantity, unit_price, discount, note, unit_type
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING
             id,
             quote_id as "quoteId",
@@ -602,7 +622,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             quantity,
             unit_price as "unitPrice",
             discount,
-            note`,
+            note,
+            unit_type as "unitType"`,
             [
               itemId,
               updatedQuoteId,
@@ -612,9 +633,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.unitPrice,
               item.discount || 0,
               item.note || null,
+              item.unitType || 'hours',
             ],
           );
-          updatedItems.push(itemResult.rows[0]);
+          updatedItems.push(
+            normalizeSupplierQuoteItemRow(itemResult.rows[0] as Record<string, unknown>),
+          );
         }
       } else {
         const itemsResult = await query(
@@ -626,12 +650,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quantity,
           unit_price as "unitPrice",
           discount,
-          note
+          note,
+          unit_type as "unitType"
          FROM supplier_quote_items
          WHERE quote_id = $1`,
           [updatedQuoteId],
         );
-        updatedItems = itemsResult.rows;
+        updatedItems = itemsResult.rows.map((item) =>
+          normalizeSupplierQuoteItemRow(item as Record<string, unknown>),
+        );
       }
 
       await logAudit({
