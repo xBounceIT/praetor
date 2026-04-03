@@ -785,7 +785,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onClose={() => setIsManageTypesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
@@ -865,7 +865,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 title={t('crm:internalListing.manageTypes')}
                 data={productTypes}
                 defaultRowsPerPage={5}
-                containerClassName="shadow-none rounded-xl border-slate-200"
+                containerClassName="shadow-none border-slate-200 rounded-2xl"
                 tableContainerClassName="max-h-[35vh] overflow-y-auto"
                 emptyState={
                   <div className="text-center py-6 text-slate-500">
