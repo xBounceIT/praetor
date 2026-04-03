@@ -372,56 +372,52 @@ const TrackerView: React.FC<{
           defaultLocation={defaultLocation}
         />
       ) : (
-        <>
-          <div className="flex flex-col lg:flex-row gap-8">
-            <div className="flex-1 space-y-6">
-              {/* Manager Selection Header */}
-              {availableUsers.length > 1 && (
-                <div className="max-w-[70%] mx-auto">
-                  <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
-                      >
-                        {viewingUser?.avatarInitials}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                          {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
-                        </p>
-                        <p className="text-sm font-bold text-slate-800">{viewingUser?.name}</p>
-                      </div>
-                    </div>
-                    <div className="w-64">
-                      <CustomSelect
-                        options={userOptions}
-                        value={viewingUserId}
-                        onChange={(val) => onViewUserChange(val as string)}
-                        label={t('tracker.switchUserView')}
-                        searchable={true}
-                      />
-                    </div>
+        <div className="space-y-6">
+          {/* Manager Selection Header */}
+          {availableUsers.length > 1 && (
+            <div className="max-w-xl mx-auto">
+              <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}
+                  >
+                    {viewingUser?.avatarInitials}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
+                    </p>
+                    <p className="text-sm font-bold text-slate-800 truncate">{viewingUser?.name}</p>
                   </div>
                 </div>
-              )}
-
-              <div className="max-w-[70%] mx-auto">
-                <DailyView
-                  clients={clients}
-                  projects={projects}
-                  projectTasks={projectTasks}
-                  onAdd={onAddEntry}
-                  selectedDate={selectedDate}
-                  onMakeRecurring={onMakeRecurring}
-                  permissions={permissions}
-                  dailyGoal={dailyGoal}
-                  currentDayTotal={dailyTotal}
-                  defaultLocation={defaultLocation}
-                />
+                <div className="w-full sm:w-56 shrink-0">
+                  <CustomSelect
+                    options={userOptions}
+                    value={viewingUserId}
+                    onChange={(val) => onViewUserChange(val as string)}
+                    label={t('tracker.switchUserView')}
+                    searchable={true}
+                  />
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="lg:w-80 shrink-0 space-y-6">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
+            <DailyView
+              clients={clients}
+              projects={projects}
+              projectTasks={projectTasks}
+              onAdd={onAddEntry}
+              selectedDate={selectedDate}
+              onMakeRecurring={onMakeRecurring}
+              permissions={permissions}
+              dailyGoal={dailyGoal}
+              currentDayTotal={dailyTotal}
+              defaultLocation={defaultLocation}
+            />
+
+            <div className="w-full xl:max-w-[300px]">
               <Calendar
                 selectedDate={selectedDate}
                 onDateSelect={setSelectedDate}
@@ -430,49 +426,48 @@ const TrackerView: React.FC<{
                 treatSaturdayAsHoliday={treatSaturdayAsHoliday}
                 dailyGoal={dailyGoal}
                 allowWeekendSelection={allowWeekendSelection}
+                size="compact"
               />
             </div>
           </div>
 
-          <div className="max-w-[70%] mx-auto">
-            <StandardTable<TimeEntry>
-              title={
-                selectedDate
-                  ? t('tracker.activityFor', {
-                      date: formatDateOnlyForLocale(selectedDate, undefined, {
-                        month: 'long',
-                        day: 'numeric',
-                      }),
-                    })
-                  : t('entry.recentActivity')
-              }
-              headerExtras={
-                selectedDate ? (
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">
-                      {t('tracker.dayTotal')}
-                    </p>
-                    <p
-                      className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}
-                    >
-                      {dailyTotal.toFixed(2)} h
-                    </p>
-                  </div>
-                ) : undefined
-              }
-              data={filteredEntries}
-              columns={activityColumns}
-              defaultRowsPerPage={10}
-              rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
-              emptyState={
-                <div className="px-6 py-20 text-center">
-                  <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
-                  <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
+          <StandardTable<TimeEntry>
+            title={
+              selectedDate
+                ? t('tracker.activityFor', {
+                    date: formatDateOnlyForLocale(selectedDate, undefined, {
+                      month: 'long',
+                      day: 'numeric',
+                    }),
+                  })
+                : t('entry.recentActivity')
+            }
+            headerExtras={
+              selectedDate ? (
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">
+                    {t('tracker.dayTotal')}
+                  </p>
+                  <p
+                    className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}
+                  >
+                    {dailyTotal.toFixed(2)} h
+                  </p>
                 </div>
-              }
-            />
-          </div>
-        </>
+              ) : undefined
+            }
+            data={filteredEntries}
+            columns={activityColumns}
+            defaultRowsPerPage={10}
+            rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
+            emptyState={
+              <div className="px-6 py-20 text-center">
+                <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
+                <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
+              </div>
+            }
+          />
+        </div>
       )}
 
       {/* Recurring Delete Modal */}
