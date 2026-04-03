@@ -573,6 +573,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         if (product) {
           newItems[index].productId = bid.productId;
           newItems[index].productName = product.name;
+          if (product.type === 'supply') {
+            newItems[index].unitType = 'hours';
+          }
           const molSource = bid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
