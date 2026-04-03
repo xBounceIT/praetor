@@ -462,6 +462,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       productId: '',
       productName: '',
       quantity: 1,
+      unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
       productTaxRate: 0,
@@ -598,10 +599,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const taxAmount = lineNetAfterGlobal * (taxRate / 100);
       taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
 
-      const cost = item.specialBidId
+      const baseCost = item.specialBidId
         ? Number(item.specialBidUnitPrice ?? 0)
         : Number(item.productCost ?? 0);
-      totalCost += item.quantity * cost;
+      const costMultiplier = item.unitType === 'days' ? 8 : 1;
+      totalCost += item.quantity * baseCost * costMultiplier;
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
@@ -664,9 +666,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     if (isSupply) {
       return (
         <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-          {qty === 1
-            ? t('sales:clientQuotes.unit')
-            : t('sales:clientQuotes.units')}
+          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
         </span>
       );
     }
@@ -1251,9 +1251,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       : undefined;
 
                     // Cost is the bid price if selected, otherwise product cost
-                    const cost = item.specialBidId
+                    const baseCost = item.specialBidId
                       ? Number(item.specialBidUnitPrice ?? 0)
                       : Number(item.productCost ?? 0);
+                    const unitMultiplier = item.unitType === 'days' ? 8 : 1;
+                    const cost = baseCost * unitMultiplier;
 
                     const molSource = item.specialBidId
                       ? item.specialBidMolPercentage
@@ -1261,7 +1263,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const molPercentage = molSource ? Number(molSource) : 0;
                     const quantity = Number(item.quantity || 0);
                     const lineCost = cost * quantity;
-                    const unitSalePrice = calcProductSalePrice(cost, molPercentage);
+                    const unitSalePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
                     return (

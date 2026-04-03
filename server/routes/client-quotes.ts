@@ -52,6 +52,10 @@ const normalizeNullableString = (value: unknown) => {
 
 const normalizeSpecialBidId = (value: unknown) => normalizeNullableString(value);
 
+const normalizeUnitType = (value: unknown): 'hours' | 'days' => {
+  return value === 'days' ? 'days' : 'hours';
+};
+
 const calculateQuoteTotals = (
   items: Array<{ quantity: number; unitPrice: number; discount?: number; productTaxRate?: number }>,
   globalDiscount: number,
@@ -267,6 +271,7 @@ const quoteItemSchema = {
     specialBidMolPercentage: { type: ['number', 'null'] },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
+    unitType: { type: 'string', enum: ['hours', 'days'] },
   },
   required: [
     'id',
@@ -327,6 +332,7 @@ const quoteItemBodySchema = {
     specialBidMolPercentage: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
+    unitType: { type: 'string', enum: ['hours', 'days'] },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -405,7 +411,7 @@ const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   ),
   discount: toFiniteNumber(row.discount, 'quoteItem.discount'),
   note: toNullableString(row.note),
-  unitType: (row.unitType as 'hours' | 'days') || 'hours',
+  unitType: normalizeUnitType(row.unitType),
 });
 
 const normalizeQuoteRow = (row: Record<string, unknown>) => ({
@@ -612,6 +618,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice: unitPriceResult.value,
           discount: itemDiscountResult.value || 0,
           note: normalizeNullableString(item.note),
+          unitType: normalizeUnitType(item.unitType),
         });
       }
 
@@ -936,6 +943,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             unitPrice: unitPriceResult.value,
             discount: itemDiscountResult.value || 0,
             note: normalizeNullableString(item.note),
+            unitType: normalizeUnitType(item.unitType),
           });
         }
 
@@ -978,7 +986,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
                 ? null
                 : Number(item.specialBidMolPercentage),
-            unitType: (item.unitType as 'hours' | 'days') || 'hours',
+            unitType: normalizeUnitType(item.unitType),
           });
         });
 

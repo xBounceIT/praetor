@@ -30,6 +30,15 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
+const normalizeUnitType = (value: unknown): 'hours' | 'days' => {
+  return value === 'days' ? 'days' : 'hours';
+};
+
+const normalizeSupplierQuoteItemRow = (item: Record<string, unknown>) => ({
+  ...item,
+  unitType: normalizeUnitType(item.unitType),
+});
+
 const supplierQuoteItemSchema = {
   type: 'object',
   properties: {
@@ -41,6 +50,7 @@ const supplierQuoteItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
+    unitType: { type: 'string', enum: ['hours', 'days'] },
   },
   required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -194,7 +204,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!itemsByQuote[quoteId]) {
           itemsByQuote[quoteId] = [];
         }
-        itemsByQuote[quoteId].push(item);
+        itemsByQuote[quoteId].push(normalizeSupplierQuoteItemRow(item as Record<string, unknown>));
       });
 
       return quotesResult.rows.map((quote) => ({
@@ -240,6 +250,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice?: string | number;
           discount?: string | number;
           note?: string;
+          unitType?: 'hours' | 'days';
         }>;
         paymentTerms?: string;
         discount?: string | number;
@@ -286,7 +297,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
           discount: itemDiscountResult.value || 0,
-          unitType: (item as any).unitType || 'hours',
+          unitType: normalizeUnitType(item.unitType),
         });
       }
 
@@ -366,7 +377,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.unitType || 'hours',
           ],
         );
-        createdItems.push(itemResult.rows[0]);
+        createdItems.push(
+          normalizeSupplierQuoteItemRow(itemResult.rows[0] as Record<string, unknown>),
+        );
       }
 
       await logAudit({
@@ -424,6 +437,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice?: string | number;
           discount?: string | number;
           note?: string;
+          unitType?: 'hours' | 'days';
         }>;
         paymentTerms?: string;
         discount?: string | number;
@@ -588,7 +602,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             quantity: quantityResult.value,
             unitPrice: unitPriceResult.value,
             discount: itemDiscountResult.value || 0,
-            unitType: (item as any).unitType || 'hours',
+            unitType: normalizeUnitType(item.unitType),
           });
         }
 
@@ -622,7 +636,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.unitType || 'hours',
             ],
           );
-          updatedItems.push(itemResult.rows[0]);
+          updatedItems.push(
+            normalizeSupplierQuoteItemRow(itemResult.rows[0] as Record<string, unknown>),
+          );
         }
       } else {
         const itemsResult = await query(
@@ -640,7 +656,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          WHERE quote_id = $1`,
           [updatedQuoteId],
         );
-        updatedItems = itemsResult.rows;
+        updatedItems = itemsResult.rows.map((item) =>
+          normalizeSupplierQuoteItemRow(item as Record<string, unknown>),
+        );
       }
 
       await logAudit({
