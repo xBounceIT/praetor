@@ -310,7 +310,7 @@ const TrackerView: React.FC<{
       },
       {
         id: 'delete',
-        header: '',
+        header: t('common:labels.actions', { defaultValue: 'Actions' }),
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => (
