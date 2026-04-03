@@ -576,7 +576,7 @@ const StandardTable = <T extends object>({
                     <th
                       key={colId}
                       style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                      className={`relative group px-3 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.headerClassName || ''}`}
+                      className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.headerClassName || ''}`}
                     >
                       {/* Inline wrapper for button beside text */}
                       <span className="inline-flex items-center gap-1">
@@ -670,7 +670,7 @@ const StandardTable = <T extends object>({
                         <td
                           key={colId}
                           style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                          className={`px-3 py-px align-middle whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
+                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px align-middle whitespace-nowrap ${isLastColumn ? 'w-full' : ''} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
