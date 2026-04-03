@@ -403,18 +403,20 @@ const TrackerView: React.FC<{
                 </div>
               )}
 
-              <DailyView
-                clients={clients}
-                projects={projects}
-                projectTasks={projectTasks}
-                onAdd={onAddEntry}
-                selectedDate={selectedDate}
-                onMakeRecurring={onMakeRecurring}
-                permissions={permissions}
-                dailyGoal={dailyGoal}
-                currentDayTotal={dailyTotal}
-                defaultLocation={defaultLocation}
-              />
+              <div className="max-w-[70%]">
+                <DailyView
+                  clients={clients}
+                  projects={projects}
+                  projectTasks={projectTasks}
+                  onAdd={onAddEntry}
+                  selectedDate={selectedDate}
+                  onMakeRecurring={onMakeRecurring}
+                  permissions={permissions}
+                  dailyGoal={dailyGoal}
+                  currentDayTotal={dailyTotal}
+                  defaultLocation={defaultLocation}
+                />
+              </div>
             </div>
 
             <div className="lg:w-80 shrink-0 space-y-6">
@@ -430,42 +432,44 @@ const TrackerView: React.FC<{
             </div>
           </div>
 
-          <StandardTable<TimeEntry>
-            title={
-              selectedDate
-                ? t('tracker.activityFor', {
-                    date: formatDateOnlyForLocale(selectedDate, undefined, {
-                      month: 'long',
-                      day: 'numeric',
-                    }),
-                  })
-                : t('entry.recentActivity')
-            }
-            headerExtras={
-              selectedDate ? (
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    {t('tracker.dayTotal')}
-                  </p>
-                  <p
-                    className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}
-                  >
-                    {dailyTotal.toFixed(2)} h
-                  </p>
+          <div className="max-w-[70%]">
+            <StandardTable<TimeEntry>
+              title={
+                selectedDate
+                  ? t('tracker.activityFor', {
+                      date: formatDateOnlyForLocale(selectedDate, undefined, {
+                        month: 'long',
+                        day: 'numeric',
+                      }),
+                    })
+                  : t('entry.recentActivity')
+              }
+              headerExtras={
+                selectedDate ? (
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">
+                      {t('tracker.dayTotal')}
+                    </p>
+                    <p
+                      className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-red-600' : 'text-praetor'}`}
+                    >
+                      {dailyTotal.toFixed(2)} h
+                    </p>
+                  </div>
+                ) : undefined
+              }
+              data={filteredEntries}
+              columns={activityColumns}
+              defaultRowsPerPage={10}
+              rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
+              emptyState={
+                <div className="px-6 py-20 text-center">
+                  <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
+                  <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
                 </div>
-              ) : undefined
-            }
-            data={filteredEntries}
-            columns={activityColumns}
-            defaultRowsPerPage={10}
-            rowClassName={(row) => (row.isPlaceholder ? 'bg-indigo-50/30 italic' : '')}
-            emptyState={
-              <div className="px-6 py-20 text-center">
-                <i className="fa-solid fa-calendar-day text-4xl text-slate-100 mb-4 block" />
-                <p className="text-slate-400 font-medium text-sm">{t('tracker.noEntries')}</p>
-              </div>
-            }
-          />
+              }
+            />
+          </div>
         </>
       )}
 
