@@ -144,19 +144,19 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     [onListInternalSubcategories],
   );
 
-  // When modal opens, load categories for current type
+  // Load categories when modal opens and when type changes
   useEffect(() => {
-    if (isManageCategoriesModalOpen && formData.type) {
+    if (isModalOpen && formData.type) {
       loadCategories(formData.type);
     }
-  }, [isManageCategoriesModalOpen, formData.type, loadCategories]);
+  }, [isModalOpen, formData.type, loadCategories]);
 
-  // When subcategory modal opens, load subcategories for current type + category
+  // Load subcategories when modal opens with a category
   useEffect(() => {
-    if (isManageSubcategoriesModalOpen && formData.type && formData.category) {
+    if (isModalOpen && formData.type && formData.category) {
       loadSubcategories(formData.type, formData.category);
     }
-  }, [isManageSubcategoriesModalOpen, formData.type, formData.category, loadSubcategories]);
+  }, [isModalOpen, formData.type, formData.category, loadSubcategories]);
 
   // When category selection changes, update costUnit from category
   useEffect(() => {
@@ -173,38 +173,30 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
   }, [formData.category, formData.type, categories]);
 
-  // Calculated values
-  const calcSalePrice = (costo: number, molPercentage: number) => {
-    if (molPercentage >= 100) return costo;
-    return costo / (1 - molPercentage / 100);
-  };
-  const calcMargine = (costo: number, molPercentage: number) => {
-    return calcSalePrice(costo, molPercentage) - costo;
-  };
-
-  const handleNumericValueChange =
-    (field: 'taxRate' | 'costo' | 'molPercentage') => (value: string) => {
-      const parsed = parseNumberInputValue(value, undefined);
-      setFormData({
-        ...formData,
-        [field]: parsed,
-      });
-      if (errors[field]) {
-        setErrors({ ...errors, [field]: '' });
-      }
-    };
+  // Auto-select first category when categories load (only for new products, not when editing)
+  useEffect(() => {
+    if (isModalOpen && !editingProduct && categories.length > 0 && !formData.category) {
+      const firstCategory = categories[0];
+      setFormData((prev) => ({
+        ...prev,
+        category: firstCategory.name,
+        costUnit: firstCategory.costUnit,
+        subcategory: '',
+      }));
+    }
+  }, [isModalOpen, editingProduct, categories, formData.category]);
 
   const openAddModal = () => {
     setEditingProduct(null);
-    const defaultCategory = categories[0];
+    // Set initial state with type supply, will load categories on effect
     setFormData({
       name: '',
       productCode: '',
       description: '',
       costo: undefined,
       molPercentage: undefined,
-      costUnit: defaultCategory?.costUnit || 'unit',
-      category: defaultCategory?.name || '',
+      costUnit: 'unit',
+      category: '',
       subcategory: '',
       taxRate: 22,
       type: 'supply',
@@ -232,6 +224,27 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setServerError(null);
     setIsModalOpen(true);
   };
+
+  const calcSalePrice = (costo: number, molPercentage: number) => {
+    if (molPercentage >= 100) return costo;
+    return costo / (1 - molPercentage / 100);
+  };
+
+  const calcMargine = (costo: number, molPercentage: number) => {
+    return calcSalePrice(costo, molPercentage) - costo;
+  };
+
+  const handleNumericValueChange =
+    (field: 'taxRate' | 'costo' | 'molPercentage') => (value: string) => {
+      const parsed = parseNumberInputValue(value, undefined);
+      setFormData({
+        ...formData,
+        [field]: parsed,
+      });
+      if (errors[field]) {
+        setErrors({ ...errors, [field]: '' });
+      }
+    };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -562,15 +575,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const handleTypeChange = (val: string) => {
     const type = val as Product['type'];
-
-    // Find first category of this type and use its costUnit
-    const firstCategory = categories.find((c) => c.type === type);
-
+    // Reset category and subcategory - new categories will be loaded by useEffect
     setFormData({
       ...formData,
       type,
-      costUnit: firstCategory?.costUnit || 'unit',
-      category: firstCategory?.name || '',
+      costUnit: 'unit',
+      category: '',
       subcategory: '',
     });
     if (errors.type) {

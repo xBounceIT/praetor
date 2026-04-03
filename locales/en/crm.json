@@ -201,6 +201,7 @@
     "noCategories": "No categories found. Create your first category.",
     "noSubcategories": "No subcategories found. Create your first subcategory.",
     "products": "products",
+    "costUnit": "Cost Unit",
     "deleteCategoryWithProducts": "Category '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will become uncategorized.",
     "deleteSubcategoryWithProducts": "Subcategory '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will lose their subcategory."
   },

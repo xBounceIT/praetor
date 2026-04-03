@@ -1433,7 +1433,7 @@ BEGIN
         IF existing_id IS NULL THEN
             INSERT INTO internal_product_categories (id, name, type, cost_unit)
             VALUES (
-                'ipc-' || EXTRACT(EPOCH FROM NOW())::TEXT || '-' || MD5(RANDOM()::TEXT)::TEXT,
+                'ipc-' || gen_random_uuid(),
                 rec.category,
                 rec.type,
                 rec.derived_cost_unit
@@ -1486,4 +1486,55 @@ BEGIN
         INSERT INTO internal_product_categories (id, name, type, cost_unit)
         VALUES ('ipc-service-maintenance', 'Maintenance', 'service', 'hours');
     END IF;
+END $$;
+
+-- Internal product subcategories table
+CREATE TABLE IF NOT EXISTS internal_product_subcategories (
+    id VARCHAR(50) PRIMARY KEY,
+    category_id VARCHAR(50) NOT NULL REFERENCES internal_product_categories(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (category_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_internal_product_subcategories_category_id 
+    ON internal_product_subcategories(category_id);
+
+-- Migration: Backfill internal product subcategories from existing products
+DO $$
+DECLARE
+    rec RECORD;
+    cat_id VARCHAR(50);
+BEGIN
+    FOR rec IN 
+        SELECT DISTINCT p.category, p.type, p.subcategory
+        FROM products p
+        WHERE p.category IS NOT NULL 
+          AND p.category != ''
+          AND p.subcategory IS NOT NULL
+          AND p.subcategory != ''
+          AND p.supplier_id IS NULL
+          AND p.type IN ('supply', 'service', 'consulting')
+    LOOP
+        -- Find the category id
+        SELECT id INTO cat_id
+        FROM internal_product_categories
+        WHERE name = rec.category AND type = rec.type;
+        
+        IF cat_id IS NOT NULL THEN
+            -- Check if subcategory already exists
+            IF NOT EXISTS (
+                SELECT 1 FROM internal_product_subcategories 
+                WHERE category_id = cat_id AND LOWER(name) = LOWER(rec.subcategory)
+            ) THEN
+                INSERT INTO internal_product_subcategories (id, category_id, name)
+                VALUES (
+                    'ips-' || gen_random_uuid(),
+                    cat_id,
+                    rec.subcategory
+                );
+            END IF;
+        END IF;
+    END LOOP;
 END $$;

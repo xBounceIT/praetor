@@ -166,6 +166,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxRate,
         type,
         supplierId,
+        costUnit,
       } = request.body as {
         name: unknown;
         productCode: unknown;
@@ -177,6 +178,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxRate: unknown;
         type: unknown;
         supplierId: unknown;
+        costUnit: unknown;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -241,8 +243,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const typeResult = validateEnum(type, ['supply', 'service', 'consulting'], 'type');
       if (!typeResult.ok) return badRequest(reply, typeResult.message);
 
-      // Auto-derive costUnit from type (always ignore frontend-supplied costUnit)
-      const expectedCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
+      // Derive costUnit:
+      // - For external products (with supplierId): use frontend-supplied costUnit or default by type
+      // - For internal products: derive from the selected category's cost_unit if category exists
+      let expectedCostUnit: string;
+      if (supplierId) {
+        const costUnitResult = validateEnum(costUnit, ['unit', 'hours'], 'costUnit');
+        expectedCostUnit = costUnitResult.ok
+          ? costUnitResult.value
+          : typeResult.value === 'supply'
+            ? 'unit'
+            : 'hours';
+      } else {
+        // Internal product: derive from category if provided
+        if (category) {
+          const catResult = await query(
+            'SELECT cost_unit FROM internal_product_categories WHERE name = $1 AND type = $2',
+            [category, typeResult.value],
+          );
+          expectedCostUnit =
+            catResult.rows.length > 0
+              ? catResult.rows[0].cost_unit
+              : typeResult.value === 'supply'
+                ? 'unit'
+                : 'hours';
+        } else {
+          expectedCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
+        }
+      }
 
       const id = 'p-' + Date.now();
       const result = await query(
@@ -401,18 +429,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(molPercentageResult.value);
       }
 
-      // Category (nullable)
-      if (body.category !== undefined) {
-        fields.push(`category = $${paramIndex++}`);
-        values.push(body.category || null);
-      }
-
-      // Subcategory (nullable)
-      if (body.subcategory !== undefined) {
-        fields.push(`subcategory = $${paramIndex++}`);
-        values.push(body.subcategory || null);
-      }
-
       // Tax Rate
       if (body.taxRate !== undefined) {
         const taxRateResult = parseLocalizedNonNegativeNumber(body.taxRate, 'taxRate');
@@ -424,52 +440,90 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(taxRateResult.value);
       }
 
-      // Type - when type changes, auto-update costUnit to match
-      let currentProductType = null;
+      // Get current product info to determine if internal or external
+      const currentProductQuery = await query(
+        'SELECT type, supplier_id, category FROM products WHERE id = $1',
+        [idResult.value],
+      );
+      const currentProduct = currentProductQuery.rows[0] || {
+        type: null,
+        supplier_id: null,
+        category: null,
+      };
+
+      // Type - when type changes, handle costUnit appropriately
+      let updatedType = currentProduct.type;
+      const updatedCategory =
+        body.category !== undefined ? body.category || null : currentProduct.category;
+      const updatedSupplierId =
+        body.supplierId !== undefined
+          ? body.supplierId
+            ? body.supplierId
+            : null
+          : currentProduct.supplier_id;
+
       if (body.type !== undefined) {
         const typeResult = validateEnum(body.type, ['supply', 'service', 'consulting'], 'type');
         if (!typeResult.ok) return badRequest(reply, typeResult.message);
         fields.push(`type = $${paramIndex++}`);
         values.push(typeResult.value);
-
-        // Auto-set costUnit based on new type
-        const autoCostUnit = typeResult.value === 'supply' ? 'unit' : 'hours';
-        fields.push(`cost_unit = $${paramIndex++}`);
-        values.push(autoCostUnit);
-        currentProductType = typeResult.value;
+        updatedType = typeResult.value;
       }
 
-      // Cost Unit - validate against current product type, auto-correct if mismatch
-      if (body.costUnit !== undefined && currentProductType === null) {
-        // Need to fetch current product to validate costUnit against its type
-        const currentProduct = await query('SELECT type FROM products WHERE id = $1', [
-          idResult.value,
-        ]);
-        if (currentProduct.rows.length === 0) {
-          return reply.code(404).send({ error: 'Product not found' });
-        }
-        currentProductType = currentProduct.rows[0].type;
+      // Category update
+      if (body.category !== undefined) {
+        fields.push(`category = $${paramIndex++}`);
+        values.push(body.category || null);
+      }
 
-        const expectedCostUnit = currentProductType === 'supply' ? 'unit' : 'hours';
+      // Subcategory update
+      if (body.subcategory !== undefined) {
+        fields.push(`subcategory = $${paramIndex++}`);
+        values.push(body.subcategory || null);
+      }
+
+      // Supplier update (nullable)
+      if (body.supplierId !== undefined) {
+        fields.push(`supplier_id = $${paramIndex++}`);
+        values.push(body.supplierId ? body.supplierId : null);
+      }
+
+      // Cost Unit handling:
+      // - For external products (with supplierId): accept from request body if provided
+      // - For internal products: derive from category if category is set, otherwise from type
+      const isExternal = updatedSupplierId !== null;
+      let costUnitToSet: string | null = null;
+
+      if (!isExternal) {
+        // Internal product: derive from category if available
+        if (updatedCategory) {
+          const catResult = await query(
+            'SELECT cost_unit FROM internal_product_categories WHERE name = $1 AND type = $2',
+            [updatedCategory, updatedType],
+          );
+          costUnitToSet =
+            catResult.rows.length > 0
+              ? catResult.rows[0].cost_unit
+              : updatedType === 'supply'
+                ? 'unit'
+                : 'hours';
+        } else {
+          costUnitToSet = updatedType === 'supply' ? 'unit' : 'hours';
+        }
+        fields.push(`cost_unit = $${paramIndex++}`);
+        values.push(costUnitToSet);
+      } else if (body.costUnit !== undefined) {
+        // External product: accept costUnit from request body
         const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'], 'costUnit');
         if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-
-        // Auto-correct: always use expected value based on type
         fields.push(`cost_unit = $${paramIndex++}`);
-        values.push(expectedCostUnit);
+        values.push(costUnitResult.value);
       }
 
       // Is Disabled
       if (body.isDisabled !== undefined) {
         fields.push(`is_disabled = $${paramIndex++}`);
         values.push(parseBoolean(body.isDisabled));
-      }
-
-      // Supplier (nullable)
-      if (body.supplierId !== undefined) {
-        fields.push(`supplier_id = $${paramIndex++}`);
-        // Convert empty string to null to avoid FK violation and allow clearing
-        values.push(body.supplierId ? body.supplierId : null);
       }
 
       if (fields.length === 0) {
@@ -779,7 +833,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Category with this name already exists for this type');
       }
 
-      const id = 'ipc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      const id = 'ipc-' + crypto.randomUUID();
       const result = await query(
         `INSERT INTO internal_product_categories (id, name, type, cost_unit) 
          VALUES ($1, $2, $3, $4)
@@ -1032,24 +1086,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const categoryResult = requireNonEmptyString(category, 'category');
       if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
 
+      // First, get the category id
+      const categoryIdResult = await query(
+        'SELECT id FROM internal_product_categories WHERE name = $1 AND type = $2',
+        [categoryResult.value, typeResult.value],
+      );
+      if (categoryIdResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Category not found' });
+      }
+      const categoryId = categoryIdResult.rows[0].id;
+
+      // Then get subcategories with product counts
       const result = await query(
-        `SELECT subcategory as name, COUNT(*) as "productCount"
-         FROM products
-         WHERE type = $1 
-           AND category = $2 
-           AND supplier_id IS NULL
-           AND subcategory IS NOT NULL 
-           AND subcategory != ''
-         GROUP BY subcategory
-         ORDER BY subcategory ASC`,
-        [typeResult.value, categoryResult.value],
+        `SELECT s.name, COALESCE(p.count, 0) as "productCount"
+         FROM internal_product_subcategories s
+         LEFT JOIN (
+           SELECT subcategory, COUNT(*) as count
+           FROM products
+           WHERE type = $1 AND category = $2 AND supplier_id IS NULL
+           GROUP BY subcategory
+         ) p ON s.name = p.subcategory
+         WHERE s.category_id = $3
+         ORDER BY s.name ASC`,
+        [typeResult.value, categoryResult.value, categoryId],
       );
 
       return result.rows;
     },
   );
 
-  // POST /internal-subcategories - Create internal subcategory (just adds to a product for now)
+  // POST /internal-subcategories - Create internal subcategory
   fastify.post(
     '/internal-subcategories',
     {
@@ -1088,25 +1154,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const categoryResult = requireNonEmptyString(category, 'category');
       if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
 
-      // Check if this subcategory already exists
+      // Get category id
+      const categoryIdResult = await query(
+        'SELECT id FROM internal_product_categories WHERE name = $1 AND type = $2',
+        [categoryResult.value, typeResult.value],
+      );
+      if (categoryIdResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Category not found' });
+      }
+      const categoryId = categoryIdResult.rows[0].id;
+
+      // Check if this subcategory already exists for this category
       const existingResult = await query(
-        `SELECT 1 FROM products 
-         WHERE type = $1 
-           AND category = $2 
-           AND supplier_id IS NULL
-           AND LOWER(subcategory) = LOWER($3)
-         LIMIT 1`,
-        [typeResult.value, categoryResult.value, nameResult.value],
+        'SELECT 1 FROM internal_product_subcategories WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1',
+        [categoryId, nameResult.value],
       );
 
       if (existingResult.rows.length > 0) {
         return badRequest(reply, 'Subcategory with this name already exists for this category');
       }
 
-      // Subcategory is validated but doesn't create a row until it's assigned to a product
-      // Return success - the frontend will handle the actual assignment via product create/update
+      // Create the subcategory
+      const id = 'ips-' + crypto.randomUUID();
+      const result = await query(
+        `INSERT INTO internal_product_subcategories (id, category_id, name)
+         VALUES ($1, $2, $3)
+         RETURNING name`,
+        [id, categoryId, nameResult.value],
+      );
+
+      await bumpNamespaceVersion('products');
+      await logAudit({
+        request,
+        action: 'internal_subcategory.created',
+        entityType: 'internal_product_subcategory',
+        entityId: id,
+        details: {
+          targetLabel: nameResult.value,
+          secondaryLabel: categoryResult.value,
+        },
+      });
+
       return reply.code(201).send({
-        name: nameResult.value,
+        name: result.rows[0].name,
         productCount: 0,
       });
     },
@@ -1158,20 +1248,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const categoryResult = requireNonEmptyString(body.category, 'category');
       if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
 
+      // Get category id
+      const categoryIdResult = await query(
+        'SELECT id FROM internal_product_categories WHERE name = $1 AND type = $2',
+        [categoryResult.value, typeResult.value],
+      );
+      if (categoryIdResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Category not found' });
+      }
+      const categoryId = categoryIdResult.rows[0].id;
+
       // Check if target subcategory already exists
       if (oldNameResult.value.toLowerCase() !== newNameResult.value.toLowerCase()) {
         const existingResult = await query(
-          `SELECT 1 FROM products 
-           WHERE type = $1 
-             AND category = $2 
-             AND supplier_id IS NULL
-             AND LOWER(subcategory) = LOWER($3)
-           LIMIT 1`,
-          [typeResult.value, categoryResult.value, newNameResult.value],
+          'SELECT 1 FROM internal_product_subcategories WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1',
+          [categoryId, newNameResult.value],
         );
         if (existingResult.rows.length > 0) {
           return badRequest(reply, 'Subcategory with this name already exists for this category');
         }
+      }
+
+      // Update subcategory in the table
+      const subResult = await query(
+        `UPDATE internal_product_subcategories 
+         SET name = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE category_id = $2 AND name = $3
+         RETURNING id`,
+        [newNameResult.value, categoryId, oldNameResult.value],
+      );
+      if (subResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Subcategory not found' });
       }
 
       // Update all products with this subcategory
@@ -1191,7 +1298,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         action: 'internal_subcategory.renamed',
         entityType: 'internal_product_subcategory',
-        entityId: `${typeResult.value}:${categoryResult.value}:${newNameResult.value}`,
+        entityId: subResult.rows[0].id,
         details: {
           targetLabel: newNameResult.value,
           secondaryLabel: `From: ${oldNameResult.value}`,
@@ -1247,6 +1354,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const categoryResult = requireNonEmptyString(category, 'category');
       if (!categoryResult.ok) return badRequest(reply, categoryResult.message);
 
+      // Get category id
+      const categoryIdResult = await query(
+        'SELECT id FROM internal_product_categories WHERE name = $1 AND type = $2',
+        [categoryResult.value, typeResult.value],
+      );
+      if (categoryIdResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Category not found' });
+      }
+      const categoryId = categoryIdResult.rows[0].id;
+
       // Check if products with this subcategory are linked to transactions
       const linkedCheck = await checkProductsLinkedToTransactions(
         categoryResult.value,
@@ -1266,17 +1383,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
          WHERE type = $1 
            AND category = $2 
            AND supplier_id IS NULL
-           AND subcategory = $3
-         RETURNING id`,
+           AND subcategory = $3`,
         [typeResult.value, categoryResult.value, nameResult.value],
       );
+
+      // Delete the subcategory from the table
+      const subResult = await query(
+        `DELETE FROM internal_product_subcategories 
+         WHERE category_id = $1 AND name = $2
+         RETURNING id`,
+        [categoryId, nameResult.value],
+      );
+      if (subResult.rows.length === 0) {
+        return reply.code(404).send({ error: 'Subcategory not found' });
+      }
 
       await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_subcategory.deleted',
         entityType: 'internal_product_subcategory',
-        entityId: `${typeResult.value}:${categoryResult.value}:${nameResult.value}`,
+        entityId: subResult.rows[0].id,
         details: {
           targetLabel: nameResult.value,
           secondaryLabel: categoryResult.value,
