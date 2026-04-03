@@ -514,9 +514,10 @@ const StandardTable = <T extends object>({
                           const isVisible = !hiddenColIds.has(colId);
                           const isLastVisible = visibleColumns.length === 1 && isVisible;
                           return (
-                            <label
+                            <div
                               key={colId}
                               className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 rounded cursor-pointer"
+                              onClick={() => !isLastVisible && toggleColumnVisibility(colId)}
                             >
                               <Checkbox
                                 size="sm"
@@ -527,7 +528,7 @@ const StandardTable = <T extends object>({
                               <span className="text-[11px] text-slate-600 select-none">
                                 {col.header}
                               </span>
-                            </label>
+                            </div>
                           );
                         })}
                       </div>
