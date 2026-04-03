@@ -2112,11 +2112,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Internal Product Category Management Handlers
-  const handleListInternalCategories = async (type: string) => {
-    return api.products.listInternalCategories(type);
-  };
-
+  // Internal Product Category Management Handlers (mutations only)
   const handleCreateInternalCategory = async (categoryData: { name: string; type: string }) => {
     try {
       await api.products.createInternalCategory(categoryData);
@@ -2150,11 +2146,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Internal Product Subcategory Management Handlers
-  const handleListInternalSubcategories = async (type: string, category: string) => {
-    return api.products.listInternalSubcategories(type, category);
-  };
-
+  // Internal Product Subcategory Management Handlers (mutations only)
   const handleCreateInternalSubcategory = async (subcategoryData: {
     name: string;
     type: string;
@@ -2197,11 +2189,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Product Type Management Handlers
-  const handleListProductTypes = async () => {
-    return api.products.listProductTypes();
-  };
-
+  // Product Type Management Handlers (mutations only)
   const handleCreateProductType = async (typeData: {
     name: string;
     costUnit: 'unit' | 'hours';
@@ -3288,15 +3276,12 @@ const App: React.FC = () => {
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
                   currency={generalSettings.currency}
-                  onListInternalCategories={handleListInternalCategories}
                   onCreateInternalCategory={handleCreateInternalCategory}
                   onUpdateInternalCategory={handleUpdateInternalCategory}
                   onDeleteInternalCategory={handleDeleteInternalCategory}
-                  onListInternalSubcategories={handleListInternalSubcategories}
                   onCreateInternalSubcategory={handleCreateInternalSubcategory}
                   onRenameInternalSubcategory={handleRenameInternalSubcategory}
                   onDeleteInternalSubcategory={handleDeleteInternalSubcategory}
-                  onListProductTypes={handleListProductTypes}
                   onCreateProductType={handleCreateProductType}
                   onUpdateProductType={handleUpdateProductType}
                   onDeleteProductType={handleDeleteProductType}

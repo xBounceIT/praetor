@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../../services/api';
 import type {
   InternalProductCategory,
   InternalProductSubcategory,
@@ -21,23 +22,17 @@ export interface InternalListingViewProps {
   onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   onDeleteProduct: (id: string) => void;
   currency: string;
-  // Product Type management
-  onListProductTypes: () => Promise<InternalProductType[]>;
+  // Product Type management (mutations only - reads use api directly)
   onCreateProductType: (typeData: { name: string; costUnit: 'unit' | 'hours' }) => Promise<void>;
   onUpdateProductType: (
     id: string,
     updates: Partial<{ name: string; costUnit: 'unit' | 'hours' }>,
   ) => Promise<void>;
   onDeleteProductType: (id: string) => Promise<void>;
-  // Category/Subcategory management
-  onListInternalCategories: (type: string) => Promise<InternalProductCategory[]>;
+  // Category/Subcategory management (mutations only - reads use api directly)
   onCreateInternalCategory: (categoryData: { name: string; type: string }) => Promise<void>;
   onUpdateInternalCategory: (id: string, updates: Partial<{ name: string }>) => Promise<void>;
   onDeleteInternalCategory: (id: string) => Promise<void>;
-  onListInternalSubcategories: (
-    type: string,
-    category: string,
-  ) => Promise<InternalProductSubcategory[]>;
   onCreateInternalSubcategory: (subcategoryData: {
     name: string;
     type: string;
@@ -58,15 +53,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onUpdateProduct,
   onDeleteProduct,
   currency,
-  onListProductTypes,
   onCreateProductType,
   onUpdateProductType,
   onDeleteProductType,
-  onListInternalCategories,
   onCreateInternalCategory,
   onUpdateInternalCategory,
   onDeleteInternalCategory,
-  onListInternalSubcategories,
   onCreateInternalSubcategory,
   onRenameInternalSubcategory,
   onDeleteInternalSubcategory,
@@ -135,7 +127,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     const loadTypes = async () => {
       setIsLoadingTypes(true);
       try {
-        const types = await onListProductTypes();
+        const types = await api.products.listProductTypes();
         setProductTypes(types);
         if (types.length > 0) {
           const defaultType = types[0];
@@ -155,41 +147,35 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       }
     };
     loadTypes();
-  }, [onListProductTypes]);
+  }, []);
 
   // Load categories when type changes or category modal opens
-  const loadCategories = useCallback(
-    async (type: string) => {
-      if (!type) return;
-      setIsLoadingCategories(true);
-      try {
-        const cats = await onListInternalCategories(type);
-        setCategories(cats);
-      } catch (err) {
-        console.error('Failed to load categories:', err);
-      } finally {
-        setIsLoadingCategories(false);
-      }
-    },
-    [onListInternalCategories],
-  );
+  const loadCategories = useCallback(async (type: string) => {
+    if (!type) return;
+    setIsLoadingCategories(true);
+    try {
+      const cats = await api.products.listInternalCategories(type);
+      setCategories(cats);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  }, []);
 
   // Load subcategories when category changes or subcategory modal opens
-  const loadSubcategories = useCallback(
-    async (type: string, category: string) => {
-      if (!type || !category) return;
-      setIsLoadingSubcategories(true);
-      try {
-        const subs = await onListInternalSubcategories(type, category);
-        setSubcategories(subs);
-      } catch (err) {
-        console.error('Failed to load subcategories:', err);
-      } finally {
-        setIsLoadingSubcategories(false);
-      }
-    },
-    [onListInternalSubcategories],
-  );
+  const loadSubcategories = useCallback(async (type: string, category: string) => {
+    if (!type || !category) return;
+    setIsLoadingSubcategories(true);
+    try {
+      const subs = await api.products.listInternalSubcategories(type, category);
+      setSubcategories(subs);
+    } catch (err) {
+      console.error('Failed to load subcategories:', err);
+    } finally {
+      setIsLoadingSubcategories(false);
+    }
+  }, []);
 
   // Load categories when modal opens and when type changes
   useEffect(() => {
@@ -543,7 +529,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       }
 
       // Reload types
-      const types = await onListProductTypes();
+      const types = await api.products.listProductTypes();
       setProductTypes(types);
 
       // If the renamed type was selected, update formData
@@ -604,7 +590,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       }
 
       // Reload types
-      const types = await onListProductTypes();
+      const types = await api.products.listProductTypes();
       setProductTypes(types);
     } catch (err: unknown) {
       setTypeError(err instanceof Error ? err.message : 'An error occurred');
