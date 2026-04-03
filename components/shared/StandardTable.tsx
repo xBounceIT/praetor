@@ -323,7 +323,7 @@ const StandardTable = <T extends object>({
       <div className={tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'}>
         {columns && data ? (
           <table className="w-max min-w-full text-left border-collapse">
-            {paginatedData.length > 0 && (
+            {(paginatedData.length > 0 || Object.keys(filterState).length > 0 || sortState !== null) && (
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
                   {visibleColumns.map((col, colIdx) => {
