@@ -323,88 +323,90 @@ const StandardTable = <T extends object>({
       <div className={tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'}>
         {columns && data ? (
           <table className="w-max min-w-full text-left border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                {visibleColumns.map((col, colIdx) => {
-                  const colId = getColId(col);
-                  const isFiltered = filterState[colId] && filterState[colId].length > 0;
-                  const isSorted = sortState?.colId === colId;
-                  const isFirstColumn = colIdx === 0;
-                  const isLastColumn = colIdx === visibleColumns.length - 1;
-                  // Force alignment: first column left, last column right, otherwise use col.align
-                  const effectiveAlign = isFirstColumn
-                    ? 'left'
-                    : isLastColumn
-                      ? 'right'
-                      : col.align;
+            {paginatedData.length > 0 && (
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  {visibleColumns.map((col, colIdx) => {
+                    const colId = getColId(col);
+                    const isFiltered = filterState[colId] && filterState[colId].length > 0;
+                    const isSorted = sortState?.colId === colId;
+                    const isFirstColumn = colIdx === 0;
+                    const isLastColumn = colIdx === visibleColumns.length - 1;
+                    // Force alignment: first column left, last column right, otherwise use col.align
+                    const effectiveAlign = isFirstColumn
+                      ? 'left'
+                      : isLastColumn
+                        ? 'right'
+                        : col.align;
 
-                  return (
-                    <th
-                      key={colId}
-                      className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
-                    >
-                      {/* Inline wrapper for button beside text */}
-                      <span className="inline-flex items-center gap-1">
-                        <span>{col.header}</span>
+                    return (
+                      <th
+                        key={colId}
+                        className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${col.headerClassName || ''}`}
+                      >
+                        {/* Inline wrapper for button beside text */}
+                        <span className="inline-flex items-center gap-1">
+                          <span>{col.header}</span>
 
-                        {/* Filter button - inline with header text */}
-                        {!col.disableFiltering && (
-                          <button
-                            ref={activeFilterCol === colId ? filterRef : undefined}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (activeFilterCol === colId) {
-                                setActiveFilterCol(null);
-                              } else {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setFilterPos({
-                                  top: rect.bottom + window.scrollY + 4,
-                                  left: rect.left + window.scrollX,
-                                });
-                                setActiveFilterCol(colId);
-                              }
-                            }}
-                            className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                              isFiltered || isSorted || activeFilterCol === colId
-                                ? 'text-praetor'
-                                : 'text-slate-400'
-                            }`}
-                          >
-                            <i className="fa-solid fa-filter"></i>
-                          </button>
-                        )}
-                      </span>
+                          {/* Filter button - inline with header text */}
+                          {!col.disableFiltering && (
+                            <button
+                              ref={activeFilterCol === colId ? filterRef : undefined}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (activeFilterCol === colId) {
+                                  setActiveFilterCol(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setFilterPos({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.left + window.scrollX,
+                                  });
+                                  setActiveFilterCol(colId);
+                                }
+                              }}
+                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                                isFiltered || isSorted || activeFilterCol === colId
+                                  ? 'text-praetor'
+                                  : 'text-slate-400'
+                              }`}
+                            >
+                              <i className="fa-solid fa-filter"></i>
+                            </button>
+                          )}
+                        </span>
 
-                      {/* Portal for filter popup - outside the wrapper */}
-                      {activeFilterCol === colId &&
-                        filterPos &&
-                        createPortal(
-                          <div
-                            ref={popupRef}
-                            style={{
-                              top: filterPos.top,
-                              left: filterPos.left,
-                              position: 'absolute',
-                              zIndex: 9999,
-                            }}
-                          >
-                            <TableFilter
-                              title={col.header}
-                              options={getFilterOptions(colId)}
-                              selectedValues={filterState[colId] || []}
-                              onFilterChange={(selected) => handleFilter(colId, selected)}
-                              sortDirection={sortState?.colId === colId ? sortState.px : null}
-                              onSortChange={(dir) => handleSort(colId, dir)}
-                              onClose={() => setActiveFilterCol(null)}
-                            />
-                          </div>,
-                          document.body,
-                        )}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
+                        {/* Portal for filter popup - outside the wrapper */}
+                        {activeFilterCol === colId &&
+                          filterPos &&
+                          createPortal(
+                            <div
+                              ref={popupRef}
+                              style={{
+                                top: filterPos.top,
+                                left: filterPos.left,
+                                position: 'absolute',
+                                zIndex: 9999,
+                              }}
+                            >
+                              <TableFilter
+                                title={col.header}
+                                options={getFilterOptions(colId)}
+                                selectedValues={filterState[colId] || []}
+                                onFilterChange={(selected) => handleFilter(colId, selected)}
+                                sortDirection={sortState?.colId === colId ? sortState.px : null}
+                                onSortChange={(dir) => handleSort(colId, dir)}
+                                onClose={() => setActiveFilterCol(null)}
+                              />
+                            </div>,
+                            document.body,
+                          )}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+            )}
             <tbody className="divide-y divide-slate-100">
               {paginatedData.length > 0 ? (
                 paginatedData.map((row, idx) => (
