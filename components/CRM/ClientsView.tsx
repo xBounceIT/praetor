@@ -273,11 +273,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   const startEditRow = (client: Client, initialActiveField?: keyof Client) => {
     if (!canUpdateClients && !editingState.isNewRow) return;
     const isNew = client.id === 'new';
-    setEditingState({
-      rowId: client.id,
-      isNewRow: isNew ? true : editingState.isNewRow,
-      data: { ...client },
-      touchedFields: new Set(),
+    setEditingState((prev) => {
+      const isNew = client.id === 'new';
+      const isSameRow = prev.rowId === client.id;
+      return {
+        rowId: client.id,
+        isNewRow: isNew,
+        data: isSameRow ? prev.data : { ...client },
+        touchedFields: isSameRow ? prev.touchedFields : new Set(),
+      };
     });
     setValidationErrors({});
     setActiveCell(initialActiveField ? { field: initialActiveField } : null);
@@ -413,7 +417,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         setValidationErrors({ ...errors, clientCode: t('common:validation.clientCodeUnique') });
       } else {
         // Handle unrecognized server errors
-        console.error('Failed to save client:', err);
+        setValidationErrors({ ...errors, general: t('common:messages.errorOccurred') });
         setValidationErrors({ ...errors, name: t('common:messages.error') });
       }
     }
@@ -1056,14 +1060,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   ]);
 
   // Prepare data with new row if editing
-  const tableData = useMemo(() => {
     if (editingState.isNewRow) {
       const newRow: Client = {
         id: 'new',
         name: '',
         ...editingState.data,
       } as Client;
-      return [...clients, newRow];
+      return [newRow, ...clients];
     }
     return clients;
   }, [clients, editingState]);
