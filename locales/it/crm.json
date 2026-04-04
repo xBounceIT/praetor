@@ -105,6 +105,7 @@
     "typeItem": "Articolo",
     "typeService": "Servizio",
     "productCode": "Codice",
+    "insertDate": "Data inserimento",
     "productCodeHint": "Sono ammessi solo lettere, numeri, trattini bassi e trattini",
     "supplier": "Fornitore",
     "noProducts": "Nessun prodotto trovato",

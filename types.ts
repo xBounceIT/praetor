@@ -195,6 +195,7 @@ export interface Product {
   supplierId?: string;
   supplierName?: string;
   isDisabled?: boolean;
+  createdAt?: number;
 }
 
 export interface SpecialBid {
