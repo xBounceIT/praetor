@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { bumpNamespaceVersion } from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -1187,6 +1188,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Auto-create projects when order is confirmed for the first time
       if (status === 'confirmed' && existingOrder.status !== 'confirmed') {
+        // Invalidate client cache since accepted orders total has changed
+        await bumpNamespaceVersion('clients');
+
         // Fetch order items with notes and product codes for project creation
         const orderItemsResult = await query(
           `SELECT si.product_id, si.product_name, si.note, p.product_code
@@ -1286,6 +1290,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? status
           : String(orderResult.rows[0].status ?? existingOrder.status);
       const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
+
+      // Invalidate client cache if order status affects accepted orders totals
+      if (didStatusChange && (existingOrder.status === 'confirmed' || nextStatus === 'confirmed')) {
+        await bumpNamespaceVersion('clients');
+      }
+
       await logAudit({
         request,
         action: 'client_order.updated',

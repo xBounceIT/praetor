@@ -73,7 +73,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   onDeleteClient,
   permissions,
 }) => {
-  const { t } = useTranslation(['crm', 'common', 'form']);
+  const { t, i18n } = useTranslation(['crm', 'common', 'form']);
   const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
   const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
   const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
@@ -351,6 +351,50 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
       {
+        header: t('crm:clients.tableHeaders.totalSentQuotes'),
+        id: 'totalSentQuotes',
+        accessorFn: (row) => row.totalSentQuotes ?? 0,
+        cell: ({ row }) => {
+          const value = row.totalSentQuotes;
+          if (value == null || value === 0) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          const formatted = new Intl.NumberFormat(i18n.language, {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          }).format(value);
+          return (
+            <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+              {formatted}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('crm:clients.tableHeaders.totalAcceptedOrders'),
+        id: 'totalAcceptedOrders',
+        accessorFn: (row) => row.totalAcceptedOrders ?? 0,
+        cell: ({ row }) => {
+          const value = row.totalAcceptedOrders;
+          if (value == null || value === 0) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          const formatted = new Intl.NumberFormat(i18n.language, {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          }).format(value);
+          return (
+            <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
+              {formatted}
+            </span>
+          );
+        },
+      },
+      {
         header: t('crm:clients.tableHeaders.status'),
         id: 'status',
         accessorFn: (row) =>
@@ -410,7 +454,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
     ],
-    [t, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete, formatInsertDate],
+    [t, i18n, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete, formatInsertDate],
   );
 
   return (

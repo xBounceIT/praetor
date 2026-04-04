@@ -9,7 +9,9 @@
       "fiscalCode": "VAT / Tax Code",
       "officeCountRange": "Number of Offices",
       "insertDate": "Insert Date",
-      "status": "Status"
+      "status": "Status",
+      "totalSentQuotes": "Sent Quotes",
+      "totalAcceptedOrders": "Accepted Orders"
     },
     "title": "Clients",
     "subtitle": "Manage your client directory",
