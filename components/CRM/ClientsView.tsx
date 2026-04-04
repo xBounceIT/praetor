@@ -150,10 +150,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   };
 
   const startEditRow = (client: Client, initialActiveField?: keyof Client) => {
-    if (!canUpdateClients) return;
+    if (!canUpdateClients && !editingState.isNewRow) return;
+    const isNew = client.id === 'new';
     setEditingState({
       rowId: client.id,
-      isNewRow: false,
+      isNewRow: isNew ? true : editingState.isNewRow,
       data: { ...client },
       touchedFields: new Set(),
     });
