@@ -292,7 +292,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         setValidationErrors({ ...errors, clientCode: t('common:validation.clientCodeUnique') });
       } else {
         // Handle unrecognized server errors
-        console.error('Failed to save client:', err);
+        setValidationErrors({ ...errors, general: t('common:messages.errorOccurred') });
         setValidationErrors({ ...errors, name: t('common:messages.error') });
       }
     }
