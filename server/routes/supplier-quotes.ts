@@ -368,7 +368,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           [
             itemId,
             nextIdResult.value,
-            item.productId,
+            item.productId || null,
             item.productName,
             item.quantity,
             item.unitPrice,
@@ -627,7 +627,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               updatedQuoteId,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.quantity,
               item.unitPrice,

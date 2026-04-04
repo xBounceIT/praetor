@@ -333,7 +333,7 @@ const resolveQuoteItemSnapshots = async (
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" is invalid or supplier quote is not accepted`,
         );
       }
-      if (supplierQuoteSnapshot.productId !== item.productId) {
+      if (supplierQuoteSnapshot.productId !== item.productId && supplierQuoteSnapshot.productId !== null) {
         throw new Error(
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${item.productId}"`,
         );

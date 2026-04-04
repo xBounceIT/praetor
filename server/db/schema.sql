@@ -1114,7 +1114,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS supplier_quote_items (
     id VARCHAR(50) PRIMARY KEY,
     quote_id VARCHAR(100) NOT NULL REFERENCES supplier_quotes(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,

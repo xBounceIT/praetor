@@ -497,7 +497,7 @@ export interface Supplier {
 export interface SupplierQuoteItem {
   id: string;
   quoteId: string;
-  productId: string;
+  productId?: string;
   productName: string;
   quantity: number;
   unitPrice: number;
