@@ -2,13 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requireAnyPermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -148,25 +141,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const bypass = shouldBypassCache(request);
-      const { status, value } = await cacheGetSetJson(
-        'products',
-        'v=1',
-        TTL_LIST_SECONDS,
-        async () => {
-          const result = await query(
-            `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
-             FROM products p 
-             LEFT JOIN suppliers s ON p.supplier_id = s.id 
-             ORDER BY p.name ASC`,
-          );
-          return result.rows;
-        },
-        { bypass },
+      const result = await query(
+        `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
+         FROM products p 
+         LEFT JOIN suppliers s ON p.supplier_id = s.id 
+         ORDER BY p.name ASC`,
       );
-
-      setCacheHeader(reply, status);
-      return value;
+      return result.rows;
     },
   );
 
@@ -319,7 +300,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'product.created',
@@ -594,7 +574,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action = body.isDisabled ? 'product.disabled' : 'product.enabled';
       }
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action,
@@ -640,7 +619,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Product not found' });
       }
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'product.deleted',
@@ -866,7 +844,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [id, nameResult.value, typeResult.value, costUnit],
       );
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_category.created',
@@ -978,7 +955,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return result;
       });
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_category.updated',
@@ -1058,7 +1034,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Delete the category
       await query('DELETE FROM internal_product_categories WHERE id = $1', [idResult.value]);
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_category.deleted',
@@ -1233,7 +1208,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [id, categoryId, nameResult.value],
       );
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_subcategory.created',
@@ -1374,7 +1348,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_subcategory.renamed',
@@ -1480,7 +1453,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Subcategory not found' });
       }
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'internal_subcategory.deleted',
@@ -1610,7 +1582,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [id, nameResult.value, costUnitResult.value],
       );
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'product_type.created',
@@ -1731,7 +1702,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return result;
       });
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'product_type.updated',
@@ -1826,7 +1796,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Delete the type
       await query('DELETE FROM product_types WHERE id = $1', [idResult.value]);
 
-      await bumpNamespaceVersion('products');
       await logAudit({
         request,
         action: 'product_type.deleted',

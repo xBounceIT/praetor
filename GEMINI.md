@@ -7,7 +7,7 @@ Praetor is a modern, AI-enhanced ERP (Enterprise Resource Planning) application 
 The project follows a full-stack architecture with a React-based frontend and a Fastify-based backend.
 
 - **Frontend:** A Single Page Application (SPA) built with React 19, TypeScript, and Vite. Styling is handled via Tailwind CSS, and data visualization uses Recharts.
-- **Backend:** An API server built with Fastify, using PostgreSQL as the primary relational database and Redis for caching.
+- **Backend:** An API server built with Fastify, using PostgreSQL as the primary relational database.
 - **AI Integration:** Supports AI Reporting (Gemini/OpenRouter, server-side provider calls) for generating insights from business data.
 - **Deployment:** Containerized using Docker and Orchestrated via Docker Compose.
 
@@ -37,7 +37,7 @@ The project follows a full-stack architecture with a React-based frontend and a 
 ## Technology Stack
 
 - **Frontend:** React 19, Vite, TypeScript, Tailwind CSS, Recharts, i18next, Biome.
-- **Backend:** Fastify, PostgreSQL (`pg`), Redis, Bun, JWT.
+- **Backend:** Fastify, PostgreSQL (`pg`), Bun, JWT.
 - **Infrastructure:** Docker, Caddy (for serving frontend).
 
 ## Development Commands
@@ -55,7 +55,7 @@ The project follows a full-stack architecture with a React-based frontend and a 
 - `cd server && bun run build`: Compile TypeScript to JavaScript.
 
 ### Docker
-- `docker compose up -d --build`: Build and start the entire stack (Postgres, Redis, Backend, Frontend).
+- `docker compose up -d --build`: Build and start the entire stack (Postgres, Backend, Frontend).
 
 ## Key Files & Directories
 

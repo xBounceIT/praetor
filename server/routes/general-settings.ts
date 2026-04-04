@@ -2,13 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_SETTINGS_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   badRequest,
@@ -88,61 +81,50 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const apiKeyVisible = hasPermission(request, 'administration.general.update') ? 'yes' : 'no';
-      const bypass = shouldBypassCache(request);
-
-      const { status, value } = await cacheGetSetJson(
-        'general-settings',
-        `v=4:apiKeyVisible=${apiKeyVisible}`,
-        TTL_SETTINGS_SECONDS,
-        async () => {
-          const result = await query(
-            'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_reporting, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
-          );
-          if (result.rows.length === 0) {
-            return {
-              currency: 'EUR',
-              dailyLimit: 8.0,
-              startOfWeek: 'Monday',
-              treatSaturdayAsHoliday: true,
-              enableAiReporting: false,
-              geminiApiKey: '',
-              aiProvider: 'gemini',
-              openrouterApiKey: '',
-              geminiModelId: '',
-              openrouterModelId: '',
-              allowWeekendSelection: true,
-              defaultLocation: 'remote',
-            };
-          }
-          const s = result.rows[0];
-          const geminiApiKey =
-            apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
-          const openrouterApiKey =
-            apiKeyVisible === 'yes'
-              ? s.openrouter_api_key || ''
-              : s.openrouter_api_key
-                ? '********'
-                : '';
-
-          return {
-            currency: s.currency,
-            dailyLimit: parseFloat(s.daily_limit),
-            startOfWeek: s.start_of_week,
-            treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
-            enableAiReporting: s.enable_ai_reporting ?? false,
-            geminiApiKey,
-            aiProvider: s.ai_provider || 'gemini',
-            openrouterApiKey,
-            geminiModelId: s.gemini_model_id || '',
-            openrouterModelId: s.openrouter_model_id || '',
-            allowWeekendSelection: s.allow_weekend_selection ?? true,
-            defaultLocation: s.default_location || 'remote',
-          };
-        },
-        { bypass },
+      const result = await query(
+        'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_reporting, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',
       );
+      if (result.rows.length === 0) {
+        return {
+          currency: 'EUR',
+          dailyLimit: 8.0,
+          startOfWeek: 'Monday',
+          treatSaturdayAsHoliday: true,
+          enableAiReporting: false,
+          geminiApiKey: '',
+          aiProvider: 'gemini',
+          openrouterApiKey: '',
+          geminiModelId: '',
+          openrouterModelId: '',
+          allowWeekendSelection: true,
+          defaultLocation: 'remote',
+        };
+      }
+      const s = result.rows[0];
+      const geminiApiKey =
+        apiKeyVisible === 'yes' ? s.gemini_api_key || '' : s.gemini_api_key ? '********' : '';
+      const openrouterApiKey =
+        apiKeyVisible === 'yes'
+          ? s.openrouter_api_key || ''
+          : s.openrouter_api_key
+            ? '********'
+            : '';
 
-      setCacheHeader(reply, status);
+      const value = {
+        currency: s.currency,
+        dailyLimit: parseFloat(s.daily_limit),
+        startOfWeek: s.start_of_week,
+        treatSaturdayAsHoliday: s.treat_saturday_as_holiday,
+        enableAiReporting: s.enable_ai_reporting ?? false,
+        geminiApiKey,
+        aiProvider: s.ai_provider || 'gemini',
+        openrouterApiKey,
+        geminiModelId: s.gemini_model_id || '',
+        openrouterModelId: s.openrouter_model_id || '',
+        allowWeekendSelection: s.allow_weekend_selection ?? true,
+        defaultLocation: s.default_location || 'remote',
+      };
+
       return value;
     },
   );
@@ -261,7 +243,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const s = result.rows[0];
-      await bumpNamespaceVersion('general-settings');
       await logAudit({
         request,
         action: 'settings.updated',

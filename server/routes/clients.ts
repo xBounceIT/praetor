@@ -6,13 +6,6 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -267,46 +260,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const canViewClientDetails = hasPermission(request, 'crm.clients.view');
-      const scopeKey = canViewAllClients ? 'all' : `user:${request.user.id}`;
-      const detailsKey = canViewClientDetails ? 'full' : 'nameOnly';
-      const bypass = shouldBypassCache(request);
+      let queryText = 'SELECT * FROM clients ORDER BY name';
+      const queryParams: (string | null)[] = [];
 
-      const { status, value } = await cacheGetSetJson(
-        'clients',
-        `v=4:scope=${scopeKey}:details=${detailsKey}`,
-        TTL_LIST_SECONDS,
-        async () => {
-          let queryText = 'SELECT * FROM clients ORDER BY name';
-          const queryParams: (string | null)[] = [];
-
-          if (!canViewAllClients) {
-            queryText = `
+      if (!canViewAllClients) {
+        queryText = `
                 SELECT c.id, c.name
                 FROM clients c
                 INNER JOIN user_clients uc ON c.id = uc.client_id
                 WHERE uc.user_id = $1
                 ORDER BY c.name
             `;
-            queryParams.push(request.user.id);
-          }
+        queryParams.push(request.user.id);
+      }
 
-          const result = await query(queryText, queryParams);
-          return result.rows.map((c) => {
-            if (!canViewClientDetails) {
-              return {
-                id: c.id,
-                name: c.name,
-                description: null,
-              };
-            }
+      const result = await query(queryText, queryParams);
+      const value = result.rows.map((c) => {
+        if (!canViewClientDetails) {
+          return {
+            id: c.id,
+            name: c.name,
+            description: null,
+          };
+        }
 
-            return mapClientRow(c);
-          });
-        },
-        { bypass },
-      );
+        return mapClientRow(c);
+      });
 
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -474,7 +454,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           await assignClientToUser(request.user.id, id);
         }
         await assignClientToTopManagers(id);
-        await bumpNamespaceVersion('clients');
         await logAudit({
           request,
           action: 'client.created',
@@ -780,7 +759,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action = isDisabledValue ? 'client.disabled' : 'client.enabled';
         }
 
-        await bumpNamespaceVersion('clients');
         await logAudit({
           request,
           action,
@@ -838,7 +816,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Client not found' });
       }
 
-      await bumpNamespaceVersion('clients');
       await logAudit({
         request,
         action: 'client.deleted',

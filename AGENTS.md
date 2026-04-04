@@ -21,7 +21,7 @@
 - `cd server && bun run build`: typecheck/compile API (`tsc`).
 - `cd server && bun run start`: run the built API (defaults to `http://localhost:3001`).
 - `bun run docs`: generate TypeDoc + OpenAPI into `docs/`.
-- `docker compose up -d --build`: run full stack (Postgres/Redis/API/Caddy).
+- `docker compose up -d --build`: run full stack (Postgres/API/Caddy).
 
 ## Coding Style & Naming Conventions
 

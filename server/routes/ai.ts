@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { cacheGetSetJson } from '../services/cache.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
 
@@ -43,26 +42,17 @@ const googleModelExists = async (apiKey: string, modelPath: string): Promise<boo
 type OpenRouterModel = { id: string; name?: string };
 
 const listOpenRouterModels = async (apiKey: string): Promise<OpenRouterModel[]> => {
-  // The models list is not user-specific. Cache to avoid repeated calls.
-  const { value } = await cacheGetSetJson<OpenRouterModel[]>(
-    'openrouter-models',
-    'v=1',
-    60 * 60,
-    async () => {
-      const res = await fetch('https://openrouter.ai/api/v1/models', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
-      if (!res.ok) {
-        throw new Error(`OpenRouter models request failed: HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as { data?: Array<{ id: string; name?: string }> };
-      return (data.data || []).map((m) => ({ id: m.id, name: m.name }));
+  const res = await fetch('https://openrouter.ai/api/v1/models', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
     },
-  );
-  return value;
+  });
+  if (!res.ok) {
+    throw new Error(`OpenRouter models request failed: HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as { data?: Array<{ id: string; name?: string }> };
+  return (data.data || []).map((m) => ({ id: m.id, name: m.name }));
 };
 
 const openrouterModelExists = async (
