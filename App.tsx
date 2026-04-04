@@ -2378,17 +2378,7 @@ const App: React.FC = () => {
         linkedOfferId: offer.id,
         paymentTerms: offer.paymentTerms,
         items: offer.items.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          specialBidId: item.specialBidId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          productCost: item.productCost,
-          productMolPercentage: item.productMolPercentage,
-          specialBidUnitPrice: item.specialBidUnitPrice,
-          specialBidMolPercentage: item.specialBidMolPercentage,
-          discount: item.discount,
-          note: item.note,
+          ...item,
           id: 'temp-' + Math.random().toString(36).substring(2, 11),
           orderId: '',
         })),
@@ -2399,6 +2389,11 @@ const App: React.FC = () => {
       const order = await api.clientsOrders.create(orderData);
       setClientsOrders((prev) => [...prev, order]);
       setActiveView('accounting/clients-orders');
+      try {
+        await refreshSupplierQuoteFlow();
+      } catch (refreshErr) {
+        console.error('Failed to refresh supplier data:', refreshErr);
+      }
     } catch (err) {
       console.error('Failed to create order from offer:', err);
       alert((err as Error).message || 'Failed to create order from offer');
@@ -2526,9 +2521,13 @@ const App: React.FC = () => {
           orderId: '',
         })),
       });
-      await refreshSupplierQuoteFlow();
       setSupplierQuoteFilterId(quote.id);
       setActiveView('accounting/supplier-orders');
+      try {
+        await refreshSupplierQuoteFlow();
+      } catch (refreshErr) {
+        console.error('Failed to refresh supplier data:', refreshErr);
+      }
     } catch (err) {
       console.error('Failed to create supplier order from quote:', err);
       alert((err as Error).message || 'Failed to create supplier order from quote');

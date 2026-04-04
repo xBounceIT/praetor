@@ -3,6 +3,7 @@ import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { generateSupplierOrderId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -180,18 +181,6 @@ const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) =>
     });
   }
   return normalizedItems;
-};
-
-const generateSupplierOrderId = async () => {
-  const year = new Date().getFullYear();
-  const result = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
-     FROM supplier_sales
-     WHERE id ~ $1`,
-    [`^SORD-${year}-[0-9]+$`],
-  );
-  const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
-  return `SORD-${year}-${String(nextSequence).padStart(4, '0')}`;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
