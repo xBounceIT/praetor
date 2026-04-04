@@ -72,6 +72,7 @@
     "clientDeleted": "Cliente eliminato",
     "deleteConfirm": "Sei sicuro di voler eliminare questo cliente? Tutti i progetti e attività associati verranno anche eliminati.",
     "isDisabled": "Il cliente è disabilitato",
+    "disableClient": "Disabilita Cliente",
     "activeClients": "Clienti Attivi",
     "disabledClients": "Clienti Disabilitati",
     "subjectType": "Tipologia Soggetto",

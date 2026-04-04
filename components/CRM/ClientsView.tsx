@@ -415,7 +415,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-1">
             <Tooltip
-              label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.isDisabled')}
+              label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
             >
               {() => (
                 <button
