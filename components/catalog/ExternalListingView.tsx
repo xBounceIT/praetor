@@ -68,7 +68,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     costUnit: 'unit',
     category: '',
     subcategory: '',
-    taxRate: 22,
     type: '',
     supplierId: '',
   });
@@ -98,17 +97,16 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     return calcSalePrice(costo, molPercentage) - costo;
   };
 
-  const handleNumericValueChange =
-    (field: 'taxRate' | 'costo' | 'molPercentage') => (value: string) => {
-      const parsed = parseNumberInputValue(value, undefined);
-      setFormData({
-        ...formData,
-        [field]: parsed,
-      });
-      if (errors[field]) {
-        setErrors({ ...errors, [field]: '' });
-      }
-    };
+  const handleNumericValueChange = (field: 'costo' | 'molPercentage') => (value: string) => {
+    const parsed = parseNumberInputValue(value, undefined);
+    setFormData({
+      ...formData,
+      [field]: parsed,
+    });
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: '' });
+    }
+  };
 
   const handleSupplierChange = (supplierId: string) => {
     setFormData({
@@ -131,7 +129,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       costUnit: defaultProductType?.costUnit || 'unit',
       category: '',
       subcategory: '',
-      taxRate: 22,
       type: defaultProductType?.name || '',
       supplierId: '',
     });
@@ -151,7 +148,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       costUnit: product.costUnit || defaultProductType?.costUnit || 'unit',
       category: product.category || '',
       subcategory: product.subcategory || '',
-      taxRate: product.taxRate || 0,
       type: product.type || defaultProductType?.name || '',
       supplierId: product.supplierId || '',
     });
@@ -202,23 +198,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
     ) {
       if (formData.molPercentage <= 0 || formData.molPercentage >= 100) {
         newErrors.molPercentage = t('common:validation.molPercentageRange');
-      }
-    }
-    if (
-      formData.taxRate === undefined ||
-      formData.taxRate === null ||
-      Number.isNaN(formData.taxRate)
-    ) {
-      newErrors.taxRate = t('common:validation.taxRateRequired');
-    }
-    if (
-      !newErrors.taxRate &&
-      formData.taxRate !== undefined &&
-      formData.taxRate !== null &&
-      !Number.isNaN(formData.taxRate)
-    ) {
-      if (formData.taxRate < 0 || formData.taxRate > 100) {
-        newErrors.taxRate = t('common:validation.taxRateRange');
       }
     }
     const typeValue = formData.type;
@@ -344,14 +323,14 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
   }, [activeSuppliers, formData.supplierId, suppliers, t]);
 
   // Helper to display type name
-  const getDisplayTypeName = (typeName: string) => {
+  const getDisplayTypeName = React.useCallback((typeName: string) => {
     return typeName.charAt(0).toUpperCase() + typeName.slice(1);
-  };
+  }, []);
 
   // Build type options from API-loaded product types
   const typeOptions: Option[] = React.useMemo(() => {
     return productTypes.map((t) => ({ id: t.name, name: getDisplayTypeName(t.name) }));
-  }, [productTypes]);
+  }, [productTypes, getDisplayTypeName]);
 
   const handleTypeChange = (val: string) => {
     const typeName = val;
@@ -378,13 +357,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
   const pricing = hasPricing
     ? { cost: Number(formData.costo), mol: Number(formData.molPercentage) }
     : null;
-
-  const showTaxRateWarning =
-    formData.taxRate !== undefined &&
-    formData.taxRate !== null &&
-    !Number.isNaN(formData.taxRate) &&
-    formData.taxRate > 30 &&
-    formData.taxRate <= 100;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -679,29 +651,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
                     disabled={!formData.category}
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-end justify-between ml-1 min-h-5">
-                    <div className="flex flex-col">
-                      {showTaxRateWarning && (
-                        <p className="text-amber-600 text-[10px] font-bold leading-none mb-1">
-                          {t('crm:internalListing.unusualTaxRate')}
-                        </p>
-                      )}
-                      <label className="text-xs font-bold text-slate-500">
-                        {t('crm:internalListing.taxRate')}
-                      </label>
-                    </div>
-                  </div>
-                  <ValidatedNumberInput
-                    value={formData.taxRate ?? ''}
-                    onValueChange={handleNumericValueChange('taxRate')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 outline-none transition-all ${errors.taxRate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 focus:ring-praetor'}`}
-                  />
-                  {errors.taxRate && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.taxRate}</p>
-                  )}
-                </div>
               </div>
             </div>
 
@@ -965,15 +914,6 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
               <span className="text-sm font-semibold text-emerald-600">
                 {Number(value).toFixed(2)} {currency}
               </span>
-            ),
-          },
-          {
-            header: t('crm:internalListing.taxRate'),
-            align: 'right',
-            className: 'px-6 py-5 whitespace-nowrap text-right',
-            accessorKey: 'taxRate',
-            cell: ({ row: p }) => (
-              <span className="text-sm font-bold text-praetor">{p.taxRate}%</span>
             ),
           },
           {

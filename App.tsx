@@ -2384,7 +2384,6 @@ const App: React.FC = () => {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           productCost: item.productCost,
-          productTaxRate: item.productTaxRate,
           productMolPercentage: item.productMolPercentage,
           specialBidUnitPrice: item.specialBidUnitPrice,
           specialBidMolPercentage: item.specialBidMolPercentage,
@@ -2525,7 +2524,6 @@ const App: React.FC = () => {
           ...item,
           id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
           orderId: '',
-          productTaxRate: products.find((product) => product.id === item.productId)?.taxRate || 0,
         })),
       });
       await refreshSupplierQuoteFlow();
@@ -2569,7 +2567,6 @@ const App: React.FC = () => {
         description: item.productName,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
-        taxRate: item.productTaxRate || 0,
         discount: item.discount || 0,
       }));
       const totals = items.reduce(
@@ -2578,10 +2575,9 @@ const App: React.FC = () => {
           const lineDiscount = (lineSubtotal * item.discount) / 100;
           const lineNet = lineSubtotal - lineDiscount;
           acc.subtotal += lineNet;
-          acc.taxAmount += lineNet * (item.taxRate / 100);
           return acc;
         },
-        { subtotal: 0, taxAmount: 0 },
+        { subtotal: 0 },
       );
       const invoice = await api.supplierInvoices.create({
         linkedSaleId: order.id,
@@ -2591,8 +2587,7 @@ const App: React.FC = () => {
         dueDate,
         status: 'draft',
         subtotal: totals.subtotal,
-        taxAmount: totals.taxAmount,
-        total: totals.subtotal + totals.taxAmount,
+        total: totals.subtotal,
         amountPaid: 0,
         notes: order.notes,
         items,
