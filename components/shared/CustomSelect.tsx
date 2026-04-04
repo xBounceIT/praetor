@@ -122,7 +122,6 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
   const hasAutoOpenedRef = useRef(false);
 
-  // Auto open dropdown when autoOpen prop transitions to true
   useEffect(() => {
     if (autoOpen && !hasAutoOpenedRef.current && !disabled && buttonRef.current) {
       hasAutoOpenedRef.current = true;
@@ -144,7 +143,6 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   useLayoutEffect(() => {
     if (!isOpen) return;
 
-    // Calculate initial position immediately when opening
     const updatePosition = () => {
       const newStyles = calculatePosition();
       if (newStyles) {
@@ -152,10 +150,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       }
     };
 
-    // Initial position calculation
     updatePosition();
 
-    // Add listeners for subsequent updates (resize/scroll)
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
 

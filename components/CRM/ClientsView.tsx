@@ -56,7 +56,6 @@ const REVENUE_OPTIONS: Array<{ id: NonNullable<Client['revenue']>; labelKey: str
   { id: '> 1000', labelKey: 'over1000' },
 ];
 
-// Required fields for validation
 const REQUIRED_FIELDS: Array<keyof Client> = ['name', 'clientCode', 'fiscalCode'];
 
 type EditingState = {
@@ -75,7 +74,6 @@ const truncateText = (text: string | undefined, maxLength = 30): string => {
 interface EditableCellProps {
   field: keyof Client;
   value: unknown;
-  _rowId: string;
   isEditing: boolean;
   isRequired: boolean;
   type?: 'text' | 'select';
@@ -150,21 +148,19 @@ const EditableCell = memo<EditableCellProps>(
 
     if (type === 'select' && options) {
       return (
-        <div className="w-full">
-          <CustomSelect
-            options={options}
-            value={(value as string) || ''}
-            onChange={(val) => {
-              onUpdateField(field, val || undefined);
-            }}
-            placeholder={placeholder || t('common:form.selectOption')}
-            searchable={false}
-            autoOpen={true}
-            buttonClassName={`w-full text-xs py-1 px-2 ${
-              showRedBorder ? '!border-red-500 !bg-red-50' : ''
-            }`}
-          />
-        </div>
+        <CustomSelect
+          options={options}
+          value={(value as string) || ''}
+          onChange={(val) => {
+            onUpdateField(field, val || undefined);
+          }}
+          placeholder={placeholder || t('common:form.selectOption')}
+          searchable={false}
+          autoOpen={true}
+          buttonClassName={`w-full text-xs py-1 px-2 ${
+            showRedBorder ? '!border-red-500 !bg-red-50' : ''
+          }`}
+        />
       );
     }
 
@@ -205,11 +201,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
   const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
 
-  // Delete modal state
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
 
-  // Inline editing state
   const [editingState, setEditingState] = useState<EditingState>({
     rowId: null,
     isNewRow: false,
@@ -217,15 +211,21 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     touchedFields: new Set(),
   });
 
-  // Active cell being edited (for double-click)
   const [activeCell, setActiveCell] = useState<{ field: keyof Client } | null>(null);
 
-  // Unsaved changes confirmation
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // Validation errors
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const editingStateRef = useRef(editingState);
+  editingStateRef.current = editingState;
+
+  const resetEditingState = useCallback(() => {
+    setEditingState({ rowId: null, isNewRow: false, data: {}, touchedFields: new Set() });
+    setValidationErrors({});
+    setActiveCell(null);
+  }, []);
 
   const getEmptyClient = (): Partial<Client> => ({
     name: '',
@@ -257,98 +257,103 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     setActiveCell(null);
   };
 
-  const startEditRow = (client: Client, initialActiveField?: keyof Client) => {
-    if (!canUpdateClients && !editingState.isNewRow) return;
-    const isNew = client.id === 'new';
-    setEditingState((prev) => {
-      const isNew = client.id === 'new';
-      const isSameRow = prev.rowId === client.id;
-      return {
-        rowId: client.id,
-        isNewRow: isNew,
-        data: isSameRow ? prev.data : { ...client },
-        touchedFields: isSameRow ? prev.touchedFields : new Set(),
-      };
-    });
-    setValidationErrors({});
-    setActiveCell(initialActiveField ? { field: initialActiveField } : null);
-  };
+  const startEditRow = useCallback(
+    (client: Client, initialActiveField?: keyof Client) => {
+      if (!canUpdateClients && !editingState.isNewRow) return;
+      setEditingState((prev) => {
+        const isNew = client.id === 'new';
+        const isSameRow = prev.rowId === client.id;
+        return {
+          rowId: client.id,
+          isNewRow: isNew,
+          data: isSameRow ? prev.data : { ...client },
+          touchedFields: isSameRow ? prev.touchedFields : new Set(),
+        };
+      });
+      setValidationErrors({});
+      setActiveCell(initialActiveField ? { field: initialActiveField } : null);
+    },
+    [canUpdateClients, editingState.isNewRow],
+  );
 
-  const validateField = (field: keyof Client, value: unknown): string | null => {
-    if (!REQUIRED_FIELDS.includes(field)) return null;
+  const validateField = useCallback(
+    (field: keyof Client, value: unknown): string | null => {
+      if (!REQUIRED_FIELDS.includes(field)) return null;
 
-    const strValue = typeof value === 'string' ? value.trim() : '';
-    if (!strValue) {
-      return t('common:validation.required');
-    }
-    return null;
-  };
-
-  const validateAll = (data: Partial<Client>): Record<string, string> => {
-    const errors: Record<string, string> = {};
-
-    REQUIRED_FIELDS.forEach((field) => {
-      const error = validateField(field, data[field]);
-      if (error) {
-        errors[field] = error;
+      const strValue = typeof value === 'string' ? value.trim() : '';
+      if (!strValue) {
+        return t('common:validation.required');
       }
-    });
+      return null;
+    },
+    [t],
+  );
 
-    // Check for duplicate client code
-    if (data.clientCode) {
-      const trimmedCode = data.clientCode.trim();
-      if (!/^[a-zA-Z0-9_-]+$/.test(trimmedCode)) {
-        errors.clientCode = t('common:validation.clientCodeInvalid');
-      } else {
-        const isDuplicate = clients.some(
-          (c) =>
-            (c.clientCode || '').toLowerCase() === trimmedCode.toLowerCase() &&
-            (editingState.isNewRow || c.id !== editingState.rowId),
-        );
-        if (isDuplicate) {
-          errors.clientCode = t('common:validation.clientCodeUnique');
-        }
-      }
-    }
+  const validateAll = useCallback(
+    (data: Partial<Client>): Record<string, string> => {
+      const errors: Record<string, string> = {};
 
-    return errors;
-  };
-
-  const isValid = (data: Partial<Client> = editingState.data): boolean => {
-    const errors = validateAll(data);
-    return Object.keys(errors).length === 0;
-  };
-
-  const updateField = (field: keyof Client, value: unknown) => {
-    setEditingState((prev) => {
-      const newData = { ...prev.data, [field]: value };
-      const newTouched = new Set(prev.touchedFields).add(field);
-
-      // Validate the field
-      const error = validateField(field, value);
-      setValidationErrors((prevErrors) => {
-        const newErrors = { ...prevErrors };
+      REQUIRED_FIELDS.forEach((field) => {
+        const error = validateField(field, data[field]);
         if (error) {
-          newErrors[field] = error;
-        } else {
-          delete newErrors[field];
+          errors[field] = error;
         }
-        return newErrors;
       });
 
-      return {
-        ...prev,
-        data: newData,
-        touchedFields: newTouched,
-      };
-    });
-  };
+      if (data.clientCode) {
+        const trimmedCode = data.clientCode.trim();
+        if (!/^[a-zA-Z0-9_-]+$/.test(trimmedCode)) {
+          errors.clientCode = t('common:validation.clientCodeInvalid');
+        } else {
+          const isDuplicate = clients.some(
+            (c) =>
+              (c.clientCode || '').toLowerCase() === trimmedCode.toLowerCase() &&
+              (editingState.isNewRow || c.id !== editingState.rowId),
+          );
+          if (isDuplicate) {
+            errors.clientCode = t('common:validation.clientCodeUnique');
+          }
+        }
+      }
 
-  const handleSave = async () => {
-    const errors = validateAll(editingState.data);
+      return errors;
+    },
+    [t, validateField, clients, editingState.isNewRow, editingState.rowId],
+  );
+
+  const updateField = useCallback(
+    (field: keyof Client, value: unknown) => {
+      const error = validateField(field, value);
+      setValidationErrors((prevErrors) => {
+        if (error) {
+          if (prevErrors[field as string] === error) return prevErrors;
+          return { ...prevErrors, [field]: error };
+        }
+        if (!((field as string) in prevErrors)) return prevErrors;
+        const newErrors = { ...prevErrors };
+        delete newErrors[field as string];
+        return newErrors;
+      });
+      setEditingState((prev) => {
+        if (prev.data[field] === value && prev.touchedFields.has(field as string)) return prev;
+        const newTouched = prev.touchedFields.has(field as string)
+          ? prev.touchedFields
+          : new Set(prev.touchedFields).add(field as string);
+        return {
+          ...prev,
+          data: { ...prev.data, [field]: value },
+          touchedFields: newTouched,
+        };
+      });
+    },
+    [validateField],
+  );
+
+  const handleSave = useCallback(async () => {
+    const { data, isNewRow, rowId } = editingStateRef.current;
+    const errors = validateAll(data);
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      // Mark all required fields as touched to show errors
       setEditingState((prev) => ({
         ...prev,
         touchedFields: new Set([...prev.touchedFields, ...REQUIRED_FIELDS]),
@@ -357,39 +362,31 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
 
     const payload = {
-      name: editingState.data.name?.trim() || '',
-      type: editingState.data.type,
-      contactName: editingState.data.contactName?.trim() || '',
-      clientCode: editingState.data.clientCode?.trim() || '',
-      email: editingState.data.email?.trim() || undefined,
-      phone: editingState.data.phone?.trim() || '',
-      address: editingState.data.address?.trim() || '',
-      description: editingState.data.description?.trim() || undefined,
-      atecoCode: editingState.data.atecoCode?.trim() || undefined,
-      website: editingState.data.website?.trim() || undefined,
-      sector: editingState.data.sector,
-      numberOfEmployees: editingState.data.numberOfEmployees,
-      revenue: editingState.data.revenue,
-      fiscalCode: editingState.data.fiscalCode?.trim() || '',
-      officeCountRange: editingState.data.officeCountRange,
+      name: data.name?.trim() || '',
+      type: data.type,
+      contactName: data.contactName?.trim() || '',
+      clientCode: data.clientCode?.trim() || '',
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || '',
+      address: data.address?.trim() || '',
+      description: data.description?.trim() || undefined,
+      atecoCode: data.atecoCode?.trim() || undefined,
+      website: data.website?.trim() || undefined,
+      sector: data.sector,
+      numberOfEmployees: data.numberOfEmployees,
+      revenue: data.revenue,
+      fiscalCode: data.fiscalCode?.trim() || '',
+      officeCountRange: data.officeCountRange,
     };
 
     try {
-      if (editingState.isNewRow) {
+      if (isNewRow) {
         await onAddClient(payload);
-      } else if (editingState.rowId && typeof editingState.rowId === 'string') {
-        await onUpdateClient(editingState.rowId, payload);
+      } else if (rowId && typeof rowId === 'string') {
+        await onUpdateClient(rowId, payload);
       }
 
-      // Reset editing state
-      setEditingState({
-        rowId: null,
-        isNewRow: false,
-        data: {},
-        touchedFields: new Set(),
-      });
-      setValidationErrors({});
-      setActiveCell(null);
+      resetEditingState();
     } catch (err) {
       const message = (err as Error).message;
       if (
@@ -403,38 +400,27 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       ) {
         setValidationErrors({ ...errors, clientCode: t('common:validation.clientCodeUnique') });
       } else {
-        // Handle unrecognized server errors
-        setValidationErrors({ ...errors, general: t('common:messages.errorOccurred') });
-        setValidationErrors({ ...errors, name: t('common:messages.error') });
+        setValidationErrors({ ...errors, name: t('common:messages.errorOccurred') });
       }
     }
-  };
+  }, [validateAll, onAddClient, onUpdateClient, t]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     if (editingState.touchedFields.size > 0) {
       setShowUnsavedDialog(true);
       setPendingAction(() => () => {
-        setEditingState({
-          rowId: null,
-          isNewRow: false,
-          data: {},
-          touchedFields: new Set(),
-        });
-        setValidationErrors({});
-        setActiveCell(null);
+        resetEditingState();
         setShowUnsavedDialog(false);
       });
     } else {
-      setEditingState({
-        rowId: null,
-        isNewRow: false,
-        data: {},
-        touchedFields: new Set(),
-      });
-      setValidationErrors({});
-      setActiveCell(null);
+      resetEditingState();
     }
-  };
+  }, [editingState.touchedFields.size, resetEditingState]);
+
+  const isValidForSave = useMemo(
+    () => Object.keys(validateAll(editingState.data)).length === 0,
+    [validateAll, editingState.data],
+  );
 
   const confirmDiscard = () => {
     if (pendingAction) {
@@ -467,7 +453,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
   };
 
-  // Column definitions
   const columns = useMemo<Column<Client>[]>(() => {
     const isRowEditing = (row: Client) => {
       if (editingState.isNewRow) {
@@ -488,54 +473,80 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     const dblClick = (field: keyof Client) =>
       canUpdateClients ? { onCellDoubleClick: (row: Client) => startEditRow(row, field) } : {};
 
+    const textColumn = (
+      field: keyof Client,
+      headerKey: string,
+      isRequired = false,
+      className = '',
+    ) => ({
+      header: t(`crm:clients.tableHeaders.${headerKey}`),
+      accessorKey: field,
+      ...dblClick(field),
+      cell: ({ row }: { row: Client }) => {
+        const isEditing = isRowEditing(row);
+        const value = isEditing ? editingState.data[field] : row[field];
+        return (
+          <EditableCell
+            {...ecProps}
+            field={field}
+            value={value}
+            isEditing={isEditing}
+            isRequired={isRequired}
+            type="text"
+            displayValue={value as string | undefined}
+            className={className}
+          />
+        );
+      },
+    });
+
+    const labeledSelectColumn = (
+      field: keyof Client,
+      headerKey: string,
+      options: Array<{ id: string; labelKey: string }>,
+      i18nPrefix: string,
+      isRequired = false,
+    ) => ({
+      header: t(`crm:clients.tableHeaders.${headerKey}`),
+      accessorKey: field,
+      ...dblClick(field),
+      cell: ({ row }: { row: Client }) => {
+        const isEditing = isRowEditing(row);
+        const value = (isEditing ? editingState.data[field] : row[field]) as string | undefined;
+        const option = options.find((o) => o.id === value);
+        return (
+          <EditableCell
+            {...ecProps}
+            field={field}
+            value={value}
+            isEditing={isEditing}
+            isRequired={isRequired}
+            type="select"
+            options={options.map((o) => ({
+              id: o.id,
+              name: t(`crm:clients.${i18nPrefix}.${o.labelKey}`),
+            }))}
+            displayValue={option ? t(`crm:clients.${i18nPrefix}.${option.labelKey}`) : undefined}
+          />
+        );
+      },
+    });
+
+    const eurFormatter = new Intl.NumberFormat(i18n.language, {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+
     return [
-      {
-        header: t('crm:clients.tableHeaders.name'),
-        accessorKey: 'name',
-        ...dblClick('name'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="name"
-              value={isEditing ? editingState.data.name : row.name}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={true}
-              type="text"
-              displayValue={isEditing ? editingState.data.name : row.name}
-              className="font-semibold whitespace-nowrap"
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.clientCode'),
-        accessorKey: 'clientCode',
-        ...dblClick('clientCode'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          const value = isEditing ? editingState.data.clientCode : row.clientCode;
-          return (
-            <EditableCell
-              {...ecProps}
-              field="clientCode"
-              value={value}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={true}
-              type="text"
-              displayValue={value || ''}
-            />
-          );
-        },
-      },
+      textColumn('name', 'name', true, 'font-semibold whitespace-nowrap'),
+      textColumn('clientCode', 'clientCode', true),
       {
         header: t('crm:clients.tableHeaders.insertDate'),
         id: 'createdAt',
-        accessorFn: (row) => row.createdAt ?? 0,
-        cell: ({ row }) => {
+        accessorFn: (row: Client) => row.createdAt ?? 0,
+        cell: ({ row }: { row: Client }) => {
           if (!row.createdAt) {
             return <span className="text-xs text-slate-400">-</span>;
           }
@@ -545,7 +556,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             </span>
           );
         },
-        filterFormat: (value) => {
+        filterFormat: (value: string | number | boolean | null | undefined) => {
           const timestamp = typeof value === 'number' ? value : Number(value);
           if (!Number.isFinite(timestamp) || timestamp <= 0) {
             return '-';
@@ -556,10 +567,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.type'),
         id: 'type',
-        accessorFn: (row) =>
+        accessorFn: (row: Client) =>
           row.type === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual'),
         ...dblClick('type'),
-        cell: ({ row }) => {
+        cell: ({ row }: { row: Client }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.type : row.type;
 
@@ -581,7 +592,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               {...ecProps}
               field="type"
               value={value}
-              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="select"
@@ -596,52 +606,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           );
         },
       },
-      {
-        header: t('crm:clients.tableHeaders.email'),
-        accessorKey: 'email',
-        ...dblClick('email'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="email"
-              value={isEditing ? editingState.data.email : row.email}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.email : row.email}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.phone'),
-        accessorKey: 'phone',
-        ...dblClick('phone'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="phone"
-              value={isEditing ? editingState.data.phone : row.phone}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.phone : row.phone}
-            />
-          );
-        },
-      },
+      textColumn('email', 'email'),
+      textColumn('phone', 'phone'),
       {
         header: t('crm:clients.tableHeaders.fiscalCode'),
         id: 'fiscalCode',
-        accessorFn: (row) => row.fiscalCode || row.vatNumber || row.taxCode || '',
+        accessorFn: (row: Client) => row.fiscalCode || row.vatNumber || row.taxCode || '',
         ...dblClick('fiscalCode'),
-        cell: ({ row }) => {
+        cell: ({ row }: { row: Client }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing
             ? editingState.data.fiscalCode
@@ -651,7 +623,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               {...ecProps}
               field="fiscalCode"
               value={value}
-              _rowId={row.id}
               isEditing={isEditing}
               isRequired={true}
               type="text"
@@ -665,7 +636,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
         ...dblClick('officeCountRange'),
-        cell: ({ row }) => {
+        cell: ({ row }: { row: Client }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.officeCountRange : row.officeCountRange;
           return (
@@ -673,7 +644,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               {...ecProps}
               field="officeCountRange"
               value={value}
-              _rowId={row.id}
               isEditing={isEditing}
               isRequired={true}
               type="select"
@@ -683,219 +653,31 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           );
         },
       },
-      {
-        header: t('crm:clients.tableHeaders.sector'),
-        accessorKey: 'sector',
-        ...dblClick('sector'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          const value = isEditing ? editingState.data.sector : row.sector;
-          const sectorDisplay = isEditing ? editingState.data.sector : row.sector;
-          const displayValue = sectorDisplay
-            ? t(
-                `crm:clients.sectorOptions.${SECTOR_OPTIONS.find((s) => s.id === sectorDisplay)?.labelKey}`,
-              )
-            : undefined;
-          return (
-            <EditableCell
-              {...ecProps}
-              field="sector"
-              value={value}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="select"
-              options={SECTOR_OPTIONS.map((option) => ({
-                id: option.id,
-                name: t(`crm:clients.sectorOptions.${option.labelKey}`),
-              }))}
-              displayValue={displayValue}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.numberOfEmployees'),
-        accessorKey: 'numberOfEmployees',
-        ...dblClick('numberOfEmployees'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          const value = isEditing ? editingState.data.numberOfEmployees : row.numberOfEmployees;
-          const employeesDisplay = isEditing
-            ? editingState.data.numberOfEmployees
-            : row.numberOfEmployees;
-          const displayValue = employeesDisplay
-            ? t(
-                `crm:clients.numberOfEmployeesOptions.${NUMBER_OF_EMPLOYEES_OPTIONS.find((e) => e.id === employeesDisplay)?.labelKey}`,
-              )
-            : undefined;
-          return (
-            <EditableCell
-              {...ecProps}
-              field="numberOfEmployees"
-              value={value}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="select"
-              options={NUMBER_OF_EMPLOYEES_OPTIONS.map((option) => ({
-                id: option.id,
-                name: t(`crm:clients.numberOfEmployeesOptions.${option.labelKey}`),
-              }))}
-              displayValue={displayValue}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.revenue'),
-        accessorKey: 'revenue',
-        ...dblClick('revenue'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          const value = isEditing ? editingState.data.revenue : row.revenue;
-          const revenueDisplay = isEditing ? editingState.data.revenue : row.revenue;
-          const displayValue = revenueDisplay
-            ? t(
-                `crm:clients.revenueOptions.${REVENUE_OPTIONS.find((r) => r.id === revenueDisplay)?.labelKey}`,
-              )
-            : undefined;
-          return (
-            <EditableCell
-              {...ecProps}
-              field="revenue"
-              value={value}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="select"
-              options={REVENUE_OPTIONS.map((option) => ({
-                id: option.id,
-                name: t(`crm:clients.revenueOptions.${option.labelKey}`),
-              }))}
-              displayValue={displayValue}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.contactName'),
-        accessorKey: 'contactName',
-        ...dblClick('contactName'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="contactName"
-              value={isEditing ? editingState.data.contactName : row.contactName}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.contactName : row.contactName}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.address'),
-        accessorKey: 'address',
-        ...dblClick('address'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="address"
-              value={isEditing ? editingState.data.address : row.address}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.address : row.address}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.description'),
-        accessorKey: 'description',
-        ...dblClick('description'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="description"
-              value={isEditing ? editingState.data.description : row.description}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.description : row.description}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.atecoCode'),
-        accessorKey: 'atecoCode',
-        ...dblClick('atecoCode'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="atecoCode"
-              value={isEditing ? editingState.data.atecoCode : row.atecoCode}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.atecoCode : row.atecoCode}
-            />
-          );
-        },
-      },
-      {
-        header: t('crm:clients.tableHeaders.website'),
-        accessorKey: 'website',
-        ...dblClick('website'),
-        cell: ({ row }) => {
-          const isEditing = isRowEditing(row);
-          return (
-            <EditableCell
-              {...ecProps}
-              field="website"
-              value={isEditing ? editingState.data.website : row.website}
-              _rowId={row.id}
-              isEditing={isEditing}
-              isRequired={false}
-              type="text"
-              displayValue={isEditing ? editingState.data.website : row.website}
-            />
-          );
-        },
-      },
+      labeledSelectColumn('sector', 'sector', SECTOR_OPTIONS, 'sectorOptions'),
+      labeledSelectColumn(
+        'numberOfEmployees',
+        'numberOfEmployees',
+        NUMBER_OF_EMPLOYEES_OPTIONS,
+        'numberOfEmployeesOptions',
+      ),
+      labeledSelectColumn('revenue', 'revenue', REVENUE_OPTIONS, 'revenueOptions'),
+      textColumn('contactName', 'contactName'),
+      textColumn('address', 'address'),
+      textColumn('description', 'description'),
+      textColumn('atecoCode', 'atecoCode'),
+      textColumn('website', 'website'),
       {
         header: t('crm:clients.tableHeaders.totalSentQuotes'),
         id: 'totalSentQuotes',
-        accessorFn: (row) => row.totalSentQuotes ?? 0,
-        cell: ({ row }) => {
+        accessorFn: (row: Client) => row.totalSentQuotes ?? 0,
+        cell: ({ row }: { row: Client }) => {
           const value = row.totalSentQuotes;
           if (value == null || value === 0) {
             return <span className="text-xs text-slate-400">-</span>;
           }
-          const formatted = new Intl.NumberFormat(i18n.language, {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }).format(value);
           return (
             <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-              {formatted}
+              {eurFormatter.format(value)}
             </span>
           );
         },
@@ -903,21 +685,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.totalAcceptedOrders'),
         id: 'totalAcceptedOrders',
-        accessorFn: (row) => row.totalAcceptedOrders ?? 0,
-        cell: ({ row }) => {
+        accessorFn: (row: Client) => row.totalAcceptedOrders ?? 0,
+        cell: ({ row }: { row: Client }) => {
           const value = row.totalAcceptedOrders;
           if (value == null || value === 0) {
             return <span className="text-xs text-slate-400">-</span>;
           }
-          const formatted = new Intl.NumberFormat(i18n.language, {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }).format(value);
           return (
             <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
-              {formatted}
+              {eurFormatter.format(value)}
             </span>
           );
         },
@@ -945,6 +721,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
 
           if (isEditing) {
+            const valid = isValidForSave;
             return (
               <div className="flex items-center justify-end gap-1">
                 <Tooltip label={t('common:buttons.save')}>
@@ -954,9 +731,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         e.stopPropagation();
                         handleSave();
                       }}
-                      disabled={!isValid()}
+                      disabled={!valid}
                       className={`p-2 rounded-lg transition-all ${
-                        isValid()
+                        valid
                           ? 'text-emerald-600 hover:bg-emerald-50'
                           : 'text-slate-300 cursor-not-allowed'
                       }`}
@@ -1044,17 +821,23 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   }, [
     t,
     i18n,
-    editingState,
+    editingState.isNewRow,
+    editingState.rowId,
+    editingState.data,
+    editingState.touchedFields,
     canUpdateClients,
     canDeleteClients,
     onUpdateClient,
     confirmDelete,
-    formatInsertDate,
     validationErrors,
     activeCell,
+    handleSave,
+    handleCancel,
+    updateField,
+    startEditRow,
+    isValidForSave,
   ]);
 
-  // Prepare data with new row if editing
   const tableData = useMemo(() => {
     if (editingState.isNewRow) {
       const newRow: Client = {
@@ -1065,11 +848,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       return [newRow, ...clients];
     }
     return clients;
-  }, [clients, editingState]);
+  }, [clients, editingState.isNewRow, editingState.data]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Unsaved Changes Dialog */}
       <Modal isOpen={showUnsavedDialog} onClose={confirmDismissDialog}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
@@ -1102,7 +884,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
