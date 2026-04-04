@@ -646,50 +646,41 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const selectedQuoteItem = selectedQuote?.items.find((item) => item.id === value);
 
       if (selectedQuote && selectedQuoteItem) {
-        const product = products.find((p) => p.id === selectedQuoteItem.productId);
+        const product = selectedQuoteItem.productId
+          ? products.find((p) => p.id === selectedQuoteItem.productId)
+          : undefined;
+
+        // Calculate net cost after supplier discounts
+        const lineDiscountedCost =
+          selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
+        const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
+
+        // Store supplier quote data
+        newItems[index].productId = selectedQuoteItem.productId || '';
+        newItems[index].productName = product?.name || selectedQuoteItem.productName;
+        newItems[index].supplierQuoteId = selectedQuote.id;
+        newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
+        newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
+        newItems[index].supplierQuoteUnitPrice = netCost;
+        newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
+        newItems[index].supplierQuoteDiscount = selectedQuote.discount;
+
+        // Clear special bid when supplier quote is selected
+        newItems[index].specialBidId = '';
+        newItems[index].specialBidUnitPrice = null;
+        newItems[index].specialBidMolPercentage = null;
+
         if (product) {
-          // Calculate net cost after supplier discounts
-          const lineDiscountedCost =
-            selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
-          const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
-
-          // Store supplier quote data
-          newItems[index].productId = selectedQuoteItem.productId;
-          newItems[index].productName = product.name;
-          newItems[index].supplierQuoteId = selectedQuote.id;
-          newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
-          newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
-          newItems[index].supplierQuoteUnitPrice = netCost;
-          newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
-          newItems[index].supplierQuoteDiscount = selectedQuote.discount;
-
-          // Clear special bid when supplier quote is selected
-          newItems[index].specialBidId = '';
-          newItems[index].specialBidUnitPrice = null;
-          newItems[index].specialBidMolPercentage = null;
-
-          // Calculate sale price using net cost
+          // Product found — calculate sale price using product MOL
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(netCost, mol);
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         } else {
-          // Product not found for supplier quote item - clear supplier quote and revert
-          newItems[index].supplierQuoteItemId = null;
-          newItems[index].supplierQuoteId = null;
-          newItems[index].supplierQuoteSupplierName = null;
-          newItems[index].supplierQuoteUnitPrice = null;
-          newItems[index].supplierQuoteItemDiscount = null;
-          newItems[index].supplierQuoteDiscount = null;
-
-          // Revert to product cost if product exists on the item
-          const existingProduct = products.find((p) => p.id === newItems[index].productId);
-          if (existingProduct) {
-            const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
-            newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
-            newItems[index].productCost = Number(existingProduct.costo);
-            newItems[index].productMolPercentage = existingProduct.molPercentage;
-          }
+          // No linked product — use net cost as unit price (no MOL markup)
+          newItems[index].unitPrice = netCost;
+          newItems[index].productCost = netCost;
+          newItems[index].productMolPercentage = null;
         }
       } else {
         // Supplier quote item not found - clear supplier quote and revert
@@ -823,7 +814,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       id: string;
       name: string;
       quoteId: string;
-      productId: string;
+      productId?: string;
       unitPrice: number;
       discount: number;
       quoteDiscount: number;
