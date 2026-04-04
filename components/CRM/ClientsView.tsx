@@ -406,7 +406,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             isRequired && !value ? t('common:validation.required') : isTruncated ? display : ''
           }
           disabled={!isRequired && !isTruncated && !isEditing}
-          wrapperClassName="w-full h-full -mx-3 -my-px"
+          wrapperClassName="w-full h-full flex"
         >
           {() => (
             <div
@@ -418,7 +418,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   onStartEdit(field);
                 }
               }}
-              className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
+              className={`h-full w-full flex items-center px-3 py-px cursor-pointer rounded transition-colors ${
                 isEditing ? 'hover:bg-slate-100' : ''
               } ${showRedBorder ? 'border border-red-500 bg-red-50' : ''} ${className}`}
             >
