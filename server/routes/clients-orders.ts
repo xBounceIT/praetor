@@ -1,8 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { query } from '../db/index.ts';
+import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import {
+  generateClientOrderId,
+  generateItemId,
+  generateSupplierOrderId,
+} from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   assignClientToTopManagers,
@@ -217,18 +222,6 @@ const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
   note: toNullableString(row.note),
   discount: toFiniteNumber(row.discount, 'clientOrderItem.discount'),
 });
-
-const generateClientOrderId = async () => {
-  const year = new Date().getFullYear();
-  const result = await query(
-    `SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) as "maxSequence"
-     FROM sales
-     WHERE id ~ $1`,
-    [`^ORD-${year}-[0-9]+$`],
-  );
-  const nextSequence = Number(result.rows[0]?.maxSequence ?? 0) + 1;
-  return `ORD-${year}-${String(nextSequence).padStart(4, '0')}`;
-};
 
 const normalizeClientOrderRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
@@ -574,6 +567,93 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           normalizeClientOrderItemRow(itemResult.rows[0] as Record<string, unknown>),
         );
       }
+
+      const supplierQuoteIds = [
+        ...new Set(
+          normalizedItems
+            .map((item) => item.supplierQuoteId)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      ];
+
+      await Promise.allSettled(
+        supplierQuoteIds.map(async (sqId) => {
+          const [sqResult, existingSupplierOrder, sqItems] = await Promise.all([
+            query(
+              `SELECT id, supplier_id as "supplierId", supplier_name as "supplierName",
+                      payment_terms as "paymentTerms", discount, notes, status
+               FROM supplier_quotes WHERE id = $1`,
+              [sqId],
+            ),
+            query('SELECT id FROM supplier_sales WHERE linked_quote_id = $1 LIMIT 1', [sqId]),
+            query(
+              `SELECT id, product_id as "productId", product_name as "productName",
+                      quantity, unit_price as "unitPrice", discount, note
+               FROM supplier_quote_items WHERE quote_id = $1`,
+              [sqId],
+            ),
+          ]);
+
+          if (sqResult.rows.length === 0 || sqResult.rows[0].status !== 'accepted') return;
+          if (existingSupplierOrder.rows.length > 0) return;
+
+          const sq = sqResult.rows[0];
+          const items = sqItems.rows;
+
+          await withTransaction(async (tx) => {
+            const supplierOrderId = await generateSupplierOrderId(tx);
+            await tx.query(
+              `INSERT INTO supplier_sales
+                (id, linked_quote_id, supplier_id, supplier_name, payment_terms, discount, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7)`,
+              [
+                supplierOrderId,
+                sqId,
+                sq.supplierId,
+                sq.supplierName,
+                sq.paymentTerms || 'immediate',
+                sq.discount || 0,
+                sq.notes,
+              ],
+            );
+
+            if (items.length > 0) {
+              const placeholders = items
+                .map(
+                  (_, i) =>
+                    `($${i * 8 + 1}, $${i * 8 + 2}, $${i * 8 + 3}, $${i * 8 + 4}, $${i * 8 + 5}, $${i * 8 + 6}, $${i * 8 + 7}, $${i * 8 + 8})`,
+                )
+                .join(', ');
+              const params = items.flatMap((item) => [
+                generateItemId('ssi-'),
+                supplierOrderId,
+                item.productId,
+                item.productName,
+                item.quantity,
+                item.unitPrice,
+                item.discount || 0,
+                item.note,
+              ]);
+              await tx.query(
+                `INSERT INTO supplier_sale_items (id, sale_id, product_id, product_name, quantity, unit_price, discount, note)
+                 VALUES ${placeholders}`,
+                params,
+              );
+            }
+
+            await logAudit({
+              request,
+              action: 'supplier_order.auto_created',
+              entityType: 'supplier_order',
+              entityId: supplierOrderId,
+              details: {
+                targetLabel: supplierOrderId,
+                secondaryLabel: `${sq.supplierName} (from client order ${orderId}, supplier quote ${sqId})`,
+              },
+            });
+          });
+        }),
+      );
 
       await logAudit({
         request,

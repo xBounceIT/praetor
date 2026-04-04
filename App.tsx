@@ -2398,6 +2398,7 @@ const App: React.FC = () => {
 
       const order = await api.clientsOrders.create(orderData);
       setClientsOrders((prev) => [...prev, order]);
+      await refreshSupplierQuoteFlow();
       setActiveView('accounting/clients-orders');
     } catch (err) {
       console.error('Failed to create order from offer:', err);
