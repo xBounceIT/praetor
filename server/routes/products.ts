@@ -719,7 +719,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       { name: 'invoice_items', column: 'product_id' },
       { name: 'special_bids', column: 'product_id' },
       { name: 'supplier_quote_items', column: 'product_id' },
-      { name: 'supplier_offer_items', column: 'product_id' },
       { name: 'supplier_sale_items', column: 'product_id' },
       { name: 'supplier_invoice_items', column: 'product_id' },
     ];
@@ -793,8 +792,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                SELECT 1 FROM special_bids sb WHERE sb.product_id = pr.id
                UNION ALL
                SELECT 1 FROM supplier_quote_items sqi WHERE sqi.product_id = pr.id
-               UNION ALL
-               SELECT 1 FROM supplier_offer_items soi WHERE soi.product_id = pr.id
                UNION ALL
                SELECT 1 FROM supplier_sale_items ssi WHERE ssi.product_id = pr.id
                UNION ALL
@@ -1152,8 +1149,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                SELECT 1 FROM special_bids sb WHERE sb.product_id = pr.id
                UNION ALL
                SELECT 1 FROM supplier_quote_items sqi WHERE sqi.product_id = pr.id
-               UNION ALL
-               SELECT 1 FROM supplier_offer_items soi WHERE soi.product_id = pr.id
                UNION ALL
                SELECT 1 FROM supplier_sale_items ssi WHERE ssi.product_id = pr.id
                UNION ALL
