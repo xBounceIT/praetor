@@ -514,7 +514,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={true}
               type="text"
-              displayValue={row.name}
+              displayValue={isEditing ? editingState.data.name : row.name}
               className="font-semibold whitespace-nowrap"
             />
           );
@@ -621,7 +621,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.email}
+              displayValue={isEditing ? editingState.data.email : row.email}
             />
           );
         },
@@ -641,7 +641,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.phone}
+              displayValue={isEditing ? editingState.data.phone : row.phone}
             />
           );
         },
@@ -688,7 +688,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={true}
               type="select"
               options={OFFICE_COUNT_RANGE_OPTIONS}
-              displayValue={row.officeCountRange}
+              displayValue={isEditing ? editingState.data.officeCountRange : row.officeCountRange}
             />
           );
         },
@@ -700,9 +700,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.sector : row.sector;
-          const displayValue = row.sector
+          const sectorDisplay = isEditing ? editingState.data.sector : row.sector;
+          const displayValue = sectorDisplay
             ? t(
-                `crm:clients.sectorOptions.${SECTOR_OPTIONS.find((s) => s.id === row.sector)?.labelKey}`,
+                `crm:clients.sectorOptions.${SECTOR_OPTIONS.find((s) => s.id === sectorDisplay)?.labelKey}`,
               )
             : undefined;
           return (
@@ -730,9 +731,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.numberOfEmployees : row.numberOfEmployees;
-          const displayValue = row.numberOfEmployees
+          const employeesDisplay = isEditing
+            ? editingState.data.numberOfEmployees
+            : row.numberOfEmployees;
+          const displayValue = employeesDisplay
             ? t(
-                `crm:clients.numberOfEmployeesOptions.${NUMBER_OF_EMPLOYEES_OPTIONS.find((e) => e.id === row.numberOfEmployees)?.labelKey}`,
+                `crm:clients.numberOfEmployeesOptions.${NUMBER_OF_EMPLOYEES_OPTIONS.find((e) => e.id === employeesDisplay)?.labelKey}`,
               )
             : undefined;
           return (
@@ -760,9 +764,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.revenue : row.revenue;
-          const displayValue = row.revenue
+          const revenueDisplay = isEditing ? editingState.data.revenue : row.revenue;
+          const displayValue = revenueDisplay
             ? t(
-                `crm:clients.revenueOptions.${REVENUE_OPTIONS.find((r) => r.id === row.revenue)?.labelKey}`,
+                `crm:clients.revenueOptions.${REVENUE_OPTIONS.find((r) => r.id === revenueDisplay)?.labelKey}`,
               )
             : undefined;
           return (
@@ -798,7 +803,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.contactName}
+              displayValue={isEditing ? editingState.data.contactName : row.contactName}
             />
           );
         },
@@ -818,7 +823,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.address}
+              displayValue={isEditing ? editingState.data.address : row.address}
             />
           );
         },
@@ -838,7 +843,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.description}
+              displayValue={isEditing ? editingState.data.description : row.description}
             />
           );
         },
@@ -858,7 +863,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.atecoCode}
+              displayValue={isEditing ? editingState.data.atecoCode : row.atecoCode}
             />
           );
         },
@@ -878,7 +883,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isEditing={isEditing}
               isRequired={false}
               type="text"
-              displayValue={row.website}
+              displayValue={isEditing ? editingState.data.website : row.website}
             />
           );
         },
