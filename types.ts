@@ -491,6 +491,7 @@ export interface Supplier {
   taxCode?: string;
   paymentTerms?: string;
   notes?: string;
+  createdAt?: number;
 }
 
 export interface SupplierQuoteItem {

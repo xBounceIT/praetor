@@ -1,17 +1,9 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import { createHash, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query as dbQuery } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_ENTRIES_SECONDS,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
@@ -633,8 +625,6 @@ const applyOptionalFieldPruning = (
   }
 };
 
-const TTL_AI_DATASET_SECONDS = 60;
-
 const DATASET_SECTIONS = [
   'timesheets',
   'clients',
@@ -763,29 +753,15 @@ const determineRequestedSections = (
   return matchedSections;
 };
 
-const getPermissionsHash = (request: FastifyRequest) => {
-  const permissions = Array.isArray(request.user?.permissions)
-    ? [...request.user.permissions].sort().join('|')
-    : '';
-  return createHash('sha1').update(permissions).digest('hex').slice(0, 12);
-};
-
-const getRequestedSectionsKey = (requestedSections: Set<DatasetSection> | null) =>
-  requestedSections && requestedSections.size > 0
-    ? Array.from(requestedSections).sort().join(',')
-    : 'all';
-
 const logDatasetBuildTelemetry = (
   request: FastifyRequest,
   payload: {
-    cacheStatus: string;
     durationMs: number;
     metrics: DatasetBuildMetrics;
   },
 ) => {
   request.log.info(
     {
-      cache_status: payload.cacheStatus,
       dataset_build_ms: payload.durationMs,
       dataset_query_count: payload.metrics.queryCount,
       dataset_char_count: payload.metrics.charCount,
@@ -2595,28 +2571,6 @@ const buildBusinessDataset = async (
     return finalizeDataset(JSON.stringify(dataset).length);
   });
 
-const getCachedBusinessDataset = async (
-  request: FastifyRequest,
-  cfg: GeneralAiConfig,
-  fromDate: string,
-  toDate: string,
-  requestedSections: Set<DatasetSection> | null,
-  bypass = false,
-) => {
-  const userId = request.user?.id || '';
-  const sectionKey = getRequestedSectionsKey(requestedSections);
-  const permissionHash = getPermissionsHash(request);
-  const ns = `reports:ai-reporting:dataset:user:${userId}`;
-
-  return cacheGetSetJson<DatasetBuildResult>(
-    ns,
-    `v=1:from=${fromDate}:to=${toDate}:sections=${sectionKey}:permissions=${permissionHash}`,
-    TTL_AI_DATASET_SECONDS,
-    () => buildBusinessDataset(request, cfg, fromDate, toDate, requestedSections),
-    { bypass },
-  );
-};
-
 const buildAiReportingSystemPrompt = (language: UiLanguage) => {
   if (language === 'it') {
     return [
@@ -2739,37 +2693,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const userId = request.user?.id;
       const cfg = await getGeneralAiConfig();
       if (!ensureAiEnabled(cfg, reply)) return;
-      const bypass = shouldBypassCache(request);
-      const ns = `reports:ai-reporting:user:${userId}`;
-
-      const { status, value } = await cacheGetSetJson(
-        ns,
-        'v=1:listSessions',
-        TTL_LIST_SECONDS,
-        async () => {
-          const result = await query(
-            `SELECT
-               id,
-               title,
-               EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
-               EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
-             FROM report_chat_sessions
-             WHERE user_id = $1 AND is_archived = FALSE
-             ORDER BY updated_at DESC
-             LIMIT 50`,
-            [userId],
-          );
-          return result.rows.map((r) => ({
-            id: String(r.id),
-            title: String(r.title || ''),
-            createdAt: toNumber(r.createdAt),
-            updatedAt: toNumber(r.updatedAt),
-          }));
-        },
-        { bypass },
+      const result = await query(
+        `SELECT
+           id,
+           title,
+           EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt",
+           EXTRACT(EPOCH FROM updated_at) * 1000 as "updatedAt"
+         FROM report_chat_sessions
+         WHERE user_id = $1 AND is_archived = FALSE
+         ORDER BY updated_at DESC
+         LIMIT 50`,
+        [userId],
       );
+      const value = result.rows.map((r) => ({
+        id: String(r.id),
+        title: String(r.title || ''),
+        createdAt: toNumber(r.createdAt),
+        updatedAt: toNumber(r.updatedAt),
+      }));
 
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -2810,7 +2752,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         [id, userId, titleResult.value || ''],
       );
 
-      await bumpNamespaceVersion(`reports:ai-reporting:user:${userId}`);
       return reply.send({ id });
     },
   );
@@ -2868,59 +2809,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (session.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
 
-      const bypass = shouldBypassCache(request);
-      const ns = `reports:ai-reporting:user:${userId}`;
+      const result =
+        beforeTimestampMs === null
+          ? await query(
+              `SELECT
+                 id,
+                 session_id as "sessionId",
+                 role,
+                 content,
+                 thought_content as "thoughtContent",
+                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
+               FROM report_chat_messages
+               WHERE session_id = $1
+               ORDER BY created_at DESC
+               LIMIT $2`,
+              [idResult.value, messageLimit],
+            )
+          : await query(
+              `SELECT
+                 id,
+                 session_id as "sessionId",
+                 role,
+                 content,
+                 thought_content as "thoughtContent",
+                 EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
+               FROM report_chat_messages
+               WHERE session_id = $1
+                 AND created_at < TO_TIMESTAMP($2 / 1000.0)
+               ORDER BY created_at DESC
+               LIMIT $3`,
+              [idResult.value, beforeTimestampMs, messageLimit],
+            );
 
-      const { status, value } = await cacheGetSetJson(
-        ns,
-        `v=2:session=${idResult.value}:messages:limit=${messageLimit}:before=${beforeTimestampMs ?? 'none'}`,
-        TTL_ENTRIES_SECONDS,
-        async () => {
-          const result =
-            beforeTimestampMs === null
-              ? await query(
-                  `SELECT
-                     id,
-                     session_id as "sessionId",
-                     role,
-                     content,
-                     thought_content as "thoughtContent",
-                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-                   FROM report_chat_messages
-                   WHERE session_id = $1
-                   ORDER BY created_at DESC
-                   LIMIT $2`,
-                  [idResult.value, messageLimit],
-                )
-              : await query(
-                  `SELECT
-                     id,
-                     session_id as "sessionId",
-                     role,
-                     content,
-                     thought_content as "thoughtContent",
-                     EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt"
-                   FROM report_chat_messages
-                   WHERE session_id = $1
-                     AND created_at < TO_TIMESTAMP($2 / 1000.0)
-                   ORDER BY created_at DESC
-                   LIMIT $3`,
-                  [idResult.value, beforeTimestampMs, messageLimit],
-                );
+      const value = result.rows.reverse().map((r) => ({
+        id: String(r.id),
+        sessionId: String(r.sessionId),
+        role: String(r.role),
+        content: String(r.content || ''),
+        thoughtContent: r.thoughtContent ? String(r.thoughtContent) : undefined,
+        createdAt: toNumber(r.createdAt),
+      }));
 
-          return result.rows.reverse().map((r) => ({
-            id: String(r.id),
-            sessionId: String(r.sessionId),
-            role: String(r.role),
-            content: String(r.content || ''),
-            thoughtContent: r.thoughtContent ? String(r.thoughtContent) : undefined,
-            createdAt: toNumber(r.createdAt),
-          }));
-        },
-        { bypass },
-      );
-
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -2962,7 +2891,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (result.rows.length === 0) return reply.code(404).send({ error: 'Session not found' });
 
-      await bumpNamespaceVersion(`reports:ai-reporting:user:${userId}`);
       return reply.send({ success: true });
     },
   );
@@ -3015,8 +2943,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
-      const ns = `reports:ai-reporting:user:${userId}`;
-      let didMutate = false;
       let shouldAutoTitle = false;
       let streamStarted = false;
       let thoughtDoneSent = false;
@@ -3047,7 +2973,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           [resolvedSessionId, userId, ''],
         );
-        didMutate = true;
         shouldAutoTitle = true;
       }
 
@@ -3062,7 +2987,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
             [userMessageId, resolvedSessionId, messageResult.value],
           );
-          didMutate = true;
         }
 
         const recent = await query(
@@ -3091,17 +3015,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const { fromDate, toDate } = getReportingRange();
         const requestedSections = determineRequestedSections(messageResult.value, convo);
         const datasetStartedAt = Date.now();
-        const { status: datasetCacheStatus, value: datasetBuildResult } =
-          await getCachedBusinessDataset(
-            request,
-            cfg,
-            fromDate,
-            toDate,
-            requestedSections,
-            shouldBypassCache(request),
-          );
+        const datasetBuildResult = await buildBusinessDataset(
+          request,
+          cfg,
+          fromDate,
+          toDate,
+          requestedSections,
+        );
         logDatasetBuildTelemetry(request, {
-          cacheStatus: datasetCacheStatus,
           durationMs: Date.now() - datasetStartedAt,
           metrics: datasetBuildResult.metrics,
         });
@@ -3209,7 +3130,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,
           [assistantMessageId, resolvedSessionId, assistantText, assistantThoughtContent || null],
         );
-        didMutate = true;
 
         let titleToSet = '';
         if (shouldAutoTitle) {
@@ -3242,10 +3162,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  WHEN BTRIM(title) = '' OR title = 'AI Reporting' THEN LEFT($2, 80)
                  ELSE title
                END
-           WHERE id = $1 AND user_id = $3`,
+            WHERE id = $1 AND user_id = $3`,
           [resolvedSessionId, titleToSet || cleanSessionTitle(messageResult.value), userId],
         );
-        didMutate = true;
 
         if (
           !writeSseEvent(reply, 'done', {
@@ -3269,9 +3188,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } finally {
         request.raw.removeListener('aborted', handleClientDisconnect);
         request.raw.removeListener('close', handleClientDisconnect);
-        if (didMutate) {
-          await bumpNamespaceVersion(ns);
-        }
       }
     },
   );
@@ -3328,8 +3244,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
-      const ns = `reports:ai-reporting:user:${userId}`;
-      let didMutate = false;
       let streamStarted = false;
       let thoughtDoneSent = false;
       let streamedText = '';
@@ -3380,7 +3294,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         savedAssistantCreatedAt = new Date(pairedAssistant.rows[0].created_at);
         // Delete the paired assistant message
         await query(`DELETE FROM report_chat_messages WHERE id = $1`, [pairedAssistant.rows[0].id]);
-        didMutate = true;
       } else {
         savedAssistantCreatedAt = new Date(new Date(userMsgCreatedAt).getTime() + 1000);
       }
@@ -3390,7 +3303,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         contentResult.value,
         messageIdResult.value,
       ]);
-      didMutate = true;
 
       const assistantMessageId = `rpt-msg-${randomUUID()}`;
 
@@ -3419,17 +3331,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const { fromDate, toDate } = getReportingRange();
         const requestedSections = determineRequestedSections(contentResult.value, convo);
         const datasetStartedAt = Date.now();
-        const { status: datasetCacheStatus, value: datasetBuildResult } =
-          await getCachedBusinessDataset(
-            request,
-            cfg,
-            fromDate,
-            toDate,
-            requestedSections,
-            shouldBypassCache(request),
-          );
+        const datasetBuildResult = await buildBusinessDataset(
+          request,
+          cfg,
+          fromDate,
+          toDate,
+          requestedSections,
+        );
         logDatasetBuildTelemetry(request, {
-          cacheStatus: datasetCacheStatus,
           durationMs: Date.now() - datasetStartedAt,
           metrics: datasetBuildResult.metrics,
         });
@@ -3544,7 +3453,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             savedAssistantCreatedAt.toISOString(),
           ],
         );
-        didMutate = true;
 
         await query(
           `UPDATE report_chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2`,
@@ -3573,9 +3481,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } finally {
         request.raw.removeListener('aborted', handleClientDisconnect);
         request.raw.removeListener('close', handleClientDisconnect);
-        if (didMutate) {
-          await bumpNamespaceVersion(ns);
-        }
       }
     },
   );
@@ -3637,8 +3542,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
-      const ns = `reports:ai-reporting:user:${userId}`;
-      let didMutate = false;
       let shouldAutoTitle = false;
 
       let resolvedSessionId = sessionIdResult.value || '';
@@ -3659,7 +3562,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           [resolvedSessionId, userId, ''],
         );
-        didMutate = true;
         shouldAutoTitle = true;
       }
 
@@ -3672,7 +3574,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              VALUES ($1, $2, 'user', $3, CURRENT_TIMESTAMP)`,
             [userMessageId, resolvedSessionId, messageResult.value],
           );
-          didMutate = true;
         }
 
         const recent = await query(
@@ -3701,17 +3602,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const { fromDate, toDate } = getReportingRange();
         const requestedSections = determineRequestedSections(messageResult.value, convo);
         const datasetStartedAt = Date.now();
-        const { status: datasetCacheStatus, value: datasetBuildResult } =
-          await getCachedBusinessDataset(
-            request,
-            cfg,
-            fromDate,
-            toDate,
-            requestedSections,
-            shouldBypassCache(request),
-          );
+        const datasetBuildResult = await buildBusinessDataset(
+          request,
+          cfg,
+          fromDate,
+          toDate,
+          requestedSections,
+        );
         logDatasetBuildTelemetry(request, {
-          cacheStatus: datasetCacheStatus,
           durationMs: Date.now() - datasetStartedAt,
           metrics: datasetBuildResult.metrics,
         });
@@ -3755,7 +3653,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
            VALUES ($1, $2, 'assistant', $3, $4, CURRENT_TIMESTAMP)`,
           [assistantMessageId, resolvedSessionId, assistantText, assistantThoughtContent || null],
         );
-        didMutate = true;
 
         let titleToSet = '';
         if (shouldAutoTitle) {
@@ -3788,10 +3685,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  WHEN BTRIM(title) = '' OR title = 'AI Reporting' THEN LEFT($2, 80)
                  ELSE title
                END
-           WHERE id = $1 AND user_id = $3`,
+            WHERE id = $1 AND user_id = $3`,
           [resolvedSessionId, titleToSet || cleanSessionTitle(messageResult.value), userId],
         );
-        didMutate = true;
 
         return reply.send({
           sessionId: resolvedSessionId,
@@ -3801,11 +3697,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'AI request failed';
         return reply.code(502).send({ error: msg });
-      } finally {
-        if (didMutate) {
-          // Bump only after request completes so concurrent GETs can't cache an incomplete view under the new version.
-          await bumpNamespaceVersion(ns);
-        }
       }
     },
   );

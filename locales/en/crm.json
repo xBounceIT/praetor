@@ -72,6 +72,7 @@
     "clientDeleted": "Client deleted",
     "deleteConfirm": "Are you sure you want to delete this client? All associated projects and tasks will also be deleted.",
     "isDisabled": "Client is disabled",
+    "disableClient": "Disable Client",
     "activeClients": "Active Clients",
     "disabledClients": "Disabled Clients",
     "subjectType": "Subject Type",
@@ -381,6 +382,7 @@
     "tableHeaders": {
       "name": "Name",
       "code": "Code",
+      "insertDate": "Insert Date",
       "contact": "Contact",
       "vat": "VAT",
       "taxCode": "Tax Code",

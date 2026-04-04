@@ -35,6 +35,7 @@ const supplierSchema = {
     taxCode: { type: ['string', 'null'] },
     paymentTerms: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
+    createdAt: { type: 'number' },
   },
   required: ['id', 'name', 'isDisabled'],
 } as const;
@@ -114,6 +115,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCode: s.tax_code,
         paymentTerms: s.payment_terms,
         notes: s.notes,
+        createdAt: s.created_at ? new Date(s.created_at).getTime() : undefined,
       }));
     },
   );
@@ -187,12 +189,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const notesResult = optionalNonEmptyString(notes, 'notes');
       if (!notesResult.ok) return badRequest(reply, notesResult.message);
 
-      const id = 's-' + Date.now();
+      const now = Date.now();
+      const id = 's-' + now;
       await query(
         `INSERT INTO suppliers (
         id, name, is_disabled, supplier_code, contact_name, email, phone,
-        address, vat_number, tax_code, payment_terms, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        address, vat_number, tax_code, payment_terms, notes, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, to_timestamp($13 / 1000.0))`,
         [
           id,
           nameResult.value,
@@ -206,6 +209,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           taxCodeResult.value,
           paymentTermsResult.value,
           notesResult.value,
+          now,
         ],
       );
 
@@ -232,6 +236,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCode: taxCodeResult.value,
         paymentTerms: paymentTermsResult.value,
         notes: notesResult.value,
+        createdAt: now,
       });
     },
   );
@@ -395,6 +400,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCode: s.tax_code,
         paymentTerms: s.payment_terms,
         notes: s.notes,
+        createdAt: s.created_at ? new Date(s.created_at).getTime() : undefined,
       };
     },
   );

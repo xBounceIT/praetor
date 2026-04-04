@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { bumpNamespaceVersion } from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -1365,7 +1364,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Invalidate client cache if quote status affects sent quotes totals
       if (didStatusChange && (currentStatus === 'sent' || nextStatus === 'sent')) {
-        await bumpNamespaceVersion('clients');
       }
 
       await logAudit({

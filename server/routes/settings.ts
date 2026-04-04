@@ -7,13 +7,6 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_USER_SETTINGS_SECONDS,
-} from '../services/cache.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -69,49 +62,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const bypass = shouldBypassCache(request);
       const userId = request.user.id;
 
-      const { status, value } = await cacheGetSetJson(
-        `settings:user:${userId}`,
-        'v=1',
-        TTL_USER_SETTINGS_SECONDS,
-        async () => {
-          const result = await query(
-            `SELECT full_name, email, language
-             FROM settings WHERE user_id = $1`,
-            [userId],
-          );
-
-          if (result.rows.length === 0) {
-            // Create default settings if none exist
-            const insertResult = await query(
-              `INSERT INTO settings (user_id, full_name, email)
-               VALUES ($1, $2, $3)
-               RETURNING *`,
-              [userId, request.user?.name, `${request.user?.username}@example.com`],
-            );
-
-            const s = insertResult.rows[0];
-            await bumpNamespaceVersion('users');
-            return {
-              fullName: s.full_name,
-              email: s.email,
-              language: s.language || 'auto',
-            };
-          }
-
-          const s = result.rows[0];
-          return {
-            fullName: s.full_name,
-            email: s.email,
-            language: s.language || 'auto',
-          };
-        },
-        { bypass },
+      const result = await query(
+        `SELECT full_name, email, language
+         FROM settings WHERE user_id = $1`,
+        [userId],
       );
 
-      setCacheHeader(reply, status);
+      let value: { fullName: string; email: string; language: string };
+      if (result.rows.length === 0) {
+        // Create default settings if none exist
+        const insertResult = await query(
+          `INSERT INTO settings (user_id, full_name, email)
+           VALUES ($1, $2, $3)
+           RETURNING *`,
+          [userId, request.user?.name, `${request.user?.username}@example.com`],
+        );
+
+        const s = insertResult.rows[0];
+        value = {
+          fullName: s.full_name,
+          email: s.email,
+          language: s.language || 'auto',
+        };
+      } else {
+        const s = result.rows[0];
+        value = {
+          fullName: s.full_name,
+          email: s.email,
+          language: s.language || 'auto',
+        };
+      }
+
       return value;
     },
   );
@@ -174,10 +157,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const s = result.rows[0];
-      if (email !== undefined) {
-        await bumpNamespaceVersion('users');
-      }
-      await bumpNamespaceVersion(`settings:user:${request.user?.id}`);
       return {
         fullName: s.full_name,
         email: s.email,
@@ -244,7 +223,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Update password
       await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, request.user?.id]);
-      await bumpNamespaceVersion(`settings:user:${request.user?.id}`);
 
       return { message: 'Password updated successfully' };
     },

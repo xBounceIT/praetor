@@ -23,7 +23,6 @@
           "auth"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -42,7 +41,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "security": [],
         "responses": {
@@ -430,7 +430,6 @@
           "auth"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -445,7 +444,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -646,7 +646,6 @@
           "ai"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -668,7 +667,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -1001,7 +1001,6 @@
           "users"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1039,7 +1038,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -1331,7 +1331,6 @@
           "users"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1664,7 +1663,6 @@
           "users"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1686,7 +1684,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -1967,7 +1966,6 @@
           "users"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -2238,6 +2236,12 @@
                       },
                       "createdAt": {
                         "type": "number"
+                      },
+                      "totalSentQuotes": {
+                        "type": "number"
+                      },
+                      "totalAcceptedOrders": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -2365,7 +2369,6 @@
           "clients"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -2453,7 +2456,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -2567,6 +2571,12 @@
                     },
                     "createdAt": {
                       "type": "number"
+                    },
+                    "totalSentQuotes": {
+                      "type": "number"
+                    },
+                    "totalAcceptedOrders": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -2677,7 +2687,6 @@
           "clients"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -2914,6 +2923,12 @@
                       ]
                     },
                     "createdAt": {
+                      "type": "number"
+                    },
+                    "totalSentQuotes": {
+                      "type": "number"
+                    },
+                    "totalAcceptedOrders": {
                       "type": "number"
                     }
                   },
@@ -3310,7 +3325,6 @@
           "projects"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -3335,7 +3349,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -3604,7 +3619,6 @@
           "projects"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -3902,7 +3916,6 @@
           "projects"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -3920,7 +3933,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -4232,7 +4246,6 @@
           "tasks"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -4266,7 +4279,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -4431,7 +4445,6 @@
           "tasks"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -4886,7 +4899,6 @@
           "tasks"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -4904,7 +4916,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -5237,7 +5250,6 @@
           "entries"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -5288,7 +5300,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -5632,7 +5645,6 @@
           "entries"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -6112,7 +6124,6 @@
           "settings"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -6269,7 +6280,6 @@
           "settings"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -6288,7 +6298,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -6590,7 +6601,6 @@
           "ldap"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -7142,7 +7152,6 @@
           "general-settings"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -7568,7 +7577,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -7618,7 +7626,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -7800,7 +7809,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8307,7 +8315,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8326,7 +8333,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -8476,7 +8484,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8904,7 +8911,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -8927,7 +8933,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -9056,7 +9063,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -9079,7 +9085,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -9488,7 +9495,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -9511,7 +9517,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -9656,7 +9663,6 @@
           "products"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -10247,7 +10253,6 @@
           "client-quotes"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -10348,7 +10353,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -10638,7 +10644,6 @@
           "client-quotes"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -11441,7 +11446,6 @@
           "client-offers"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -11553,7 +11557,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -11832,7 +11837,6 @@
           "client-offers"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -12507,7 +12511,6 @@
           "work-units"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -12532,7 +12535,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -12708,7 +12712,6 @@
           "work-units"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -13201,7 +13204,6 @@
           "work-units"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -13219,7 +13221,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -13664,7 +13667,6 @@
           "clients-orders"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -13772,7 +13774,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -14052,7 +14055,6 @@
           "clients-orders"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -14799,7 +14801,6 @@
           "invoices"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -14892,7 +14893,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -15122,7 +15124,6 @@
           "invoices"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -15627,6 +15628,9 @@
                           "null",
                           "string"
                         ]
+                      },
+                      "createdAt": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -15755,7 +15759,6 @@
           "suppliers"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -15798,7 +15801,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -15870,6 +15874,9 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -15981,7 +15988,6 @@
           "suppliers"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -16105,6 +16111,9 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -16567,7 +16576,6 @@
           "supplier-quotes"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -16646,7 +16654,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -16870,7 +16879,6 @@
           "supplier-quotes"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -17518,7 +17526,6 @@
           "supplier-orders"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -17592,7 +17599,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -17807,7 +17815,6 @@
           "supplier-orders"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -18440,7 +18447,6 @@
           "supplier-invoices"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -18519,7 +18525,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -18735,7 +18742,6 @@
           "supplier-invoices"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -19381,7 +19387,6 @@
           "supplier-quotes"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -19460,7 +19465,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -19684,7 +19690,6 @@
           "supplier-quotes"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -20284,7 +20289,6 @@
           "special-bids"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -20331,7 +20335,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -20498,7 +20503,6 @@
           "special-bids"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -21531,7 +21535,6 @@
           "email"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -21738,7 +21741,6 @@
           "email"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -21753,7 +21755,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -22083,7 +22086,6 @@
           "roles"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -22104,7 +22106,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -22262,7 +22265,6 @@
           "roles"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -22277,7 +22279,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -22589,7 +22592,6 @@
           "roles"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -22607,7 +22609,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "parameters": [
           {
@@ -22924,7 +22927,6 @@
           "reports"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23351,7 +23353,6 @@
           "reports"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23372,7 +23373,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "400": {
@@ -23475,7 +23477,6 @@
           "reports"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23501,7 +23502,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "400": {
@@ -23604,7 +23606,6 @@
           "reports"
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -23625,7 +23626,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
