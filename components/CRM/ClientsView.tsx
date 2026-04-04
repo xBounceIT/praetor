@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -75,6 +75,127 @@ const truncateText = (text: string | undefined, maxLength = 30): string => {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
 };
+
+interface EditableCellProps {
+  field: keyof Client;
+  value: unknown;
+  _rowId: string;
+  isEditing: boolean;
+  isRequired: boolean;
+  type?: 'text' | 'select';
+  options?: Array<{ id: string; name: string }>;
+  displayValue?: string;
+  className?: string;
+  placeholder?: string;
+  activeField: keyof Client | undefined;
+  touchedFields: Set<string>;
+  validationErrors: Record<string, string>;
+  onUpdateField: (field: keyof Client, value: unknown) => void;
+  onSetActiveCell: (cell: { field: keyof Client } | null) => void;
+  t: (key: string) => string;
+}
+
+const EditableCell = memo<EditableCellProps>(
+  ({
+    field,
+    value,
+    isEditing,
+    isRequired,
+    type = 'text',
+    options,
+    displayValue,
+    className = '',
+    placeholder,
+    activeField,
+    touchedFields,
+    validationErrors,
+    onUpdateField,
+    onSetActiveCell,
+    t,
+  }) => {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const isActive = activeField === field;
+    const isTouched = touchedFields.has(field as string);
+    const hasError = isTouched && validationErrors[field as string];
+    const showErrorBorder = isRequired && (!value || (typeof value === 'string' && !value.trim()));
+    const showRedBorder = hasError || (showErrorBorder && (isTouched || isEditing));
+
+    useEffect(() => {
+      if (isEditing && isActive && inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }, [isEditing, isActive]);
+
+    if (!isEditing || !isActive) {
+      const display = displayValue || (value as string) || '-';
+      const isTruncated = typeof display === 'string' && display.length > 30;
+      const truncatedDisplay = isTruncated ? truncateText(display, 30) : display;
+
+      return (
+        <Tooltip
+          label={
+            isRequired && !value ? t('common:validation.required') : isTruncated ? display : ''
+          }
+          disabled={!isRequired && !isTruncated && !isEditing}
+        >
+          {() => (
+            <div
+              className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
+                isEditing ? 'hover:bg-slate-100' : ''
+              } ${showRedBorder ? 'border border-red-500 bg-red-50' : ''} ${className}`}
+            >
+              <span className="text-xs text-slate-600 w-full">{truncatedDisplay}</span>
+            </div>
+          )}
+        </Tooltip>
+      );
+    }
+
+    if (type === 'select' && options) {
+      return (
+        <div className="w-full">
+          <CustomSelect
+            options={options}
+            value={(value as string) || ''}
+            onChange={(val) => {
+              onUpdateField(field, val || undefined);
+            }}
+            placeholder={placeholder || t('common:form.selectOption')}
+            searchable={false}
+            autoOpen={true}
+            buttonClassName={`w-full text-xs py-1 px-2 ${
+              showRedBorder ? '!border-red-500 !bg-red-50' : ''
+            }`}
+          />
+        </div>
+      );
+    }
+
+    const stringValue = (value as string) || '';
+    const dynamicMinWidth = Math.min(500, Math.max(200, stringValue.length * 8 + 32));
+
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={stringValue}
+        onChange={(e) => onUpdateField(field, e.target.value)}
+        onBlur={() => onSetActiveCell(null)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onSetActiveCell(null);
+          }
+        }}
+        style={{ width: `${dynamicMinWidth}px`, minWidth: `${dynamicMinWidth}px` }}
+        className={`text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
+          showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
+        } ${className}`}
+        placeholder={placeholder}
+      />
+    );
+  },
+);
 
 const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
@@ -355,115 +476,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
   };
 
-  // Editable Cell Component
-  const EditableCell: React.FC<{
-    field: keyof Client;
-    value: unknown;
-    _rowId: string;
-    isEditing: boolean;
-    isRequired: boolean;
-    type?: 'text' | 'select';
-    options?: Array<{ id: string; name: string }>;
-    displayValue?: string;
-    className?: string;
-    placeholder?: string;
-  }> = ({
-    field,
-    value,
-    _rowId,
-    isEditing,
-    isRequired,
-    type = 'text',
-    options,
-    displayValue,
-    className = '',
-    placeholder,
-  }) => {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const isActive = activeCell?.field === field;
-    const isTouched = editingState.touchedFields.has(field as string);
-    const hasError = isTouched && validationErrors[field as string];
-    const showErrorBorder = isRequired && (!value || (typeof value === 'string' && !value.trim()));
-    const showRedBorder = hasError || (showErrorBorder && (isTouched || isEditing));
-
-    useEffect(() => {
-      if (isEditing && isActive && inputRef.current) {
-        inputRef.current.focus();
-        inputRef.current.select();
-      }
-    }, [isEditing, isActive]);
-
-    if (!isEditing || !isActive) {
-      // Display mode
-      const display = displayValue || (value as string) || '-';
-      const isTruncated = typeof display === 'string' && display.length > 30;
-      const truncatedDisplay = isTruncated ? truncateText(display, 30) : display;
-
-      return (
-        <Tooltip
-          label={
-            isRequired && !value ? t('common:validation.required') : isTruncated ? display : ''
-          }
-          disabled={!isRequired && !isTruncated && !isEditing}
-        >
-          {() => (
-            <div
-              className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
-                isEditing ? 'hover:bg-slate-100' : ''
-              } ${showRedBorder ? 'border border-red-500 bg-red-50' : ''} ${className}`}
-            >
-              <span className="text-xs text-slate-600 w-full">{truncatedDisplay}</span>
-            </div>
-          )}
-        </Tooltip>
-      );
-    }
-
-    // Edit mode
-    if (type === 'select' && options) {
-      return (
-        <div className="w-full">
-          <CustomSelect
-            options={options}
-            value={(value as string) || ''}
-            onChange={(val) => {
-              updateField(field, val || undefined);
-            }}
-            placeholder={placeholder || t('common:form.selectOption')}
-            searchable={false}
-            autoOpen={true}
-            buttonClassName={`w-full text-xs py-1 px-2 ${
-              showRedBorder ? '!border-red-500 !bg-red-50' : ''
-            }`}
-          />
-        </div>
-      );
-    }
-
-    const stringValue = (value as string) || '';
-    const dynamicMinWidth = Math.min(500, Math.max(200, stringValue.length * 8 + 32));
-
-    return (
-      <input
-        ref={inputRef}
-        type="text"
-        value={stringValue}
-        onChange={(e) => updateField(field, e.target.value)}
-        onBlur={() => setActiveCell(null)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            setActiveCell(null);
-          }
-        }}
-        style={{ width: `${dynamicMinWidth}px`, minWidth: `${dynamicMinWidth}px` }}
-        className={`text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
-          showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
-        } ${className}`}
-        placeholder={placeholder}
-      />
-    );
-  };
-
   // Column definitions
   const columns = useMemo<Column<Client>[]>(() => {
     const isRowEditing = (row: Client) => {
@@ -471,6 +483,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         return row.id === 'new';
       }
       return editingState.rowId === row.id;
+    };
+
+    const ecProps = {
+      activeField: activeCell?.field,
+      touchedFields: editingState.touchedFields,
+      validationErrors,
+      onUpdateField: updateField,
+      onSetActiveCell: setActiveCell,
+      t,
     };
 
     return [
@@ -482,6 +503,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="name"
               value={isEditing ? editingState.data.name : row.name}
               _rowId={row.id}
@@ -503,6 +525,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const value = isEditing ? editingState.data.clientCode : row.clientCode;
           return (
             <EditableCell
+              {...ecProps}
               field="clientCode"
               value={value}
               _rowId={row.id}
@@ -561,6 +584,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
           return (
             <EditableCell
+              {...ecProps}
               field="type"
               value={value}
               _rowId={row.id}
@@ -586,6 +610,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="email"
               value={isEditing ? editingState.data.email : row.email}
               _rowId={row.id}
@@ -605,6 +630,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="phone"
               value={isEditing ? editingState.data.phone : row.phone}
               _rowId={row.id}
@@ -628,6 +654,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             : row.fiscalCode || row.vatNumber || row.taxCode;
           return (
             <EditableCell
+              {...ecProps}
               field="fiscalCode"
               value={value}
               _rowId={row.id}
@@ -649,6 +676,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const value = isEditing ? editingState.data.officeCountRange : row.officeCountRange;
           return (
             <EditableCell
+              {...ecProps}
               field="officeCountRange"
               value={value}
               _rowId={row.id}
@@ -675,6 +703,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             : undefined;
           return (
             <EditableCell
+              {...ecProps}
               field="sector"
               value={value}
               _rowId={row.id}
@@ -704,6 +733,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             : undefined;
           return (
             <EditableCell
+              {...ecProps}
               field="numberOfEmployees"
               value={value}
               _rowId={row.id}
@@ -733,6 +763,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             : undefined;
           return (
             <EditableCell
+              {...ecProps}
               field="revenue"
               value={value}
               _rowId={row.id}
@@ -756,6 +787,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="contactName"
               value={isEditing ? editingState.data.contactName : row.contactName}
               _rowId={row.id}
@@ -775,6 +807,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="address"
               value={isEditing ? editingState.data.address : row.address}
               _rowId={row.id}
@@ -794,6 +827,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="description"
               value={isEditing ? editingState.data.description : row.description}
               _rowId={row.id}
@@ -813,6 +847,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="atecoCode"
               value={isEditing ? editingState.data.atecoCode : row.atecoCode}
               _rowId={row.id}
@@ -832,6 +867,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           const isEditing = isRowEditing(row);
           return (
             <EditableCell
+              {...ecProps}
               field="website"
               value={isEditing ? editingState.data.website : row.website}
               _rowId={row.id}
