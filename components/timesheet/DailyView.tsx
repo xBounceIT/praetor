@@ -277,7 +277,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_140px] gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_50px] gap-4 items-start">
           <div className="min-w-0">
             <CustomSelect
               label={t('entry.client')}
