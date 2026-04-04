@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -206,6 +207,28 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
           ) : null,
       },
       {
+        header: t('crm:suppliers.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        cell: ({ row }) => {
+          if (!row.createdAt) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) {
+            return '-';
+          }
+          return formatInsertDate(timestamp);
+        },
+      },
+      {
         header: t('crm:suppliers.tableHeaders.contact'),
         id: 'contact',
         accessorFn: (row) => row.contactName || row.email || row.phone || '',
@@ -250,8 +273,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         },
         className: 'whitespace-nowrap font-mono text-xs',
         align: 'right',
-        cell: ({ value }: { value: number }) => {
-          const totalValue = value;
+        cell: ({ value }) => {
+          const totalValue = value as number;
           return (
             <span
               className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
