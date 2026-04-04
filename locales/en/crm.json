@@ -384,7 +384,8 @@
       "contact": "Contact",
       "vat": "VAT",
       "taxCode": "Tax Code",
-      "status": "Status"
+      "status": "Status",
+      "totalOrders": "Total orders"
     }
   },
   "paymentTerms": {
