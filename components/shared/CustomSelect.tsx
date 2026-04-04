@@ -120,28 +120,26 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     };
   }, [dropdownPosition]);
 
-  // Auto open dropdown when autoOpen prop is true
+  const hasAutoOpenedRef = useRef(false);
+
+  // Auto open dropdown when autoOpen prop transitions to true
   useEffect(() => {
-    if (autoOpen && !isOpen && !disabled && buttonRef.current) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-        onOpen?.();
-        // Dispatch event to close other dropdowns
-        document.dispatchEvent(
-          new CustomEvent('custom-select-open', { detail: { id: dropdownId } }),
-        );
-        // Trigger position calculation after dropdown renders
-        setTimeout(() => {
-          const newStyles = calculatePosition();
-          if (newStyles) {
-            setDropdownStyles(newStyles);
-          }
-        }, 0);
-      }, 10);
-      return () => clearTimeout(timer);
+    if (autoOpen && !hasAutoOpenedRef.current && !disabled && buttonRef.current) {
+      hasAutoOpenedRef.current = true;
+      setIsOpen(true);
+      onOpen?.();
+      document.dispatchEvent(new CustomEvent('custom-select-open', { detail: { id: dropdownId } }));
+      setTimeout(() => {
+        const newStyles = calculatePosition();
+        if (newStyles) {
+          setDropdownStyles(newStyles);
+        }
+      }, 20);
     }
-  }, [autoOpen, isOpen, disabled, dropdownId, onOpen, calculatePosition]);
+    if (!autoOpen) {
+      hasAutoOpenedRef.current = false;
+    }
+  }, [autoOpen, disabled, dropdownId, onOpen, calculatePosition]);
 
   useLayoutEffect(() => {
     if (!isOpen) return;
