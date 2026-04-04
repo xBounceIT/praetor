@@ -688,11 +688,19 @@ const StandardTable = <T extends object>({
                                 ? { minWidth: '120px' }
                                 : undefined
                           }
-                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full flex justify-end items-center' : isLastColumn ? 'flex justify-end items-center' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto text-right' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
                         >
-                          {col.cell
-                            ? col.cell({ getValue: () => val, row, value: val })
-                            : (val as ReactNode)}
+                          {col.sticky === 'right' ? (
+                            <div className="flex justify-end items-center w-full h-full">
+                              {col.cell
+                                ? col.cell({ getValue: () => val, row, value: val })
+                                : (val as ReactNode)}
+                            </div>
+                          ) : col.cell ? (
+                            col.cell({ getValue: () => val, row, value: val })
+                          ) : (
+                            (val as ReactNode)
+                          )}
                         </td>
                       );
                     })}
