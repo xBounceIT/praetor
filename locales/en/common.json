@@ -30,7 +30,8 @@
     "view": "View",
     "send": "Send",
     "manage": "Manage",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "discard": "Discard"
   },
   "labels": {
     "name": "Name",
@@ -216,7 +217,8 @@
     "saveSuccess": "Saved successfully",
     "deleteSuccess": "Deleted successfully",
     "errorOccurred": "An error occurred. Please try again.",
-    "unsavedChanges": "You have unsaved changes. Do you want to continue?",
+    "unsavedChanges": "Unsaved Changes",
+    "unsavedChangesConfirm": "You have unsaved changes. Do you want to save them?",
     "noChangesToSave": "No changes to save"
   },
   "filters": {
