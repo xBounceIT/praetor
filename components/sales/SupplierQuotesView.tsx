@@ -1,13 +1,19 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Product, Supplier, SupplierQuote, SupplierQuoteItem, SupplierUnitType } from '../../types';
+import type {
+  Product,
+  Supplier,
+  SupplierQuote,
+  SupplierQuoteItem,
+  SupplierUnitType,
+} from '../../types';
 import {
   formatDateOnlyForLocale,
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -109,6 +115,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const getNextMonthDate = () => {
+    const now = new Date();
+    return getLocalDateString(new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
+  };
   const [formData, setFormData] = useState<Partial<SupplierQuote>>({
     supplierId: '',
     supplierName: '',
@@ -117,7 +127,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     paymentTerms: 'immediate',
     discount: 0,
     status: 'draft',
-    expirationDate: getLocalDateString(),
+    expirationDate: getNextMonthDate(),
     notes: '',
   });
 
@@ -150,7 +160,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       paymentTerms: 'immediate',
       discount: 0,
       status: 'draft',
-      expirationDate: getLocalDateString(),
+      expirationDate: getNextMonthDate(),
       notes: '',
     });
     setErrors({});
@@ -237,11 +247,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     if (!item) return;
     const oldType = item.unitType || 'unit';
     if (oldType === newType) return;
-    // Only convert price between hours ↔ days (8x factor). 'unit' has no conversion.
-    let adjustedPrice = item.unitPrice;
-    if ((oldType === 'hours' && newType === 'days') || (oldType === 'days' && newType === 'hours')) {
-      adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
-    }
+    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
@@ -823,8 +829,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                     </div>
-                    <div className="col-span-1" />
-                    <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                    <div className="col-span-2" />
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
@@ -875,10 +881,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 className={`${itemInputClassName} text-center`}
                               />
                             </div>
-                            <div className="hidden md:flex col-span-1 items-center justify-center">
+                            <div className="hidden md:flex col-span-2 items-center justify-center">
                               {renderUnitSelector(index, item)}
                             </div>
-                            <div className="col-span-4 md:col-span-3">
+                            <div className="col-span-4 md:col-span-2">
                               <div className="flex items-center gap-1.5">
                                 <ValidatedNumberInput
                                   value={item.unitPrice}

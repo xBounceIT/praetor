@@ -61,6 +61,7 @@
     "errors": {
       "clientRequired": "Il cliente è richiesto",
       "itemsRequired": "Almeno un prodotto è richiesto",
+      "productOrSupplierRequired": "Ogni voce deve avere un prodotto o un preventivo fornitore collegato",
       "quantityGreaterThanZero": "Tutti gli articoli devono avere quantità maggiore di 0",
       "totalGreaterThanZero": "Il totale deve essere maggiore di 0",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",

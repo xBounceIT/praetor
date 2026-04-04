@@ -32,8 +32,10 @@ type IncomingQuoteItem = {
   unitPrice: number;
   discount: number;
   note?: string | null;
-  unitType?: 'hours' | 'days';
+  unitType?: UnitType;
 };
+
+type UnitType = 'hours' | 'days' | 'unit';
 
 type QuoteItemSnapshot = {
   productCost: number;
@@ -59,8 +61,53 @@ const normalizeNullableString = (value: unknown) => {
 
 const normalizeSpecialBidId = (value: unknown) => normalizeNullableString(value);
 
-const normalizeUnitType = (value: unknown): 'hours' | 'days' => {
-  return value === 'days' ? 'days' : 'hours';
+const normalizeUnitType = (value: unknown): UnitType => {
+  if (value === 'days') return 'days';
+  if (value === 'unit') return 'unit';
+  return 'hours';
+};
+
+const normalizeQuoteItems = (
+  items: unknown[],
+): { ok: true; items: IncomingQuoteItem[] } | { ok: false; message: string } => {
+  const result: IncomingQuoteItem[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] as Record<string, unknown>;
+    const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
+    if (!item.productId && !itemSupplierQuoteItemId) {
+      return {
+        ok: false,
+        message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
+      };
+    }
+    const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
+    if (!productNameResult.ok) return { ok: false, message: productNameResult.message };
+    const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
+    if (!quantityResult.ok) return { ok: false, message: quantityResult.message };
+    const unitPriceResult = parseLocalizedNonNegativeNumber(
+      item.unitPrice,
+      `items[${i}].unitPrice`,
+    );
+    if (!unitPriceResult.ok) return { ok: false, message: unitPriceResult.message };
+    const itemDiscountResult = optionalLocalizedNonNegativeNumber(
+      item.discount,
+      `items[${i}].discount`,
+    );
+    if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
+    result.push({
+      id: normalizeNullableString(item.id) ?? undefined,
+      productId: normalizeNullableString(item.productId),
+      productName: productNameResult.value,
+      specialBidId: normalizeSpecialBidId(item.specialBidId),
+      supplierQuoteItemId: itemSupplierQuoteItemId,
+      quantity: quantityResult.value,
+      unitPrice: unitPriceResult.value,
+      discount: itemDiscountResult.value || 0,
+      note: normalizeNullableString(item.note),
+      unitType: normalizeUnitType(item.unitType),
+    });
+  }
+  return { ok: true, items: result };
 };
 
 const calculateQuoteTotals = (
@@ -248,19 +295,19 @@ const resolveQuoteItemSnapshots = async (
     );
   });
 
-  const productSnapshots = await getProductSnapshots(
-    itemsNeedingRecalc.map((item) => item.productId),
-  );
-  const specialBidSnapshots = await getSpecialBidSnapshots(
-    itemsNeedingRecalc
-      .map((item) => normalizeSpecialBidId(item.specialBidId))
-      .filter((bidId): bidId is string => bidId !== null),
-  );
-  const supplierQuoteSnapshots = await getSupplierQuoteItemSnapshots(
-    itemsNeedingRecalc
-      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
-      .filter((id): id is string => id !== null),
-  );
+  const [productSnapshots, specialBidSnapshots, supplierQuoteSnapshots] = await Promise.all([
+    getProductSnapshots(itemsNeedingRecalc.map((item) => item.productId)),
+    getSpecialBidSnapshots(
+      itemsNeedingRecalc
+        .map((item) => normalizeSpecialBidId(item.specialBidId))
+        .filter((bidId): bidId is string => bidId !== null),
+    ),
+    getSupplierQuoteItemSnapshots(
+      itemsNeedingRecalc
+        .map((item) => normalizeNullableString(item.supplierQuoteItemId))
+        .filter((id): id is string => id !== null),
+    ),
+  ]);
 
   const resolvedItems: ResolvedQuoteItem[] = [];
   for (const item of items) {
@@ -298,8 +345,8 @@ const resolveQuoteItemSnapshots = async (
       }
     }
 
-    const productSnapshot = productSnapshots.get(item.productId);
-    if (!productSnapshot) {
+    const productSnapshot = item.productId ? productSnapshots.get(item.productId) : undefined;
+    if (!productSnapshot && !normalizedSupplierQuoteItemId) {
       throw new Error(`items productId "${item.productId}" is invalid`);
     }
 
@@ -333,7 +380,10 @@ const resolveQuoteItemSnapshots = async (
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" is invalid or supplier quote is not accepted`,
         );
       }
-      if (supplierQuoteSnapshot.productId !== item.productId && supplierQuoteSnapshot.productId !== null) {
+      if (
+        supplierQuoteSnapshot.productId !== item.productId &&
+        supplierQuoteSnapshot.productId !== null
+      ) {
         throw new Error(
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${item.productId}"`,
         );
@@ -349,8 +399,8 @@ const resolveQuoteItemSnapshots = async (
       ...item,
       specialBidId: normalizedBidId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
-      productCost: productSnapshot.productCost,
-      productMolPercentage: productSnapshot.productMolPercentage,
+      productCost: productSnapshot?.productCost ?? 0,
+      productMolPercentage: productSnapshot?.productMolPercentage ?? null,
       specialBidUnitPrice,
       specialBidMolPercentage,
       supplierQuoteId,
@@ -395,7 +445,7 @@ const quoteItemSchema = {
     supplierQuoteDiscount: { type: ['number', 'null'] },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
-    unitType: { type: 'string', enum: ['hours', 'days'] },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
   required: [
     'id',
@@ -455,7 +505,7 @@ const quoteItemBodySchema = {
     specialBidMolPercentage: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
-    unitType: { type: 'string', enum: ['hours', 'days'] },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -730,41 +780,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems: IncomingQuoteItem[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i] as Record<string, unknown>;
-        const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
-        if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
-        const productNameResult = requireNonEmptyString(
-          item.productName,
-          `items[${i}].productName`,
-        );
-        if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-        const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
-        if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-        const unitPriceResult = parseLocalizedNonNegativeNumber(
-          item.unitPrice,
-          `items[${i}].unitPrice`,
-        );
-        if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-        const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-          item.discount,
-          `items[${i}].discount`,
-        );
-        if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
-        normalizedItems.push({
-          id: normalizeNullableString(item.id) ?? undefined,
-          productId: productIdResult.value,
-          productName: productNameResult.value,
-          specialBidId: normalizeSpecialBidId(item.specialBidId),
-          supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
-          quantity: quantityResult.value,
-          unitPrice: unitPriceResult.value,
-          discount: itemDiscountResult.value || 0,
-          note: normalizeNullableString(item.note),
-          unitType: normalizeUnitType(item.unitType),
-        });
-      }
+      const itemsResult = normalizeQuoteItems(items);
+      if (!itemsResult.ok) return badRequest(reply, itemsResult.message);
+      const normalizedItems = itemsResult.items;
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
@@ -1070,44 +1088,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        const incomingItems: IncomingQuoteItem[] = [];
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i] as Record<string, unknown>;
-          const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
-          if (!productIdResult.ok) return badRequest(reply, productIdResult.message);
-          const productNameResult = requireNonEmptyString(
-            item.productName,
-            `items[${i}].productName`,
-          );
-          if (!productNameResult.ok) return badRequest(reply, productNameResult.message);
-          const quantityResult = parseLocalizedPositiveNumber(
-            item.quantity,
-            `items[${i}].quantity`,
-          );
-          if (!quantityResult.ok) return badRequest(reply, quantityResult.message);
-          const unitPriceResult = parseLocalizedNonNegativeNumber(
-            item.unitPrice,
-            `items[${i}].unitPrice`,
-          );
-          if (!unitPriceResult.ok) return badRequest(reply, unitPriceResult.message);
-          const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-            item.discount,
-            `items[${i}].discount`,
-          );
-          if (!itemDiscountResult.ok) return badRequest(reply, itemDiscountResult.message);
-          incomingItems.push({
-            id: normalizeNullableString(item.id) ?? undefined,
-            productId: productIdResult.value,
-            productName: productNameResult.value,
-            specialBidId: normalizeSpecialBidId(item.specialBidId),
-            supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
-            quantity: quantityResult.value,
-            unitPrice: unitPriceResult.value,
-            discount: itemDiscountResult.value || 0,
-            note: normalizeNullableString(item.note),
-            unitType: normalizeUnitType(item.unitType),
-          });
-        }
+        const itemsResult = normalizeQuoteItems(items);
+        if (!itemsResult.ok) return badRequest(reply, itemsResult.message);
+        const incomingItems = itemsResult.items;
 
         const existingItemsResult = await query(
           `SELECT

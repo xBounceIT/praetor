@@ -9,6 +9,7 @@ import type {
   QuoteItem,
   SpecialBid,
   SupplierQuote,
+  SupplierUnitType,
 } from '../../types';
 import {
   formatDateOnlyForLocale,
@@ -17,7 +18,7 @@ import {
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -289,9 +290,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     if (!formData.items || formData.items.length === 0) {
       newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
     } else {
-      const invalidItem = formData.items.find((item) => !item.productId);
+      const invalidItem = formData.items.find(
+        (item) => !item.productId && !item.supplierQuoteItemId,
+      );
       if (invalidItem) {
-        newErrors.items = 'Please select a product for all items';
+        newErrors.items = t('sales:clientQuotes.errors.productOrSupplierRequired', {
+          defaultValue: 'Each item must have a product or a linked supplier quote',
+        });
       }
       const invalidQuantity = formData.items.find(
         (item) =>
@@ -801,8 +806,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     };
   }, []);
 
-  const activeClients = clients.filter((c) => !c.isDisabled);
-  const activeProducts = products.filter((p) => !p.isDisabled);
+  const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
+  const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
+  const activeProductOptions = useMemo(
+    () => activeProducts.map((p) => ({ id: p.id, name: p.name })),
+    [activeProducts],
+  );
+  const activeProductIds = useMemo(
+    () => new Set(activeProducts.map((p) => p.id)),
+    [activeProducts],
+  );
   const today = getLocalDateString();
   const activeSpecialBids = specialBids.filter((b) => {
     return isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate);
@@ -827,7 +840,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       unitPrice: number;
       discount: number;
       quoteDiscount: number;
-      unitType?: 'hours' | 'days';
+      unitType?: SupplierUnitType;
       quantity: number;
     }> = [];
     for (const quote of acceptedSupplierQuotes) {
@@ -854,13 +867,45 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
   };
 
-  const handleUnitTypeChange = (index: number, newType: 'hours' | 'days') => {
+  const isLinkedProductMissing = (item: QuoteItem) =>
+    Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
+
+  const renderProductSelectOrFallback = (
+    item: QuoteItem,
+    index: number,
+    selectProps: { className?: string; buttonClassName?: string },
+  ) => {
+    if (isLinkedProductMissing(item)) {
+      return (
+        <input
+          type="text"
+          readOnly
+          value={item.productName || ''}
+          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600"
+        />
+      );
+    }
+    return (
+      <CustomSelect
+        options={activeProductOptions}
+        value={item.productId}
+        onChange={(val) => updateProductRow(index, 'productId', val as string)}
+        placeholder={t('sales:clientQuotes.selectProduct')}
+        searchable={true}
+        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        className={selectProps.className}
+        buttonClassName={selectProps.buttonClassName}
+      />
+    );
+  };
+
+  const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item) return;
     const oldType = item.unitType || 'hours';
     if (oldType === newType) return;
-    const adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
@@ -886,12 +931,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return (
       <select
         value={item.unitType || 'hours'}
-        onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
+        onChange={(e) => handleUnitTypeChange(index, e.target.value as SupplierUnitType)}
         disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
         className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
         <option value="days">{t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`)}</option>
+        <option value="unit">{t(`sales:clientQuotes.${qty === 1 ? 'unit' : 'units'}`)}</option>
       </select>
     );
   };
@@ -1554,18 +1600,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                                 {t('sales:clientQuotes.productsServices')}
                               </div>
-                              <CustomSelect
-                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                value={item.productId}
-                                onChange={(val) =>
-                                  updateProductRow(index, 'productId', val as string)
-                                }
-                                placeholder={t('sales:clientQuotes.selectProduct')}
-                                searchable={true}
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                              />
+                              {renderProductSelectOrFallback(item, index, {
+                                className: 'min-w-0',
+                                buttonClassName:
+                                  'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                              })}
                             </div>
                           </div>
                           <button
@@ -1697,18 +1736,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               />
                             </div>
                             <div className="col-span-3 min-w-0">
-                              <CustomSelect
-                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                value={item.productId}
-                                onChange={(val) =>
-                                  updateProductRow(index, 'productId', val as string)
-                                }
-                                placeholder={t('sales:clientQuotes.selectProduct')}
-                                searchable={true}
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                              />
+                              {renderProductSelectOrFallback(item, index, {
+                                className: 'min-w-0',
+                                buttonClassName:
+                                  'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                              })}
                             </div>
                             <div className="col-span-2">
                               <div className="flex items-center gap-1">

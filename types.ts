@@ -233,7 +233,7 @@ export interface QuoteItem {
   supplierQuoteDiscount?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
-  unitType?: 'hours' | 'days';
+  unitType?: SupplierUnitType;
 }
 
 export interface Quote {
