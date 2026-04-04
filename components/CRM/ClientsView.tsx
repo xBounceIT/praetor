@@ -440,11 +440,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       );
     }
 
+    const stringValue = (value as string) || '';
+    const dynamicMinWidth = Math.min(500, Math.max(200, stringValue.length * 8 + 32));
+
     return (
       <input
         ref={inputRef}
         type="text"
-        value={(value as string) || ''}
+        value={stringValue}
         onChange={(e) => updateField(field, e.target.value)}
         onBlur={() => setActiveCell(null)}
         onKeyDown={(e) => {
@@ -452,7 +455,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             setActiveCell(null);
           }
         }}
-        className={`w-full min-w-[120px] text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
+        style={{ minWidth: `${dynamicMinWidth}px` }}
+        className={`w-full text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
           showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
         } ${className}`}
         placeholder={placeholder}
