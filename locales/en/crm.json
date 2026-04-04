@@ -113,6 +113,7 @@
     "typeItem": "Item",
     "typeService": "Service",
     "productCode": "Code",
+    "insertDate": "Insert Date",
     "productCodeHint": "Only letters, numbers, underscores, and hyphens allowed",
     "supplier": "Supplier",
     "noProducts": "No products found",

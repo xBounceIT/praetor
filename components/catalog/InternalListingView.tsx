@@ -8,6 +8,7 @@ import type {
   InternalProductType,
 } from '../../services/api/products';
 import type { Product } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -1562,6 +1563,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p }) => (
               <span className="font-bold text-slate-700">{p.productCode || '-'}</span>
             ),
+          },
+          {
+            header: t('crm:internalListing.insertDate'),
+            id: 'createdAt',
+            accessorFn: (row) => row.createdAt ?? 0,
+            cell: ({ value }) => (
+              <span className="text-xs text-slate-500 whitespace-nowrap">
+                {formatInsertDate(value as number | null)}
+              </span>
+            ),
+            filterFormat: (value) => formatInsertDate(value as number | null),
           },
           {
             header: t('common:labels.name'),
