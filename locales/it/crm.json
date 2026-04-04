@@ -380,7 +380,8 @@
       "contact": "Contatto",
       "vat": "P.IVA",
       "taxCode": "C.F.",
-      "status": "Stato"
+      "status": "Stato",
+      "totalOrders": "Totale ordini"
     }
   },
   "paymentTerms": {
