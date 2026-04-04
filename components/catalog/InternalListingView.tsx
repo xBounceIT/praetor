@@ -454,17 +454,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   };
 
   const handleDeleteCategory = async (category: InternalProductCategory) => {
-    // Check if any products are linked to transactions
-    if (category.hasLinkedProducts) {
-      window.alert(
-        t('crm:internalListing.deleteCategoryWithLinkedProducts', {
-          count: category.productCount,
-          name: category.name,
-        }) ||
-          `Cannot delete category "${category.name}". Some products in this category are linked to transactions (offers, orders, invoices). Remove the products from transactions first.`,
-      );
-      return;
-    }
+    if (category.hasLinkedProducts) return;
 
     if (category.productCount > 0) {
       const confirmed = window.confirm(
@@ -675,17 +665,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       return;
     }
 
-    // Check if any products are linked to transactions
-    if (subcategory.hasLinkedProducts) {
-      window.alert(
-        t('crm:internalListing.deleteSubcategoryWithLinkedProducts', {
-          count: subcategory.productCount,
-          name: subcategory.name,
-        }) ||
-          `Cannot delete subcategory "${subcategory.name}". Some products in this subcategory are linked to transactions (offers, orders, invoices). Remove the products from transactions first.`,
-      );
-      return;
-    }
+    if (subcategory.hasLinkedProducts) return;
 
     if (subcategory.productCount > 0) {
       const confirmed = window.confirm(
@@ -973,7 +953,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onClose={() => setIsManageCategoriesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
@@ -1032,47 +1012,89 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             </div>
 
             {/* Categories List */}
-            <div className="space-y-2">
-              {isLoadingCategories ? (
-                <div className="flex items-center justify-center py-8">
-                  <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-                </div>
-              ) : categories.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <p>{t('crm:internalListing.noCategories')}</p>
-                </div>
-              ) : (
-                categories.map((category) => (
-                  <div
-                    key={category.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-700">{category.name}</span>
-                      <span className="text-xs text-slate-400">
-                        {category.productCount} {t('crm:internalListing.products')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditCategory(category)}
-                        className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                        title={t('common:buttons.edit')}
-                      >
-                        <i className="fa-solid fa-pen"></i>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(category)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title={t('common:buttons.delete')}
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </div>
+            {isLoadingCategories ? (
+              <div className="flex items-center justify-center py-8">
+                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+              </div>
+            ) : (
+              <StandardTable<InternalProductCategory>
+                title={t('crm:internalListing.manageCategories')}
+                data={categories}
+                defaultRowsPerPage={5}
+                containerClassName="shadow-none border-slate-200 rounded-2xl"
+                tableContainerClassName="max-h-[35vh] overflow-y-auto"
+                emptyState={
+                  <div className="text-center py-6 text-slate-500">
+                    <p>{t('crm:internalListing.noCategories')}</p>
                   </div>
-                ))
-              )}
-            </div>
+                }
+                columns={[
+                  {
+                    header: t('crm:internalListing.name'),
+                    accessorFn: (row) => row.name,
+                    cell: ({ row }) => <span className="font-bold text-slate-700">{row.name}</span>,
+                    disableFiltering: true,
+                  },
+                  {
+                    header: t('crm:internalListing.linkedItems'),
+                    accessorFn: (row) => `${row.productCount} ${t('crm:internalListing.products')}`,
+                    cell: ({ row }) => (
+                      <span className="text-xs text-slate-400">
+                        {row.productCount} {t('crm:internalListing.products')}
+                      </span>
+                    ),
+                    disableFiltering: true,
+                  },
+                  {
+                    header: t('common:labels.actions'),
+                    id: 'actions',
+                    disableSorting: true,
+                    disableFiltering: true,
+                    cell: ({ row: category }) => {
+                      const isDeleteBlocked = category.hasLinkedProducts;
+                      const deleteBlockedMessage = t(
+                        'crm:internalListing.deleteCategoryWithLinkedProducts',
+                        { count: category.productCount, name: category.name },
+                      );
+
+                      return (
+                        <div className="flex items-center gap-1">
+                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
+                            {() => (
+                              <button
+                                onClick={() => handleEditCategory(category)}
+                                className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                          <Tooltip
+                            label={isDeleteBlocked ? deleteBlockedMessage : ''}
+                            disabled={!isDeleteBlocked}
+                            tooltipClassName="z-[80]"
+                          >
+                            {() => (
+                              <button
+                                onClick={() => handleDeleteCategory(category)}
+                                disabled={isDeleteBlocked}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isDeleteBlocked
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                }`}
+                              >
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                        </div>
+                      );
+                    },
+                  },
+                ]}
+              />
+            )}
           </div>
         </div>
       </Modal>
@@ -1083,7 +1105,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onClose={() => setIsManageSubcategoriesModalOpen(false)}
         zIndex={70}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-praetor">
@@ -1145,47 +1167,89 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             </div>
 
             {/* Subcategories List */}
-            <div className="space-y-2">
-              {isLoadingSubcategories ? (
-                <div className="flex items-center justify-center py-8">
-                  <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-                </div>
-              ) : subcategories.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <p>{t('crm:internalListing.noSubcategories')}</p>
-                </div>
-              ) : (
-                subcategories.map((subcategory) => (
-                  <div
-                    key={subcategory.name}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-700">{subcategory.name}</span>
-                      <span className="text-xs text-slate-400">
-                        {subcategory.productCount} {t('crm:internalListing.products')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditSubcategory(subcategory)}
-                        className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
-                        title={t('common:buttons.edit')}
-                      >
-                        <i className="fa-solid fa-pen"></i>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSubcategory(subcategory)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title={t('common:buttons.delete')}
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </div>
+            {isLoadingSubcategories ? (
+              <div className="flex items-center justify-center py-8">
+                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+              </div>
+            ) : (
+              <StandardTable<InternalProductSubcategory>
+                title={t('crm:internalListing.manageSubcategories')}
+                data={subcategories}
+                defaultRowsPerPage={5}
+                containerClassName="shadow-none border-slate-200 rounded-2xl"
+                tableContainerClassName="max-h-[35vh] overflow-y-auto"
+                emptyState={
+                  <div className="text-center py-6 text-slate-500">
+                    <p>{t('crm:internalListing.noSubcategories')}</p>
                   </div>
-                ))
-              )}
-            </div>
+                }
+                columns={[
+                  {
+                    header: t('crm:internalListing.name'),
+                    accessorFn: (row) => row.name,
+                    cell: ({ row }) => <span className="font-bold text-slate-700">{row.name}</span>,
+                    disableFiltering: true,
+                  },
+                  {
+                    header: t('crm:internalListing.linkedItems'),
+                    accessorFn: (row) => `${row.productCount} ${t('crm:internalListing.products')}`,
+                    cell: ({ row }) => (
+                      <span className="text-xs text-slate-400">
+                        {row.productCount} {t('crm:internalListing.products')}
+                      </span>
+                    ),
+                    disableFiltering: true,
+                  },
+                  {
+                    header: t('common:labels.actions'),
+                    id: 'actions',
+                    disableSorting: true,
+                    disableFiltering: true,
+                    cell: ({ row: subcategory }) => {
+                      const isDeleteBlocked = subcategory.hasLinkedProducts;
+                      const deleteBlockedMessage = t(
+                        'crm:internalListing.deleteSubcategoryWithLinkedProducts',
+                        { count: subcategory.productCount, name: subcategory.name },
+                      );
+
+                      return (
+                        <div className="flex items-center gap-1">
+                          <Tooltip label={t('common:buttons.edit')} tooltipClassName="z-[80]">
+                            {() => (
+                              <button
+                                onClick={() => handleEditSubcategory(subcategory)}
+                                className="p-1.5 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                          <Tooltip
+                            label={isDeleteBlocked ? deleteBlockedMessage : ''}
+                            disabled={!isDeleteBlocked}
+                            tooltipClassName="z-[80]"
+                          >
+                            {() => (
+                              <button
+                                onClick={() => handleDeleteSubcategory(subcategory)}
+                                disabled={isDeleteBlocked}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isDeleteBlocked
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                }`}
+                              >
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            )}
+                          </Tooltip>
+                        </div>
+                      );
+                    },
+                  },
+                ]}
+              />
+            )}
           </div>
         </div>
       </Modal>
