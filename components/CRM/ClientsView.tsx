@@ -455,8 +455,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             setActiveCell(null);
           }
         }}
-        style={{ minWidth: `${dynamicMinWidth}px` }}
-        className={`w-full text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
+        style={{ width: `${dynamicMinWidth}px`, minWidth: `${dynamicMinWidth}px` }}
+        className={`text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
           showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
         } ${className}`}
         placeholder={placeholder}
