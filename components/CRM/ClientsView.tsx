@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -289,6 +289,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         message.toLowerCase().includes('client code')
       ) {
         setValidationErrors({ ...errors, clientCode: t('common:validation.clientCodeUnique') });
+      } else {
+        // Handle unrecognized server errors
+        console.error('Failed to save client:', err);
+        setValidationErrors({ ...errors, name: t('common:messages.error') });
       }
     }
   };
@@ -354,7 +358,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   const EditableCell: React.FC<{
     field: keyof Client;
     value: unknown;
-    rowId: string;
+    _rowId: string;
     isEditing: boolean;
     isRequired: boolean;
     type?: 'text' | 'select';
@@ -365,7 +369,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   }> = ({
     field,
     value,
-    rowId,
+    _rowId,
     isEditing,
     isRequired,
     type = 'text',
@@ -374,11 +378,19 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     className = '',
     placeholder,
   }) => {
+    const inputRef = useRef<HTMLInputElement>(null);
     const isActive = activeCell?.field === field;
     const isTouched = editingState.touchedFields.has(field as string);
     const hasError = isTouched && validationErrors[field as string];
     const showErrorBorder = isRequired && (!value || (typeof value === 'string' && !value.trim()));
     const showRedBorder = hasError || (showErrorBorder && isTouched);
+
+    useEffect(() => {
+      if (isEditing && isActive && inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }, [isEditing, isActive]);
 
     if (!isEditing || !isActive) {
       // Display mode
@@ -400,11 +412,11 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   setActiveCell({ field });
                 }
               }}
-              className={`cursor-pointer px-2 py-1 rounded transition-colors ${
+              className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
                 isEditing ? 'hover:bg-slate-100' : ''
               } ${showRedBorder ? 'border border-red-500 bg-red-50' : ''} ${className}`}
             >
-              <span className="text-xs text-slate-600">{truncatedDisplay}</span>
+              <span className="text-xs text-slate-600 w-full">{truncatedDisplay}</span>
             </div>
           )}
         </Tooltip>
@@ -433,6 +445,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
     return (
       <input
+        ref={inputRef}
         type="text"
         value={(value as string) || ''}
         onChange={(e) => updateField(field, e.target.value)}
@@ -442,7 +455,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             setActiveCell(null);
           }
         }}
-        autoFocus
         className={`w-full text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
           showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
         } ${className}`}
@@ -454,23 +466,23 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   // Column definitions
   const columns = useMemo<Column<Client>[]>(() => {
     const isRowEditing = (row: Client) => {
-      if (editingState.isNewRow) return false;
+      if (editingState.isNewRow) {
+        return row.id === 'new';
+      }
       return editingState.rowId === row.id;
     };
-
-    const isNewRowEditing = () => editingState.isNewRow;
 
     return [
       {
         header: t('crm:clients.tableHeaders.name'),
         accessorKey: 'name',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="name"
               value={isEditing ? editingState.data.name : row.name}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={true}
               type="text"
@@ -484,13 +496,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.clientCode'),
         accessorKey: 'clientCode',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.clientCode : row.clientCode;
           return (
             <EditableCell
               field="clientCode"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={true}
               type="text"
@@ -527,7 +539,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         accessorFn: (row) =>
           row.type === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual'),
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.type : row.type;
 
           if (!isEditing) {
@@ -547,7 +559,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <EditableCell
               field="type"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="select"
@@ -566,12 +578,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.email'),
         accessorKey: 'email',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="email"
               value={isEditing ? editingState.data.email : row.email}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -584,12 +596,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.phone'),
         accessorKey: 'phone',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="phone"
               value={isEditing ? editingState.data.phone : row.phone}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -603,7 +615,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         id: 'fiscalCode',
         accessorFn: (row) => row.fiscalCode || row.vatNumber || row.taxCode || '',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing
             ? editingState.data.fiscalCode
             : row.fiscalCode || row.vatNumber || row.taxCode;
@@ -611,7 +623,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <EditableCell
               field="fiscalCode"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={true}
               type="text"
@@ -625,13 +637,13 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.officeCountRange : row.officeCountRange;
           return (
             <EditableCell
               field="officeCountRange"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={true}
               type="select"
@@ -645,7 +657,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.sector'),
         accessorKey: 'sector',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.sector : row.sector;
           const displayValue = row.sector
             ? t(
@@ -656,7 +668,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <EditableCell
               field="sector"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="select"
@@ -673,7 +685,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.numberOfEmployees'),
         accessorKey: 'numberOfEmployees',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.numberOfEmployees : row.numberOfEmployees;
           const displayValue = row.numberOfEmployees
             ? t(
@@ -684,7 +696,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <EditableCell
               field="numberOfEmployees"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="select"
@@ -701,7 +713,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.revenue'),
         accessorKey: 'revenue',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.revenue : row.revenue;
           const displayValue = row.revenue
             ? t(
@@ -712,7 +724,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <EditableCell
               field="revenue"
               value={value}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="select"
@@ -729,12 +741,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.contactName'),
         accessorKey: 'contactName',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="contactName"
               value={isEditing ? editingState.data.contactName : row.contactName}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -747,12 +759,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.address'),
         accessorKey: 'address',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="address"
               value={isEditing ? editingState.data.address : row.address}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -765,12 +777,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.description'),
         accessorKey: 'description',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="description"
               value={isEditing ? editingState.data.description : row.description}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -783,12 +795,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.atecoCode'),
         accessorKey: 'atecoCode',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="atecoCode"
               value={isEditing ? editingState.data.atecoCode : row.atecoCode}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -801,12 +813,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.website'),
         accessorKey: 'website',
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
           return (
             <EditableCell
               field="website"
               value={isEditing ? editingState.data.website : row.website}
-              rowId={row.id}
+              _rowId={row.id}
               isEditing={isEditing}
               isRequired={false}
               type="text"
@@ -878,7 +890,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          const isEditing = isNewRowEditing() || isRowEditing(row);
+          const isEditing = isRowEditing(row);
 
           if (isEditing) {
             return (
@@ -997,7 +1009,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         name: '',
         ...editingState.data,
       } as Client;
-      return [newRow, ...clients];
+      return [...clients, newRow];
     }
     return clients;
   }, [clients, editingState]);
