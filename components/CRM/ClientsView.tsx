@@ -165,7 +165,6 @@ const EditableCell = memo<EditableCellProps>(
     }
 
     const stringValue = (value as string) || '';
-    const dynamicMinWidth = Math.min(500, Math.max(200, stringValue.length * 8 + 32));
 
     return (
       <input
@@ -179,8 +178,7 @@ const EditableCell = memo<EditableCellProps>(
             onSetActiveCell(null);
           }
         }}
-        style={{ width: `${dynamicMinWidth}px`, minWidth: `${dynamicMinWidth}px` }}
-        className={`text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
+        className={`w-full text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
           showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
         } ${className}`}
         placeholder={placeholder}
