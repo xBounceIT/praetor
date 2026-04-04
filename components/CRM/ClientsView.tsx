@@ -189,9 +189,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     if (!trimmedFiscalCode) {
       newErrors.fiscalCode = t('common:validation.fiscalCodeRequired');
     }
-    if (!officeCountRange) {
-      newErrors.officeCountRange = t('common:validation.required');
-    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
