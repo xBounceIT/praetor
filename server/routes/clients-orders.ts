@@ -95,6 +95,7 @@ const clientOrderSchema = {
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     items: { type: 'array', items: clientOrderItemSchema },
+    warnings: { type: 'array', items: { type: 'string' } },
   },
   required: [
     'id',

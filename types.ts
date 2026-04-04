@@ -358,6 +358,7 @@ export interface ClientsOrder {
   notes?: string;
   createdAt: number;
   updatedAt: number;
+  warnings?: string[];
 }
 
 export type View =
