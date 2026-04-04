@@ -102,6 +102,8 @@ export interface Client {
   revenue?: '< 10' | '11..50' | '51..1000' | '> 1000';
   fiscalCode?: string;
   officeCountRange?: '1' | '2...5' | '6...10' | '>10';
+  totalSentQuotes?: number;
+  totalAcceptedOrders?: number;
   // Legacy compatibility fields (mapped from fiscalCode by API)
   vatNumber?: string;
   taxCode?: string;

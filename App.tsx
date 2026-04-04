@@ -3375,6 +3375,8 @@ const App: React.FC = () => {
               activeView === 'crm/suppliers' && (
                 <SuppliersView
                   suppliers={suppliers}
+                  supplierOrders={supplierOrders}
+                  currency={generalSettings.currency}
                   onAddSupplier={addSupplier}
                   onUpdateSupplier={handleUpdateSupplier}
                   onDeleteSupplier={handleDeleteSupplier}

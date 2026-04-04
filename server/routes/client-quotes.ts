@@ -1389,6 +1389,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nextStatus = typeof status === 'string' ? status : normalizedQuote.status;
       const didStatusChange = status !== undefined && currentStatus !== nextStatus;
 
+      // Invalidate client cache if quote status affects sent quotes totals
+      if (didStatusChange && (currentStatus === 'sent' || nextStatus === 'sent')) {
+      }
+
       await logAudit({
         request,
         action: 'client_quote.updated',

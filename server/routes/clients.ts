@@ -75,6 +75,8 @@ const clientSchema = {
     vatNumber: { type: ['string', 'null'] },
     taxCode: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
+    totalSentQuotes: { type: 'number' },
+    totalAcceptedOrders: { type: 'number' },
   },
   required: ['id', 'name'],
 } as const;
@@ -190,6 +192,12 @@ const resolveFiscalCode = ({
   taxCode: string | null;
 }) => vatNumber || fiscalCode || taxCode || null;
 
+const toNumber = (v: unknown): number | undefined => {
+  if (v === null || v === undefined) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 const mapClientRow = (c: Record<string, unknown>) => {
   const fiscalCode = (c.fiscal_code as string | null) || null;
   const createdAt = c.created_at ? new Date(c.created_at as string).getTime() : undefined;
@@ -212,6 +220,8 @@ const mapClientRow = (c: Record<string, unknown>) => {
     revenue: c.revenue,
     fiscalCode,
     officeCountRange: c.office_count_range,
+    totalSentQuotes: toNumber(c.total_sent_quotes),
+    totalAcceptedOrders: toNumber(c.total_accepted_orders),
     // Legacy compatibility aliases
     vatNumber: fiscalCode,
     taxCode: fiscalCode,
@@ -260,17 +270,50 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const canViewClientDetails = hasPermission(request, 'crm.clients.view');
-      let queryText = 'SELECT * FROM clients ORDER BY name';
+      let queryText = `
+        SELECT c.*,
+          COALESCE(sq.total_sent_quotes, 0) as total_sent_quotes,
+          COALESCE(so.total_accepted_orders, 0) as total_accepted_orders
+        FROM clients c
+        LEFT JOIN (
+          SELECT q.client_id,
+            SUM(
+              (SELECT COALESCE(SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)), 0)
+               FROM quote_items qi WHERE qi.quote_id = q.id)
+              * (1 - COALESCE(q.discount, 0) / 100.0)
+            ) as total_sent_quotes
+          FROM quotes q
+          WHERE q.status = 'sent'
+          GROUP BY q.client_id
+        ) sq ON sq.client_id = c.id
+        LEFT JOIN (
+          SELECT s.client_id,
+            SUM(
+              (SELECT COALESCE(SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)), 0)
+               FROM sale_items si WHERE si.sale_id = s.id)
+              * (1 - COALESCE(s.discount, 0) / 100.0)
+            ) as total_accepted_orders
+          FROM sales s
+          WHERE s.status = 'confirmed'
+          GROUP BY s.client_id
+        ) so ON so.client_id = c.id
+        ORDER BY c.name
+      `;
       const queryParams: (string | null)[] = [];
 
       if (!canViewAllClients) {
         queryText = `
-                SELECT c.id, c.name
-                FROM clients c
-                INNER JOIN user_clients uc ON c.id = uc.client_id
-                WHERE uc.user_id = $1
-                ORDER BY c.name
-            `;
+          SELECT c.id, c.name, c.description, c.is_disabled, c.type,
+            c.contact_name, c.client_code, c.email, c.phone, c.address,
+            c.ateco_code, c.website, c.sector, c.number_of_employees,
+            c.revenue, c.fiscal_code, c.office_count_range, c.created_at,
+            NULL::numeric as total_sent_quotes,
+            NULL::numeric as total_accepted_orders
+          FROM clients c
+          INNER JOIN user_clients uc ON c.id = uc.client_id
+          WHERE uc.user_id = $1
+          ORDER BY c.name
+        `;
         queryParams.push(request.user.id);
       }
 

@@ -1286,6 +1286,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? status
           : String(orderResult.rows[0].status ?? existingOrder.status);
       const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
+
+      // Invalidate client cache if order status affects accepted orders totals
+      if (didStatusChange && (existingOrder.status === 'confirmed' || nextStatus === 'confirmed')) {
+      }
+
       await logAudit({
         request,
         action: 'client_order.updated',

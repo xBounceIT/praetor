@@ -9,7 +9,9 @@
       "fiscalCode": "P.IVA / C.F.",
       "officeCountRange": "Numero di sedi",
       "insertDate": "Data inserimento",
-      "status": "Stato"
+      "status": "Stato",
+      "totalSentQuotes": "Preventivi Inviati",
+      "totalAcceptedOrders": "Ordini Accettati"
     },
     "title": "Clienti",
     "subtitle": "Gestisci la tua directory clienti",
@@ -380,7 +382,8 @@
       "contact": "Contatto",
       "vat": "P.IVA",
       "taxCode": "C.F.",
-      "status": "Stato"
+      "status": "Stato",
+      "totalOrders": "Totale ordini"
     }
   },
   "paymentTerms": {
