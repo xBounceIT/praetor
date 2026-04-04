@@ -24,6 +24,7 @@ export interface CustomSelectProps {
   buttonClassName?: string;
   dropdownPosition?: 'top' | 'bottom';
   displayValue?: string; // Custom display value to override the default label
+  autoOpen?: boolean; // Auto open dropdown when component mounts/becomes active
 }
 
 const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -41,6 +42,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   buttonClassName,
   dropdownPosition = 'bottom',
   displayValue,
+  autoOpen = false,
 }) => {
   const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
@@ -56,6 +58,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     : options.find((o) => o.id === value);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
@@ -70,7 +74,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     const handleOtherOpen = (event: Event) => {
@@ -116,6 +120,26 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     };
   }, [dropdownPosition]);
 
+  const hasAutoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoOpen && !hasAutoOpenedRef.current && !disabled && buttonRef.current) {
+      hasAutoOpenedRef.current = true;
+      setIsOpen(true);
+      onOpen?.();
+      document.dispatchEvent(new CustomEvent('custom-select-open', { detail: { id: dropdownId } }));
+      setTimeout(() => {
+        const newStyles = calculatePosition();
+        if (newStyles) {
+          setDropdownStyles(newStyles);
+        }
+      }, 20);
+    }
+    if (!autoOpen) {
+      hasAutoOpenedRef.current = false;
+    }
+  }, [autoOpen, disabled, dropdownId, onOpen, calculatePosition]);
+
   useLayoutEffect(() => {
     if (!isOpen) return;
 
@@ -126,7 +150,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       }
     };
 
-    // Only add listeners for subsequent updates, initial position is set in onClick
+    updatePosition();
+
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
 

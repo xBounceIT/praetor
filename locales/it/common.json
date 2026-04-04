@@ -30,7 +30,8 @@
     "view": "Visualizza",
     "send": "Invia",
     "manage": "Gestisci",
-    "saving": "Salvataggio..."
+    "saving": "Salvataggio...",
+    "discard": "Abbandona"
   },
   "labels": {
     "name": "Nome",
@@ -214,7 +215,8 @@
     "saveSuccess": "Salvato con successo",
     "deleteSuccess": "Eliminato con successo",
     "errorOccurred": "Si è verificato un errore. Riprova.",
-    "unsavedChanges": "Hai modifiche non salvate. Vuoi continuare?",
+    "unsavedChanges": "Modifiche non salvate",
+    "unsavedChangesConfirm": "Hai modifiche non salvate. Vuoi salvarle?",
     "noChangesToSave": "Nessuna modifica da salvare"
   },
   "filters": {

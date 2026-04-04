@@ -11,7 +11,15 @@
       "insertDate": "Data inserimento",
       "status": "Stato",
       "totalSentQuotes": "Preventivi Inviati",
-      "totalAcceptedOrders": "Ordini Accettati"
+      "totalAcceptedOrders": "Ordini Accettati",
+      "sector": "Settore",
+      "numberOfEmployees": "Dipendenti",
+      "revenue": "Fatturato (M€)",
+      "contactName": "Nome Contatto",
+      "address": "Indirizzo",
+      "description": "Descrizione",
+      "atecoCode": "Codice Ateco",
+      "website": "Sito Web"
     },
     "title": "Clienti",
     "subtitle": "Gestisci la tua directory clienti",

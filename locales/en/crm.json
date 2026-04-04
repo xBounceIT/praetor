@@ -11,7 +11,15 @@
       "insertDate": "Insert Date",
       "status": "Status",
       "totalSentQuotes": "Sent Quotes",
-      "totalAcceptedOrders": "Accepted Orders"
+      "totalAcceptedOrders": "Accepted Orders",
+      "sector": "Sector",
+      "numberOfEmployees": "Employees",
+      "revenue": "Revenue (M€)",
+      "contactName": "Contact Name",
+      "address": "Address",
+      "description": "Description",
+      "atecoCode": "Ateco Code",
+      "website": "Website"
     },
     "title": "Clients",
     "subtitle": "Manage your client directory",

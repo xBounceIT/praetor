@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client } from '../../types';
 import { formatInsertDate } from '../../utils/date';
@@ -56,16 +56,136 @@ const REVENUE_OPTIONS: Array<{ id: NonNullable<Client['revenue']>; labelKey: str
   { id: '> 1000', labelKey: 'over1000' },
 ];
 
-const toOptionalTrimmedString = (value: unknown) => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+const REQUIRED_FIELDS: Array<keyof Client> = ['name', 'clientCode', 'fiscalCode'];
+
+type EditingState = {
+  rowId: string | 'new' | null;
+  isNewRow: boolean;
+  data: Partial<Client>;
+  touchedFields: Set<string>;
 };
 
-const toTrimmedString = (value: unknown) => {
-  if (typeof value !== 'string') return '';
-  return value.trim();
+const truncateText = (text: string | undefined, maxLength = 30): string => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 };
+
+interface EditableCellProps {
+  field: keyof Client;
+  value: unknown;
+  isEditing: boolean;
+  isRequired: boolean;
+  type?: 'text' | 'select';
+  options?: Array<{ id: string; name: string }>;
+  displayValue?: string;
+  className?: string;
+  placeholder?: string;
+  activeField: keyof Client | undefined;
+  touchedFields: Set<string>;
+  validationErrors: Record<string, string>;
+  onUpdateField: (field: keyof Client, value: unknown) => void;
+  onSetActiveCell: (cell: { field: keyof Client } | null) => void;
+  t: (key: string) => string;
+}
+
+const EditableCell = memo<EditableCellProps>(
+  ({
+    field,
+    value,
+    isEditing,
+    isRequired,
+    type = 'text',
+    options,
+    displayValue,
+    className = '',
+    placeholder,
+    activeField,
+    touchedFields,
+    validationErrors,
+    onUpdateField,
+    onSetActiveCell,
+    t,
+  }) => {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const isActive = activeField === field;
+    const isTouched = touchedFields.has(field as string);
+    const hasError = isTouched && validationErrors[field as string];
+    const showErrorBorder = isRequired && (!value || (typeof value === 'string' && !value.trim()));
+    const showRedBorder = hasError || (showErrorBorder && (isTouched || isEditing));
+
+    useEffect(() => {
+      if (isEditing && isActive && inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }, [isEditing, isActive]);
+
+    if (!isEditing || !isActive) {
+      const display = displayValue || (value as string) || '-';
+      const isTruncated = typeof display === 'string' && display.length > 30;
+      const truncatedDisplay = isTruncated ? truncateText(display, 30) : display;
+
+      return (
+        <Tooltip
+          label={
+            isRequired && !value ? t('common:validation.required') : isTruncated ? display : ''
+          }
+          disabled={!isRequired && !isTruncated && !isEditing}
+        >
+          {() => (
+            <div
+              className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
+                isEditing ? 'hover:bg-slate-100' : ''
+              } ${showRedBorder ? 'border border-red-500 bg-red-50' : ''} ${className}`}
+            >
+              <span className="text-xs text-slate-600 w-full">{truncatedDisplay}</span>
+            </div>
+          )}
+        </Tooltip>
+      );
+    }
+
+    if (type === 'select' && options) {
+      return (
+        <CustomSelect
+          options={options}
+          value={(value as string) || ''}
+          onChange={(val) => {
+            onUpdateField(field, val || undefined);
+          }}
+          placeholder={placeholder || t('common:form.selectOption')}
+          searchable={false}
+          autoOpen={true}
+          buttonClassName={`w-full text-xs py-1 px-2 ${
+            showRedBorder ? '!border-red-500 !bg-red-50' : ''
+          }`}
+        />
+      );
+    }
+
+    const stringValue = (value as string) || '';
+
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={stringValue}
+        onChange={(e) => onUpdateField(field, e.target.value)}
+        onBlur={() => onSetActiveCell(null)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onSetActiveCell(null);
+          }
+        }}
+        className={`w-full text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
+          showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
+        } ${className}`}
+        placeholder={placeholder}
+      />
+    );
+  },
+);
 
 const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
@@ -78,14 +198,34 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   const canCreateClients = hasPermission(permissions, buildPermission('crm.clients', 'create'));
   const canUpdateClients = hasPermission(permissions, buildPermission('crm.clients', 'update'));
   const canDeleteClients = hasPermission(permissions, buildPermission('crm.clients', 'delete'));
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
+
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Form State
-  const [formData, setFormData] = useState<Partial<Client>>({
+  const [editingState, setEditingState] = useState<EditingState>({
+    rowId: null,
+    isNewRow: false,
+    data: {},
+    touchedFields: new Set(),
+  });
+
+  const [activeCell, setActiveCell] = useState<{ field: keyof Client } | null>(null);
+
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const editingStateRef = useRef(editingState);
+  editingStateRef.current = editingState;
+
+  const resetEditingState = useCallback(() => {
+    setEditingState({ rowId: null, isNewRow: false, data: {}, touchedFields: new Set() });
+    setValidationErrors({});
+    setActiveCell(null);
+  }, []);
+
+  const getEmptyClient = (): Partial<Client> => ({
     name: '',
     type: 'company',
     contactName: '',
@@ -103,140 +243,197 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     officeCountRange: undefined,
   });
 
-  const openAddModal = () => {
+  const startNewRow = () => {
     if (!canCreateClients) return;
-    setEditingClient(null);
-    setFormData({
-      name: '',
-      type: 'company',
-      contactName: '',
-      clientCode: '',
-      email: '',
-      phone: '',
-      address: '',
-      description: '',
-      atecoCode: '',
-      website: '',
-      sector: undefined,
-      numberOfEmployees: undefined,
-      revenue: undefined,
-      fiscalCode: '',
-      officeCountRange: undefined,
+    setEditingState({
+      rowId: 'new',
+      isNewRow: true,
+      data: getEmptyClient(),
+      touchedFields: new Set(),
     });
-    setErrors({});
-    setIsModalOpen(true);
+    setValidationErrors({});
+    setActiveCell(null);
   };
 
-  const openEditModal = (client: Client) => {
-    if (!canUpdateClients) return;
-    setEditingClient(client);
-    setFormData({
-      name: client.name || '',
-      type: client.type || 'company',
-      contactName: client.contactName || '',
-      clientCode: client.clientCode || '',
-      email: client.email || '',
-      phone: client.phone || '',
-      address: client.address || '',
-      description: client.description || '',
-      atecoCode: client.atecoCode || '',
-      website: client.website || '',
-      sector: client.sector ?? undefined,
-      numberOfEmployees: client.numberOfEmployees ?? undefined,
-      revenue: client.revenue ?? undefined,
-      fiscalCode: client.fiscalCode || client.vatNumber || client.taxCode || '',
-      officeCountRange: client.officeCountRange ?? undefined,
-    });
-    setErrors({});
-    setIsModalOpen(true);
-  };
+  const startEditRow = useCallback(
+    (client: Client, initialActiveField?: keyof Client) => {
+      if (!canUpdateClients && !editingState.isNewRow) return;
+      setEditingState((prev) => {
+        const isNew = client.id === 'new';
+        const isSameRow = prev.rowId === client.id;
+        return {
+          rowId: client.id,
+          isNewRow: isNew,
+          data: isSameRow ? prev.data : { ...client },
+          touchedFields: isSameRow ? prev.touchedFields : new Set(),
+        };
+      });
+      setValidationErrors({});
+      setActiveCell(initialActiveField ? { field: initialActiveField } : null);
+    },
+    [canUpdateClients, editingState.isNewRow],
+  );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const validateField = useCallback(
+    (field: keyof Client, value: unknown): string | null => {
+      if (!REQUIRED_FIELDS.includes(field)) return null;
 
-    if (editingClient && !canUpdateClients) return;
-    if (!editingClient && !canCreateClients) return;
-
-    // Validation
-    const trimmedName = formData.name?.trim() || '';
-    const trimmedClientCode = formData.clientCode?.trim() || '';
-    const trimmedFiscalCode = formData.fiscalCode?.trim() || '';
-    const trimmedContactName = toTrimmedString(formData.contactName);
-    const trimmedEmail = toOptionalTrimmedString(formData.email);
-    const trimmedPhone = toTrimmedString(formData.phone);
-    const trimmedAddress = toTrimmedString(formData.address);
-    const trimmedDescription = toOptionalTrimmedString(formData.description);
-    const trimmedAtecoCode = toOptionalTrimmedString(formData.atecoCode);
-    const trimmedWebsite = toOptionalTrimmedString(formData.website);
-    const officeCountRange = formData.officeCountRange;
-    const newErrors: Record<string, string> = {};
-    if (!trimmedName) {
-      newErrors.name = t('common:validation.nameRequired');
-    }
-    if (!trimmedClientCode) {
-      newErrors.clientCode = t('common:validation.clientCodeRequired');
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(trimmedClientCode)) {
-      newErrors.clientCode = t('common:validation.clientCodeInvalid');
-    } else {
-      const isDuplicate = clients.some(
-        (c) =>
-          (c.clientCode || '').toLowerCase() === trimmedClientCode.toLowerCase() &&
-          (!editingClient || c.id !== editingClient.id),
-      );
-      if (isDuplicate) {
-        newErrors.clientCode = t('common:validation.clientCodeUnique');
+      const strValue = typeof value === 'string' ? value.trim() : '';
+      if (!strValue) {
+        return t('common:validation.required');
       }
-    }
-    if (!trimmedFiscalCode) {
-      newErrors.fiscalCode = t('common:validation.fiscalCodeRequired');
-    }
+      return null;
+    },
+    [t],
+  );
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+  const validateAll = useCallback(
+    (data: Partial<Client>): Record<string, string> => {
+      const errors: Record<string, string> = {};
+
+      REQUIRED_FIELDS.forEach((field) => {
+        const error = validateField(field, data[field]);
+        if (error) {
+          errors[field] = error;
+        }
+      });
+
+      if (data.clientCode) {
+        const trimmedCode = data.clientCode.trim();
+        if (!/^[a-zA-Z0-9_-]+$/.test(trimmedCode)) {
+          errors.clientCode = t('common:validation.clientCodeInvalid');
+        } else {
+          const isDuplicate = clients.some(
+            (c) =>
+              (c.clientCode || '').toLowerCase() === trimmedCode.toLowerCase() &&
+              (editingState.isNewRow || c.id !== editingState.rowId),
+          );
+          if (isDuplicate) {
+            errors.clientCode = t('common:validation.clientCodeUnique');
+          }
+        }
+      }
+
+      return errors;
+    },
+    [t, validateField, clients, editingState.isNewRow, editingState.rowId],
+  );
+
+  const updateField = useCallback(
+    (field: keyof Client, value: unknown) => {
+      const error = validateField(field, value);
+      setValidationErrors((prevErrors) => {
+        if (error) {
+          if (prevErrors[field as string] === error) return prevErrors;
+          return { ...prevErrors, [field]: error };
+        }
+        if (!((field as string) in prevErrors)) return prevErrors;
+        const newErrors = { ...prevErrors };
+        delete newErrors[field as string];
+        return newErrors;
+      });
+      setEditingState((prev) => {
+        if (prev.data[field] === value && prev.touchedFields.has(field as string)) return prev;
+        const newTouched = prev.touchedFields.has(field as string)
+          ? prev.touchedFields
+          : new Set(prev.touchedFields).add(field as string);
+        return {
+          ...prev,
+          data: { ...prev.data, [field]: value },
+          touchedFields: newTouched,
+        };
+      });
+    },
+    [validateField],
+  );
+
+  const handleSave = useCallback(async () => {
+    const { data, isNewRow, rowId } = editingStateRef.current;
+    const errors = validateAll(data);
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      setEditingState((prev) => ({
+        ...prev,
+        touchedFields: new Set([...prev.touchedFields, ...REQUIRED_FIELDS]),
+      }));
       return;
     }
 
     const payload = {
-      name: trimmedName,
-      type: formData.type,
-      contactName: trimmedContactName,
-      clientCode: trimmedClientCode,
-      email: trimmedEmail,
-      phone: trimmedPhone,
-      address: trimmedAddress,
-      description: trimmedDescription,
-      atecoCode: trimmedAtecoCode,
-      website: trimmedWebsite,
-      sector: formData.sector ?? undefined,
-      numberOfEmployees: formData.numberOfEmployees ?? undefined,
-      revenue: formData.revenue ?? undefined,
-      fiscalCode: trimmedFiscalCode,
-      officeCountRange,
+      name: data.name?.trim() || '',
+      type: data.type,
+      contactName: data.contactName?.trim() || '',
+      clientCode: data.clientCode?.trim() || '',
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || '',
+      address: data.address?.trim() || '',
+      description: data.description?.trim() || undefined,
+      atecoCode: data.atecoCode?.trim() || undefined,
+      website: data.website?.trim() || undefined,
+      sector: data.sector,
+      numberOfEmployees: data.numberOfEmployees,
+      revenue: data.revenue,
+      fiscalCode: data.fiscalCode?.trim() || '',
+      officeCountRange: data.officeCountRange,
     };
 
     try {
-      if (editingClient) {
-        await onUpdateClient(editingClient.id, payload);
-      } else {
+      if (isNewRow) {
         await onAddClient(payload);
+      } else if (rowId && typeof rowId === 'string') {
+        await onUpdateClient(rowId, payload);
       }
-      setIsModalOpen(false);
+
+      resetEditingState();
     } catch (err) {
       const message = (err as Error).message;
       if (
         message.toLowerCase().includes('fiscal code') ||
         message.toLowerCase().includes('vat number')
       ) {
-        setErrors({ ...newErrors, fiscalCode: message });
+        setValidationErrors({ ...errors, fiscalCode: message });
       } else if (
         message.toLowerCase().includes('client id') ||
         message.toLowerCase().includes('client code')
       ) {
-        setErrors({ ...newErrors, clientCode: t('common:validation.clientCodeUnique') });
+        setValidationErrors({ ...errors, clientCode: t('common:validation.clientCodeUnique') });
       } else {
-        setErrors({ ...newErrors, general: message });
+        setValidationErrors({ ...errors, name: t('common:messages.errorOccurred') });
       }
     }
+  }, [validateAll, onAddClient, onUpdateClient, t]);
+
+  const handleCancel = useCallback(() => {
+    if (editingState.touchedFields.size > 0) {
+      setShowUnsavedDialog(true);
+      setPendingAction(() => () => {
+        resetEditingState();
+        setShowUnsavedDialog(false);
+      });
+    } else {
+      resetEditingState();
+    }
+  }, [editingState.touchedFields.size, resetEditingState]);
+
+  const isValidForSave = useMemo(
+    () => Object.keys(validateAll(editingState.data)).length === 0,
+    [validateAll, editingState.data],
+  );
+
+  const confirmDiscard = () => {
+    if (pendingAction) {
+      pendingAction();
+    }
+  };
+
+  const confirmSave = async () => {
+    setShowUnsavedDialog(false);
+    await handleSave();
+  };
+
+  const confirmDismissDialog = () => {
+    setShowUnsavedDialog(false);
+    setPendingAction(null);
   };
 
   const confirmDelete = useCallback((client: Client) => {
@@ -254,37 +451,102 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
   };
 
-  const canSubmit = editingClient ? canUpdateClients : canCreateClients;
+  const columns = useMemo<Column<Client>[]>(() => {
+    const isRowEditing = (row: Client) => {
+      if (editingState.isNewRow) {
+        return row.id === 'new';
+      }
+      return editingState.rowId === row.id;
+    };
 
-  // Column definitions
-  const columns = useMemo<Column<Client>[]>(
-    () => [
-      {
-        header: t('crm:clients.tableHeaders.name'),
-        accessorKey: 'name',
-        cell: ({ row }) => (
-          <span
-            className={`font-semibold whitespace-nowrap ${row.isDisabled ? 'line-through text-slate-400' : 'text-slate-800'}`}
-          >
-            {row.name}
-          </span>
-        ),
+    const ecProps = {
+      activeField: activeCell?.field,
+      touchedFields: editingState.touchedFields,
+      validationErrors,
+      onUpdateField: updateField,
+      onSetActiveCell: setActiveCell,
+      t,
+    };
+
+    const dblClick = (field: keyof Client) =>
+      canUpdateClients || editingState.isNewRow
+        ? { onCellDoubleClick: (row: Client) => startEditRow(row, field) }
+        : {};
+
+    const textColumn = (
+      field: keyof Client,
+      headerKey: string,
+      isRequired = false,
+      className = '',
+    ) => ({
+      header: t(`crm:clients.tableHeaders.${headerKey}`),
+      accessorKey: field,
+      ...dblClick(field),
+      cell: ({ row }: { row: Client }) => {
+        const isEditing = isRowEditing(row);
+        const value = isEditing ? editingState.data[field] : row[field];
+        return (
+          <EditableCell
+            {...ecProps}
+            field={field}
+            value={value}
+            isEditing={isEditing}
+            isRequired={isRequired}
+            type="text"
+            displayValue={value as string | undefined}
+            className={className}
+          />
+        );
       },
-      {
-        header: t('crm:clients.tableHeaders.clientCode'),
-        accessorKey: 'clientCode',
-        cell: ({ row }) =>
-          row.clientCode ? (
-            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">
-              {row.clientCode}
-            </span>
-          ) : null,
+    });
+
+    const labeledSelectColumn = (
+      field: keyof Client,
+      headerKey: string,
+      options: Array<{ id: string; labelKey: string }>,
+      i18nPrefix: string,
+      isRequired = false,
+    ) => ({
+      header: t(`crm:clients.tableHeaders.${headerKey}`),
+      accessorKey: field,
+      ...dblClick(field),
+      cell: ({ row }: { row: Client }) => {
+        const isEditing = isRowEditing(row);
+        const value = (isEditing ? editingState.data[field] : row[field]) as string | undefined;
+        const option = options.find((o) => o.id === value);
+        return (
+          <EditableCell
+            {...ecProps}
+            field={field}
+            value={value}
+            isEditing={isEditing}
+            isRequired={isRequired}
+            type="select"
+            options={options.map((o) => ({
+              id: o.id,
+              name: t(`crm:clients.${i18nPrefix}.${o.labelKey}`),
+            }))}
+            displayValue={option ? t(`crm:clients.${i18nPrefix}.${option.labelKey}`) : undefined}
+          />
+        );
       },
+    });
+
+    const eurFormatter = new Intl.NumberFormat(i18n.language, {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+
+    return [
+      textColumn('name', 'name', true, 'font-semibold whitespace-nowrap'),
+      textColumn('clientCode', 'clientCode', true),
       {
         header: t('crm:clients.tableHeaders.insertDate'),
         id: 'createdAt',
-        accessorFn: (row) => row.createdAt ?? 0,
-        cell: ({ row }) => {
+        accessorFn: (row: Client) => row.createdAt ?? 0,
+        cell: ({ row }: { row: Client }) => {
           if (!row.createdAt) {
             return <span className="text-xs text-slate-400">-</span>;
           }
@@ -294,7 +556,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             </span>
           );
         },
-        filterFormat: (value) => {
+        filterFormat: (value: string | number | boolean | null | undefined) => {
           const timestamp = typeof value === 'number' ? value : Number(value);
           if (!Number.isFinite(timestamp) || timestamp <= 0) {
             return '-';
@@ -305,62 +567,117 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.type'),
         id: 'type',
-        accessorFn: (row) =>
+        accessorFn: (row: Client) =>
           row.type === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual'),
-        cell: ({ row }) => (
-          <StatusBadge
-            type={row.type === 'company' ? 'company' : 'individual'}
-            label={
-              row.type === 'company'
-                ? t('crm:clients.typeCompany')
-                : t('crm:clients.typeIndividual')
-            }
-          />
-        ),
+        ...dblClick('type'),
+        cell: ({ row }: { row: Client }) => {
+          const isEditing = isRowEditing(row);
+          const value = isEditing ? editingState.data.type : row.type;
+
+          if (!isEditing) {
+            return (
+              <StatusBadge
+                type={row.type === 'company' ? 'company' : 'individual'}
+                label={
+                  row.type === 'company'
+                    ? t('crm:clients.typeCompany')
+                    : t('crm:clients.typeIndividual')
+                }
+              />
+            );
+          }
+
+          return (
+            <EditableCell
+              {...ecProps}
+              field="type"
+              value={value}
+              isEditing={isEditing}
+              isRequired={false}
+              type="select"
+              options={[
+                { id: 'company', name: t('crm:clients.typeCompany') },
+                { id: 'individual', name: t('crm:clients.typeIndividual') },
+              ]}
+              displayValue={
+                value === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual')
+              }
+            />
+          );
+        },
       },
-      {
-        header: t('crm:clients.tableHeaders.email'),
-        accessorKey: 'email',
-        cell: ({ row }) => <span className="text-xs text-slate-500">{row.email || '-'}</span>,
-      },
-      {
-        header: t('crm:clients.tableHeaders.phone'),
-        accessorKey: 'phone',
-        cell: ({ row }) => (
-          <span className="text-xs text-slate-500 whitespace-nowrap">{row.phone || '-'}</span>
-        ),
-      },
+      textColumn('email', 'email'),
+      textColumn('phone', 'phone'),
       {
         header: t('crm:clients.tableHeaders.fiscalCode'),
         id: 'fiscalCode',
-        accessorFn: (row) => row.fiscalCode || row.vatNumber || row.taxCode || '',
-        className: 'font-mono text-xs text-slate-400',
+        accessorFn: (row: Client) => row.fiscalCode || row.vatNumber || row.taxCode || '',
+        ...dblClick('fiscalCode'),
+        cell: ({ row }: { row: Client }) => {
+          const isEditing = isRowEditing(row);
+          const value = isEditing
+            ? editingState.data.fiscalCode
+            : row.fiscalCode || row.vatNumber || row.taxCode;
+          return (
+            <EditableCell
+              {...ecProps}
+              field="fiscalCode"
+              value={value}
+              isEditing={isEditing}
+              isRequired={true}
+              type="text"
+              displayValue={value}
+              className="font-mono text-xs text-slate-400"
+            />
+          );
+        },
       },
       {
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
-        cell: ({ row }) => (
-          <span className="text-xs text-slate-500">{row.officeCountRange || '-'}</span>
-        ),
+        ...dblClick('officeCountRange'),
+        cell: ({ row }: { row: Client }) => {
+          const isEditing = isRowEditing(row);
+          const value = isEditing ? editingState.data.officeCountRange : row.officeCountRange;
+          return (
+            <EditableCell
+              {...ecProps}
+              field="officeCountRange"
+              value={value}
+              isEditing={isEditing}
+              isRequired={true}
+              type="select"
+              options={OFFICE_COUNT_RANGE_OPTIONS}
+              displayValue={isEditing ? editingState.data.officeCountRange : row.officeCountRange}
+            />
+          );
+        },
       },
+      labeledSelectColumn('sector', 'sector', SECTOR_OPTIONS, 'sectorOptions'),
+      labeledSelectColumn(
+        'numberOfEmployees',
+        'numberOfEmployees',
+        NUMBER_OF_EMPLOYEES_OPTIONS,
+        'numberOfEmployeesOptions',
+      ),
+      labeledSelectColumn('revenue', 'revenue', REVENUE_OPTIONS, 'revenueOptions'),
+      textColumn('contactName', 'contactName'),
+      textColumn('address', 'address'),
+      textColumn('description', 'description'),
+      textColumn('atecoCode', 'atecoCode'),
+      textColumn('website', 'website'),
       {
         header: t('crm:clients.tableHeaders.totalSentQuotes'),
         id: 'totalSentQuotes',
-        accessorFn: (row) => row.totalSentQuotes ?? 0,
-        cell: ({ row }) => {
+        accessorFn: (row: Client) => row.totalSentQuotes ?? 0,
+        cell: ({ row }: { row: Client }) => {
           const value = row.totalSentQuotes;
           if (value == null || value === 0) {
             return <span className="text-xs text-slate-400">-</span>;
           }
-          const formatted = new Intl.NumberFormat(i18n.language, {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }).format(value);
           return (
             <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-              {formatted}
+              {eurFormatter.format(value)}
             </span>
           );
         },
@@ -368,21 +685,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.totalAcceptedOrders'),
         id: 'totalAcceptedOrders',
-        accessorFn: (row) => row.totalAcceptedOrders ?? 0,
-        cell: ({ row }) => {
+        accessorFn: (row: Client) => row.totalAcceptedOrders ?? 0,
+        cell: ({ row }: { row: Client }) => {
           const value = row.totalAcceptedOrders;
           if (value == null || value === 0) {
             return <span className="text-xs text-slate-400">-</span>;
           }
-          const formatted = new Intl.NumberFormat(i18n.language, {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }).format(value);
           return (
             <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
-              {formatted}
+              {eurFormatter.format(value)}
             </span>
           );
         },
@@ -405,401 +716,174 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         align: 'right',
         disableSorting: true,
         disableFiltering: true,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-end gap-1">
-            <Tooltip
-              label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
-            >
-              {() => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canUpdateClients) return;
-                    onUpdateClient(row.id, { isDisabled: !row.isDisabled });
-                  }}
-                  disabled={!canUpdateClients}
-                  className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    row.isDisabled
-                      ? 'text-praetor hover:bg-slate-100'
-                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
-                  }`}
-                >
-                  <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                </button>
+        sticky: 'right',
+        cell: ({ row }) => {
+          const isEditing = isRowEditing(row);
+
+          if (isEditing) {
+            const valid = isValidForSave;
+            return (
+              <div className="flex items-center justify-end gap-1">
+                <Tooltip label={t('common:buttons.save')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSave();
+                      }}
+                      disabled={!valid}
+                      className={`p-2 rounded-lg transition-all ${
+                        valid
+                          ? 'text-emerald-600 hover:bg-emerald-50'
+                          : 'text-slate-300 cursor-not-allowed'
+                      }`}
+                    >
+                      <i className="fa-solid fa-check"></i>
+                    </button>
+                  )}
+                </Tooltip>
+                <Tooltip label={t('common:buttons.cancel')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCancel();
+                      }}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex items-center justify-end gap-1">
+              {canUpdateClients && (
+                <Tooltip label={t('common:buttons.edit')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditRow(row);
+                      }}
+                      disabled={!canUpdateClients}
+                      className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <i className="fa-solid fa-pen"></i>
+                    </button>
+                  )}
+                </Tooltip>
               )}
-            </Tooltip>
-            {canDeleteClients && (
-              <Tooltip label={t('common:buttons.delete')}>
+              <Tooltip
+                label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
+              >
                 {() => (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      confirmDelete(row);
+                      if (!canUpdateClients) return;
+                      onUpdateClient(row.id, { isDisabled: !row.isDisabled });
                     }}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    disabled={!canUpdateClients}
+                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      row.isDisabled
+                        ? 'text-praetor hover:bg-slate-100'
+                        : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
                   >
-                    <i className="fa-solid fa-trash-can"></i>
+                    <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
                   </button>
                 )}
               </Tooltip>
-            )}
-          </div>
-        ),
+              {canDeleteClients && (
+                <Tooltip label={t('common:buttons.delete')}>
+                  {() => (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDelete(row);
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  )}
+                </Tooltip>
+              )}
+            </div>
+          );
+        },
       },
-    ],
-    [t, i18n, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete],
-  );
+    ];
+  }, [
+    t,
+    i18n,
+    editingState.isNewRow,
+    editingState.rowId,
+    editingState.data,
+    editingState.touchedFields,
+    canUpdateClients,
+    canDeleteClients,
+    onUpdateClient,
+    confirmDelete,
+    validationErrors,
+    activeCell,
+    handleSave,
+    handleCancel,
+    updateField,
+    startEditRow,
+    isValidForSave,
+  ]);
+
+  const tableData = useMemo(() => {
+    if (editingState.isNewRow) {
+      const newRow: Client = {
+        id: 'new',
+        name: '',
+        ...editingState.data,
+      } as Client;
+      return [newRow, ...clients];
+    }
+    return clients;
+  }, [clients, editingState.isNewRow, editingState.data]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
-                <i className={`fa-solid ${editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
-              </div>
-              {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
+      <Modal isOpen={showUnsavedDialog} onClose={confirmDismissDialog}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('common:messages.unsavedChanges')}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('common:messages.unsavedChangesConfirm')}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={confirmDiscard}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.discard')}
+              </button>
+              <button
+                onClick={confirmSave}
+                className="flex-1 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95"
+              >
+                {t('common:buttons.save')}
+              </button>
+            </div>
           </div>
-
-          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8" noValidate>
-            {/* Section 1: Identification */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.identifyingData')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.subjectType')}
-                  </label>
-                  <div className="relative flex p-1 bg-slate-100 rounded-xl">
-                    <div
-                      className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                        formData.type === 'company' ? 'translate-x-0' : 'translate-x-full'
-                      }`}
-                    ></div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, type: 'company' })}
-                      className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${formData.type === 'company' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      {t('crm:clients.typeCompany')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, type: 'individual' })}
-                      className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${formData.type === 'individual' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      {t('crm:clients.typeIndividual')}
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.uniqueId')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.clientCode}
-                    onChange={(e) => {
-                      setFormData({ ...formData, clientCode: e.target.value });
-                      if (errors.clientCode) setErrors({ ...errors, clientCode: '' });
-                    }}
-                    placeholder={t('form:placeholderCode')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.clientCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                    }`}
-                  />
-                  {errors.clientCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientCode}</p>
-                  )}
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {formData.type === 'company'
-                      ? t('crm:clients.companyName')
-                      : t('crm:clients.personName')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
-                      if (errors.name) setErrors({ ...errors, name: '' });
-                    }}
-                    placeholder={
-                      formData.type === 'company'
-                        ? t('form:placeholderName')
-                        : t('form:placeholderName')
-                    }
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                    }`}
-                  />
-                  {errors.name && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2: Contacts */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.contacts')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.primaryEmail')}
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder={t('form:placeholderEmail')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.phoneLabel')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder={t('form:placeholderPhone')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.contactRole')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contactName}
-                    onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                    placeholder={t('form:placeholderName')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.website')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.website || ''}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    placeholder={t('crm:clients.websitePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.streetAddress')}
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder={t('form:placeholderDescription')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                  />
-                </div>
-                <div className="col-span-full space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.description')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.description || ''}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder={t('form:placeholderDescription')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 3: Administrative */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
-                {t('crm:clients.adminFiscal')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.fiscalCode')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.fiscalCode}
-                    onChange={(e) => {
-                      setFormData({ ...formData, fiscalCode: e.target.value });
-                      if (errors.fiscalCode) setErrors({ ...errors, fiscalCode: '' });
-                    }}
-                    placeholder={t('form:placeholderCode')}
-                    className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                      errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                    }`}
-                  />
-                  {errors.fiscalCode && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.fiscalCode}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.atecoCode')}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.atecoCode || ''}
-                    onChange={(e) => setFormData({ ...formData, atecoCode: e.target.value })}
-                    placeholder={t('crm:clients.atecoCodePlaceholder')}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.officeCountRange')}
-                  </label>
-                  <CustomSelect
-                    options={OFFICE_COUNT_RANGE_OPTIONS}
-                    value={formData.officeCountRange || ''}
-                    onChange={(value) => {
-                      setFormData({
-                        ...formData,
-                        officeCountRange: (value || undefined) as Client['officeCountRange'],
-                      });
-                      if (errors.officeCountRange) {
-                        setErrors({ ...errors, officeCountRange: '' });
-                      }
-                    }}
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                    buttonClassName={`py-2.5 text-sm ${
-                      errors.officeCountRange ? '!border-red-500 !bg-red-50' : ''
-                    }`}
-                  />
-                  {errors.officeCountRange && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">
-                      {errors.officeCountRange}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.sector')}
-                  </label>
-                  <CustomSelect
-                    options={SECTOR_OPTIONS.map((option) => ({
-                      id: option.id,
-                      name: t(`crm:clients.sectorOptions.${option.labelKey}`),
-                    }))}
-                    value={formData.sector || ''}
-                    onChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        sector: (value || undefined) as Client['sector'],
-                      })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                    buttonClassName="py-2.5 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.numberOfEmployees')}
-                  </label>
-                  <CustomSelect
-                    options={NUMBER_OF_EMPLOYEES_OPTIONS.map((option) => ({
-                      id: option.id,
-                      name: t(`crm:clients.numberOfEmployeesOptions.${option.labelKey}`),
-                    }))}
-                    value={formData.numberOfEmployees || ''}
-                    onChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        numberOfEmployees: (value || undefined) as Client['numberOfEmployees'],
-                      })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                    buttonClassName="py-2.5 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('crm:clients.revenueMillions')}
-                  </label>
-                  <CustomSelect
-                    options={REVENUE_OPTIONS.map((option) => ({
-                      id: option.id,
-                      name: t(`crm:clients.revenueOptions.${option.labelKey}`),
-                    }))}
-                    value={formData.revenue || ''}
-                    onChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        revenue: (value || undefined) as Client['revenue'],
-                      })
-                    }
-                    placeholder={t('common:form.selectOption')}
-                    searchable={false}
-                    buttonClassName="py-2.5 text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {errors.general && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
-                <i className="fa-solid fa-circle-exclamation text-lg"></i>
-                <p className="text-sm font-bold">{errors.general}</p>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-8 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`px-10 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
-                  canSubmit
-                    ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                    : 'bg-slate-300 shadow-none cursor-not-allowed'
-                }`}
-              >
-                {editingClient ? t('common:buttons.update') : t('common:buttons.save')}
-              </button>
-            </div>
-          </form>
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
@@ -837,9 +921,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             <h2 className="text-2xl font-black text-slate-800">{t('crm:clients.title')}</h2>
             <p className="text-slate-500 text-sm">{t('crm:clients.subtitle')}</p>
           </div>
-          {canCreateClients && (
+          {canCreateClients && !editingState.isNewRow && (
             <button
-              onClick={openAddModal}
+              onClick={startNewRow}
               className="bg-praetor text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-xl shadow-slate-200 transition-all hover:bg-slate-700 active:scale-95 flex items-center gap-2"
             >
               <i className="fa-solid fa-plus"></i> {t('crm:clients.addClient')}
@@ -850,10 +934,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
       <StandardTable<Client>
         title={t('crm:clients.clientsDirectory')}
-        data={clients}
+        data={tableData}
         columns={columns}
         defaultRowsPerPage={10}
-        onRowClick={canUpdateClients ? openEditModal : undefined}
         rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
       />
     </div>
