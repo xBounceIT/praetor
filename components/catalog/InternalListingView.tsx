@@ -727,6 +727,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     const typeName = val;
     const typeData = productTypes.find((t) => t.name === typeName);
     // Reset category and subcategory - new categories will be loaded by useEffect
+    setSubcategories([]);
     setFormData({
       ...formData,
       type: typeName,
@@ -1389,9 +1390,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   <CustomSelect
                     options={categoryOptions}
                     value={formData.category || ''}
-                    onChange={(val) =>
-                      setFormData({ ...formData, category: val as string, subcategory: '' })
-                    }
+                    onChange={(val) => {
+                      setSubcategories([]);
+                      setFormData({ ...formData, category: val as string, subcategory: '' });
+                    }}
                     placeholder={t('crm:internalListing.selectOption')}
                     searchable={true}
                   />
