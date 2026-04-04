@@ -2,6 +2,7 @@ import type React from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -323,6 +324,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         }
       }
     }
+    if (!trimmedFiscalCode) {
+      newErrors.fiscalCode = t('common:validation.fiscalCodeRequired');
+    }
 
     return errors;
   };
@@ -479,6 +483,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       });
     }
   };
+
+  const canSubmit = editingClient ? canUpdateClients : canCreateClients;
 
   // Column definitions
   const columns = useMemo<Column<Client>[]>(() => {
@@ -1009,6 +1015,27 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     </button>
                   )}
                 </Tooltip>
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end gap-1">
+            <Tooltip
+              label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')}
+            >
+              {() => (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!canUpdateClients) return;
+                    onUpdateClient(row.id, { isDisabled: !row.isDisabled });
+                  }}
+                  disabled={!canUpdateClients}
+                  className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    row.isDisabled
+                      ? 'text-praetor hover:bg-slate-100'
+                      : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                  }`}
+                >
+                  <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                </button>
               )}
               <Tooltip
                 label={row.isDisabled ? t('common:buttons.enable') : t('crm:clients.isDisabled')}
@@ -1034,6 +1061,59 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               {canDeleteClients && (
                 <Tooltip label={t('common:buttons.delete')}>
                   {() => (
+            )}
+          </div>
+        ),
+      },
+    ],
+    [t, i18n, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete],
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Add/Edit Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
+                <i className={`fa-solid ${editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
+              </div>
+              {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
+            </h3>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="overflow-y-auto p-8 space-y-8" noValidate>
+            {/* Section 1: Identification */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
+                {t('crm:clients.identifyingData')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('crm:clients.subjectType')}
+                  </label>
+                  <div className="relative flex p-1 bg-slate-100 rounded-xl">
+                    <div
+                      className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                        formData.type === 'company' ? 'translate-x-0' : 'translate-x-full'
+                      }`}
+                    ></div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, type: 'company' })}
+                      className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${formData.type === 'company' ? 'text-praetor' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      {t('crm:clients.typeCompany')}
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

@@ -1,7 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { query } from '../db/index.ts';
-import { cacheGetSetJson, TTL_AUTH_USER_SECONDS } from '../services/cache.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'praetor-secret-key-change-in-production';
@@ -34,7 +33,7 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
     request.auth = { userId: decoded.userId, sessionStart };
 
-    // Fetch user data (cached briefly in Redis to avoid hitting Postgres on every request)
+    // Fetch user data from Postgres.
     type AuthUserRow = {
       id: string;
       name: string;
@@ -44,21 +43,13 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       is_disabled: boolean;
     };
 
-    const { value: user } = await cacheGetSetJson<AuthUserRow | null>(
-      'users',
-      `auth:user:${decoded.userId}`,
-      TTL_AUTH_USER_SECONDS,
-      async () => {
-        const result = await query(
-          `SELECT u.id, u.name, u.username, u.role, u.avatar_initials, u.is_disabled
-           FROM users u
-           WHERE u.id = $1`,
-          [decoded.userId],
-        );
-        if (result.rows.length === 0) return null;
-        return result.rows[0] as AuthUserRow;
-      },
+    const result = await query(
+      `SELECT u.id, u.name, u.username, u.role, u.avatar_initials, u.is_disabled
+       FROM users u
+       WHERE u.id = $1`,
+      [decoded.userId],
     );
+    const user = result.rows.length === 0 ? null : (result.rows[0] as AuthUserRow);
 
     if (!user) {
       return reply.code(401).send({ error: 'User not found' });

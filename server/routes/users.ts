@@ -8,13 +8,6 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
@@ -229,101 +222,86 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewCosts = hasPermission(request, 'hr.costs.view');
       const canRevealUserEmails = canViewUserEmails(request);
 
-      const bypass = shouldBypassCache(request);
-      const scopeKey = canViewAllUsers ? 'all' : 'filtered';
-      const keySuffix = canViewAllUsers
-        ? `v=6:scope=all:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`
-        : `v=6:scope=${scopeKey}:user=${request.user.id}:managed=${canViewManagedUsers ? 1 : 0}:internal=${canViewInternal ? 1 : 0}:external=${canViewExternal ? 1 : 0}:costs=${canViewCosts ? 1 : 0}:emails=${canRevealUserEmails ? 1 : 0}`;
+      let result: Awaited<ReturnType<typeof query>>;
+      if (canViewAllUsers) {
+        result = await query(
+          `SELECT u.id,
+                  u.name,
+                  u.username,
+                  COALESCE(s.email, '') AS email,
+                  u.role,
+                  u.avatar_initials,
+                  u.cost_per_hour,
+                  u.is_disabled,
+                  u.employee_type,
+                  EXISTS (
+                    SELECT 1
+                    FROM user_roles ur
+                    WHERE ur.user_id = u.id AND ur.role_id = $1
+                  ) AS has_top_manager_role,
+                  (
+                    u.role = $2
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM user_roles ur_admin_only
+                      WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> $2
+                    )
+                  ) AS is_admin_only
+             FROM users u
+             LEFT JOIN settings s ON s.user_id = u.id
+             ORDER BY u.name`,
+          [TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
+        );
+      } else {
+        const conditions: string[] = ['u.id = $1'];
+        if (canViewManagedUsers) {
+          conditions.push('wum.user_id = $1');
+        }
+        if (canViewInternal) {
+          conditions.push("u.employee_type = 'internal'");
+        }
+        if (canViewExternal) {
+          conditions.push("u.employee_type = 'external'");
+        }
 
-      const { status, value } = await cacheGetSetJson(
-        'users',
-        keySuffix,
-        TTL_LIST_SECONDS,
-        async () => {
-          let result: Awaited<ReturnType<typeof query>>;
-          if (canViewAllUsers) {
-            result = await query(
-              `SELECT u.id,
-                      u.name,
-                      u.username,
-                      COALESCE(s.email, '') AS email,
-                      u.role,
-                      u.avatar_initials,
-                      u.cost_per_hour,
-                      u.is_disabled,
-                      u.employee_type,
-                      EXISTS (
-                        SELECT 1
-                        FROM user_roles ur
-                        WHERE ur.user_id = u.id AND ur.role_id = $1
-                      ) AS has_top_manager_role,
-                      (
-                        u.role = $2
-                        AND NOT EXISTS (
-                          SELECT 1
-                          FROM user_roles ur_admin_only
-                          WHERE ur_admin_only.user_id = u.id AND ur_admin_only.role_id <> $2
-                        )
-                      ) AS is_admin_only
-                 FROM users u
-                 LEFT JOIN settings s ON s.user_id = u.id
-                 ORDER BY u.name`,
-              [TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
-            );
-          } else {
-            const conditions: string[] = ['u.id = $1'];
-            if (canViewManagedUsers) {
-              conditions.push('wum.user_id = $1');
-            }
-            if (canViewInternal) {
-              conditions.push("u.employee_type = 'internal'");
-            }
-            if (canViewExternal) {
-              conditions.push("u.employee_type = 'external'");
-            }
+        result = await query(
+          `SELECT DISTINCT u.id,
+                           u.name,
+                           u.username,
+                           COALESCE(s.email, '') AS email,
+                           u.role,
+                           u.avatar_initials,
+                           u.cost_per_hour,
+                           u.is_disabled,
+                           u.employee_type,
+                           EXISTS (
+                             SELECT 1
+                             FROM user_roles ur
+                             WHERE ur.user_id = u.id AND ur.role_id = $2
+                           ) AS has_top_manager_role,
+                           (
+                             u.role = $3
+                             AND NOT EXISTS (
+                               SELECT 1
+                               FROM user_roles ur_admin_only
+                               WHERE ur_admin_only.user_id = u.id
+                                 AND ur_admin_only.role_id <> $3
+                             )
+                           ) AS is_admin_only
+             FROM users u
+             LEFT JOIN settings s ON s.user_id = u.id
+             LEFT JOIN user_work_units uw ON u.id = uw.user_id
+             LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
+             WHERE (${conditions.join(' OR ')})
+               AND NOT EXISTS (SELECT 1 FROM user_roles ur_tm WHERE ur_tm.user_id = u.id AND ur_tm.role_id = $2)
+             ORDER BY u.name`,
+          [request.user.id, TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
+        );
+      }
 
-            result = await query(
-              `SELECT DISTINCT u.id,
-                               u.name,
-                               u.username,
-                               COALESCE(s.email, '') AS email,
-                               u.role,
-                               u.avatar_initials,
-                               u.cost_per_hour,
-                               u.is_disabled,
-                               u.employee_type,
-                               EXISTS (
-                                 SELECT 1
-                                 FROM user_roles ur
-                                 WHERE ur.user_id = u.id AND ur.role_id = $2
-                               ) AS has_top_manager_role,
-                               (
-                                 u.role = $3
-                                 AND NOT EXISTS (
-                                   SELECT 1
-                                   FROM user_roles ur_admin_only
-                                   WHERE ur_admin_only.user_id = u.id
-                                     AND ur_admin_only.role_id <> $3
-                                 )
-                               ) AS is_admin_only
-                 FROM users u
-                 LEFT JOIN settings s ON s.user_id = u.id
-                 LEFT JOIN user_work_units uw ON u.id = uw.user_id
-                 LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
-                 WHERE (${conditions.join(' OR ')})
-                   AND NOT EXISTS (SELECT 1 FROM user_roles ur_tm WHERE ur_tm.user_id = u.id AND ur_tm.role_id = $2)
-                 ORDER BY u.name`,
-              [request.user.id, TOP_MANAGER_ROLE_ID, ADMIN_ROLE_ID],
-            );
-          }
-          return result.rows.map((u) =>
-            mapUserResponse(u as UserRow, canViewCosts, canRevealUserEmails),
-          );
-        },
-        { bypass },
+      const value = result.rows.map((u) =>
+        mapUserResponse(u as UserRow, canViewCosts, canRevealUserEmails),
       );
-
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -478,12 +456,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           await syncTopManagerAssignmentsForUser(id);
         }
 
-        await bumpNamespaceVersion('users');
-        if (roleValue === TOP_MANAGER_ROLE_ID) {
-          await bumpNamespaceVersion('clients');
-          await bumpNamespaceVersion('projects');
-          await bumpNamespaceVersion('tasks');
-        }
         await logAudit({
           request,
           action: 'user.created',
@@ -582,7 +554,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      await bumpNamespaceVersion('users');
       await logAudit({
         request,
         action: 'user.deleted',
@@ -855,15 +826,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const u = responseResult.rows[0] as UserRow;
       const canRevealUserEmails = canViewUserEmails(request);
 
-      await bumpNamespaceVersion('users');
-      if (name !== undefined || email !== undefined) {
-        await bumpNamespaceVersion(`settings:user:${idResult.value}`);
-      }
-      if (role !== undefined && (hadTopManagerRole || roleValue === TOP_MANAGER_ROLE_ID)) {
-        await bumpNamespaceVersion('clients');
-        await bumpNamespaceVersion('projects');
-        await bumpNamespaceVersion('tasks');
-      }
       await logAudit({
         request,
         action,
@@ -990,12 +952,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       await syncTopManagerAssignmentsForUser(idResult.value);
-      await bumpNamespaceVersion('users');
-      if (hadTopManagerRole || roleIdsResult.value.includes(TOP_MANAGER_ROLE_ID)) {
-        await bumpNamespaceVersion('clients');
-        await bumpNamespaceVersion('projects');
-        await bumpNamespaceVersion('tasks');
-      }
       await logAudit({
         request,
         action: 'user.roles_updated',
@@ -1197,9 +1153,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       });
 
-      if (clientIds) await bumpNamespaceVersion('clients');
-      if (projectIds) await bumpNamespaceVersion('projects');
-      if (taskIds) await bumpNamespaceVersion('tasks');
       await logAudit({
         request,
         action: 'user.assignments_updated',

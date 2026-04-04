@@ -1,7 +1,8 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Supplier } from '../../types';
+import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -10,14 +11,30 @@ import Tooltip from '../shared/Tooltip';
 
 export interface SuppliersViewProps {
   suppliers: Supplier[];
+  supplierOrders: SupplierSaleOrder[];
+  currency: string;
   onAddSupplier: (supplierData: Partial<Supplier>) => Promise<void>;
   onUpdateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;
   onDeleteSupplier: (id: string) => Promise<void>;
   permissions: string[];
 }
 
+const calculateOrderTotal = (items: SupplierSaleOrderItem[], discount: number): number => {
+  let subtotal = 0;
+  items.forEach((item) => {
+    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+    const lineNet = lineSubtotal - lineDiscount;
+    subtotal += lineNet;
+  });
+  const discountAmount = subtotal * (discount / 100);
+  return subtotal - discountAmount;
+};
+
 const SuppliersView: React.FC<SuppliersViewProps> = ({
   suppliers,
+  supplierOrders,
+  currency,
   onAddSupplier,
   onUpdateSupplier,
   onDeleteSupplier,
@@ -190,6 +207,28 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
           ) : null,
       },
       {
+        header: t('crm:suppliers.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        cell: ({ row }) => {
+          if (!row.createdAt) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) {
+            return '-';
+          }
+          return formatInsertDate(timestamp);
+        },
+      },
+      {
         header: t('crm:suppliers.tableHeaders.contact'),
         id: 'contact',
         accessorFn: (row) => row.contactName || row.email || row.phone || '',
@@ -220,6 +259,31 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         header: t('crm:suppliers.tableHeaders.taxCode'),
         accessorKey: 'taxCode',
         className: 'font-mono text-xs text-slate-400',
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.totalOrders'),
+        id: 'totalOrders',
+        accessorFn: (row: Supplier) => {
+          const sentOrders = supplierOrders.filter(
+            (order) => order.supplierId === row.id && order.status === 'sent',
+          );
+          return sentOrders.reduce((total, order) => {
+            return total + calculateOrderTotal(order.items, order.discount);
+          }, 0);
+        },
+        className: 'whitespace-nowrap font-mono text-xs',
+        align: 'right',
+        cell: (info) => {
+          const totalValue = info.value as number;
+          return (
+            <span
+              className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
+            >
+              {totalValue.toFixed(2)} {currency}
+            </span>
+          );
+        },
+        filterFormat: (value: unknown) => (value as number).toFixed(2),
       },
       {
         header: t('crm:suppliers.tableHeaders.status'),
@@ -281,7 +345,15 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         ),
       },
     ],
-    [t, canUpdateSuppliers, canDeleteSuppliers, onUpdateSupplier, confirmDelete],
+    [
+      t,
+      canUpdateSuppliers,
+      canDeleteSuppliers,
+      onUpdateSupplier,
+      confirmDelete,
+      supplierOrders,
+      currency,
+    ],
   );
 
   return (

@@ -3,13 +3,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query, withTransaction } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { messageResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   ADMIN_BASE_PERMISSIONS,
@@ -130,21 +123,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const bypass = shouldBypassCache(request);
-      const { status, value } = await cacheGetSetJson(
-        'roles',
-        'v=1',
-        TTL_LIST_SECONDS,
-        async () => {
-          const result = await query(
-            'SELECT id, name, is_system, is_admin FROM roles ORDER BY name',
-          );
-          return Promise.all(result.rows.map(mapRoleRow));
-        },
-        { bypass },
-      );
-
-      setCacheHeader(reply, status);
+      const result = await query('SELECT id, name, is_system, is_admin FROM roles ORDER BY name');
+      const value = await Promise.all(result.rows.map(mapRoleRow));
       return value;
     },
   );
@@ -216,7 +196,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       });
 
-      await bumpNamespaceVersion('roles');
       const roleRow = await query('SELECT id, name, is_system, is_admin FROM roles WHERE id = $1', [
         id,
       ]);
@@ -278,7 +257,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await query('UPDATE roles SET name = $1 WHERE id = $2', [nameResult.value, idResult.value]);
-      await bumpNamespaceVersion('roles');
       await logAudit({
         request,
         action: 'role.updated',
@@ -341,7 +319,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await query('DELETE FROM roles WHERE id = $1', [idResult.value]);
-      await bumpNamespaceVersion('roles');
       await logAudit({
         request,
         action: 'role.deleted',
@@ -428,7 +405,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       });
 
-      await bumpNamespaceVersion('roles');
       const updatedRoleResult = await query(
         'SELECT id, name, is_system, is_admin FROM roles WHERE id = $1',
         [idResult.value],

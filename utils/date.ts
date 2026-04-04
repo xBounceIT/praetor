@@ -56,3 +56,17 @@ export const isDateOnlyWithinInclusiveRange = (
   }
   return true;
 };
+
+/**
+ * Formats a Unix timestamp (milliseconds) to a DD/MM/YYYY date string.
+ * Returns '-' for invalid, null, or undefined timestamps.
+ */
+export const formatInsertDate = (timestamp: number | null | undefined): string => {
+  if (timestamp === null || timestamp === undefined) return '-';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '-';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};

@@ -80,6 +80,7 @@
     "clientDeleted": "Cliente eliminato",
     "deleteConfirm": "Sei sicuro di voler eliminare questo cliente? Tutti i progetti e attività associati verranno anche eliminati.",
     "isDisabled": "Il cliente è disabilitato",
+    "disableClient": "Disabilita Cliente",
     "activeClients": "Clienti Attivi",
     "disabledClients": "Clienti Disabilitati",
     "subjectType": "Tipologia Soggetto",
@@ -108,7 +109,6 @@
     "molPercentage": "MOL (%)",
     "salePrice": "Prezzo di Vendita",
     "margin": "Margine",
-    "taxRate": "IVA (%)",
     "type": "Tipo",
     "typeItem": "Articolo",
     "typeService": "Servizio",
@@ -167,7 +167,6 @@
     "autoSetBasedOnType": "Impostato automaticamente in base al Tipo",
     "salePriceCalculated": "Prezzo di Vendita (calcolato)",
     "marginCalculated": "Margine (calcolato)",
-    "unusualTaxRate": "Aliquota insolita (superiore al 30%).",
     "manageTypes": "Gestisci Tipi",
     "typeName": "Nome Tipo",
     "name": "Nome",
@@ -387,10 +386,12 @@
     "tableHeaders": {
       "name": "Nome",
       "code": "Codice",
+      "insertDate": "Data inserimento",
       "contact": "Contatto",
       "vat": "P.IVA",
       "taxCode": "C.F.",
-      "status": "Stato"
+      "status": "Stato",
+      "totalOrders": "Totale ordini"
     }
   },
   "paymentTerms": {

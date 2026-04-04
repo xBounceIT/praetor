@@ -6,13 +6,6 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { normalizeNullableDateOnly, todayLocalDateOnly } from '../utils/date.ts';
@@ -133,23 +126,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
 
       const canViewAll = hasPermission(request, 'projects.tasks_all.view');
-      const scopeKey = canViewAll ? 'all' : `user:${request.user.id}`;
-      const bypass = shouldBypassCache(request);
-
-      const { status, value } = await cacheGetSetJson(
-        'tasks',
-        `v=1:scope=${scopeKey}`,
-        TTL_LIST_SECONDS,
-        async () => {
-          let queryText = `
+      let queryText = `
             SELECT id, name, project_id, description, is_recurring, 
                    recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
             FROM tasks ORDER BY name
         `;
-          let queryParams: string[] = [];
+      let queryParams: string[] = [];
 
-          if (!canViewAll) {
-            queryText = `
+      if (!canViewAll) {
+        queryText = `
                 SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
                        t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
                 FROM tasks t
@@ -157,29 +142,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 WHERE ut.user_id = $1
                 ORDER BY t.name
             `;
-            queryParams = [request.user.id];
-          }
+        queryParams = [request.user.id];
+      }
 
-          const result = await query(queryText, queryParams);
-          return result.rows.map((t) => ({
-            id: t.id,
-            name: t.name,
-            projectId: t.project_id,
-            description: t.description,
-            isRecurring: t.is_recurring,
-            recurrencePattern: t.recurrence_pattern,
-            recurrenceStart:
-              normalizeNullableDateOnly(t.recurrence_start, 'task.recurrenceStart') ?? undefined,
-            recurrenceEnd:
-              normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
-            recurrenceDuration: parseFloat(t.recurrence_duration || 0),
-            isDisabled: t.is_disabled,
-          }));
-        },
-        { bypass },
-      );
+      const result = await query(queryText, queryParams);
+      const value = result.rows.map((t) => ({
+        id: t.id,
+        name: t.name,
+        projectId: t.project_id,
+        description: t.description,
+        isRecurring: t.is_recurring,
+        recurrencePattern: t.recurrence_pattern,
+        recurrenceStart:
+          normalizeNullableDateOnly(t.recurrence_start, 'task.recurrenceStart') ?? undefined,
+        recurrenceEnd:
+          normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
+        recurrenceDuration: parseFloat(t.recurrence_duration || 0),
+        isDisabled: t.is_disabled,
+      }));
 
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -269,7 +250,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         await assignProjectToTopManagers(projectIdResult.value);
         await assignTaskToTopManagers(id);
-        await bumpNamespaceVersion('tasks');
         await logAudit({
           request,
           action: 'task.created',
@@ -411,7 +391,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         action = isDisabled ? 'task.disabled' : 'task.enabled';
       }
 
-      await bumpNamespaceVersion('tasks');
       await logAudit({
         request,
         action,
@@ -465,7 +444,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Task not found' });
       }
 
-      await bumpNamespaceVersion('tasks');
       await logAudit({
         request,
         action: 'task.deleted',
@@ -549,7 +527,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       });
 
-      await bumpNamespaceVersion('tasks');
       await logAudit({
         request,
         action: 'task.users_assigned',

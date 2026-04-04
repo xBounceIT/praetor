@@ -1,14 +1,11 @@
 import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
-import { bumpNamespaceVersion } from '../services/cache.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { syncTopManagerAssignmentsForUser } from '../utils/top-manager-assignments.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
-  DEMO_CACHE_NAMESPACES,
   DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
-  DEMO_ENTRIES_CACHE_NAMESPACES,
   DEMO_EXPECTED_COUNTS,
   DEMO_IDS,
   DEMO_INVOICES,
@@ -18,7 +15,6 @@ import {
   DEMO_PRODUCTS,
   DEMO_PROJECTS,
   DEMO_SALES,
-  DEMO_SETTINGS_CACHE_NAMESPACES,
   DEMO_SUPPLIER_INVOICES,
   DEMO_SUPPLIER_SALES,
   DEMO_SUPPLIERS,
@@ -702,20 +698,6 @@ const verifyDemoDataset = async () => {
   return { verificationCountsByTable, mismatches };
 };
 
-const invalidateDemoCaches = async () => {
-  for (const namespace of DEMO_CACHE_NAMESPACES) {
-    await bumpNamespaceVersion(namespace);
-  }
-
-  for (const namespace of DEMO_SETTINGS_CACHE_NAMESPACES) {
-    await bumpNamespaceVersion(namespace);
-  }
-
-  for (const namespace of DEMO_ENTRIES_CACHE_NAMESPACES) {
-    await bumpNamespaceVersion(namespace);
-  }
-};
-
 const collectDemoUserIdsToDelete = async (client: PoolClient) => {
   const result = await client.query<{ id: string }>(
     `SELECT id
@@ -809,8 +791,6 @@ export const runDemoSeedRefresh = async ({
           .join(', ')}`,
       );
     }
-
-    await invalidateDemoCaches();
 
     const result: DemoSeedResult = {
       demoSeedingEnabled: true,

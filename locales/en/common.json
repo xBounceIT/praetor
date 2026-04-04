@@ -115,8 +115,6 @@
     "costRequired": "Cost is required",
     "molPercentageRequired": "MOL (%) is required",
     "molPercentageRange": "MOL (%) must be greater than 0 and less than 100",
-    "taxRateRequired": "Tax rate is required",
-    "taxRateRange": "Tax rate must be between 0 and 100",
     "unitNameRequired": "Unit name is required",
     "typeRequired": "Type is required",
     "unitOfMeasureRequired": "Unit of measure is required",

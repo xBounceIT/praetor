@@ -36,7 +36,6 @@ const itemSchema = {
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    productTaxRate: { type: 'number' },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
   },
@@ -78,7 +77,6 @@ const itemBodySchema = {
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    productTaxRate: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
   },
@@ -120,7 +118,6 @@ type SupplierOrderItemInput = {
   productName?: string;
   quantity?: string | number;
   unitPrice?: string | number;
-  productTaxRate?: string | number;
   discount?: string | number;
   note?: string;
 };
@@ -165,14 +162,6 @@ const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) =>
       badRequest(reply, unitPriceResult.message);
       return null;
     }
-    const taxRateResult = optionalLocalizedNonNegativeNumber(
-      item.productTaxRate,
-      `items[${i}].productTaxRate`,
-    );
-    if (!taxRateResult.ok) {
-      badRequest(reply, taxRateResult.message);
-      return null;
-    }
     const discountResult = optionalLocalizedNonNegativeNumber(
       item.discount,
       `items[${i}].discount`,
@@ -186,7 +175,6 @@ const normalizeItems = (items: SupplierOrderItemInput[], reply: FastifyReply) =>
       productName: productNameResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
-      productTaxRate: taxRateResult.value || 0,
       discount: discountResult.value || 0,
       note: item.note || null,
     });
@@ -250,7 +238,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             product_name as "productName",
             quantity,
             unit_price as "unitPrice",
-            product_tax_rate as "productTaxRate",
             note,
             discount
          FROM supplier_sale_items
@@ -414,8 +401,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const itemId = 'ssi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
         const itemResult = await query(
           `INSERT INTO supplier_sale_items
-            (id, sale_id, product_id, product_name, quantity, unit_price, product_tax_rate, discount, note)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (id, sale_id, product_id, product_name, quantity, unit_price, discount, note)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING
              id,
              sale_id as "orderId",
@@ -423,7 +410,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
              product_name as "productName",
              quantity,
              unit_price as "unitPrice",
-             product_tax_rate as "productTaxRate",
              discount,
              note`,
           [
@@ -433,7 +419,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.productName,
             item.quantity,
             item.unitPrice,
-            item.productTaxRate,
             item.discount,
             item.note,
           ],
@@ -654,8 +639,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = 'ssi-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
           const itemResult = await query(
             `INSERT INTO supplier_sale_items
-              (id, sale_id, product_id, product_name, quantity, unit_price, product_tax_rate, discount, note)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              (id, sale_id, product_id, product_name, quantity, unit_price, discount, note)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING
                id,
                sale_id as "orderId",
@@ -663,7 +648,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                product_name as "productName",
                quantity,
                unit_price as "unitPrice",
-               product_tax_rate as "productTaxRate",
                discount,
                note`,
             [
@@ -673,7 +657,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.productName,
               item.quantity,
               item.unitPrice,
-              item.productTaxRate,
               item.discount,
               item.note,
             ],
@@ -689,7 +672,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               product_name as "productName",
               quantity,
               unit_price as "unitPrice",
-              product_tax_rate as "productTaxRate",
               discount,
               note
            FROM supplier_sale_items

@@ -2236,6 +2236,12 @@
                       },
                       "createdAt": {
                         "type": "number"
+                      },
+                      "totalSentQuotes": {
+                        "type": "number"
+                      },
+                      "totalAcceptedOrders": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -2564,6 +2570,12 @@
                       ]
                     },
                     "createdAt": {
+                      "type": "number"
+                    },
+                    "totalSentQuotes": {
+                      "type": "number"
+                    },
+                    "totalAcceptedOrders": {
                       "type": "number"
                     }
                   },
@@ -2911,6 +2923,12 @@
                       ]
                     },
                     "createdAt": {
+                      "type": "number"
+                    },
+                    "totalSentQuotes": {
+                      "type": "number"
+                    },
+                    "totalAcceptedOrders": {
                       "type": "number"
                     }
                   },
@@ -7410,16 +7428,8 @@
                           "string"
                         ]
                       },
-                      "taxRate": {
-                        "type": "number"
-                      },
                       "type": {
-                        "type": "string",
-                        "enum": [
-                          "supply",
-                          "service",
-                          "consulting"
-                        ]
+                        "type": "string"
                       },
                       "supplierId": {
                         "type": [
@@ -7444,7 +7454,6 @@
                       "costo",
                       "molPercentage",
                       "costUnit",
-                      "taxRate",
                       "type"
                     ]
                   }
@@ -7594,16 +7603,8 @@
                   "subcategory": {
                     "type": "string"
                   },
-                  "taxRate": {
-                    "type": "number"
-                  },
                   "type": {
-                    "type": "string",
-                    "enum": [
-                      "supply",
-                      "service",
-                      "consulting"
-                    ]
+                    "type": "string"
                   },
                   "supplierId": {
                     "type": "string"
@@ -7621,7 +7622,6 @@
                   "productCode",
                   "costo",
                   "molPercentage",
-                  "taxRate",
                   "type"
                 ]
               }
@@ -7677,16 +7677,8 @@
                         "string"
                       ]
                     },
-                    "taxRate": {
-                      "type": "number"
-                    },
                     "type": {
-                      "type": "string",
-                      "enum": [
-                        "supply",
-                        "service",
-                        "consulting"
-                      ]
+                      "type": "string"
                     },
                     "supplierId": {
                       "type": [
@@ -7711,7 +7703,6 @@
                     "costo",
                     "molPercentage",
                     "costUnit",
-                    "taxRate",
                     "type"
                   ]
                 }
@@ -7844,16 +7835,8 @@
                   "subcategory": {
                     "type": "string"
                   },
-                  "taxRate": {
-                    "type": "number"
-                  },
                   "type": {
-                    "type": "string",
-                    "enum": [
-                      "supply",
-                      "service",
-                      "consulting"
-                    ]
+                    "type": "string"
                   },
                   "supplierId": {
                     "type": "string"
@@ -7931,16 +7914,8 @@
                         "string"
                       ]
                     },
-                    "taxRate": {
-                      "type": "number"
-                    },
                     "type": {
-                      "type": "string",
-                      "enum": [
-                        "supply",
-                        "service",
-                        "consulting"
-                      ]
+                      "type": "string"
                     },
                     "supplierId": {
                       "type": [
@@ -7965,7 +7940,6 @@
                     "costo",
                     "molPercentage",
                     "costUnit",
-                    "taxRate",
                     "type"
                   ]
                 }
@@ -8176,6 +8150,1796 @@
         }
       }
     },
+    "/api/products/internal-categories": {
+      "get": {
+        "summary": "List internal product categories by type",
+        "tags": [
+          "products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "type",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "costUnit": {
+                        "type": "string",
+                        "enum": [
+                          "unit",
+                          "hours"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "productCount": {
+                        "type": "number"
+                      },
+                      "hasLinkedProducts": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "type",
+                      "costUnit",
+                      "hasLinkedProducts"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create internal product category",
+        "tags": [
+          "products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "costUnit": {
+                      "type": "string",
+                      "enum": [
+                        "unit",
+                        "hours"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "productCount": {
+                      "type": "number"
+                    },
+                    "hasLinkedProducts": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "type",
+                    "costUnit",
+                    "hasLinkedProducts"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/internal-categories/{id}": {
+      "put": {
+        "summary": "Update internal product category",
+        "tags": [
+          "products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "costUnit": {
+                      "type": "string",
+                      "enum": [
+                        "unit",
+                        "hours"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "productCount": {
+                      "type": "number"
+                    },
+                    "hasLinkedProducts": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "type",
+                    "costUnit",
+                    "hasLinkedProducts"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete internal product category",
+        "tags": [
+          "products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/internal-subcategories": {
+      "get": {
+        "summary": "List internal product subcategories",
+        "tags": [
+          "products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "type",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "category",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "productCount": {
+                        "type": "number"
+                      },
+                      "hasLinkedProducts": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "productCount",
+                      "hasLinkedProducts"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create internal product subcategory",
+        "tags": [
+          "products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "type",
+                  "category"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "productCount": {
+                      "type": "number"
+                    },
+                    "hasLinkedProducts": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "productCount",
+                    "hasLinkedProducts"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/internal-subcategories/{name}": {
+      "put": {
+        "summary": "Rename internal product subcategory",
+        "tags": [
+          "products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newName": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "newName",
+                  "type",
+                  "category"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "productCount": {
+                      "type": "number"
+                    },
+                    "hasLinkedProducts": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "productCount",
+                    "hasLinkedProducts"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete internal product subcategory",
+        "tags": [
+          "products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "type",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "category",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/internal-types": {
+      "get": {
+        "summary": "List all product types",
+        "tags": [
+          "products"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "costUnit": {
+                        "type": "string",
+                        "enum": [
+                          "unit",
+                          "hours"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "productCount": {
+                        "type": "number"
+                      },
+                      "categoryCount": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "costUnit"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new product type",
+        "tags": [
+          "products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "costUnit": {
+                    "type": "string",
+                    "enum": [
+                      "unit",
+                      "hours"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "costUnit"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "costUnit": {
+                      "type": "string",
+                      "enum": [
+                        "unit",
+                        "hours"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "productCount": {
+                      "type": "number"
+                    },
+                    "categoryCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "costUnit"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/internal-types/{id}": {
+      "put": {
+        "summary": "Update a product type",
+        "tags": [
+          "products"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "costUnit": {
+                    "type": "string",
+                    "enum": [
+                      "unit",
+                      "hours"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "costUnit": {
+                      "type": "string",
+                      "enum": [
+                        "unit",
+                        "hours"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "productCount": {
+                      "type": "number"
+                    },
+                    "categoryCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "costUnit"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a product type",
+        "tags": [
+          "products"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sales/client-quotes/": {
       "get": {
         "summary": "List client quotes",
@@ -8270,9 +10034,6 @@
                             "productCost": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -8352,7 +10113,6 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
-                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -8536,9 +10296,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -8685,9 +10442,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -8767,7 +10521,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -8934,9 +10687,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -9088,9 +10838,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -9170,7 +10917,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -9492,9 +11238,6 @@
                             "productCost": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -9566,7 +11309,6 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
-                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -9747,9 +11489,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -9907,9 +11646,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -9981,7 +11717,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -10142,9 +11877,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -10303,9 +12035,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -10377,7 +12106,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -11732,9 +13460,6 @@
                             "productCost": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -11806,7 +13531,6 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
-                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -11989,9 +13713,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -12144,9 +13865,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -12218,7 +13936,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -12381,9 +14098,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -12540,9 +14254,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -12614,7 +14325,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -12883,9 +14593,6 @@
                       "subtotal": {
                         "type": "number"
                       },
-                      "taxAmount": {
-                        "type": "number"
-                      },
                       "total": {
                         "type": "number"
                       },
@@ -12943,9 +14650,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "taxRate": {
-                              "type": "number"
-                            },
                             "discount": {
                               "type": "number"
                             }
@@ -12957,7 +14661,6 @@
                             "unitOfMeasure",
                             "quantity",
                             "unitPrice",
-                            "taxRate",
                             "discount"
                           ]
                         }
@@ -12971,7 +14674,6 @@
                       "dueDate",
                       "status",
                       "subtotal",
-                      "taxAmount",
                       "total",
                       "amountPaid",
                       "createdAt",
@@ -13130,9 +14832,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -13172,9 +14871,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -13183,8 +14879,7 @@
                         "description",
                         "unitOfMeasure",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -13236,9 +14931,6 @@
                       "type": "string"
                     },
                     "subtotal": {
-                      "type": "number"
-                    },
-                    "taxAmount": {
                       "type": "number"
                     },
                     "total": {
@@ -13298,9 +14990,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -13312,7 +15001,6 @@
                           "unitOfMeasure",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -13326,7 +15014,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
@@ -13465,9 +15152,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -13507,9 +15191,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -13518,8 +15199,7 @@
                         "description",
                         "unitOfMeasure",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -13573,9 +15253,6 @@
                       "type": "string"
                     },
                     "subtotal": {
-                      "type": "number"
-                    },
-                    "taxAmount": {
                       "type": "number"
                     },
                     "total": {
@@ -13635,9 +15312,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -13649,7 +15323,6 @@
                           "unitOfMeasure",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -13663,7 +15336,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
@@ -13956,6 +15628,9 @@
                           "null",
                           "string"
                         ]
+                      },
+                      "createdAt": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -14199,6 +15874,9 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -14433,6 +16111,9 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -15692,9 +17373,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "note": {
                               "type": [
                                 "null",
@@ -15882,9 +17560,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         },
@@ -16002,9 +17677,6 @@
                             "type": "number"
                           },
                           "unitPrice": {
-                            "type": "number"
-                          },
-                          "productTaxRate": {
                             "type": "number"
                           },
                           "note": {
@@ -16174,9 +17846,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         },
@@ -16297,9 +17966,6 @@
                             "type": "number"
                           },
                           "unitPrice": {
-                            "type": "number"
-                          },
-                          "productTaxRate": {
                             "type": "number"
                           },
                           "note": {
@@ -16587,9 +18253,6 @@
                       "subtotal": {
                         "type": "number"
                       },
-                      "taxAmount": {
-                        "type": "number"
-                      },
                       "total": {
                         "type": "number"
                       },
@@ -16634,9 +18297,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "taxRate": {
-                              "type": "number"
-                            },
                             "discount": {
                               "type": "number"
                             }
@@ -16647,7 +18307,6 @@
                             "description",
                             "quantity",
                             "unitPrice",
-                            "taxRate",
                             "discount"
                           ]
                         }
@@ -16661,7 +18320,6 @@
                       "dueDate",
                       "status",
                       "subtotal",
-                      "taxAmount",
                       "total",
                       "amountPaid",
                       "createdAt",
@@ -16820,9 +18478,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -16849,9 +18504,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -16859,8 +18511,7 @@
                       "required": [
                         "description",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -16914,9 +18565,6 @@
                     "subtotal": {
                       "type": "number"
                     },
-                    "taxAmount": {
-                      "type": "number"
-                    },
                     "total": {
                       "type": "number"
                     },
@@ -16961,9 +18609,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -16974,7 +18619,6 @@
                           "description",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -16988,7 +18632,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
@@ -17127,9 +18770,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -17156,9 +18796,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -17166,8 +18803,7 @@
                       "required": [
                         "description",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -17223,9 +18859,6 @@
                     "subtotal": {
                       "type": "number"
                     },
-                    "taxAmount": {
-                      "type": "number"
-                    },
                     "total": {
                       "type": "number"
                     },
@@ -17270,9 +18903,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -17283,7 +18913,6 @@
                           "description",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -17297,7 +18926,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
