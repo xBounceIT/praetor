@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { query } from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { bumpNamespaceVersion } from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate, normalizeNullableDateOnly } from '../utils/date.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -1326,24 +1325,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               supplier_quote_item_discount as "supplierQuoteItemDiscount",
               supplier_quote_discount as "supplierQuoteDiscount",
               unit_type as "unitType"`,
-            `INSERT INTO quote_items (id, quote_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, unit_type)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-                     RETURNING
-                        id,
-                        quote_id as "quoteId",
-                        product_id as "productId",
-                        product_name as "productName",
-                        special_bid_id as "specialBidId",
-                        quantity,
-                        unit_price as "unitPrice",
-                        product_cost as "productCost",
-                        product_tax_rate as "productTaxRate",
-                        product_mol_percentage as "productMolPercentage",
-                        special_bid_unit_price as "specialBidUnitPrice",
-                        special_bid_mol_percentage as "specialBidMolPercentage",
-                        discount,
-                        note,
-                        unit_type as "unitType"`,
             [
               itemId,
               updatedQuoteId,
@@ -1410,7 +1391,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Invalidate client cache if quote status affects sent quotes totals
       if (didStatusChange && (currentStatus === 'sent' || nextStatus === 'sent')) {
-        await bumpNamespaceVersion('clients');
       }
 
       await logAudit({

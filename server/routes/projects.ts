@@ -6,13 +6,6 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -169,45 +162,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
 
       const canViewAll = hasPermission(request, 'projects.manage_all.view');
-      const scopeKey = canViewAll ? 'all' : `user:${request.user.id}`;
-      const bypass = shouldBypassCache(request);
-
-      const { status, value } = await cacheGetSetJson(
-        'projects',
-        `v=1:scope=${scopeKey}`,
-        TTL_LIST_SECONDS,
-        async () => {
-          let queryText = `
+      let queryText = `
             SELECT id, name, client_id, color, description, is_disabled 
             FROM projects ORDER BY name
         `;
-          let queryParams: string[] = [];
+      let queryParams: string[] = [];
 
-          if (!canViewAll) {
-            queryText = `
+      if (!canViewAll) {
+        queryText = `
                 SELECT p.id, p.name, p.client_id, p.color, p.description, p.is_disabled 
                 FROM projects p
                 INNER JOIN user_projects up ON p.id = up.project_id
                 WHERE up.user_id = $1
                 ORDER BY p.name
             `;
-            queryParams = [request.user.id];
-          }
+        queryParams = [request.user.id];
+      }
 
-          const result = await query(queryText, queryParams);
-          return result.rows.map((p) => ({
-            id: p.id,
-            name: p.name,
-            clientId: p.client_id,
-            color: p.color,
-            description: p.description,
-            isDisabled: p.is_disabled,
-          }));
-        },
-        { bypass },
-      );
+      const result = await query(queryText, queryParams);
+      const value = result.rows.map((p) => ({
+        id: p.id,
+        name: p.name,
+        clientId: p.client_id,
+        color: p.color,
+        description: p.description,
+        isDisabled: p.is_disabled,
+      }));
 
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -261,7 +242,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         await assignClientToTopManagers(clientIdResult.value);
         await assignProjectToTopManagers(id);
-        await bumpNamespaceVersion('projects');
         await logAudit({
           request,
           action: 'project.created',
@@ -342,8 +322,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      await bumpNamespaceVersion('projects');
-      await bumpNamespaceVersion('clients');
       await logAudit({
         request,
         action: 'project.deleted',
@@ -491,10 +469,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      await bumpNamespaceVersion('projects');
-      if (updatedProject.clientChanged) {
-        await bumpNamespaceVersion('clients');
-      }
       await logAudit({
         request,
         action: updatedProject.action,
@@ -613,8 +587,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw err;
       }
 
-      await bumpNamespaceVersion('projects');
-      await bumpNamespaceVersion('clients');
       await logAudit({
         request,
         action: 'project.users_assigned',

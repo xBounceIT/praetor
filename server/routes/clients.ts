@@ -6,13 +6,6 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import {
-  bumpNamespaceVersion,
-  cacheGetSetJson,
-  setCacheHeader,
-  shouldBypassCache,
-  TTL_LIST_SECONDS,
-} from '../services/cache.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -277,80 +270,66 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
       const canViewClientDetails = hasPermission(request, 'crm.clients.view');
-      const scopeKey = canViewAllClients ? 'all' : `user:${request.user.id}`;
-      const detailsKey = canViewClientDetails ? 'full' : 'nameOnly';
-      const bypass = shouldBypassCache(request);
+      let queryText = `
+        SELECT c.*,
+          COALESCE(sq.total_sent_quotes, 0) as total_sent_quotes,
+          COALESCE(so.total_accepted_orders, 0) as total_accepted_orders
+        FROM clients c
+        LEFT JOIN (
+          SELECT q.client_id,
+            SUM(
+              (SELECT COALESCE(SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)), 0)
+               FROM quote_items qi WHERE qi.quote_id = q.id)
+              * (1 - COALESCE(q.discount, 0) / 100.0)
+            ) as total_sent_quotes
+          FROM quotes q
+          WHERE q.status = 'sent'
+          GROUP BY q.client_id
+        ) sq ON sq.client_id = c.id
+        LEFT JOIN (
+          SELECT s.client_id,
+            SUM(
+              (SELECT COALESCE(SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)), 0)
+               FROM sale_items si WHERE si.sale_id = s.id)
+              * (1 - COALESCE(s.discount, 0) / 100.0)
+            ) as total_accepted_orders
+          FROM sales s
+          WHERE s.status = 'confirmed'
+          GROUP BY s.client_id
+        ) so ON so.client_id = c.id
+        ORDER BY c.name
+      `;
+      const queryParams: (string | null)[] = [];
 
-      const { status, value } = await cacheGetSetJson(
-        'clients',
-        `v=5:scope=${scopeKey}:details=${detailsKey}`,
-        TTL_LIST_SECONDS,
-        async () => {
-          let queryText = `
-            SELECT c.*,
-              COALESCE(sq.total_sent_quotes, 0) as total_sent_quotes,
-              COALESCE(so.total_accepted_orders, 0) as total_accepted_orders
-            FROM clients c
-            LEFT JOIN (
-              SELECT q.client_id,
-                SUM(
-                  (SELECT COALESCE(SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)), 0)
-                   FROM quote_items qi WHERE qi.quote_id = q.id)
-                  * (1 - COALESCE(q.discount, 0) / 100.0)
-                ) as total_sent_quotes
-              FROM quotes q
-              WHERE q.status = 'sent'
-              GROUP BY q.client_id
-            ) sq ON sq.client_id = c.id
-            LEFT JOIN (
-              SELECT s.client_id,
-                SUM(
-                  (SELECT COALESCE(SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)), 0)
-                   FROM sale_items si WHERE si.sale_id = s.id)
-                  * (1 - COALESCE(s.discount, 0) / 100.0)
-                ) as total_accepted_orders
-              FROM sales s
-              WHERE s.status = 'confirmed'
-              GROUP BY s.client_id
-            ) so ON so.client_id = c.id
-            ORDER BY c.name
-          `;
-          const queryParams: (string | null)[] = [];
+      if (!canViewAllClients) {
+        queryText = `
+          SELECT c.id, c.name, c.description, c.is_disabled, c.type,
+            c.contact_name, c.client_code, c.email, c.phone, c.address,
+            c.ateco_code, c.website, c.sector, c.number_of_employees,
+            c.revenue, c.fiscal_code, c.office_count_range, c.created_at,
+            NULL::numeric as total_sent_quotes,
+            NULL::numeric as total_accepted_orders
+          FROM clients c
+          INNER JOIN user_clients uc ON c.id = uc.client_id
+          WHERE uc.user_id = $1
+          ORDER BY c.name
+        `;
+        queryParams.push(request.user.id);
+      }
 
-          if (!canViewAllClients) {
-            // Limited permission users only see id and name - no financial aggregates
-            queryText = `
-              SELECT c.id, c.name, c.description, c.is_disabled, c.type,
-                c.contact_name, c.client_code, c.email, c.phone, c.address,
-                c.ateco_code, c.website, c.sector, c.number_of_employees,
-                c.revenue, c.fiscal_code, c.office_count_range, c.created_at,
-                NULL::numeric as total_sent_quotes,
-                NULL::numeric as total_accepted_orders
-              FROM clients c
-              INNER JOIN user_clients uc ON c.id = uc.client_id
-              WHERE uc.user_id = $1
-              ORDER BY c.name
-            `;
-            queryParams.push(request.user.id);
-          }
+      const result = await query(queryText, queryParams);
+      const value = result.rows.map((c) => {
+        if (!canViewClientDetails) {
+          return {
+            id: c.id,
+            name: c.name,
+            description: null,
+          };
+        }
 
-          const result = await query(queryText, queryParams);
-          return result.rows.map((c) => {
-            if (!canViewClientDetails) {
-              return {
-                id: c.id,
-                name: c.name,
-                description: null,
-              };
-            }
+        return mapClientRow(c);
+      });
 
-            return mapClientRow(c);
-          });
-        },
-        { bypass },
-      );
-
-      setCacheHeader(reply, status);
       return value;
     },
   );
@@ -518,7 +497,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           await assignClientToUser(request.user.id, id);
         }
         await assignClientToTopManagers(id);
-        await bumpNamespaceVersion('clients');
         await logAudit({
           request,
           action: 'client.created',
@@ -824,7 +802,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action = isDisabledValue ? 'client.disabled' : 'client.enabled';
         }
 
-        await bumpNamespaceVersion('clients');
         await logAudit({
           request,
           action,
@@ -882,7 +859,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(404).send({ error: 'Client not found' });
       }
 
-      await bumpNamespaceVersion('clients');
       await logAudit({
         request,
         action: 'client.deleted',

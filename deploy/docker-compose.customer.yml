@@ -18,18 +18,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: praetor-redis
-    expose:
-      - '6379'
-    healthcheck:
-      test: ['CMD-SHELL', 'redis-cli ping | grep -q PONG']
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
   backend:
     image: ${PRAETOR_IMAGE_PREFIX:-ghcr.io/xbounceit}/praetor-backend:${PRAETOR_VERSION:?PRAETOR_VERSION is required}
     container_name: praetor-backend
@@ -40,7 +28,6 @@ services:
       DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       TRUST_PROXY: ${TRUST_PROXY:-1}
@@ -53,8 +40,6 @@ services:
       - '3001'
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     restart: unless-stopped
 

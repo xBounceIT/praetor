@@ -5,8 +5,6 @@ const currentYear = new Date().getFullYear();
 
 export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy';
 
-export const DEMO_CACHE_NAMESPACES = ['clients', 'products', 'projects', 'tasks', 'users'] as const;
-
 export const DEMO_USERS = [
   {
     id: 'u2',
@@ -92,8 +90,6 @@ export const DEMO_USERS = [
 
 export const DEMO_USER_IDS = DEMO_USERS.map((user) => user.id);
 export const DEMO_USERNAMES = DEMO_USERS.map((user) => user.username);
-export const DEMO_SETTINGS_CACHE_NAMESPACES = DEMO_USERS.map((user) => `settings:user:${user.id}`);
-export const DEMO_ENTRIES_CACHE_NAMESPACES = DEMO_USERS.map((user) => `entries:user:${user.id}`);
 
 export const COMPATIBILITY_DEFAULTS = {
   clients: ['c1', 'c2'],

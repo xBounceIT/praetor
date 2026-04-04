@@ -5,7 +5,6 @@ import buildApp from './app.ts';
 import { DEFAULT_ADMIN_PASSWORD, ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
-import { closeRedis } from './services/redis.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -88,7 +87,6 @@ const bootstrapDatabase = async () => {
 const shutdown = async (signal: string) => {
   try {
     logger.info({ signal }, 'Shutting down');
-    await closeRedis();
     await fastify.close();
   } catch (err) {
     logger.error({ signal, err: serializeError(err) }, 'Shutdown error');

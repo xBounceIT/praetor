@@ -1,5 +1,4 @@
 import { query } from '../db/index.ts';
-import { cacheGetSetJson, TTL_PERMISSIONS_SECONDS } from '../services/cache.ts';
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 export type PermissionResource = string;
@@ -212,36 +211,25 @@ export const isPermissionKnown = (permission: string) =>
   ALL_PERMISSIONS.includes(normalizePermission(permission));
 
 export const getRolePermissions = async (roleId: string): Promise<Permission[]> => {
-  const { value } = await cacheGetSetJson<Permission[]>(
-    'roles',
-    `perms:v2:role:${roleId}`,
-    TTL_PERMISSIONS_SECONDS,
-    async () => {
-      const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
-      if (roleResult.rows.length === 0) return [];
+  const roleResult = await query('SELECT id, is_admin FROM roles WHERE id = $1', [roleId]);
+  if (roleResult.rows.length === 0) return [];
 
-      const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
-        roleId,
-      ]);
-      const explicit = permResult.rows.map((r) =>
-        normalizePermission(r.permission),
-      ) as Permission[];
+  const permResult = await query('SELECT permission FROM role_permissions WHERE role_id = $1', [
+    roleId,
+  ]);
+  const explicit = permResult.rows.map((r) => normalizePermission(r.permission)) as Permission[];
 
-      const withNotifications = Array.from(
-        new Set([...explicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]),
-      );
-
-      if (roleResult.rows[0].is_admin) {
-        return Array.from(
-          new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...withNotifications]),
-        );
-      }
-
-      return withNotifications;
-    },
+  const withNotifications = Array.from(
+    new Set([...explicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]),
   );
 
-  return value;
+  if (roleResult.rows[0].is_admin) {
+    return Array.from(
+      new Set([...ADMINISTRATION_PERMISSIONS, ...ADMIN_BASE_PERMISSIONS, ...withNotifications]),
+    );
+  }
+
+  return withNotifications;
 };
 
 export const hasPermission = (permissions: string[] | undefined, permission: Permission) =>
