@@ -24,6 +24,7 @@ export interface CustomSelectProps {
   buttonClassName?: string;
   dropdownPosition?: 'top' | 'bottom';
   displayValue?: string; // Custom display value to override the default label
+  autoOpen?: boolean; // Auto open dropdown when component mounts/becomes active
 }
 
 const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -41,6 +42,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   buttonClassName,
   dropdownPosition = 'bottom',
   displayValue,
+  autoOpen = false,
 }) => {
   const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
@@ -85,6 +87,22 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     return () =>
       document.removeEventListener('custom-select-open', handleOtherOpen as EventListener);
   }, [onClose, dropdownId]);
+
+  // Auto open dropdown when autoOpen prop is true
+  useEffect(() => {
+    if (autoOpen && !isOpen && !disabled && buttonRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setIsOpen(true);
+        onOpen?.();
+        // Dispatch event to close other dropdowns
+        document.dispatchEvent(
+          new CustomEvent('custom-select-open', { detail: { id: dropdownId } }),
+        );
+      }, 10);
+      return () => clearTimeout(timer);
+    }
+  }, [autoOpen, isOpen, disabled, dropdownId, onOpen]);
 
   const calculatePosition = useCallback(() => {
     const buttonRect = buttonRef.current?.getBoundingClientRect();

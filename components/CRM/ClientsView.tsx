@@ -435,6 +435,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             }}
             placeholder={placeholder || t('common:form.selectOption')}
             searchable={false}
+            autoOpen={true}
             buttonClassName={`w-full text-xs py-1 px-2 ${
               showRedBorder ? '!border-red-500 !bg-red-50' : ''
             }`}
