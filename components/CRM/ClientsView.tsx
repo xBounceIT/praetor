@@ -385,7 +385,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     const isTouched = editingState.touchedFields.has(field as string);
     const hasError = isTouched && validationErrors[field as string];
     const showErrorBorder = isRequired && (!value || (typeof value === 'string' && !value.trim()));
-    const showRedBorder = hasError || (showErrorBorder && isTouched);
+    const showRedBorder = hasError || (showErrorBorder && (isTouched || isEditing));
 
     useEffect(() => {
       if (isEditing && isActive && inputRef.current) {
