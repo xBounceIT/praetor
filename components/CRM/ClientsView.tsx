@@ -406,7 +406,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             isRequired && !value ? t('common:validation.required') : isTruncated ? display : ''
           }
           disabled={!isRequired && !isTruncated && !isEditing}
-          wrapperClassName="w-full h-full"
+          wrapperClassName="w-full h-full -mx-3 -my-px"
         >
           {() => (
             <div
