@@ -366,7 +366,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     displayValue?: string;
     className?: string;
     placeholder?: string;
-    onStartEdit?: (field: keyof Client) => void;
   }> = ({
     field,
     value,
@@ -378,7 +377,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     displayValue,
     className = '',
     placeholder,
-    onStartEdit,
   }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const isActive = activeCell?.field === field;
@@ -406,19 +404,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             isRequired && !value ? t('common:validation.required') : isTruncated ? display : ''
           }
           disabled={!isRequired && !isTruncated && !isEditing}
-          wrapperClassName="w-full h-full flex"
         >
           {() => (
             <div
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                if (isEditing) {
-                  setActiveCell({ field });
-                } else if (onStartEdit) {
-                  onStartEdit(field);
-                }
-              }}
-              className={`h-full w-full flex items-center px-3 py-px cursor-pointer rounded transition-colors ${
+              className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
                 isEditing ? 'hover:bg-slate-100' : ''
               } ${showRedBorder ? 'border border-red-500 bg-red-50' : ''} ${className}`}
             >
@@ -462,7 +451,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
             setActiveCell(null);
           }
         }}
-        className={`w-full text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
+        className={`w-full min-w-[120px] text-xs px-2 py-1 border rounded outline-none focus:ring-2 focus:ring-praetor ${
           showRedBorder ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
         } ${className}`}
         placeholder={placeholder}
@@ -483,6 +472,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.name'),
         accessorKey: 'name',
+        onCellDoubleClick: (row) => startEditRow(row, 'name'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -495,7 +485,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               type="text"
               displayValue={row.name}
               className="font-semibold whitespace-nowrap"
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -503,6 +492,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.clientCode'),
         accessorKey: 'clientCode',
+        onCellDoubleClick: (row) => startEditRow(row, 'clientCode'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.clientCode : row.clientCode;
@@ -515,7 +505,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={true}
               type="text"
               displayValue={value || ''}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -547,6 +536,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         id: 'type',
         accessorFn: (row) =>
           row.type === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual'),
+        onCellDoubleClick: (row) => startEditRow(row, 'type'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.type : row.type;
@@ -579,7 +569,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               displayValue={
                 value === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual')
               }
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -587,6 +576,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.email'),
         accessorKey: 'email',
+        onCellDoubleClick: (row) => startEditRow(row, 'email'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -598,7 +588,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.email}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -606,6 +595,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.phone'),
         accessorKey: 'phone',
+        onCellDoubleClick: (row) => startEditRow(row, 'phone'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -617,7 +607,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.phone}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -626,6 +615,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.fiscalCode'),
         id: 'fiscalCode',
         accessorFn: (row) => row.fiscalCode || row.vatNumber || row.taxCode || '',
+        onCellDoubleClick: (row) => startEditRow(row, 'fiscalCode'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing
@@ -641,7 +631,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               type="text"
               displayValue={value}
               className="font-mono text-xs text-slate-400"
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -649,6 +638,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
+        onCellDoubleClick: (row) => startEditRow(row, 'officeCountRange'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.officeCountRange : row.officeCountRange;
@@ -662,7 +652,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               type="select"
               options={OFFICE_COUNT_RANGE_OPTIONS}
               displayValue={row.officeCountRange}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -670,6 +659,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.sector'),
         accessorKey: 'sector',
+        onCellDoubleClick: (row) => startEditRow(row, 'sector'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.sector : row.sector;
@@ -691,7 +681,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 name: t(`crm:clients.sectorOptions.${option.labelKey}`),
               }))}
               displayValue={displayValue}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -699,6 +688,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.numberOfEmployees'),
         accessorKey: 'numberOfEmployees',
+        onCellDoubleClick: (row) => startEditRow(row, 'numberOfEmployees'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.numberOfEmployees : row.numberOfEmployees;
@@ -720,7 +710,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 name: t(`crm:clients.numberOfEmployeesOptions.${option.labelKey}`),
               }))}
               displayValue={displayValue}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -728,6 +717,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.revenue'),
         accessorKey: 'revenue',
+        onCellDoubleClick: (row) => startEditRow(row, 'revenue'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.revenue : row.revenue;
@@ -749,7 +739,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 name: t(`crm:clients.revenueOptions.${option.labelKey}`),
               }))}
               displayValue={displayValue}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -757,6 +746,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.contactName'),
         accessorKey: 'contactName',
+        onCellDoubleClick: (row) => startEditRow(row, 'contactName'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -768,7 +758,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.contactName}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -776,6 +765,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.address'),
         accessorKey: 'address',
+        onCellDoubleClick: (row) => startEditRow(row, 'address'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -787,7 +777,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.address}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -795,6 +784,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.description'),
         accessorKey: 'description',
+        onCellDoubleClick: (row) => startEditRow(row, 'description'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -806,7 +796,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.description}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -814,6 +803,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.atecoCode'),
         accessorKey: 'atecoCode',
+        onCellDoubleClick: (row) => startEditRow(row, 'atecoCode'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -825,7 +815,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.atecoCode}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -833,6 +822,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.website'),
         accessorKey: 'website',
+        onCellDoubleClick: (row) => startEditRow(row, 'website'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -844,7 +834,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.website}
-              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },

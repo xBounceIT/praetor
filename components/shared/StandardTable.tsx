@@ -30,6 +30,7 @@ export type Column<T> = {
   align?: 'left' | 'center' | 'right';
   hidden?: boolean;
   sticky?: 'right';
+  onCellDoubleClick?: (row: T) => void; // Cell-level double click handler
 };
 
 export type StandardTableProps<T extends object = object> = {
@@ -681,6 +682,7 @@ const StandardTable = <T extends object>({
                       return (
                         <td
                           key={colId}
+                          onDoubleClick={() => col.onCellDoubleClick?.(row)}
                           style={
                             colWidth
                               ? { width: colWidth, minWidth: colWidth }
