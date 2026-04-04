@@ -2348,13 +2348,6 @@ const App: React.FC = () => {
     try {
       await api.clientsOrders.update(id, updates);
       await refreshClientOrderFlow();
-
-      // When an order is confirmed, projects are auto-created on the backend
-      // Refresh the projects list to reflect the new projects
-      if (updates.status === 'confirmed') {
-        const projectsData = await api.projects.list();
-        setProjects(projectsData);
-      }
     } catch (err) {
       console.error('Failed to update order:', err);
     }
