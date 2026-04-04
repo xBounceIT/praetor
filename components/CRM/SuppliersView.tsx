@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -204,6 +205,28 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
               {row.supplierCode}
             </span>
           ) : null,
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        cell: ({ row }) => {
+          if (!row.createdAt) {
+            return <span className="text-xs text-slate-400">-</span>;
+          }
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) {
+            return '-';
+          }
+          return formatInsertDate(timestamp);
+        },
       },
       {
         header: t('crm:suppliers.tableHeaders.contact'),
