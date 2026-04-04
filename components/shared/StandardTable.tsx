@@ -29,6 +29,7 @@ export type Column<T> = {
   filterFormat?: (value: T[keyof T] | string | number | boolean | null | undefined) => string;
   align?: 'left' | 'center' | 'right';
   hidden?: boolean;
+  sticky?: 'right';
 };
 
 export type StandardTableProps<T extends object = object> = {
@@ -556,7 +557,7 @@ const StandardTable = <T extends object>({
         className={`${tableContainerClassName ?? 'overflow-x-auto custom-horizontal-scrollbar'} ${resizingColId ? 'select-none' : ''}`}
       >
         {columns && data ? (
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-separate border-spacing-0">
             {(paginatedData.length > 0 ||
               Object.keys(filterState).length > 0 ||
               sortState !== null) && (
@@ -580,7 +581,7 @@ const StandardTable = <T extends object>({
                       <th
                         key={colId}
                         style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn ? 'w-full' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.headerClassName || ''}`}
+                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn ? 'w-full' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
                         {/* Inline wrapper for button beside text */}
                         <span className="inline-flex items-center gap-1">
@@ -657,7 +658,7 @@ const StandardTable = <T extends object>({
                   <tr
                     key={idx}
                     onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                    className={`transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-300 text-slate-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
+                    className={`group transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-slate-300 text-slate-500' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-slate-50/50'}`}`}
                   >
                     {visibleColumns.map((col, colIdx) => {
                       const colId = getColId(col);
@@ -675,7 +676,7 @@ const StandardTable = <T extends object>({
                         <td
                           key={colId}
                           style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn ? 'w-full flex justify-end items-center' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.className || ''}`}
+                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full flex justify-end items-center' : isLastColumn ? 'flex justify-end items-center' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
