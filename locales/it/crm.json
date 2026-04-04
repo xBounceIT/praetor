@@ -379,6 +379,7 @@
     "tableHeaders": {
       "name": "Nome",
       "code": "Codice",
+      "insertDate": "Data inserimento",
       "contact": "Contatto",
       "vat": "P.IVA",
       "taxCode": "C.F.",

@@ -383,6 +383,7 @@
     "tableHeaders": {
       "name": "Name",
       "code": "Code",
+      "insertDate": "Insert Date",
       "contact": "Contact",
       "vat": "VAT",
       "taxCode": "Tax Code",

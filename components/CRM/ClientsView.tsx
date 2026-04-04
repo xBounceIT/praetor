@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client } from '../../types';
+import { formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -254,14 +255,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   };
 
   const canSubmit = editingClient ? canUpdateClients : canCreateClients;
-  const formatInsertDate = useCallback((timestamp: number) => {
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return '-';
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  }, []);
 
   // Column definitions
   const columns = useMemo<Column<Client>[]>(
@@ -454,7 +447,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         ),
       },
     ],
-    [t, i18n, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete, formatInsertDate],
+    [t, i18n, canUpdateClients, canDeleteClients, onUpdateClient, confirmDelete],
   );
 
   return (
