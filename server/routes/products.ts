@@ -260,7 +260,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const result = await query(
         `INSERT INTO products (id, name, product_code, description, costo, mol_percentage, cost_unit, category, subcategory, type, supplier_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-             RETURNING id, name, product_code as "productCode", (EXTRACT(EPOCH FROM created_at) * 1000)::bigint as "createdAt", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, supplier_id as "supplierId"`,
+             RETURNING id, name, product_code as "productCode", EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, supplier_id as "supplierId"`,
         [
           id,
           nameResult.value,
@@ -484,7 +484,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (fields.length === 0) {
         // No updates
         const result = await query(
-          `SELECT id, name, product_code as "productCode", (EXTRACT(EPOCH FROM created_at) * 1000)::bigint as "createdAt", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, is_disabled as "isDisabled", supplier_id as "supplierId"
+          `SELECT id, name, product_code as "productCode", EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, is_disabled as "isDisabled", supplier_id as "supplierId"
                  FROM products WHERE id = $1`,
           [idResult.value],
         );
@@ -507,7 +507,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             UPDATE products 
             SET ${fields.join(', ')}
             WHERE id = $${paramIndex}
-            RETURNING id, name, product_code as "productCode", (EXTRACT(EPOCH FROM created_at) * 1000)::bigint as "createdAt", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, is_disabled as "isDisabled", supplier_id as "supplierId"
+            RETURNING id, name, product_code as "productCode", EXTRACT(EPOCH FROM created_at) * 1000 as "createdAt", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, is_disabled as "isDisabled", supplier_id as "supplierId"
         `;
 
       const result = await query(queryText, values);
