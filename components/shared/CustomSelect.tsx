@@ -58,6 +58,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     : options.find((o) => o.id === value);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
@@ -72,7 +74,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     const handleOtherOpen = (event: Event) => {
