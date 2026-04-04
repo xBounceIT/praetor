@@ -250,14 +250,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         },
         className: 'whitespace-nowrap font-mono text-xs',
         align: 'right',
-        cell: ({ row }: { row: Supplier }) => {
-          const sentOrders = supplierOrders.filter(
-            (order) => order.supplierId === row.id && order.status === 'sent',
-          );
-          const totalValue = sentOrders.reduce((total, order) => {
-            return total + calculateOrderTotal(order.items, order.discount);
-          }, 0);
-
+        cell: ({ value }: { value: number }) => {
+          const totalValue = value;
           return (
             <span
               className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}
