@@ -9,7 +9,6 @@ import type {
   QuoteItem,
   SpecialBid,
   SupplierQuote,
-  SupplierQuoteItem,
 } from '../../types';
 import {
   formatDateOnlyForLocale,
@@ -182,7 +181,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const calculateQuoteTotals = useCallback((items: QuoteItem[], globalDiscount: number) => {
     let subtotal = 0;
     let totalCost = 0;
-    const taxGroups: Record<number, number> = {};
 
     items.forEach((item) => {
       const lineSubtotal = item.quantity * item.unitPrice;
@@ -191,32 +189,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
       subtotal += lineNet;
 
-      const taxRate = Number(item.productTaxRate ?? 0);
-      const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-      const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-      taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-
       const cost = getEffectiveCost(item);
       const costMultiplier = item.unitType === 'days' ? 8 : 1;
       totalCost += item.quantity * cost * costMultiplier;
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
-    const taxableAmount = subtotal - discountAmount;
-    const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-    const total = taxableAmount + totalTax;
-    const margin = taxableAmount - totalCost;
-    const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+    const total = subtotal - discountAmount;
+    const margin = total - totalCost;
+    const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
 
     return {
       subtotal,
-      taxableAmount,
       discountAmount,
-      totalTax,
       total,
       margin,
       marginPercentage,
-      taxGroups,
     };
   }, []);
 
@@ -334,7 +322,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         unitPrice: roundToTwoDecimals(item.unitPrice),
         discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
         productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
-        productTaxRate: roundToTwoDecimals(Number(item.productTaxRate ?? 0)),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
@@ -455,7 +442,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               supplierQuoteDiscount: null,
               unitPrice,
               productCost: Number(product.costo),
-              productTaxRate: Number(product.taxRate ?? 0),
               productMolPercentage: product.molPercentage,
               specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
               specialBidMolPercentage: applicableBid?.molPercentage ?? null,
@@ -530,7 +516,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
-      productTaxRate: 0,
       productMolPercentage: null,
       specialBidUnitPrice: null,
       specialBidMolPercentage: null,
@@ -596,7 +581,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         }
         newItems[index].unitPrice = newUnitPrice;
         newItems[index].productCost = Number(product.costo);
-        newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+
         newItems[index].productMolPercentage = product.molPercentage;
       }
     }
@@ -631,7 +616,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
-            newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
             newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
@@ -647,7 +632,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             newItems[index].specialBidId = '';
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
-            newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = null;
             newItems[index].specialBidMolPercentage = null;
@@ -690,7 +675,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(netCost, mol);
           newItems[index].productCost = Number(product.costo);
-          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+
           newItems[index].productMolPercentage = product.molPercentage;
         } else {
           // Product not found for supplier quote item - clear supplier quote and revert
@@ -707,7 +692,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
             newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
             newItems[index].productCost = Number(existingProduct.costo);
-            newItems[index].productTaxRate = Number(existingProduct.taxRate ?? 0);
             newItems[index].productMolPercentage = existingProduct.molPercentage;
           }
         }
@@ -726,7 +710,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
           newItems[index].productCost = Number(existingProduct.costo);
-          newItems[index].productTaxRate = Number(existingProduct.taxRate ?? 0);
           newItems[index].productMolPercentage = existingProduct.molPercentage;
         }
       }
@@ -752,7 +735,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
-            newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+
             newItems[index].productMolPercentage = product.molPercentage;
           }
         }
@@ -776,7 +759,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
           }
           newItems[index].productCost = Number(product.costo);
-          newItems[index].productTaxRate = Number(product.taxRate ?? 0);
+
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidId = bid.id;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
@@ -800,7 +783,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const calculateTotals = useCallback((items: QuoteItem[], globalDiscount: number) => {
     let subtotal = 0;
     let totalCost = 0;
-    const taxGroups: Record<number, number> = {};
 
     items.forEach((item) => {
       const lineSubtotal = item.quantity * item.unitPrice;
@@ -809,32 +791,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
       subtotal += lineNet;
 
-      const taxRate = Number(item.productTaxRate ?? 0);
-      const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-      const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-      taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-
       const cost = getEffectiveCost(item);
       const costMultiplier = item.unitType === 'days' ? 8 : 1;
       totalCost += item.quantity * cost * costMultiplier;
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
-    const taxableAmount = subtotal - discountAmount;
-    const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-    const total = taxableAmount + totalTax;
-    const margin = taxableAmount - totalCost;
-    const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+    const total = subtotal - discountAmount;
+    const margin = total - totalCost;
+    const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
 
     return {
       subtotal,
-      taxableAmount,
       discountAmount,
-      totalTax,
       total,
       margin,
       marginPercentage,
-      taxGroups,
     };
   }, []);
 
@@ -1816,7 +1788,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const discountValue = Number.isNaN(formData.discount ?? 0)
                       ? 0
                       : (formData.discount ?? 0);
-                    const { subtotal, discountAmount, total, margin, marginPercentage, taxGroups } =
+                    const { subtotal, discountAmount, total, margin, marginPercentage } =
                       calculateTotals(formData.items, discountValue);
                     return (
                       <>
@@ -1825,7 +1797,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         )}
                         <div className="flex justify-between">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.taxableAmount')}
+                            {t('sales:clientQuotes.subtotalLabel', { defaultValue: 'Subtotale' })}
                           </span>
                           <span className="text-sm font-bold text-slate-700">
                             {subtotal.toFixed(2)} {currency}
@@ -1842,16 +1814,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </span>
                           </div>
                         )}
-                        {Object.entries(taxGroups).map(([rate, amount]) => (
-                          <div key={rate} className="flex justify-between text-xs">
-                            <span className="font-semibold text-slate-500">
-                              {t('sales:clientQuotes.ivaTax', { rate })}
-                            </span>
-                            <span className="font-semibold text-slate-700">
-                              {amount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        ))}
                         <div className="flex justify-between">
                           <span className="text-sm font-bold text-emerald-600">
                             {t('sales:clientQuotes.marginLabel')} (

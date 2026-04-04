@@ -58,10 +58,9 @@ const invoiceItemSchema = {
     description: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    taxRate: { type: 'number' },
     discount: { type: 'number' },
   },
-  required: ['id', 'invoiceId', 'description', 'quantity', 'unitPrice', 'taxRate', 'discount'],
+  required: ['id', 'invoiceId', 'description', 'quantity', 'unitPrice', 'discount'],
 } as const;
 
 const invoiceSchema = {
@@ -75,7 +74,6 @@ const invoiceSchema = {
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
     subtotal: { type: 'number' },
-    taxAmount: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: ['string', 'null'] },
@@ -91,7 +89,6 @@ const invoiceSchema = {
     'dueDate',
     'status',
     'subtotal',
-    'taxAmount',
     'total',
     'amountPaid',
     'createdAt',
@@ -107,10 +104,9 @@ const invoiceItemBodySchema = {
     description: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    taxRate: { type: 'number' },
     discount: { type: 'number' },
   },
-  required: ['description', 'quantity', 'unitPrice', 'taxRate'],
+  required: ['description', 'quantity', 'unitPrice'],
 } as const;
 
 const createBodySchema = {
@@ -124,7 +120,6 @@ const createBodySchema = {
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
     subtotal: { type: 'number' },
-    taxAmount: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: 'string' },
@@ -143,7 +138,6 @@ const updateBodySchema = {
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
     subtotal: { type: 'number' },
-    taxAmount: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
     notes: { type: 'string' },
@@ -156,7 +150,6 @@ type SupplierInvoiceItemInput = {
   description?: string;
   quantity?: string | number;
   unitPrice?: string | number;
-  taxRate?: string | number;
   discount?: string | number;
 };
 
@@ -182,11 +175,6 @@ const normalizeItems = (items: SupplierInvoiceItemInput[], reply: FastifyReply) 
       badRequest(reply, unitPriceResult.message);
       return null;
     }
-    const taxRateResult = parseLocalizedNonNegativeNumber(item.taxRate, `items[${i}].taxRate`);
-    if (!taxRateResult.ok) {
-      badRequest(reply, taxRateResult.message);
-      return null;
-    }
     const discountResult = optionalLocalizedNonNegativeNumber(
       item.discount,
       `items[${i}].discount`,
@@ -200,7 +188,6 @@ const normalizeItems = (items: SupplierInvoiceItemInput[], reply: FastifyReply) 
       description: descriptionResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
-      taxRate: taxRateResult.value,
       discount: discountResult.value || 0,
     });
   }
@@ -232,7 +219,6 @@ const formatInvoiceResponse = (
     issueDate: string | Date;
     dueDate: string | Date;
     subtotal: string | number;
-    taxAmount: string | number;
     total: string | number;
     amountPaid: string | number;
   } & Record<string, unknown>,
@@ -242,14 +228,12 @@ const formatInvoiceResponse = (
   issueDate: toRequiredDateOnly(invoice.issueDate, 'supplierInvoice.issueDate'),
   dueDate: toRequiredDateOnly(invoice.dueDate, 'supplierInvoice.dueDate'),
   subtotal: Number(invoice.subtotal ?? 0),
-  taxAmount: Number(invoice.taxAmount ?? 0),
   total: Number(invoice.total ?? 0),
   amountPaid: Number(invoice.amountPaid ?? 0),
   items: items.map((item) => ({
     ...item,
     quantity: Number(item.quantity ?? 0),
     unitPrice: Number(item.unitPrice ?? 0),
-    taxRate: Number(item.taxRate ?? 0),
     discount: Number(item.discount ?? 0),
   })),
 });
@@ -284,7 +268,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             si.due_date as "dueDate",
             si.status,
             si.subtotal,
-            si.tax_amount as "taxAmount",
             si.total,
             si.amount_paid as "amountPaid",
             si.notes,
@@ -302,7 +285,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             description,
             quantity,
             unit_price as "unitPrice",
-            tax_rate as "taxRate",
             discount
          FROM supplier_invoice_items
          ORDER BY created_at ASC`,
@@ -323,7 +305,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             issueDate: string | Date;
             dueDate: string | Date;
             subtotal: string | number;
-            taxAmount: string | number;
             total: string | number;
             amountPaid: string | number;
           } & Record<string, unknown>,
@@ -356,7 +337,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         dueDate,
         status,
         subtotal,
-        taxAmount,
         total,
         amountPaid,
         notes,
@@ -370,7 +350,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         dueDate: unknown;
         status: unknown;
         subtotal: unknown;
-        taxAmount: unknown;
         total: unknown;
         amountPaid: unknown;
         notes: unknown;
@@ -407,8 +386,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
       if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-      const taxAmountResult = optionalLocalizedNonNegativeNumber(taxAmount, 'taxAmount');
-      if (!taxAmountResult.ok) return badRequest(reply, taxAmountResult.message);
       const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
       if (!totalResult.ok) return badRequest(reply, totalResult.message);
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
@@ -448,8 +425,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           try {
             invoiceResult = await query(
               `INSERT INTO supplier_invoices
-                (id, linked_sale_id, supplier_id, supplier_name, issue_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                (id, linked_sale_id, supplier_id, supplier_name, issue_date, due_date, status, subtotal, total, amount_paid, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                RETURNING
                   id,
                   linked_sale_id as "linkedSaleId",
@@ -459,7 +436,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   due_date as "dueDate",
                   status,
                   subtotal,
-                  tax_amount as "taxAmount",
                   total,
                   amount_paid as "amountPaid",
                   notes,
@@ -474,7 +450,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 dueDateResult.value,
                 status || 'draft',
                 subtotalResult.value || 0,
-                taxAmountResult.value || 0,
                 totalResult.value || 0,
                 amountPaidResult.value || 0,
                 notes || null,
@@ -505,8 +480,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const itemId = `sinv-item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
           const itemResult = await query(
             `INSERT INTO supplier_invoice_items
-              (id, invoice_id, product_id, description, quantity, unit_price, tax_rate, discount)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              (id, invoice_id, product_id, description, quantity, unit_price, discount)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING
                 id,
                 invoice_id as "invoiceId",
@@ -514,7 +489,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 description,
                 quantity,
                 unit_price as "unitPrice",
-                tax_rate as "taxRate",
                 discount`,
             [
               itemId,
@@ -523,7 +497,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.description,
               item.quantity,
               item.unitPrice,
-              item.taxRate,
               item.discount || 0,
             ],
           );
@@ -576,7 +549,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         dueDate,
         status,
         subtotal,
-        taxAmount,
         total,
         amountPaid,
         notes,
@@ -589,7 +561,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         dueDate: unknown;
         status: unknown;
         subtotal: unknown;
-        taxAmount: unknown;
         total: unknown;
         amountPaid: unknown;
         notes: unknown;
@@ -664,7 +635,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         issueDate !== undefined ||
         dueDate !== undefined ||
         subtotal !== undefined ||
-        taxAmount !== undefined ||
         total !== undefined ||
         amountPaid !== undefined ||
         notes !== undefined ||
@@ -696,13 +666,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         subtotalValue = subtotalResult.value;
       }
 
-      let taxAmountValue = taxAmount;
-      if (taxAmount !== undefined) {
-        const taxAmountResult = optionalLocalizedNonNegativeNumber(taxAmount, 'taxAmount');
-        if (!taxAmountResult.ok) return badRequest(reply, taxAmountResult.message);
-        taxAmountValue = taxAmountResult.value;
-      }
-
       let totalValue = total;
       if (total !== undefined) {
         const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
@@ -727,12 +690,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                due_date = COALESCE($5, due_date),
                status = COALESCE($6, status),
                subtotal = COALESCE($7, subtotal),
-               tax_amount = COALESCE($8, tax_amount),
-               total = COALESCE($9, total),
-               amount_paid = COALESCE($10, amount_paid),
-               notes = COALESCE($11, notes),
+               total = COALESCE($8, total),
+               amount_paid = COALESCE($9, amount_paid),
+               notes = COALESCE($10, notes),
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $12
+           WHERE id = $11
            RETURNING
               id,
               linked_sale_id as "linkedSaleId",
@@ -742,7 +704,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               due_date as "dueDate",
               status,
               subtotal,
-              tax_amount as "taxAmount",
               total,
               amount_paid as "amountPaid",
               notes,
@@ -756,7 +717,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             dueDateValue,
             status,
             subtotalValue,
-            taxAmountValue,
             totalValue,
             amountPaidValue,
             notes,
@@ -782,8 +742,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const itemId = `sinv-item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
             const itemResult = await query(
               `INSERT INTO supplier_invoice_items
-                (id, invoice_id, product_id, description, quantity, unit_price, tax_rate, discount)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (id, invoice_id, product_id, description, quantity, unit_price, discount)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
                RETURNING
                   id,
                   invoice_id as "invoiceId",
@@ -791,7 +751,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   description,
                   quantity,
                   unit_price as "unitPrice",
-                  tax_rate as "taxRate",
                   discount`,
               [
                 itemId,
@@ -800,7 +759,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 item.description,
                 item.quantity,
                 item.unitPrice,
-                item.taxRate,
                 item.discount || 0,
               ],
             );
@@ -815,7 +773,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 description,
                 quantity,
                 unit_price as "unitPrice",
-                tax_rate as "taxRate",
                 discount
              FROM supplier_invoice_items
              WHERE invoice_id = $1`,

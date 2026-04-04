@@ -191,7 +191,6 @@ export interface Product {
   costUnit: 'unit' | 'hours';
   category?: string;
   subcategory?: string;
-  taxRate: number;
   type: string; // User-managed product types
   supplierId?: string;
   supplierName?: string;
@@ -222,7 +221,6 @@ export interface QuoteItem {
   quantity: number;
   unitPrice: number;
   productCost?: number;
-  productTaxRate?: number;
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
@@ -274,7 +272,6 @@ export interface ClientOfferItem {
   quantity: number;
   unitPrice: number;
   productCost?: number;
-  productTaxRate?: number;
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
@@ -323,7 +320,6 @@ export interface ClientsOrderItem {
   quantity: number;
   unitPrice: number;
   productCost?: number;
-  productTaxRate?: number;
   productMolPercentage?: number | null;
   specialBidUnitPrice?: number | null;
   specialBidMolPercentage?: number | null;
@@ -461,7 +457,6 @@ export interface InvoiceItem {
   unitOfMeasure: 'unit' | 'hours';
   quantity: number;
   unitPrice: number;
-  taxRate: number;
   discount?: number;
 }
 
@@ -475,7 +470,6 @@ export interface Invoice {
   dueDate: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   subtotal: number;
-  taxAmount: number;
   total: number;
   amountPaid: number;
   notes?: string;
@@ -544,7 +538,6 @@ export interface SupplierSaleOrderItem {
   productName: string;
   quantity: number;
   unitPrice: number;
-  productTaxRate?: number;
   discount?: number;
   note?: string;
 }
@@ -581,7 +574,6 @@ export interface SupplierInvoiceItem {
   description: string;
   quantity: number;
   unitPrice: number;
-  taxRate: number;
   discount?: number;
 }
 
@@ -595,7 +587,6 @@ export interface SupplierInvoice {
   dueDate: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   subtotal: number;
-  taxAmount: number;
   total: number;
   amountPaid: number;
   notes?: string;

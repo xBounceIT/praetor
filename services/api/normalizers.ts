@@ -108,7 +108,6 @@ export const normalizeUser = (u: User): User => {
 export const normalizeProduct = (p: Product): Product => ({
   ...p,
   costo: Number(p.costo || 0),
-  taxRate: Number(p.taxRate || 0),
 });
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
@@ -117,10 +116,6 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   unitPrice: Number(item.unitPrice || 0),
   productCost:
     item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
-  productTaxRate:
-    item.productTaxRate === undefined || item.productTaxRate === null
-      ? 0
-      : Number(item.productTaxRate),
   productMolPercentage:
     item.productMolPercentage === undefined || item.productMolPercentage === null
       ? null
@@ -165,10 +160,6 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
   unitPrice: Number(item.unitPrice || 0),
   productCost:
     item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
-  productTaxRate:
-    item.productTaxRate === undefined || item.productTaxRate === null
-      ? 0
-      : Number(item.productTaxRate),
   productMolPercentage:
     item.productMolPercentage === undefined || item.productMolPercentage === null
       ? null
@@ -213,10 +204,6 @@ export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderI
   unitPrice: Number(item.unitPrice || 0),
   productCost:
     item.productCost === undefined || item.productCost === null ? 0 : Number(item.productCost),
-  productTaxRate:
-    item.productTaxRate === undefined || item.productTaxRate === null
-      ? 0
-      : Number(item.productTaxRate),
   productMolPercentage:
     item.productMolPercentage === undefined || item.productMolPercentage === null
       ? null
@@ -276,14 +263,12 @@ export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   unitOfMeasure: item.unitOfMeasure === 'hours' ? 'hours' : 'unit',
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
-  taxRate: Number(item.taxRate || 0),
   discount: Number(item.discount || 0),
 });
 
 export const normalizeInvoice = (i: Invoice): Invoice => ({
   ...i,
   subtotal: roundToTwoDecimals(Number(i.subtotal ?? 0)),
-  taxAmount: roundToTwoDecimals(Number(i.taxAmount ?? 0)),
   total: roundToTwoDecimals(Number(i.total ?? 0)),
   amountPaid: roundToTwoDecimals(Number(i.amountPaid ?? 0)),
   items: (i.items || []).map(normalizeInvoiceItem),
@@ -309,10 +294,6 @@ export const normalizeSupplierSaleOrderItem = (
   ...item,
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
-  productTaxRate:
-    item.productTaxRate === undefined || item.productTaxRate === null
-      ? 0
-      : Number(item.productTaxRate),
   discount: Number(item.discount || 0),
   note: item.note || '',
 });
@@ -327,14 +308,12 @@ export const normalizeSupplierInvoiceItem = (item: SupplierInvoiceItem): Supplie
   ...item,
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
-  taxRate: Number(item.taxRate || 0),
   discount: Number(item.discount || 0),
 });
 
 export const normalizeSupplierInvoice = (invoice: SupplierInvoice): SupplierInvoice => ({
   ...invoice,
   subtotal: roundToTwoDecimals(Number(invoice.subtotal ?? 0)),
-  taxAmount: roundToTwoDecimals(Number(invoice.taxAmount ?? 0)),
   total: roundToTwoDecimals(Number(invoice.total ?? 0)),
   amountPaid: roundToTwoDecimals(Number(invoice.amountPaid ?? 0)),
   items: (invoice.items || []).map(normalizeSupplierInvoiceItem),

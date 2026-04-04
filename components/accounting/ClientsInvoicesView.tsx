@@ -90,7 +90,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       notes: '',
       amountPaid: 0,
       subtotal: 0,
-      taxAmount: 0,
       total: 0,
     };
   }, []);
@@ -156,7 +155,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         description: options?.preserveDescription ? item.description : product.name,
         unitOfMeasure: normalizeUnitOfMeasure(product.costUnit),
         unitPrice: calcProductSalePrice(cost, mol),
-        taxRate: Number(product.taxRate ?? 0),
       };
     },
     [],
@@ -189,7 +187,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       notes: '',
       amountPaid: 0,
       subtotal: 0,
-      taxAmount: 0,
       total: 0,
     });
     setErrors({});
@@ -212,23 +209,15 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   const calculateTotals = useCallback((items: InvoiceItem[]) => {
     let subtotal = 0;
-    const taxGroups: Record<number, number> = {};
 
     items.forEach((item) => {
       const lineNet = getLineTotal(item);
       subtotal += lineNet;
-
-      const taxRate = Number(item.taxRate || 0);
-      const taxAmount = roundToTwoDecimals(lineNet * (taxRate / 100));
-      taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
     });
 
-    const totalTax = roundToTwoDecimals(
-      Object.values(taxGroups).reduce((sum, value) => sum + value, 0),
-    );
-    const total = roundToTwoDecimals(subtotal + totalTax);
+    const total = roundToTwoDecimals(subtotal);
 
-    return { subtotal, totalTax, total, taxGroups };
+    return { subtotal, total };
   }, []);
 
   const handleClientChange = (clientId: string) => {
@@ -274,7 +263,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       unitOfMeasure: 'unit',
       quantity: 1,
       unitPrice: 0,
-      taxRate: 22,
       discount: 0,
     };
 
@@ -378,16 +366,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       quantity: roundToTwoDecimals(Number(item.quantity ?? 0)),
       unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
       discount: roundToTwoDecimals(Number(item.discount || 0)),
-      taxRate: roundToTwoDecimals(Number(item.taxRate || 0)),
     }));
 
-    const { subtotal, totalTax, total } = calculateTotals(roundedItems);
+    const { subtotal, total } = calculateTotals(roundedItems);
     const payload = {
       ...formData,
       items: roundedItems,
       amountPaid: roundToTwoDecimals(Number(formData.amountPaid || 0)),
       subtotal: roundToTwoDecimals(subtotal),
-      taxAmount: roundToTwoDecimals(totalTax),
       total: roundToTwoDecimals(total),
     };
 
@@ -412,7 +398,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     }
   };
 
-  const { subtotal, total, taxGroups } = calculateTotals(formData.items || []);
+  const { subtotal, total } = calculateTotals(formData.items || []);
   const totalDiscount = (formData.items || []).reduce(
     (sum, item) => sum + item.quantity * item.unitPrice * (Number(item.discount || 0) / 100),
     0,
@@ -701,7 +687,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <div className="col-span-2">
                       {t('common:labels.price')} ({currency})
                     </div>
-                    <div className="col-span-1">{t('accounting:clientsInvoices.tax')}%</div>
                     <div className="col-span-1">{t('common:labels.discount')}%</div>
                     <div className="col-span-3 pr-2 text-right">{t('common:labels.total')}</div>
                   </div>
@@ -818,25 +803,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                           </div>
                           <div className="space-y-1 md:col-span-1">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                              {t('accounting:clientsInvoices.tax')}%
-                            </label>
-                            <ValidatedNumberInput
-                              min="0"
-                              max="100"
-                              value={item.taxRate}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateItemRow(
-                                  index,
-                                  'taxRate',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                            />
-                          </div>
-                          <div className="space-y-1 md:col-span-1">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                               {t('common:labels.discount')}%
                             </label>
                             <ValidatedNumberInput
@@ -937,16 +903,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     </span>
                   </div>
                 )}
-                {Object.entries(taxGroups).map(([rate, amount]) => (
-                  <div key={rate} className="flex justify-between text-xs">
-                    <span className="font-semibold text-slate-500">
-                      {t('accounting:clientsInvoices.vat')} {rate}%
-                    </span>
-                    <span className="font-semibold text-slate-700">
-                      {amount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                ))}
                 <div className="flex justify-between border-t border-slate-200 pt-3">
                   <span className="text-lg font-black text-slate-800">
                     {t('accounting:clientsInvoices.total')}

@@ -37,7 +37,6 @@ const calcProductSalePrice = (cost: number, molPercentage: number) => {
 const calculateTotals = (items: ClientOfferItem[], globalDiscount: number) => {
   let subtotal = 0;
   let totalCost = 0;
-  const taxGroups: Record<number, number> = {};
 
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
@@ -46,11 +45,6 @@ const calculateTotals = (items: ClientOfferItem[], globalDiscount: number) => {
 
     subtotal += lineNet;
 
-    const taxRate = Number(item.productTaxRate ?? 0);
-    const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-    const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-    taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
-
     const cost = item.specialBidId
       ? Number(item.specialBidUnitPrice ?? 0)
       : Number(item.productCost ?? 0);
@@ -58,21 +52,16 @@ const calculateTotals = (items: ClientOfferItem[], globalDiscount: number) => {
   });
 
   const discountAmount = subtotal * (globalDiscount / 100);
-  const taxableAmount = subtotal - discountAmount;
-  const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-  const total = taxableAmount + totalTax;
-  const margin = taxableAmount - totalCost;
-  const marginPercentage = taxableAmount > 0 ? (margin / taxableAmount) * 100 : 0;
+  const total = subtotal - discountAmount;
+  const margin = total - totalCost;
+  const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
 
   return {
     subtotal,
-    taxableAmount,
     discountAmount,
-    totalTax,
     total,
     margin,
     marginPercentage,
-    taxGroups,
   };
 };
 
@@ -424,7 +413,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       quantity: 1,
       unitPrice: 0,
       productCost: 0,
-      productTaxRate: 0,
       productMolPercentage: null,
       specialBidUnitPrice: null,
       specialBidMolPercentage: null,
@@ -464,7 +452,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.specialBidId = matchingBid?.id || '';
           current.unitPrice = calcProductSalePrice(cost, mol);
           current.productCost = Number(product.costo);
-          current.productTaxRate = Number(product.taxRate ?? 0);
           current.productMolPercentage = product.molPercentage;
           current.specialBidUnitPrice = matchingBid ? Number(matchingBid.unitPrice) : null;
           current.specialBidMolPercentage = matchingBid?.molPercentage ?? null;
@@ -504,7 +491,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         ...item,
         unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
         productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
-        productTaxRate: roundToTwoDecimals(Number(item.productTaxRate ?? 0)),
         discount: roundToTwoDecimals(Number(item.discount ?? 0)),
       })),
     };
@@ -725,9 +711,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientOffers.discount', { defaultValue: 'Discount %' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('sales:clientOffers.taxRate', { defaultValue: 'Tax %' })}
-                    </div>
                   </div>
                   <div className="w-10 shrink-0"></div>
                 </div>
@@ -799,23 +782,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </div>
-                          <div className="col-span-2">
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              max="100"
-                              value={item.productTaxRate || 0}
-                              onValueChange={(value) =>
-                                updateItem(
-                                  index,
-                                  'productTaxRate',
-                                  value === '' ? 0 : Number(value),
-                                )
-                              }
-                              disabled={isReadOnly}
-                              className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                          </div>
                         </div>
                         <button
                           type="button"
@@ -855,26 +821,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   const discountValue = Number.isNaN(formData.discount ?? 0)
                     ? 0
                     : (formData.discount ?? 0);
-                  const {
-                    taxableAmount,
-                    discountAmount,
-                    total,
-                    margin,
-                    marginPercentage,
-                    taxGroups,
-                  } = calculateTotals(formData.items, discountValue);
+                  const { subtotal, discountAmount, total, margin, marginPercentage } =
+                    calculateTotals(formData.items, discountValue);
                   return (
                     <>
-                      {/* Taxable Amount */}
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-bold text-slate-500">
-                          {t('sales:clientOffers.taxableAmount', {
-                            defaultValue: 'Taxable Amount',
-                          })}
-                          :
+                          {t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' })}:
                         </span>
                         <span className="text-sm font-black text-slate-800">
-                          {taxableAmount.toFixed(2)} {currency}
+                          {subtotal.toFixed(2)} {currency}
                         </span>
                       </div>
 
@@ -891,19 +847,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         </div>
                       )}
 
-                      {/* Tax */}
-                      {Object.entries(taxGroups).map(([rate, amount]) => (
-                        <div key={rate} className="flex items-center gap-4">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientOffers.tax', { defaultValue: 'Tax', rate })}:
-                          </span>
-                          <span className="text-sm font-black text-slate-800">
-                            {amount.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                      ))}
-
-                      {/* Margin */}
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-bold text-emerald-600">
                           {t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (

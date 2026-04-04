@@ -32,8 +32,6 @@ const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknow
 interface TotalsBreakdown {
   subtotal: number;
   discountAmount: number;
-  totalTax: number;
-  taxGroups: Record<number, number>;
   total: number;
 }
 
@@ -43,22 +41,15 @@ const calculateTotals = (
   products: Product[],
 ): TotalsBreakdown => {
   let subtotal = 0;
-  const taxGroups: Record<number, number> = {};
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
-    const product = products.find((candidate) => candidate.id === item.productId);
-    const taxRate = Number(product?.taxRate ?? 0);
-    const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-    const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-    taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
   });
   const discountAmount = subtotal * (globalDiscount / 100);
-  const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-  const total = subtotal - discountAmount + totalTax;
-  return { subtotal, discountAmount, totalTax, taxGroups, total };
+  const total = subtotal - discountAmount;
+  return { subtotal, discountAmount, total };
 };
 
 export interface SupplierQuotesViewProps {
@@ -1058,19 +1049,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     </span>
                   </div>
                 )}
-                {Object.entries(totalsBreakdown.taxGroups).map(([rate, amount]) => (
-                  <div key={rate} className="flex justify-between text-xs">
-                    <span className="font-semibold text-slate-500">
-                      {t('sales:supplierQuotes.taxRate', {
-                        rate,
-                        defaultValue: 'Tax {{rate}}%',
-                      })}
-                    </span>
-                    <span className="font-semibold text-slate-700">
-                      {amount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                ))}
                 <div className="flex justify-between border-t border-slate-200 pt-3">
                   <span className="text-lg font-black text-slate-800">
                     {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}

@@ -61,7 +61,6 @@ const clientOrderItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    productTaxRate: { type: 'number' },
     productMolPercentage: { type: ['number', 'null'] },
     specialBidUnitPrice: { type: ['number', 'null'] },
     specialBidMolPercentage: { type: ['number', 'null'] },
@@ -74,16 +73,7 @@ const clientOrderItemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
   },
-  required: [
-    'id',
-    'orderId',
-    'productName',
-    'quantity',
-    'unitPrice',
-    'productCost',
-    'productTaxRate',
-    'discount',
-  ],
+  required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
 
 const clientOrderSchema = {
@@ -124,7 +114,6 @@ const clientOrderItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    productTaxRate: { type: 'number' },
     productMolPercentage: { type: 'number' },
     specialBidUnitPrice: { type: 'number' },
     specialBidMolPercentage: { type: 'number' },
@@ -199,7 +188,6 @@ const normalizeClientOrderItemRow = (row: Record<string, unknown>) => ({
   quantity: toFiniteNumber(row.quantity, 'clientOrderItem.quantity'),
   unitPrice: toFiniteNumber(row.unitPrice, 'clientOrderItem.unitPrice'),
   productCost: toFiniteNumber(row.productCost, 'clientOrderItem.productCost'),
-  productTaxRate: toFiniteNumber(row.productTaxRate, 'clientOrderItem.productTaxRate'),
   productMolPercentage: toNullableFiniteNumber(
     row.productMolPercentage,
     'clientOrderItem.productMolPercentage',
@@ -309,7 +297,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 quantity,
                 unit_price as "unitPrice",
                 product_cost as "productCost",
-                product_tax_rate as "productTaxRate",
                 product_mol_percentage as "productMolPercentage",
                 special_bid_unit_price as "specialBidUnitPrice",
                 special_bid_mol_percentage as "specialBidMolPercentage",
@@ -434,7 +421,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quantity: quantityResult.value,
           unitPrice: unitPriceResult.value,
           productCost: Number(item.productCost ?? 0),
-          productTaxRate: Number(item.productTaxRate ?? 0),
           productMolPercentage:
             item.productMolPercentage === undefined || item.productMolPercentage === null
               ? null
@@ -541,8 +527,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       for (const item of normalizedItems) {
         const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         const itemResult = await query(
-          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                  RETURNING
                     id,
                     sale_id as "orderId",
@@ -552,7 +538,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     quantity,
                     unit_price as "unitPrice",
                     product_cost as "productCost",
-                    product_tax_rate as "productTaxRate",
                     product_mol_percentage as "productMolPercentage",
                     special_bid_unit_price as "specialBidUnitPrice",
                     special_bid_mol_percentage as "specialBidMolPercentage",
@@ -573,7 +558,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.quantity,
             item.unitPrice,
             item.productCost,
-            item.productTaxRate,
             item.productMolPercentage ?? null,
             item.specialBidUnitPrice ?? null,
             item.specialBidMolPercentage ?? null,
@@ -744,7 +728,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             quantity: quantityResult.value,
             unitPrice: unitPriceResult.value,
             productCost: Number(item.productCost ?? 0),
-            productTaxRate: Number(item.productTaxRate ?? 0),
             productMolPercentage:
               item.productMolPercentage === undefined || item.productMolPercentage === null
                 ? null
@@ -914,7 +897,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                             quantity,
                             unit_price as "unitPrice",
                             product_cost as "productCost",
-                            product_tax_rate as "productTaxRate",
                             product_mol_percentage as "productMolPercentage",
                             special_bid_unit_price as "specialBidUnitPrice",
                             special_bid_mol_percentage as "specialBidMolPercentage",
@@ -1074,7 +1056,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         quantity,
                         unit_price as "unitPrice",
                         product_cost as "productCost",
-                        product_tax_rate as "productTaxRate",
                         product_mol_percentage as "productMolPercentage",
                         special_bid_unit_price as "specialBidUnitPrice",
                         special_bid_mol_percentage as "specialBidMolPercentage",
@@ -1103,8 +1084,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         for (const item of normalizedItems) {
           const itemId = 'si-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
           const itemResult = await query(
-            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_tax_rate, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            `INSERT INTO sale_items (id, sale_id, product_id, product_name, special_bid_id, quantity, unit_price, product_cost, product_mol_percentage, special_bid_unit_price, special_bid_mol_percentage, discount, note, supplier_quote_id, supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price, supplier_quote_item_discount, supplier_quote_discount)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                      RETURNING
                         id,
                         sale_id as "orderId",
@@ -1114,7 +1095,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                         quantity,
                         unit_price as "unitPrice",
                         product_cost as "productCost",
-                        product_tax_rate as "productTaxRate",
                         product_mol_percentage as "productMolPercentage",
                         special_bid_unit_price as "specialBidUnitPrice",
                         special_bid_mol_percentage as "specialBidMolPercentage",
@@ -1135,7 +1115,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.quantity,
               item.unitPrice,
               item.productCost,
-              item.productTaxRate,
               item.productMolPercentage ?? null,
               item.specialBidUnitPrice ?? null,
               item.specialBidMolPercentage ?? null,
@@ -1165,7 +1144,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     quantity,
                     unit_price as "unitPrice",
                     product_cost as "productCost",
-                    product_tax_rate as "productTaxRate",
                     product_mol_percentage as "productMolPercentage",
                     special_bid_unit_price as "specialBidUnitPrice",
                     special_bid_mol_percentage as "specialBidMolPercentage",

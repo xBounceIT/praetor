@@ -250,8 +250,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         },
         className: 'whitespace-nowrap font-mono text-xs',
         align: 'right',
-        cell: ({ value }: { value: number }) => {
-          const totalValue = value;
+        cell: (info) => {
+          const totalValue = info.value as number;
           return (
             <span
               className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}

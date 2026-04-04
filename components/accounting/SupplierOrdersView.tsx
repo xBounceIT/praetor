@@ -47,25 +47,20 @@ const getPaymentTermsLabel = (
 
 const calculateTotals = (items: SupplierSaleOrderItem[], globalDiscount: number) => {
   let subtotal = 0;
-  let taxAmount = 0;
 
   items.forEach((item) => {
     const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
-    taxAmount += lineNet * (1 - globalDiscount / 100) * (Number(item.productTaxRate ?? 0) / 100);
   });
 
   const discountAmount = subtotal * (globalDiscount / 100);
-  const taxableAmount = subtotal - discountAmount;
-  const total = taxableAmount + taxAmount;
+  const total = subtotal - discountAmount;
 
   return {
     subtotal,
     discountAmount,
-    taxableAmount,
-    taxAmount,
     total,
   };
 };
@@ -158,7 +153,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           if (product) {
             nextItem.productName = product.name;
             nextItem.unitPrice = Number(product.costo);
-            nextItem.productTaxRate = Number(product.taxRate ?? 0);
           }
         }
 
@@ -180,7 +174,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         items: (formData.items || []).map((item) => ({
           ...item,
           unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-          productTaxRate: roundToTwoDecimals(Number(item.productTaxRate ?? 0)),
           discount: roundToTwoDecimals(Number(item.discount ?? 0)),
         })),
       });
@@ -580,7 +573,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     <div className="col-span-2">
                       {t('crm:internalListing.salePrice')} ({currency})
                     </div>
-                    <div className="col-span-1">{t('accounting:clientsInvoices.vat')}</div>
                     <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
                     <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
                     <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
@@ -647,15 +639,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 }
                                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400"
                               />
-                            </div>
-
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('accounting:clientsInvoices.vat')}
-                              </label>
-                              <div className="flex min-h-[42px] items-center px-3 py-2 text-sm text-slate-500">
-                                {Number(item.productTaxRate ?? 0).toFixed(0)}%
-                              </div>
                             </div>
 
                             <div className="space-y-1 md:col-span-1">
@@ -750,14 +733,6 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.vat')}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {totals.taxAmount.toFixed(2)} {currency}
-                  </span>
-                </div>
                 <div className="flex justify-between border-t border-slate-200 pt-3">
                   <span className="text-lg font-black text-slate-800">
                     {t('accounting:supplierOrders.total')}
