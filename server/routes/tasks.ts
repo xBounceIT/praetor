@@ -243,7 +243,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         start = recurrenceStartResult.value || todayLocalDateOnly();
       }
 
-      const id = 't-' + Date.now();
+      const id = 't-' + crypto.randomUUID();
 
       try {
         await query(
