@@ -1567,13 +1567,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           {
             header: t('crm:internalListing.insertDate'),
             id: 'createdAt',
-            accessorFn: (row) => row.createdAt ?? 0,
-            cell: ({ row: p }) => (
+            accessorFn: (row) => row.createdAt ?? null,
+            cell: ({ value }) => (
               <span className="text-xs text-slate-500 whitespace-nowrap">
-                {formatInsertDate(p.createdAt)}
+                {formatInsertDate(value as number | null)}
               </span>
             ),
-            filterFormat: (value) => formatInsertDate(value as number),
+            filterFormat: (value) => formatInsertDate(value as number | null),
           },
           {
             header: t('common:labels.name'),
