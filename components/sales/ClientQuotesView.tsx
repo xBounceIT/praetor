@@ -581,7 +581,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         }
         newItems[index].unitPrice = newUnitPrice;
         newItems[index].productCost = Number(product.costo);
-
         newItems[index].productMolPercentage = product.molPercentage;
       }
     }
@@ -616,7 +615,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
-
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
             newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
@@ -632,7 +630,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             newItems[index].specialBidId = '';
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
-
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = null;
             newItems[index].specialBidMolPercentage = null;
@@ -675,7 +672,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
           newItems[index].unitPrice = calcProductSalePrice(netCost, mol);
           newItems[index].productCost = Number(product.costo);
-
           newItems[index].productMolPercentage = product.molPercentage;
         } else {
           // Product not found for supplier quote item - clear supplier quote and revert
@@ -735,7 +731,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
-
             newItems[index].productMolPercentage = product.molPercentage;
           }
         }
@@ -759,7 +754,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
           }
           newItems[index].productCost = Number(product.costo);
-
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidId = bid.id;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
@@ -816,9 +810,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const activeSpecialBids = specialBids.filter((b) => {
     return isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate);
   });
-  const clientSpecialBids = formData.clientId
-    ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)
-    : activeSpecialBids;
 
   // Filter accepted supplier quotes for sourcing
   const acceptedSupplierQuotes = useMemo(
@@ -852,13 +843,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     }
     return options;
   }, [acceptedSupplierQuotes]);
-
-  const getBidDisplayValue = (bidId?: string) => {
-    if (!bidId) return t('sales:clientQuotes.noSpecialBid');
-    const bid =
-      activeSpecialBids.find((b) => b.id === bidId) || specialBids.find((b) => b.id === bidId);
-    return bid ? `${bid.clientName} · ${bid.productName}` : t('sales:clientQuotes.noSpecialBid');
-  };
 
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
@@ -1797,7 +1781,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         )}
                         <div className="flex justify-between">
                           <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.subtotalLabel', { defaultValue: 'Subtotale' })}
+                            {t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
                           </span>
                           <span className="text-sm font-bold text-slate-700">
                             {subtotal.toFixed(2)} {currency}

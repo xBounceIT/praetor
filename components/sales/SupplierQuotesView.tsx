@@ -35,11 +35,7 @@ interface TotalsBreakdown {
   total: number;
 }
 
-const calculateTotals = (
-  items: SupplierQuoteItem[],
-  globalDiscount: number,
-  products: Product[],
-): TotalsBreakdown => {
+const calculateTotals = (items: SupplierQuoteItem[], globalDiscount: number): TotalsBreakdown => {
   let subtotal = 0;
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
@@ -141,11 +137,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [hasOrderForQuote],
   );
 
-  const totalsBreakdown = calculateTotals(
-    formData.items || [],
-    Number(formData.discount || 0),
-    products,
-  );
+  const totalsBreakdown = calculateTotals(formData.items || [], Number(formData.discount || 0));
 
   const inputClassName =
     'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
@@ -342,13 +334,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculateTotals(row.items, row.discount, products).total,
+        accessorFn: (row) => calculateTotals(row.items, row.discount).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const history = isHistoryRow(row);
-          const { total } = calculateTotals(row.items, row.discount, products);
+          const { total } = calculateTotals(row.items, row.discount);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
@@ -591,7 +583,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       onUpdateQuote,
       onViewOrders,
       openEditModal,
-      products,
       t,
       isHistoryRow,
       hasOrderForQuote,

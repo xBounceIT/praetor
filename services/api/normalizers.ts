@@ -108,6 +108,7 @@ export const normalizeUser = (u: User): User => {
 export const normalizeProduct = (p: Product): Product => ({
   ...p,
   costo: Number(p.costo || 0),
+  molPercentage: Number(p.molPercentage || 0),
 });
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({

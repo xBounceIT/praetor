@@ -1,10 +1,13 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import sirv from 'sirv';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
-import pkg from './package.json';
+import pkg from './package.json' with { type: 'json' };
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Generate build date in yyyymmdd format
 const getBuildDate = () => {
@@ -55,6 +58,7 @@ const docsFrontendBuildPlugin = (): Plugin => {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  const preserveSymlinks = env.VITE_PRESERVE_SYMLINKS === 'true';
   return {
     server: {
       port: 3000,
@@ -71,6 +75,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      preserveSymlinks,
     },
   };
 });

@@ -304,7 +304,6 @@ INSERT INTO products (
     cost_unit,
     category,
     subcategory,
-    tax_rate,
     type,
     description,
     supplier_id,
@@ -320,7 +319,6 @@ INSERT INTO products (
         'hours',
         'Advisory',
         'Assessment',
-        22.00,
         'consulting',
         'Initial discovery, gap analysis, and action plan.',
         NULL,
@@ -336,7 +334,6 @@ INSERT INTO products (
         'hours',
         'Delivery',
         'Implementation',
-        22.00,
         'service',
         'Implementation package for rollout and cutover activities.',
         NULL,
@@ -352,7 +349,6 @@ INSERT INTO products (
         'hours',
         'Services',
         'Managed Services',
-        22.00,
         'service',
         'Recurring managed support package used in open and overdue invoice examples.',
         NULL,
@@ -368,7 +364,6 @@ INSERT INTO products (
         'hours',
         'Advisory',
         'Training',
-        22.00,
         'consulting',
         'On-site enablement and training service.',
         NULL,
@@ -384,7 +379,6 @@ INSERT INTO products (
         'unit',
         'Hardware',
         'Endpoint',
-        22.00,
         'supply',
         'Corporate laptop bundle with accessories.',
         'dm_sup_01',
@@ -400,7 +394,6 @@ INSERT INTO products (
         'unit',
         'Software',
         'Licensing',
-        22.00,
         'service',
         'Annual productivity subscription seat.',
         'dm_sup_02',
@@ -416,7 +409,6 @@ INSERT INTO products (
         'unit',
         'Security',
         'Network',
-        22.00,
         'supply',
         'Security appliance supplied for edge protection projects.',
         'dm_sup_03',
@@ -432,7 +424,6 @@ INSERT INTO products (
         'unit',
         'Marketing',
         'Print',
-        22.00,
         'supply',
         'Print package for events, launches, and branch communication.',
         'dm_sup_04',
@@ -448,7 +439,6 @@ INSERT INTO products (
         'unit',
         'Legacy',
         'Archive',
-        22.00,
         'supply',
         'Disabled product kept only to demonstrate inactive catalog records.',
         'dm_sup_05',
@@ -463,7 +453,6 @@ ON CONFLICT (id) DO UPDATE SET
     cost_unit = EXCLUDED.cost_unit,
     category = EXCLUDED.category,
     subcategory = EXCLUDED.subcategory,
-    tax_rate = EXCLUDED.tax_rate,
     type = EXCLUDED.type,
     description = EXCLUDED.description,
     supplier_id = EXCLUDED.supplier_id,
@@ -581,7 +570,6 @@ INSERT INTO quote_items (
     quantity,
     unit_price,
     product_cost,
-    product_tax_rate,
     product_mol_percentage,
     special_bid_unit_price,
     special_bid_mol_percentage,
@@ -597,7 +585,6 @@ SELECT
     v.quantity,
     v.unit_price,
     p.costo,
-    p.tax_rate,
     p.mol_percentage,
     sb.unit_price,
     sb.mol_percentage,
@@ -630,7 +617,6 @@ ON CONFLICT (id) DO UPDATE SET
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     product_cost = EXCLUDED.product_cost,
-    product_tax_rate = EXCLUDED.product_tax_rate,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
     special_bid_unit_price = EXCLUDED.special_bid_unit_price,
     special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
@@ -676,7 +662,6 @@ INSERT INTO customer_offer_items (
     quantity,
     unit_price,
     product_cost,
-    product_tax_rate,
     product_mol_percentage,
     special_bid_unit_price,
     special_bid_mol_percentage,
@@ -692,7 +677,6 @@ SELECT
     v.quantity,
     v.unit_price,
     p.costo,
-    p.tax_rate,
     p.mol_percentage,
     sb.unit_price,
     sb.mol_percentage,
@@ -718,7 +702,6 @@ ON CONFLICT (id) DO UPDATE SET
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     product_cost = EXCLUDED.product_cost,
-    product_tax_rate = EXCLUDED.product_tax_rate,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
     special_bid_unit_price = EXCLUDED.special_bid_unit_price,
     special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
@@ -764,7 +747,6 @@ INSERT INTO sale_items (
     quantity,
     unit_price,
     product_cost,
-    product_tax_rate,
     product_mol_percentage,
     special_bid_unit_price,
     special_bid_mol_percentage,
@@ -780,7 +762,6 @@ SELECT
     v.quantity,
     v.unit_price,
     p.costo,
-    p.tax_rate,
     p.mol_percentage,
     sb.unit_price,
     sb.mol_percentage,
@@ -807,7 +788,6 @@ ON CONFLICT (id) DO UPDATE SET
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     product_cost = EXCLUDED.product_cost,
-    product_tax_rate = EXCLUDED.product_tax_rate,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
     special_bid_unit_price = EXCLUDED.special_bid_unit_price,
     special_bid_mol_percentage = EXCLUDED.special_bid_mol_percentage,
@@ -823,18 +803,17 @@ INSERT INTO invoices (
     due_date,
     status,
     subtotal,
-    tax_amount,
     total,
     amount_paid,
     notes,
     created_at,
     updated_at
 ) VALUES
-    ('dm_inv_01', NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1090.00, 239.80, 1329.80, 0.00, 'Editable draft invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_inv_02', NULL, 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE + INTERVAL '5 days', 'sent', 1795.00, 394.90, 2189.90, 600.00, 'Partially paid invoice with remaining balance.', CURRENT_TIMESTAMP - INTERVAL '30 days', CURRENT_TIMESTAMP - INTERVAL '5 days'),
-    ('dm_inv_03', 'dm_so_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 1386.72, 7689.97, 7689.97, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_inv_04', NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', 'overdue', 10020.00, 2204.40, 12224.40, 0.00, 'Outstanding overdue invoice for collections reporting.', CURRENT_TIMESTAMP - INTERVAL '45 days', CURRENT_TIMESTAMP - INTERVAL '14 days'),
-    ('dm_inv_05', NULL, 'dm_cli_04', 'Giulia Ferri', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 352.00, 1952.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days')
+    ('dm_inv_01', NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1090.00, 1090.00, 0.00, 'Editable draft invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_inv_02', NULL, 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE + INTERVAL '5 days', 'sent', 1795.00, 1795.00, 600.00, 'Partially paid invoice with remaining balance.', CURRENT_TIMESTAMP - INTERVAL '30 days', CURRENT_TIMESTAMP - INTERVAL '5 days'),
+    ('dm_inv_03', 'dm_so_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 6303.25, 6303.25, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    ('dm_inv_04', NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', 'overdue', 10020.00, 10020.00, 0.00, 'Outstanding overdue invoice for collections reporting.', CURRENT_TIMESTAMP - INTERVAL '45 days', CURRENT_TIMESTAMP - INTERVAL '14 days'),
+    ('dm_inv_05', NULL, 'dm_cli_04', 'Giulia Ferri', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 1600.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_sale_id = EXCLUDED.linked_sale_id,
     client_id = EXCLUDED.client_id,
@@ -843,7 +822,6 @@ ON CONFLICT (id) DO UPDATE SET
     due_date = EXCLUDED.due_date,
     status = EXCLUDED.status,
     subtotal = EXCLUDED.subtotal,
-    tax_amount = EXCLUDED.tax_amount,
     total = EXCLUDED.total,
     amount_paid = EXCLUDED.amount_paid,
     notes = EXCLUDED.notes,
@@ -857,22 +835,20 @@ INSERT INTO invoice_items (
     description,
     quantity,
     unit_price,
-    tax_rate,
     discount
 ) VALUES
-    ('dm_inv_item_01', 'dm_inv_01', 'dm_prd_04', 'Workshop Training Day', 1.00, 1090.00, 22.00, 0.00),
-    ('dm_inv_item_02', 'dm_inv_02', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1795.00, 22.00, 0.00),
-    ('dm_inv_item_03', 'dm_inv_03', 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 22.00, 5.00),
-    ('dm_inv_item_04', 'dm_inv_03', 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 22.00, 5.00),
-    ('dm_inv_item_05', 'dm_inv_04', 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 22.00, 0.00),
-    ('dm_inv_item_06', 'dm_inv_05', 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 22.00, 0.00)
+    ('dm_inv_item_01', 'dm_inv_01', 'dm_prd_04', 'Workshop Training Day', 1.00, 1090.00, 0.00),
+    ('dm_inv_item_02', 'dm_inv_02', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1795.00, 0.00),
+    ('dm_inv_item_03', 'dm_inv_03', 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 5.00),
+    ('dm_inv_item_04', 'dm_inv_03', 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 5.00),
+    ('dm_inv_item_05', 'dm_inv_04', 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 0.00),
+    ('dm_inv_item_06', 'dm_inv_05', 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 0.00)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
     description = EXCLUDED.description,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    tax_rate = EXCLUDED.tax_rate,
     discount = EXCLUDED.discount;
 
 INSERT INTO supplier_quotes (
@@ -994,7 +970,6 @@ INSERT INTO supplier_sale_items (
     product_name,
     quantity,
     unit_price,
-    product_tax_rate,
     discount,
     note
 )
@@ -1005,7 +980,6 @@ SELECT
     p.name,
     v.quantity,
     v.unit_price,
-    p.tax_rate,
     v.discount,
     v.note
 FROM (
@@ -1024,7 +998,6 @@ ON CONFLICT (id) DO UPDATE SET
     product_name = EXCLUDED.product_name,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    product_tax_rate = EXCLUDED.product_tax_rate,
     discount = EXCLUDED.discount,
     note = EXCLUDED.note;
 
@@ -1037,18 +1010,17 @@ INSERT INTO supplier_invoices (
     due_date,
     status,
     subtotal,
-    tax_amount,
     total,
     amount_paid,
     notes,
     created_at,
     updated_at
 ) VALUES
-    ('dm_sinv_01', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 422.40, 2342.40, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 3203.20, 17763.20, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
-    ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 1348.60, 7478.60, 7478.60, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 5192.00, 28792.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
-    ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 211.20, 1171.20, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
+    ('dm_sinv_01', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 1920.00, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 14560.00, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
+    ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 6130.00, 6130.00, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 23600.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
+    ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 960.00, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_sale_id = EXCLUDED.linked_sale_id,
     supplier_id = EXCLUDED.supplier_id,
@@ -1057,7 +1029,6 @@ ON CONFLICT (id) DO UPDATE SET
     due_date = EXCLUDED.due_date,
     status = EXCLUDED.status,
     subtotal = EXCLUDED.subtotal,
-    tax_amount = EXCLUDED.tax_amount,
     total = EXCLUDED.total,
     amount_paid = EXCLUDED.amount_paid,
     notes = EXCLUDED.notes,
@@ -1071,22 +1042,20 @@ INSERT INTO supplier_invoice_items (
     description,
     quantity,
     unit_price,
-    tax_rate,
     discount
 ) VALUES
-    ('dm_sinv_item_01', 'dm_sinv_01', 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 22.00, 0.00),
-    ('dm_sinv_item_02', 'dm_sinv_02', 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 22.00, 0.00),
-    ('dm_sinv_item_03', 'dm_sinv_03', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 22.00, 0.00),
-    ('dm_sinv_item_04', 'dm_sinv_03', 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 22.00, 0.00),
-    ('dm_sinv_item_05', 'dm_sinv_04', 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 22.00, 0.00),
-    ('dm_sinv_item_06', 'dm_sinv_05', 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 22.00, 0.00)
+    ('dm_sinv_item_01', 'dm_sinv_01', 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00),
+    ('dm_sinv_item_02', 'dm_sinv_02', 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00),
+    ('dm_sinv_item_03', 'dm_sinv_03', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00),
+    ('dm_sinv_item_04', 'dm_sinv_03', 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00),
+    ('dm_sinv_item_05', 'dm_sinv_04', 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00),
+    ('dm_sinv_item_06', 'dm_sinv_05', 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
     description = EXCLUDED.description,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    tax_rate = EXCLUDED.tax_rate,
     discount = EXCLUDED.discount;
 
 INSERT INTO projects (
