@@ -576,8 +576,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ),
       ];
 
-      await Promise.allSettled(
-        supplierQuoteIds.map(async (sqId) => {
+      const supplierOrderWarnings: string[] = [];
+
+      for (const sqId of supplierQuoteIds) {
+        try {
           const [sqResult, existingSupplierOrder, sqItems] = await Promise.all([
             query(
               `SELECT id, supplier_id as "supplierId", supplier_name as "supplierName",
@@ -594,8 +596,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ),
           ]);
 
-          if (sqResult.rows.length === 0 || sqResult.rows[0].status !== 'accepted') return;
-          if (existingSupplierOrder.rows.length > 0) return;
+          if (sqResult.rows.length === 0 || sqResult.rows[0].status !== 'accepted') continue;
+          if (existingSupplierOrder.rows.length > 0) continue;
 
           const sq = sqResult.rows[0];
           const items = sqItems.rows;
@@ -652,8 +654,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               },
             });
           });
-        }),
-      );
+        } catch (err) {
+          request.log.error({ err, supplierQuoteId: sqId }, 'Failed to auto-create supplier order');
+          supplierOrderWarnings.push(`Failed to auto-create supplier order for quote ${sqId}`);
+        }
+      }
 
       await logAudit({
         request,
@@ -668,6 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return reply.code(201).send({
         ...normalizeClientOrderRow(orderResult.rows[0] as Record<string, unknown>),
         items: createdItems,
+        ...(supplierOrderWarnings.length > 0 ? { warnings: supplierOrderWarnings } : {}),
       });
     },
   );
