@@ -149,7 +149,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     setActiveCell(null);
   };
 
-  const startEditRow = (client: Client) => {
+  const startEditRow = (client: Client, initialActiveField?: keyof Client) => {
     if (!canUpdateClients) return;
     setEditingState({
       rowId: client.id,
@@ -158,7 +158,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       touchedFields: new Set(),
     });
     setValidationErrors({});
-    setActiveCell(null);
+    setActiveCell(initialActiveField ? { field: initialActiveField } : null);
   };
 
   const validateField = (field: keyof Client, value: unknown): string | null => {
@@ -366,6 +366,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     displayValue?: string;
     className?: string;
     placeholder?: string;
+    onStartEdit?: (field: keyof Client) => void;
   }> = ({
     field,
     value,
@@ -377,6 +378,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     displayValue,
     className = '',
     placeholder,
+    onStartEdit,
   }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const isActive = activeCell?.field === field;
@@ -407,9 +409,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         >
           {() => (
             <div
-              onDoubleClick={() => {
+              onDoubleClick={(e) => {
+                e.stopPropagation();
                 if (isEditing) {
                   setActiveCell({ field });
+                } else if (onStartEdit) {
+                  onStartEdit(field);
                 }
               }}
               className={`h-full w-full flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
@@ -489,6 +494,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               type="text"
               displayValue={row.name}
               className="font-semibold whitespace-nowrap"
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -508,6 +514,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={true}
               type="text"
               displayValue={value || ''}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -571,6 +578,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               displayValue={
                 value === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual')
               }
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -589,6 +597,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.email}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -607,6 +616,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.phone}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -630,6 +640,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               type="text"
               displayValue={value}
               className="font-mono text-xs text-slate-400"
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -650,6 +661,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               type="select"
               options={OFFICE_COUNT_RANGE_OPTIONS}
               displayValue={row.officeCountRange}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -678,6 +690,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 name: t(`crm:clients.sectorOptions.${option.labelKey}`),
               }))}
               displayValue={displayValue}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -706,6 +719,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 name: t(`crm:clients.numberOfEmployeesOptions.${option.labelKey}`),
               }))}
               displayValue={displayValue}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -734,6 +748,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 name: t(`crm:clients.revenueOptions.${option.labelKey}`),
               }))}
               displayValue={displayValue}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -752,6 +767,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.contactName}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -770,6 +786,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.address}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -788,6 +805,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.description}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -806,6 +824,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.atecoCode}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
@@ -824,6 +843,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               isRequired={false}
               type="text"
               displayValue={row.website}
+              onStartEdit={(field) => startEditRow(row, field)}
             />
           );
         },
