@@ -682,7 +682,10 @@ const StandardTable = <T extends object>({
                       return (
                         <td
                           key={colId}
-                          onDoubleClick={() => col.onCellDoubleClick?.(row)}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            col.onCellDoubleClick?.(row);
+                          }}
                           style={
                             colWidth
                               ? { width: colWidth, minWidth: colWidth }
