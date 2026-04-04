@@ -889,6 +889,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         align: 'right',
         disableSorting: true,
         disableFiltering: true,
+        sticky: 'right',
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
 
@@ -999,6 +1000,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     confirmDelete,
     formatInsertDate,
     validationErrors,
+    activeCell,
   ]);
 
   // Prepare data with new row if editing

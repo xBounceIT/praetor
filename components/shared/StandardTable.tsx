@@ -580,8 +580,14 @@ const StandardTable = <T extends object>({
                     return (
                       <th
                         key={colId}
-                        style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn ? 'w-full' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
+                        style={
+                          colWidth
+                            ? { width: colWidth, minWidth: colWidth }
+                            : col.sticky === 'right'
+                              ? { minWidth: '120px', width: 'auto' }
+                              : undefined
+                        }
+                        className={`relative group ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full' : col.sticky === 'right' ? 'w-auto' : 'w-px'} ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-slate-50 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.headerClassName || ''}`}
                       >
                         {/* Inline wrapper for button beside text */}
                         <span className="inline-flex items-center gap-1">
@@ -675,8 +681,14 @@ const StandardTable = <T extends object>({
                       return (
                         <td
                           key={colId}
-                          style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
-                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full flex justify-end items-center' : isLastColumn ? 'flex justify-end items-center' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
+                          style={
+                            colWidth
+                              ? { width: colWidth, minWidth: colWidth }
+                              : col.sticky === 'right'
+                                ? { minWidth: '120px' }
+                                : undefined
+                          }
+                          className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-px whitespace-nowrap ${isLastColumn && col.sticky !== 'right' ? 'w-full flex justify-end items-center' : isLastColumn ? 'flex justify-end items-center' : `w-px align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${!isLastColumn ? 'border-r border-slate-100' : ''} ${col.sticky === 'right' ? 'sticky right-0 bg-white group-hover:bg-slate-50 transition-all duration-500 border-l border-slate-200 z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''} ${col.className || ''}`}
                         >
                           {col.cell
                             ? col.cell({ getValue: () => val, row, value: val })
