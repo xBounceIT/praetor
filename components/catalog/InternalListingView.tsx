@@ -9,7 +9,7 @@ import type {
 } from '../../services/api/products';
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -327,20 +327,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
           ...productPayload,
-          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
-          molPercentage:
-            formData.molPercentage !== undefined
-              ? roundToTwoDecimals(formData.molPercentage)
-              : undefined,
+          costo: formData.costo !== undefined ? formData.costo : undefined,
+          molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       } else {
         await onAddProduct({
           ...productPayload,
-          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
-          molPercentage:
-            formData.molPercentage !== undefined
-              ? roundToTwoDecimals(formData.molPercentage)
-              : undefined,
+          costo: formData.costo !== undefined ? formData.costo : undefined,
+          molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       }
       setIsModalOpen(false);
