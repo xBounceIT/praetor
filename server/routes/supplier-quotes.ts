@@ -30,8 +30,10 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
-const normalizeUnitType = (value: unknown): 'hours' | 'days' => {
-  return value === 'days' ? 'days' : 'hours';
+const normalizeUnitType = (value: unknown): 'hours' | 'days' | 'unit' => {
+  if (value === 'days') return 'days';
+  if (value === 'hours') return 'hours';
+  return 'unit';
 };
 
 const normalizeSupplierQuoteItemRow = (item: Record<string, unknown>) => ({
@@ -50,7 +52,7 @@ const supplierQuoteItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
-    unitType: { type: 'string', enum: ['hours', 'days'] },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
   required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -92,7 +94,7 @@ const supplierQuoteItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
-    unitType: { type: 'string', enum: ['hours', 'days'] },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -250,7 +252,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice?: string | number;
           discount?: string | number;
           note?: string;
-          unitType?: 'hours' | 'days';
+          unitType?: 'hours' | 'days' | 'unit';
         }>;
         paymentTerms?: string;
         discount?: string | number;
@@ -374,7 +376,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             item.unitPrice,
             item.discount || 0,
             item.note || null,
-            item.unitType || 'hours',
+            item.unitType || 'unit',
           ],
         );
         createdItems.push(
@@ -437,7 +439,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           unitPrice?: string | number;
           discount?: string | number;
           note?: string;
-          unitType?: 'hours' | 'days';
+          unitType?: 'hours' | 'days' | 'unit';
         }>;
         paymentTerms?: string;
         discount?: string | number;
@@ -633,7 +635,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               item.unitPrice,
               item.discount || 0,
               item.note || null,
-              item.unitType || 'hours',
+              item.unitType || 'unit',
             ],
           );
           updatedItems.push(

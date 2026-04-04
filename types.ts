@@ -494,6 +494,8 @@ export interface Supplier {
   createdAt?: number;
 }
 
+export type SupplierUnitType = 'hours' | 'days' | 'unit';
+
 export interface SupplierQuoteItem {
   id: string;
   quoteId: string;
@@ -503,7 +505,7 @@ export interface SupplierQuoteItem {
   unitPrice: number;
   discount?: number;
   note?: string;
-  unitType?: 'hours' | 'days';
+  unitType?: SupplierUnitType;
 }
 
 export interface SupplierQuote {

@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
+import type { Product, Supplier, SupplierQuote, SupplierQuoteItem, SupplierUnitType } from '../../types';
 import {
   formatDateOnlyForLocale,
   getLocalDateString,
@@ -212,7 +212,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           quantity: 1,
           unitPrice: 0,
           discount: 0,
-          unitType: 'hours' as const,
+          unitType: 'unit' as const,
           note: '',
         },
       ],
@@ -231,13 +231,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [isReadOnly],
   );
 
-  const handleUnitTypeChange = (index: number, newType: 'hours' | 'days') => {
+  const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item) return;
-    const oldType = item.unitType || 'hours';
+    const oldType = item.unitType || 'unit';
     if (oldType === newType) return;
-    const adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+    // Only convert price between hours ↔ days (8x factor). 'unit' has no conversion.
+    let adjustedPrice = item.unitPrice;
+    if ((oldType === 'hours' && newType === 'days') || (oldType === 'days' && newType === 'hours')) {
+      adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+    }
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
@@ -250,9 +254,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const renderUnitSelector = (index: number, item: SupplierQuoteItem) => {
     const product = item.productId ? products.find((p) => p.id === item.productId) : undefined;
     const isSupply = product?.type === 'supply';
-    const qty = Number(item.quantity) || 0;
 
     if (isSupply) {
+      const qty = Number(item.quantity) || 0;
       return (
         <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
           {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
@@ -260,16 +264,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       );
     }
 
+    const unitOptions = [
+      { id: 'unit', name: t('sales:clientQuotes.unit') },
+      { id: 'hours', name: t('sales:clientQuotes.hours') },
+      { id: 'days', name: t('sales:clientQuotes.days') },
+    ];
+
     return (
-      <select
-        value={item.unitType || 'hours'}
-        onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
+      <CustomSelect
+        options={unitOptions}
+        value={item.unitType || 'unit'}
+        onChange={(value) => handleUnitTypeChange(index, value as SupplierUnitType)}
         disabled={isReadOnly}
-        className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
-        <option value="days">{t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`)}</option>
-      </select>
+        buttonClassName="py-2 text-xs px-2"
+      />
     );
   };
 
