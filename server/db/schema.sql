@@ -665,7 +665,7 @@ CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     product_code VARCHAR(50) UNIQUE NOT NULL,
-    costo DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    costo DECIMAL(15, 2) NOT NULL DEFAULT 0,
     mol_percentage DECIMAL(5, 2) NOT NULL DEFAULT 0,
     cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit',
     category VARCHAR(100),
@@ -732,6 +732,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name_unique ON products(name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_product_code_unique ON products(product_code);
 CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON products(supplier_id);
 
+-- Migration: Ensure costo uses DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'products'
+          AND column_name = 'costo' AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE products ALTER COLUMN costo TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
+
 -- Quotes table
 CREATE TABLE IF NOT EXISTS quotes (
     id VARCHAR(100) PRIMARY KEY,
@@ -771,10 +783,10 @@ CREATE TABLE IF NOT EXISTS quote_items (
     product_name VARCHAR(255) NOT NULL,
     special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    product_cost DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
-    special_bid_unit_price DECIMAL(15, 6),
+    special_bid_unit_price DECIMAL(15, 2),
     special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
@@ -791,7 +803,7 @@ ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
 DO $$
@@ -804,13 +816,29 @@ BEGIN
           AND column_name = 'product_tax_rate'
     ) THEN
         UPDATE quote_items
-        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 2);
     END IF;
 END $$;
 ALTER TABLE quote_items DROP COLUMN IF EXISTS product_tax_rate;
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
+
+-- Migration: Ensure quote_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'quote_items'
+          AND column_name IN ('unit_price', 'product_cost', 'special_bid_unit_price', 'supplier_quote_unit_price')
+          AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE quote_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+        ALTER TABLE quote_items ALTER COLUMN product_cost TYPE DECIMAL(15, 2);
+        ALTER TABLE quote_items ALTER COLUMN special_bid_unit_price TYPE DECIMAL(15, 2);
+        ALTER TABLE quote_items ALTER COLUMN supplier_quote_unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Customer offers
 CREATE TABLE IF NOT EXISTS customer_offers (
@@ -840,10 +868,10 @@ CREATE TABLE IF NOT EXISTS customer_offer_items (
     product_name VARCHAR(255) NOT NULL,
     special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    product_cost DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
-    special_bid_unit_price DECIMAL(15, 6),
+    special_bid_unit_price DECIMAL(15, 2),
     special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
@@ -856,7 +884,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_offer_items_offer_id ON customer_offer_i
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
-ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
+ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
 DO $$
@@ -869,10 +897,26 @@ BEGIN
           AND column_name = 'product_tax_rate'
     ) THEN
         UPDATE customer_offer_items
-        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 2);
     END IF;
 END $$;
 ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS product_tax_rate;
+
+-- Migration: Ensure customer_offer_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'customer_offer_items'
+          AND column_name IN ('unit_price', 'product_cost', 'special_bid_unit_price', 'supplier_quote_unit_price')
+          AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE customer_offer_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+        ALTER TABLE customer_offer_items ALTER COLUMN product_cost TYPE DECIMAL(15, 2);
+        ALTER TABLE customer_offer_items ALTER COLUMN special_bid_unit_price TYPE DECIMAL(15, 2);
+        ALTER TABLE customer_offer_items ALTER COLUMN supplier_quote_unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Special bids table
 CREATE TABLE IF NOT EXISTS special_bids (
@@ -882,7 +926,7 @@ CREATE TABLE IF NOT EXISTS special_bids (
     client_name VARCHAR(255) NOT NULL,
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     mol_percentage DECIMAL(5, 2),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
@@ -933,6 +977,18 @@ CREATE INDEX IF NOT EXISTS idx_special_bids_client_product ON special_bids(clien
 CREATE INDEX IF NOT EXISTS idx_special_bids_client_id ON special_bids(client_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_product_id ON special_bids(product_id);
 CREATE INDEX IF NOT EXISTS idx_special_bids_date_range ON special_bids(start_date, end_date);
+
+-- Migration: Ensure special_bids prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'special_bids'
+          AND column_name = 'unit_price' AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE special_bids ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Migration: Add gemini_api_key to general_settings
 ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemini_api_key VARCHAR(255);
@@ -1034,10 +1090,10 @@ CREATE TABLE IF NOT EXISTS sale_items (
     product_name VARCHAR(255) NOT NULL,
     special_bid_id VARCHAR(50),
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    product_cost DECIMAL(15, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
-    special_bid_unit_price DECIMAL(15, 6),
+    special_bid_unit_price DECIMAL(15, 2),
     special_bid_mol_percentage DECIMAL(5, 2),
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1058,7 +1114,7 @@ BEGIN
           AND column_name = 'product_tax_rate'
     ) THEN
         UPDATE sale_items
-        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 2);
     END IF;
 END $$;
 ALTER TABLE sale_items DROP COLUMN IF EXISTS product_tax_rate;
@@ -1070,11 +1126,27 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_id VARCHAR(100);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_id VARCHAR(50);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VARCHAR(255);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+
+-- Migration: Ensure sale_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'sale_items'
+          AND column_name IN ('unit_price', 'product_cost', 'special_bid_unit_price', 'supplier_quote_unit_price')
+          AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE sale_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+        ALTER TABLE sale_items ALTER COLUMN product_cost TYPE DECIMAL(15, 2);
+        ALTER TABLE sale_items ALTER COLUMN special_bid_unit_price TYPE DECIMAL(15, 2);
+        ALTER TABLE sale_items ALTER COLUMN supplier_quote_unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Supplier Quotes table
 CREATE TABLE IF NOT EXISTS supplier_quotes (
@@ -1117,7 +1189,7 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
     product_id VARCHAR(50) NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1125,6 +1197,18 @@ CREATE TABLE IF NOT EXISTS supplier_quote_items (
 
 CREATE INDEX IF NOT EXISTS idx_supplier_quote_items_quote_id ON supplier_quote_items(quote_id);
 ALTER TABLE supplier_quote_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
+
+-- Migration: Ensure supplier_quote_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'supplier_quote_items'
+          AND column_name = 'unit_price' AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE supplier_quote_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Supplier sale orders
 CREATE TABLE IF NOT EXISTS supplier_sales (
@@ -1345,7 +1429,7 @@ CREATE TABLE IF NOT EXISTS supplier_sale_items (
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1361,12 +1445,24 @@ BEGIN
           AND column_name = 'product_tax_rate'
     ) THEN
         UPDATE supplier_sale_items
-        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 2);
     END IF;
 END $$;
 ALTER TABLE supplier_sale_items DROP COLUMN IF EXISTS product_tax_rate;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_sale_items_sale_id ON supplier_sale_items(sale_id);
+
+-- Migration: Ensure supplier_sale_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'supplier_sale_items'
+          AND column_name = 'unit_price' AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE supplier_sale_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Migration: Rename 'tempoRole' to 'praetorRole' in existing LDAP role mappings
 DO $$
@@ -1421,7 +1517,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     description VARCHAR(255) NOT NULL,
     unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit',
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -1451,12 +1547,24 @@ BEGIN
           AND column_name = 'tax_rate'
     ) THEN
         UPDATE invoice_items
-        SET unit_price = ROUND(unit_price * (1 + COALESCE(tax_rate, 0) / 100.0), 6);
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(tax_rate, 0) / 100.0), 2);
     END IF;
 END $$;
 ALTER TABLE invoice_items DROP COLUMN IF EXISTS tax_rate;
 
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
+
+-- Migration: Ensure invoice_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'invoice_items'
+          AND column_name = 'unit_price' AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE invoice_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Supplier invoices
 CREATE TABLE IF NOT EXISTS supplier_invoices (
@@ -1507,7 +1615,7 @@ CREATE TABLE IF NOT EXISTS supplier_invoice_items (
     product_id VARCHAR(50) REFERENCES products(id) ON DELETE SET NULL,
     description VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
-    unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
+    unit_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -1522,13 +1630,25 @@ BEGIN
           AND column_name = 'tax_rate'
     ) THEN
         UPDATE supplier_invoice_items
-        SET unit_price = ROUND(unit_price * (1 + COALESCE(tax_rate, 0) / 100.0), 6);
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(tax_rate, 0) / 100.0), 2);
     END IF;
 END $$;
 ALTER TABLE supplier_invoice_items DROP COLUMN IF EXISTS tax_rate;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_invoice_items_invoice_id
     ON supplier_invoice_items(invoice_id);
+
+-- Migration: Ensure supplier_invoice_items prices use DECIMAL(15, 2)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'supplier_invoice_items'
+          AND column_name = 'unit_price' AND numeric_scale != 2
+    ) THEN
+        ALTER TABLE supplier_invoice_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
 
 -- Migration: Remove deprecated Finances tables.
 DROP TABLE IF EXISTS payments CASCADE;
