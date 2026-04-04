@@ -32,13 +32,12 @@ const productSchema = {
     costUnit: { type: 'string', enum: ['unit', 'hours'] },
     category: { type: ['string', 'null'] },
     subcategory: { type: ['string', 'null'] },
-    taxRate: { type: 'number' },
     type: { type: 'string' },
     supplierId: { type: ['string', 'null'] },
     supplierName: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
   },
-  required: ['id', 'name', 'productCode', 'costo', 'molPercentage', 'costUnit', 'taxRate', 'type'],
+  required: ['id', 'name', 'productCode', 'costo', 'molPercentage', 'costUnit', 'type'],
 } as const;
 
 const productCreateBodySchema = {
@@ -51,12 +50,11 @@ const productCreateBodySchema = {
     molPercentage: { type: 'number' },
     category: { type: 'string' },
     subcategory: { type: 'string' },
-    taxRate: { type: 'number' },
     type: { type: 'string' },
     supplierId: { type: 'string' },
     costUnit: { type: 'string', enum: ['unit', 'hours'] },
   },
-  required: ['name', 'productCode', 'costo', 'molPercentage', 'taxRate', 'type'],
+  required: ['name', 'productCode', 'costo', 'molPercentage', 'type'],
 } as const;
 
 const productUpdateBodySchema = {
@@ -69,7 +67,6 @@ const productUpdateBodySchema = {
     molPercentage: { type: 'number' },
     category: { type: 'string' },
     subcategory: { type: 'string' },
-    taxRate: { type: 'number' },
     type: { type: 'string' },
     supplierId: { type: 'string' },
     costUnit: { type: 'string', enum: ['unit', 'hours'] },
@@ -142,7 +139,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const result = await query(
-        `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.tax_rate as "taxRate", p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
+        `SELECT p.id, p.name, p.product_code as "productCode", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled" 
          FROM products p 
          LEFT JOIN suppliers s ON p.supplier_id = s.id 
          ORDER BY p.name ASC`,
@@ -177,7 +174,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         molPercentage,
         category,
         subcategory,
-        taxRate,
         type,
         supplierId,
         costUnit,
@@ -189,7 +185,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         molPercentage: unknown;
         category: unknown;
         subcategory: unknown;
-        taxRate: unknown;
         type: unknown;
         supplierId: unknown;
         costUnit: unknown;
@@ -241,15 +236,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'molPercentage must be greater than 0 and less than 100');
       }
 
-      if (taxRate === undefined || taxRate === null || taxRate === '') {
-        return badRequest(reply, 'taxRate is required');
-      }
-      const taxRateResult = parseLocalizedNonNegativeNumber(taxRate, 'taxRate');
-      if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-      if (taxRateResult.value < 0 || taxRateResult.value > 100) {
-        return badRequest(reply, 'taxRate must be between 0 and 100');
-      }
-
       if (type === undefined || type === null || type === '') {
         return badRequest(reply, 'type is required');
       }
@@ -271,9 +257,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const id = 'p-' + Date.now();
       const result = await query(
-        `INSERT INTO products (id, name, product_code, description, costo, mol_percentage, cost_unit, category, subcategory, tax_rate, type, supplier_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
-             RETURNING id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, supplier_id as "supplierId"`,
+        `INSERT INTO products (id, name, product_code, description, costo, mol_percentage, cost_unit, category, subcategory, type, supplier_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+             RETURNING id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, supplier_id as "supplierId"`,
         [
           id,
           nameResult.value,
@@ -284,7 +270,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           expectedCostUnit,
           category,
           subcategory,
-          taxRateResult.value,
           typeResult.value,
           supplierId || null,
         ],
@@ -342,7 +327,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         molPercentage?: unknown;
         category?: unknown;
         subcategory?: unknown;
-        taxRate?: unknown;
         type?: unknown;
         supplierId?: unknown;
         costUnit?: unknown;
@@ -425,17 +409,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         values.push(molPercentageResult.value);
       }
 
-      // Tax Rate
-      if (body.taxRate !== undefined) {
-        const taxRateResult = parseLocalizedNonNegativeNumber(body.taxRate, 'taxRate');
-        if (!taxRateResult.ok) return badRequest(reply, taxRateResult.message);
-        if (taxRateResult.value < 0 || taxRateResult.value > 100) {
-          return badRequest(reply, 'taxRate must be between 0 and 100');
-        }
-        fields.push(`tax_rate = $${paramIndex++}`);
-        values.push(taxRateResult.value);
-      }
-
       // Get current product info to determine if internal or external
       const currentProductQuery = await query(
         'SELECT type, supplier_id, category FROM products WHERE id = $1',
@@ -510,7 +483,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (fields.length === 0) {
         // No updates
         const result = await query(
-          `SELECT id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId" 
+          `SELECT id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, is_disabled as "isDisabled", supplier_id as "supplierId" 
                  FROM products WHERE id = $1`,
           [idResult.value],
         );
@@ -533,7 +506,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             UPDATE products 
             SET ${fields.join(', ')}
             WHERE id = $${paramIndex}
-            RETURNING id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, tax_rate as "taxRate", type, is_disabled as "isDisabled", supplier_id as "supplierId"
+            RETURNING id, name, product_code as "productCode", description, costo, mol_percentage as "molPercentage", cost_unit as "costUnit", category, subcategory, type, is_disabled as "isDisabled", supplier_id as "supplierId"
         `;
 
       const result = await query(queryText, values);
@@ -561,7 +534,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body.molPercentage !== undefined ? 'molPercentage' : null,
         body.category !== undefined ? 'category' : null,
         body.subcategory !== undefined ? 'subcategory' : null,
-        body.taxRate !== undefined ? 'taxRate' : null,
         body.type !== undefined ? 'type' : null,
         body.costUnit !== undefined ? 'costUnit' : null,
         isDisabledChanged ? 'isDisabled' : null,

@@ -2236,6 +2236,12 @@
                       },
                       "createdAt": {
                         "type": "number"
+                      },
+                      "totalSentQuotes": {
+                        "type": "number"
+                      },
+                      "totalAcceptedOrders": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -2564,6 +2570,12 @@
                       ]
                     },
                     "createdAt": {
+                      "type": "number"
+                    },
+                    "totalSentQuotes": {
+                      "type": "number"
+                    },
+                    "totalAcceptedOrders": {
                       "type": "number"
                     }
                   },
@@ -2911,6 +2923,12 @@
                       ]
                     },
                     "createdAt": {
+                      "type": "number"
+                    },
+                    "totalSentQuotes": {
+                      "type": "number"
+                    },
+                    "totalAcceptedOrders": {
                       "type": "number"
                     }
                   },
@@ -7410,9 +7428,6 @@
                           "string"
                         ]
                       },
-                      "taxRate": {
-                        "type": "number"
-                      },
                       "type": {
                         "type": "string"
                       },
@@ -7439,7 +7454,6 @@
                       "costo",
                       "molPercentage",
                       "costUnit",
-                      "taxRate",
                       "type"
                     ]
                   }
@@ -7589,9 +7603,6 @@
                   "subcategory": {
                     "type": "string"
                   },
-                  "taxRate": {
-                    "type": "number"
-                  },
                   "type": {
                     "type": "string"
                   },
@@ -7611,7 +7622,6 @@
                   "productCode",
                   "costo",
                   "molPercentage",
-                  "taxRate",
                   "type"
                 ]
               }
@@ -7667,9 +7677,6 @@
                         "string"
                       ]
                     },
-                    "taxRate": {
-                      "type": "number"
-                    },
                     "type": {
                       "type": "string"
                     },
@@ -7696,7 +7703,6 @@
                     "costo",
                     "molPercentage",
                     "costUnit",
-                    "taxRate",
                     "type"
                   ]
                 }
@@ -7829,9 +7835,6 @@
                   "subcategory": {
                     "type": "string"
                   },
-                  "taxRate": {
-                    "type": "number"
-                  },
                   "type": {
                     "type": "string"
                   },
@@ -7911,9 +7914,6 @@
                         "string"
                       ]
                     },
-                    "taxRate": {
-                      "type": "number"
-                    },
                     "type": {
                       "type": "string"
                     },
@@ -7940,7 +7940,6 @@
                     "costo",
                     "molPercentage",
                     "costUnit",
-                    "taxRate",
                     "type"
                   ]
                 }
@@ -10035,9 +10034,6 @@
                             "productCost": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -10117,7 +10113,6 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
-                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -10301,9 +10296,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -10450,9 +10442,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -10532,7 +10521,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -10699,9 +10687,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -10853,9 +10838,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -10935,7 +10917,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -11257,9 +11238,6 @@
                             "productCost": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -11331,7 +11309,6 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
-                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -11512,9 +11489,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -11672,9 +11646,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -11746,7 +11717,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -11907,9 +11877,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -12068,9 +12035,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -12142,7 +12106,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -13497,9 +13460,6 @@
                             "productCost": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "productMolPercentage": {
                               "type": [
                                 "null",
@@ -13571,7 +13531,6 @@
                             "quantity",
                             "unitPrice",
                             "productCost",
-                            "productTaxRate",
                             "discount"
                           ]
                         }
@@ -13754,9 +13713,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -13909,9 +13865,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -13983,7 +13936,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -14146,9 +14098,6 @@
                         "productCost": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "productMolPercentage": {
                           "type": "number"
                         },
@@ -14305,9 +14254,6 @@
                           "productCost": {
                             "type": "number"
                           },
-                          "productTaxRate": {
-                            "type": "number"
-                          },
                           "productMolPercentage": {
                             "type": [
                               "null",
@@ -14379,7 +14325,6 @@
                           "quantity",
                           "unitPrice",
                           "productCost",
-                          "productTaxRate",
                           "discount"
                         ]
                       }
@@ -14648,9 +14593,6 @@
                       "subtotal": {
                         "type": "number"
                       },
-                      "taxAmount": {
-                        "type": "number"
-                      },
                       "total": {
                         "type": "number"
                       },
@@ -14708,9 +14650,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "taxRate": {
-                              "type": "number"
-                            },
                             "discount": {
                               "type": "number"
                             }
@@ -14722,7 +14661,6 @@
                             "unitOfMeasure",
                             "quantity",
                             "unitPrice",
-                            "taxRate",
                             "discount"
                           ]
                         }
@@ -14736,7 +14674,6 @@
                       "dueDate",
                       "status",
                       "subtotal",
-                      "taxAmount",
                       "total",
                       "amountPaid",
                       "createdAt",
@@ -14895,9 +14832,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -14937,9 +14871,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -14948,8 +14879,7 @@
                         "description",
                         "unitOfMeasure",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -15001,9 +14931,6 @@
                       "type": "string"
                     },
                     "subtotal": {
-                      "type": "number"
-                    },
-                    "taxAmount": {
                       "type": "number"
                     },
                     "total": {
@@ -15063,9 +14990,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -15077,7 +15001,6 @@
                           "unitOfMeasure",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -15091,7 +15014,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
@@ -15230,9 +15152,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -15272,9 +15191,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -15283,8 +15199,7 @@
                         "description",
                         "unitOfMeasure",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -15338,9 +15253,6 @@
                       "type": "string"
                     },
                     "subtotal": {
-                      "type": "number"
-                    },
-                    "taxAmount": {
                       "type": "number"
                     },
                     "total": {
@@ -15400,9 +15312,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -15414,7 +15323,6 @@
                           "unitOfMeasure",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -15428,7 +15336,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
@@ -15721,6 +15628,9 @@
                           "null",
                           "string"
                         ]
+                      },
+                      "createdAt": {
+                        "type": "number"
                       }
                     },
                     "required": [
@@ -15964,6 +15874,9 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -16198,6 +16111,9 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "createdAt": {
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -17457,9 +17373,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "productTaxRate": {
-                              "type": "number"
-                            },
                             "note": {
                               "type": [
                                 "null",
@@ -17647,9 +17560,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         },
@@ -17767,9 +17677,6 @@
                             "type": "number"
                           },
                           "unitPrice": {
-                            "type": "number"
-                          },
-                          "productTaxRate": {
                             "type": "number"
                           },
                           "note": {
@@ -17939,9 +17846,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "productTaxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         },
@@ -18062,9 +17966,6 @@
                             "type": "number"
                           },
                           "unitPrice": {
-                            "type": "number"
-                          },
-                          "productTaxRate": {
                             "type": "number"
                           },
                           "note": {
@@ -18352,9 +18253,6 @@
                       "subtotal": {
                         "type": "number"
                       },
-                      "taxAmount": {
-                        "type": "number"
-                      },
                       "total": {
                         "type": "number"
                       },
@@ -18399,9 +18297,6 @@
                             "unitPrice": {
                               "type": "number"
                             },
-                            "taxRate": {
-                              "type": "number"
-                            },
                             "discount": {
                               "type": "number"
                             }
@@ -18412,7 +18307,6 @@
                             "description",
                             "quantity",
                             "unitPrice",
-                            "taxRate",
                             "discount"
                           ]
                         }
@@ -18426,7 +18320,6 @@
                       "dueDate",
                       "status",
                       "subtotal",
-                      "taxAmount",
                       "total",
                       "amountPaid",
                       "createdAt",
@@ -18585,9 +18478,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -18614,9 +18504,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -18624,8 +18511,7 @@
                       "required": [
                         "description",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -18679,9 +18565,6 @@
                     "subtotal": {
                       "type": "number"
                     },
-                    "taxAmount": {
-                      "type": "number"
-                    },
                     "total": {
                       "type": "number"
                     },
@@ -18726,9 +18609,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -18739,7 +18619,6 @@
                           "description",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -18753,7 +18632,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",
@@ -18892,9 +18770,6 @@
                   "subtotal": {
                     "type": "number"
                   },
-                  "taxAmount": {
-                    "type": "number"
-                  },
                   "total": {
                     "type": "number"
                   },
@@ -18921,9 +18796,6 @@
                         "unitPrice": {
                           "type": "number"
                         },
-                        "taxRate": {
-                          "type": "number"
-                        },
                         "discount": {
                           "type": "number"
                         }
@@ -18931,8 +18803,7 @@
                       "required": [
                         "description",
                         "quantity",
-                        "unitPrice",
-                        "taxRate"
+                        "unitPrice"
                       ]
                     }
                   }
@@ -18988,9 +18859,6 @@
                     "subtotal": {
                       "type": "number"
                     },
-                    "taxAmount": {
-                      "type": "number"
-                    },
                     "total": {
                       "type": "number"
                     },
@@ -19035,9 +18903,6 @@
                           "unitPrice": {
                             "type": "number"
                           },
-                          "taxRate": {
-                            "type": "number"
-                          },
                           "discount": {
                             "type": "number"
                           }
@@ -19048,7 +18913,6 @@
                           "description",
                           "quantity",
                           "unitPrice",
-                          "taxRate",
                           "discount"
                         ]
                       }
@@ -19062,7 +18926,6 @@
                     "dueDate",
                     "status",
                     "subtotal",
-                    "taxAmount",
                     "total",
                     "amountPaid",
                     "createdAt",

@@ -37,17 +37,15 @@ const getStatusLabel = (
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
   let subtotal = 0;
-  let taxAmount = 0;
 
   items.forEach((item) => {
     const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
-    taxAmount += lineNet * (Number(item.taxRate ?? 0) / 100);
   });
 
-  return { subtotal, taxAmount, total: subtotal + taxAmount };
+  return { subtotal, total: subtotal };
 };
 
 export interface SupplierInvoicesViewProps {
@@ -91,7 +89,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     dueDate: addDaysToDateOnly(getLocalDateString(), 30),
     status: 'draft',
     subtotal: 0,
-    taxAmount: 0,
     total: 0,
     amountPaid: 0,
     notes: '',
@@ -132,7 +129,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           if (product) {
             nextItem.description = product.name;
             nextItem.unitPrice = Number(product.costo);
-            nextItem.taxRate = Number(product.taxRate ?? 0);
           }
         }
 
@@ -158,7 +154,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           ...item,
           quantity: roundToTwoDecimals(Number(item.quantity ?? 0)),
           unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-          taxRate: roundToTwoDecimals(Number(item.taxRate ?? 0)),
           discount: roundToTwoDecimals(Number(item.discount ?? 0)),
         })),
       });
@@ -454,7 +449,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     <div className="col-span-2">
                       {t('crm:internalListing.salePrice')} ({currency})
                     </div>
-                    <div className="col-span-1">{t('accounting:clientsInvoices.vat')}</div>
                     <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
                     <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                   </div>
@@ -535,19 +529,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
                             <div className="space-y-1 md:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
-                                {t('accounting:clientsInvoices.vat')}
-                              </label>
-                              <ValidatedNumberInput
-                                value={item.taxRate}
-                                onValueChange={(value) =>
-                                  updateItem(index, 'taxRate', value === '' ? 0 : Number(value))
-                                }
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                              />
-                            </div>
-
-                            <div className="space-y-1 md:col-span-1">
-                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 md:hidden">
                                 {t('accounting:supplierOrders.discount')}
                               </label>
                               <ValidatedNumberInput
@@ -620,14 +601,6 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-sm font-bold text-slate-500">
-                    {t('accounting:clientsInvoices.vat')}
-                  </span>
-                  <span className="text-sm font-bold text-slate-700">
-                    {totals.taxAmount.toFixed(2)} {currency}
-                  </span>
-                </div>
                 <div className="flex justify-between border-t border-slate-200 pt-3">
                   <span className="text-lg font-black text-slate-800">
                     {t('accounting:supplierInvoices.total')}

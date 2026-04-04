@@ -669,7 +669,6 @@ CREATE TABLE IF NOT EXISTS products (
     mol_percentage DECIMAL(5, 2) NOT NULL DEFAULT 0,
     cost_unit VARCHAR(20) NOT NULL DEFAULT 'unit',
     category VARCHAR(100),
-    tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     type VARCHAR(20) NOT NULL DEFAULT 'item',
     description TEXT,
     subcategory VARCHAR(100),
@@ -693,6 +692,7 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id VARCHAR(50) REFERENCES
 -- Migration: Add mol_percentage column and migrate from sale_price/cost
 ALTER TABLE products ADD COLUMN IF NOT EXISTS mol_percentage DECIMAL(5, 2) DEFAULT 0;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS costo DECIMAL(10, 2) DEFAULT 0;
+ALTER TABLE products DROP COLUMN IF EXISTS tax_rate;
 
 -- Migrate existing data: copy cost to costo, calculate mol_percentage from sale_price
 DO $$
@@ -773,7 +773,6 @@ CREATE TABLE IF NOT EXISTS quote_items (
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
     special_bid_unit_price DECIMAL(15, 6),
     special_bid_mol_percentage DECIMAL(5, 2),
@@ -784,7 +783,6 @@ CREATE TABLE IF NOT EXISTS quote_items (
 
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_id VARCHAR(50);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT NULL DEFAULT 0;
-ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_tax_rate DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
@@ -796,16 +794,20 @@ ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_supplier_name VA
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
-UPDATE quote_items qi
-SET product_tax_rate = p.tax_rate
-FROM products p
-WHERE qi.product_tax_rate IS NULL
-  AND qi.product_id = p.id;
-UPDATE quote_items
-SET product_tax_rate = 0
-WHERE product_tax_rate IS NULL;
-ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET DEFAULT 0;
-ALTER TABLE quote_items ALTER COLUMN product_tax_rate SET NOT NULL;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'quote_items'
+          AND column_name = 'product_tax_rate'
+    ) THEN
+        UPDATE quote_items
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+    END IF;
+END $$;
+ALTER TABLE quote_items DROP COLUMN IF EXISTS product_tax_rate;
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS unit_type VARCHAR(10) DEFAULT 'hours';
 
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
@@ -840,7 +842,6 @@ CREATE TABLE IF NOT EXISTS customer_offer_items (
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
     special_bid_unit_price DECIMAL(15, 6),
     special_bid_mol_percentage DECIMAL(5, 2),
@@ -858,6 +859,20 @@ ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_supplie
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_unit_price DECIMAL(15, 6);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_item_discount DECIMAL(5, 2);
 ALTER TABLE customer_offer_items ADD COLUMN IF NOT EXISTS supplier_quote_discount DECIMAL(5, 2);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'customer_offer_items'
+          AND column_name = 'product_tax_rate'
+    ) THEN
+        UPDATE customer_offer_items
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+    END IF;
+END $$;
+ALTER TABLE customer_offer_items DROP COLUMN IF EXISTS product_tax_rate;
 
 -- Special bids table
 CREATE TABLE IF NOT EXISTS special_bids (
@@ -1021,7 +1036,6 @@ CREATE TABLE IF NOT EXISTS sale_items (
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
     product_cost DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     product_mol_percentage DECIMAL(5, 2),
     special_bid_unit_price DECIMAL(15, 6),
     special_bid_mol_percentage DECIMAL(5, 2),
@@ -1034,17 +1048,20 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_cost DECIMAL(10, 2) NOT 
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_mol_percentage DECIMAL(5, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_unit_price DECIMAL(10, 2);
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS special_bid_mol_percentage DECIMAL(5, 2);
-ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS product_tax_rate DECIMAL(5, 2);
-UPDATE sale_items si
-SET product_tax_rate = p.tax_rate
-FROM products p
-WHERE si.product_tax_rate IS NULL
-  AND si.product_id = p.id;
-UPDATE sale_items
-SET product_tax_rate = 0
-WHERE product_tax_rate IS NULL;
-ALTER TABLE sale_items ALTER COLUMN product_tax_rate SET DEFAULT 0;
-ALTER TABLE sale_items ALTER COLUMN product_tax_rate SET NOT NULL;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'sale_items'
+          AND column_name = 'product_tax_rate'
+    ) THEN
+        UPDATE sale_items
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+    END IF;
+END $$;
+ALTER TABLE sale_items DROP COLUMN IF EXISTS product_tax_rate;
 
 -- Ensure note column exists for sale items (mirrors quote_items structure)
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS note TEXT;
@@ -1214,7 +1231,6 @@ BEGIN
                 product_name,
                 quantity,
                 unit_price,
-                product_tax_rate,
                 discount,
                 note,
                 created_at
@@ -1226,7 +1242,6 @@ BEGIN
                 soi.product_name,
                 soi.quantity,
                 soi.unit_price,
-                soi.product_tax_rate,
                 soi.discount,
                 soi.note,
                 soi.created_at
@@ -1331,11 +1346,25 @@ CREATE TABLE IF NOT EXISTS supplier_sale_items (
     product_name VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    product_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'supplier_sale_items'
+          AND column_name = 'product_tax_rate'
+    ) THEN
+        UPDATE supplier_sale_items
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(product_tax_rate, 0) / 100.0), 6);
+    END IF;
+END $$;
+ALTER TABLE supplier_sale_items DROP COLUMN IF EXISTS product_tax_rate;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_sale_items_sale_id ON supplier_sale_items(sale_id);
 
@@ -1370,13 +1399,14 @@ CREATE TABLE IF NOT EXISTS invoices (
     due_date DATE NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
     subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
     total DECIMAL(12, 2) NOT NULL DEFAULT 0,
     amount_paid DECIMAL(12, 2) NOT NULL DEFAULT 0,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE invoices DROP COLUMN IF EXISTS tax_amount;
 
 CREATE INDEX IF NOT EXISTS idx_invoices_client_id ON invoices(client_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
@@ -1392,7 +1422,6 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit',
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -1412,6 +1441,20 @@ WHERE unit_of_measure IS NULL OR unit_of_measure = '';
 
 ALTER TABLE invoice_items ALTER COLUMN unit_of_measure SET DEFAULT 'unit';
 ALTER TABLE invoice_items ALTER COLUMN unit_of_measure SET NOT NULL;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'invoice_items'
+          AND column_name = 'tax_rate'
+    ) THEN
+        UPDATE invoice_items
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(tax_rate, 0) / 100.0), 6);
+    END IF;
+END $$;
+ALTER TABLE invoice_items DROP COLUMN IF EXISTS tax_rate;
 
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
 
@@ -1425,13 +1468,14 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
     due_date DATE NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')),
     subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
     total DECIMAL(12, 2) NOT NULL DEFAULT 0,
     amount_paid DECIMAL(12, 2) NOT NULL DEFAULT 0,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE supplier_invoices DROP COLUMN IF EXISTS tax_amount;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_invoices_supplier_id ON supplier_invoices(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_invoices_status ON supplier_invoices(status);
@@ -1464,10 +1508,24 @@ CREATE TABLE IF NOT EXISTS supplier_invoice_items (
     description VARCHAR(255) NOT NULL,
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
     unit_price DECIMAL(15, 6) NOT NULL DEFAULT 0,
-    tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(5, 2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'supplier_invoice_items'
+          AND column_name = 'tax_rate'
+    ) THEN
+        UPDATE supplier_invoice_items
+        SET unit_price = ROUND(unit_price * (1 + COALESCE(tax_rate, 0) / 100.0), 6);
+    END IF;
+END $$;
+ALTER TABLE supplier_invoice_items DROP COLUMN IF EXISTS tax_rate;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_invoice_items_invoice_id
     ON supplier_invoice_items(invoice_id);

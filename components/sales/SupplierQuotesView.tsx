@@ -32,33 +32,20 @@ const getPaymentTermsOptions = (t: (key: string, options?: Record<string, unknow
 interface TotalsBreakdown {
   subtotal: number;
   discountAmount: number;
-  totalTax: number;
-  taxGroups: Record<number, number>;
   total: number;
 }
 
-const calculateTotals = (
-  items: SupplierQuoteItem[],
-  globalDiscount: number,
-  products: Product[],
-): TotalsBreakdown => {
+const calculateTotals = (items: SupplierQuoteItem[], globalDiscount: number): TotalsBreakdown => {
   let subtotal = 0;
-  const taxGroups: Record<number, number> = {};
   items.forEach((item) => {
     const lineSubtotal = item.quantity * item.unitPrice;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
-    const product = products.find((candidate) => candidate.id === item.productId);
-    const taxRate = Number(product?.taxRate ?? 0);
-    const lineNetAfterGlobal = lineNet * (1 - globalDiscount / 100);
-    const taxAmount = lineNetAfterGlobal * (taxRate / 100);
-    taxGroups[taxRate] = (taxGroups[taxRate] || 0) + taxAmount;
   });
   const discountAmount = subtotal * (globalDiscount / 100);
-  const totalTax = Object.values(taxGroups).reduce((sum, val) => sum + val, 0);
-  const total = subtotal - discountAmount + totalTax;
-  return { subtotal, discountAmount, totalTax, taxGroups, total };
+  const total = subtotal - discountAmount;
+  return { subtotal, discountAmount, total };
 };
 
 export interface SupplierQuotesViewProps {
@@ -150,11 +137,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [hasOrderForQuote],
   );
 
-  const totalsBreakdown = calculateTotals(
-    formData.items || [],
-    Number(formData.discount || 0),
-    products,
-  );
+  const totalsBreakdown = calculateTotals(formData.items || [], Number(formData.discount || 0));
 
   const inputClassName =
     'w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed';
@@ -351,13 +334,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
         id: 'total',
-        accessorFn: (row) => calculateTotals(row.items, row.discount, products).total,
+        accessorFn: (row) => calculateTotals(row.items, row.discount).total,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row }) => {
           const history = isHistoryRow(row);
-          const { total } = calculateTotals(row.items, row.discount, products);
+          const { total } = calculateTotals(row.items, row.discount);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-slate-400' : 'text-slate-700'}`}
@@ -600,7 +583,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       onUpdateQuote,
       onViewOrders,
       openEditModal,
-      products,
       t,
       isHistoryRow,
       hasOrderForQuote,
@@ -1058,19 +1040,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     </span>
                   </div>
                 )}
-                {Object.entries(totalsBreakdown.taxGroups).map(([rate, amount]) => (
-                  <div key={rate} className="flex justify-between text-xs">
-                    <span className="font-semibold text-slate-500">
-                      {t('sales:supplierQuotes.taxRate', {
-                        rate,
-                        defaultValue: 'Tax {{rate}}%',
-                      })}
-                    </span>
-                    <span className="font-semibold text-slate-700">
-                      {amount.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                ))}
                 <div className="flex justify-between border-t border-slate-200 pt-3">
                   <span className="text-lg font-black text-slate-800">
                     {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
