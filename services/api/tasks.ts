@@ -12,10 +12,22 @@ export const tasksApi = {
     description?: string,
     isRecurring?: boolean,
     recurrencePattern?: string,
+    expectedEffort?: number,
+    revenue?: number,
+    notes?: string,
   ): Promise<ProjectTask> =>
     fetchApi<ProjectTask>('/tasks', {
       method: 'POST',
-      body: JSON.stringify({ name, projectId, description, isRecurring, recurrencePattern }),
+      body: JSON.stringify({
+        name,
+        projectId,
+        description,
+        isRecurring,
+        recurrencePattern,
+        expectedEffort,
+        revenue,
+        notes,
+      }),
     }).then(normalizeTask),
 
   update: (id: string, updates: Partial<ProjectTask>): Promise<ProjectTask> =>

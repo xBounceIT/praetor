@@ -128,6 +128,9 @@ export interface ProjectTask {
   recurrenceStart?: string;
   recurrenceEnd?: string;
   recurrenceDuration?: number;
+  expectedEffort?: number;
+  revenue?: number;
+  notes?: string;
   isDisabled?: boolean;
 }
 

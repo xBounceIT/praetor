@@ -434,6 +434,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     recurrence_start DATE,
     recurrence_end DATE,
     recurrence_duration DECIMAL(10, 2) DEFAULT 0,
+    expected_effort DECIMAL(10, 2) DEFAULT 0,
+    revenue DECIMAL(15, 2) DEFAULT 0,
+    notes TEXT,
     is_disabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

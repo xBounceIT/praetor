@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi } from '../../services/api';
-import type { Client, Project, User } from '../../types';
+import type { Client, ClientsOrder, Project, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
@@ -13,12 +13,33 @@ import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
 
+type DraftTask = {
+  _id: string;
+  name: string;
+  expectedEffort: string;
+  revenue: string;
+  notes: string;
+};
+
+export type DraftTaskInput = {
+  name: string;
+  expectedEffort?: number;
+  revenue?: number;
+  notes?: string;
+};
+
 export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
+  orders: ClientsOrder[];
   permissions: string[];
   users: User[];
-  onAddProject: (name: string, clientId: string, description?: string) => void;
+  onAddProject: (
+    name: string,
+    orderId: string,
+    description?: string,
+    tasks?: DraftTaskInput[],
+  ) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
 }
@@ -28,6 +49,7 @@ type AssignmentLoadState = 'loading' | 'error' | 'ready';
 const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
+  orders,
   permissions,
   users,
   onAddProject,
@@ -66,21 +88,27 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   // Form State
   const [name, setName] = useState('');
-  const [clientId, setClientId] = useState('');
+  const [orderId, setOrderId] = useState(''); // used for create
+  const [clientId, setClientId] = useState(''); // used for edit
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(COLORS[0]);
   const [tempIsDisabled, setTempIsDisabled] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Draft tasks state (create modal only)
+  const [draftTasks, setDraftTasks] = useState<DraftTask[]>([]);
 
   // Modal Handlers
   const openAddModal = () => {
     if (!canCreateProjects) return;
     setEditingProject(null);
     setName('');
+    setOrderId('');
     setClientId('');
     setDescription('');
     setColor(COLORS[0]);
     setTempIsDisabled(false);
+    setDraftTasks([]);
     setErrors({});
     setIsModalOpen(true);
   };
@@ -90,9 +118,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setEditingProject(project);
     setName(project.name);
     setClientId(project.clientId);
+    setOrderId('');
     setDescription(project.description || '');
     setColor(project.color);
     setTempIsDisabled(project.isDisabled || false);
+    setDraftTasks([]);
     setErrors({});
     setIsModalOpen(true);
   };
@@ -102,6 +132,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setIsDeleteConfirmOpen(false);
     setEditingProject(null);
     setProjectToDelete(null);
+    setDraftTasks([]);
     setErrors({});
   };
 
@@ -114,7 +145,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
-    if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
+
+    if (editingProject) {
+      if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
+    } else {
+      if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -130,7 +166,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         isDisabled: tempIsDisabled,
       });
     } else {
-      onAddProject(name, clientId, description);
+      const taskInputs: DraftTaskInput[] = draftTasks
+        .filter((t) => t.name.trim())
+        .map((t) => ({
+          name: t.name.trim(),
+          expectedEffort: t.expectedEffort ? parseFloat(t.expectedEffort) : undefined,
+          revenue: t.revenue ? parseFloat(t.revenue) : undefined,
+          notes: t.notes.trim() || undefined,
+        }));
+      onAddProject(name, orderId, description, taskInputs.length > 0 ? taskInputs : undefined);
     }
     closeModal();
   };
@@ -197,9 +241,40 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     await loadAssignments(managingProjectId);
   };
 
+  // Draft task helpers
+  const addDraftTask = () => {
+    setDraftTasks((prev) => [
+      ...prev,
+      {
+        _id: String(Date.now() + Math.random()),
+        name: '',
+        expectedEffort: '',
+        revenue: '',
+        notes: '',
+      },
+    ]);
+  };
+
+  const updateDraftTask = (id: string, field: keyof Omit<DraftTask, '_id'>, value: string) => {
+    setDraftTasks((prev) => prev.map((t) => (t._id === id ? { ...t, [field]: value } : t)));
+  };
+
+  const removeDraftTask = (id: string) => {
+    setDraftTasks((prev) => prev.filter((t) => t._id !== id));
+  };
+
   const canSubmit = editingProject ? canUpdateProjects : canCreateProjects;
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
+
+  const orderOptions = orders
+    .filter((o) => o.status === 'confirmed')
+    .map((o) => ({
+      id: o.id,
+      name: `${o.clientName} — #${o.id.replace('co-', '')}`,
+    }));
+
+  const selectedOrder = orders.find((o) => o.id === orderId);
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const filteredUsers = users.filter(
@@ -211,11 +286,91 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         (u.username?.toLowerCase() ?? '').includes(userSearch.toLowerCase())),
   );
 
+  const draftTaskColumns: Column<DraftTask>[] = [
+    {
+      header: t('projects:projects.taskName'),
+      id: 'name',
+      accessorKey: 'name',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          value={row.name}
+          placeholder={t('projects:projects.taskName')}
+          onChange={(e) => updateDraftTask(row._id, 'name', e.target.value)}
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.expectedEffort'),
+      id: 'expectedEffort',
+      accessorKey: 'expectedEffort',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          value={row.expectedEffort}
+          placeholder="0"
+          onChange={(e) => updateDraftTask(row._id, 'expectedEffort', e.target.value)}
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.taskRevenue'),
+      id: 'revenue',
+      accessorKey: 'revenue',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={row.revenue}
+          placeholder="0.00"
+          onChange={(e) => updateDraftTask(row._id, 'revenue', e.target.value)}
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.taskNotes'),
+      id: 'notes',
+      accessorKey: 'notes',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          value={row.notes}
+          placeholder="—"
+          onChange={(e) => updateDraftTask(row._id, 'notes', e.target.value)}
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
+        />
+      ),
+    },
+    {
+      header: '',
+      id: 'actions',
+      disableFiltering: true,
+      align: 'right',
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => removeDraftTask(row._id)}
+          className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+        >
+          <i className="fa-solid fa-xmark text-xs"></i>
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -237,26 +392,61 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
           <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6">
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('projects:projects.client')}
-                </label>
-                <CustomSelect
-                  options={clientOptions}
-                  value={clientId}
-                  onChange={(val) => {
-                    setClientId(val as string);
-                    if (errors.clientId) setErrors({ ...errors, clientId: '' });
-                  }}
-                  placeholder={t('projects:projects.selectClient')}
-                  searchable={true}
-                  className={errors.clientId ? 'border-red-300' : ''}
-                  buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
-                />
-                {errors.clientId && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                )}
-              </div>
+              {/* Order selector (create only) / Client selector (edit only) */}
+              {editingProject ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('projects:projects.client')}
+                  </label>
+                  <CustomSelect
+                    options={clientOptions}
+                    value={clientId}
+                    onChange={(val) => {
+                      setClientId(val as string);
+                      if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                    }}
+                    placeholder={t('projects:projects.selectClient')}
+                    searchable={true}
+                    className={errors.clientId ? 'border-red-300' : ''}
+                    buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                  />
+                  {errors.clientId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">
+                    {t('projects:projects.order')}
+                  </label>
+                  <CustomSelect
+                    options={orderOptions}
+                    value={orderId}
+                    onChange={(val) => {
+                      setOrderId(val as string);
+                      if (errors.orderId) setErrors({ ...errors, orderId: '' });
+                    }}
+                    placeholder={t('projects:projects.selectOrder')}
+                    searchable={true}
+                    className={errors.orderId ? 'border-red-300' : ''}
+                    buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.orderId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                  />
+                  {errors.orderId && (
+                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.orderId}</p>
+                  )}
+                  {selectedOrder && (
+                    <div className="flex items-center gap-2 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+                      <i className="fa-solid fa-building text-slate-400 text-xs"></i>
+                      <span className="text-xs text-slate-500">
+                        {t('projects:projects.inheritedClientLabel')}:
+                      </span>
+                      <span className="text-xs font-bold text-slate-700">
+                        {selectedOrder.clientName}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
@@ -291,6 +481,33 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
                 />
               </div>
+
+              {/* Tasks section (create only) */}
+              {!editingProject && (
+                <div className="space-y-2">
+                  <StandardTable<DraftTask>
+                    title={t('projects:projects.projectTasks')}
+                    data={draftTasks}
+                    columns={draftTaskColumns}
+                    defaultRowsPerPage={5}
+                    emptyState={
+                      <span className="text-slate-400 text-xs italic">
+                        {t('projects:projects.noTasksAdded')}
+                      </span>
+                    }
+                    headerAction={
+                      <button
+                        type="button"
+                        onClick={addDraftTask}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors"
+                      >
+                        <i className="fa-solid fa-plus text-[10px]"></i>
+                        {t('projects:projects.addTaskRow')}
+                      </button>
+                    }
+                  />
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">

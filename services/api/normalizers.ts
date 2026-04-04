@@ -251,6 +251,8 @@ export const normalizeTimeEntry = (e: TimeEntry): TimeEntry => ({
 export const normalizeTask = (t: ProjectTask): ProjectTask => ({
   ...t,
   recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
+  expectedEffort: t.expectedEffort !== undefined ? Number(t.expectedEffort) : undefined,
+  revenue: t.revenue !== undefined ? Number(t.revenue) : undefined,
 });
 
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({
