@@ -152,11 +152,15 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   const startEditRow = (client: Client, initialActiveField?: keyof Client) => {
     if (!canUpdateClients && !editingState.isNewRow) return;
     const isNew = client.id === 'new';
-    setEditingState({
-      rowId: client.id,
-      isNewRow: isNew ? true : editingState.isNewRow,
-      data: { ...client },
-      touchedFields: new Set(),
+    setEditingState((prev) => {
+      const isNew = client.id === 'new';
+      const isSameRow = prev.rowId === client.id;
+      return {
+        rowId: client.id,
+        isNewRow: isNew,
+        data: isSameRow ? prev.data : { ...client },
+        touchedFields: isSameRow ? prev.touchedFields : new Set(),
+      };
     });
     setValidationErrors({});
     setActiveCell(initialActiveField ? { field: initialActiveField } : null);
