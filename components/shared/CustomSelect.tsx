@@ -88,22 +88,6 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       document.removeEventListener('custom-select-open', handleOtherOpen as EventListener);
   }, [onClose, dropdownId]);
 
-  // Auto open dropdown when autoOpen prop is true
-  useEffect(() => {
-    if (autoOpen && !isOpen && !disabled && buttonRef.current) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-        onOpen?.();
-        // Dispatch event to close other dropdowns
-        document.dispatchEvent(
-          new CustomEvent('custom-select-open', { detail: { id: dropdownId } }),
-        );
-      }, 10);
-      return () => clearTimeout(timer);
-    }
-  }, [autoOpen, isOpen, disabled, dropdownId, onOpen]);
-
   const calculatePosition = useCallback(() => {
     const buttonRect = buttonRef.current?.getBoundingClientRect();
     const dropdownRect = dropdownRef.current?.getBoundingClientRect();
@@ -134,9 +118,33 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     };
   }, [dropdownPosition]);
 
+  // Auto open dropdown when autoOpen prop is true
+  useEffect(() => {
+    if (autoOpen && !isOpen && !disabled && buttonRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setIsOpen(true);
+        onOpen?.();
+        // Dispatch event to close other dropdowns
+        document.dispatchEvent(
+          new CustomEvent('custom-select-open', { detail: { id: dropdownId } }),
+        );
+        // Trigger position calculation after dropdown renders
+        setTimeout(() => {
+          const newStyles = calculatePosition();
+          if (newStyles) {
+            setDropdownStyles(newStyles);
+          }
+        }, 0);
+      }, 10);
+      return () => clearTimeout(timer);
+    }
+  }, [autoOpen, isOpen, disabled, dropdownId, onOpen, calculatePosition]);
+
   useLayoutEffect(() => {
     if (!isOpen) return;
 
+    // Calculate initial position immediately when opening
     const updatePosition = () => {
       const newStyles = calculatePosition();
       if (newStyles) {
@@ -144,7 +152,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       }
     };
 
-    // Only add listeners for subsequent updates, initial position is set in onClick
+    // Initial position calculation
+    updatePosition();
+
+    // Add listeners for subsequent updates (resize/scroll)
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
 
