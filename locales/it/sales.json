@@ -129,7 +129,9 @@
     "clientChangeRepriceMessage": "Hai cambiato il cliente su un preventivo esistente. Mantieni gli snapshot correnti delle righe per preservare lo storico, oppure ricalcola le righe usando prodotti e offerte speciali correnti per il nuovo cliente.",
     "clientChangeKeepSnapshots": "Mantieni snapshot correnti",
     "clientChangeRepriceNow": "Ricalcola righe",
-    "clientChangeRepriceCancel": "Annulla"
+    "clientChangeRepriceCancel": "Annulla",
+    "supplierQuoteColumn": "Quotazione Fornitore",
+    "revenue": "Ricavi"
   },
   "clientOffers": {
     "title": "Offerte Clienti",

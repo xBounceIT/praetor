@@ -813,7 +813,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   // Filter accepted supplier quotes for sourcing
   const acceptedSupplierQuotes = useMemo(
-    () => supplierQuotes.filter((q) => q.status === 'accepted'),
+    () => supplierQuotes.filter((q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate)),
     [supplierQuotes],
   );
 
@@ -1426,7 +1426,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
                   <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                      {t('crm:externalListing.title')}
+                      {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                       {t('sales:clientQuotes.productsServices')}
@@ -1444,7 +1444,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       {t('sales:clientQuotes.marginLabel')}
                     </div>
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:internalListing.salePrice')}
+                      {t('sales:clientQuotes.revenue')}
                     </div>
                   </div>
                   <div className="w-10 shrink-0"></div>
@@ -1484,7 +1484,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="min-w-0">
                               <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                {t('crm:externalListing.title')}
+                                {t('sales:clientQuotes.supplierQuoteColumn')}
                               </div>
                               <CustomSelect
                                 options={[
@@ -1604,7 +1604,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1 col-span-2 md:col-span-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('crm:internalListing.salePrice')}
+                              {t('sales:clientQuotes.revenue')}
                             </div>
                             <div
                               className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
