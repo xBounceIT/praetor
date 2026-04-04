@@ -3275,6 +3275,7 @@ const App: React.FC = () => {
                 <SupplierQuotesView
                   quotes={supplierQuotes}
                   suppliers={suppliers}
+                  products={products}
                   onAddQuote={addSupplierQuote}
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onDeleteQuote={handleDeleteSupplierQuote}

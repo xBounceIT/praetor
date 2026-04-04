@@ -424,7 +424,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
             let unitPrice = calcProductSalePrice(cost, mol);
             if (item.unitType === 'days') {
-              unitPrice = Math.round(unitPrice * 8 * 100) / 100;
+              unitPrice = roundToTwoDecimals(unitPrice * 8);
             }
 
             return {
@@ -577,7 +577,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const mol = product.molPercentage ? Number(product.molPercentage) : 0;
         let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
         if (newItems[index].unitType === 'days') {
-          newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+          newUnitPrice = roundToTwoDecimals(newUnitPrice * 8);
         }
         newItems[index].unitPrice = newUnitPrice;
         newItems[index].productCost = Number(product.costo);
@@ -611,7 +611,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = molSource ? Number(molSource) : 0;
             let newUnitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
             if (newItems[index].unitType === 'days') {
-              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+              newUnitPrice = roundToTwoDecimals(newUnitPrice * 8);
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
@@ -625,7 +625,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
             if (newItems[index].unitType === 'days') {
-              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+              newUnitPrice = roundToTwoDecimals(newUnitPrice * 8);
             }
             newItems[index].specialBidId = '';
             newItems[index].unitPrice = newUnitPrice;
@@ -665,23 +665,29 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
         newItems[index].supplierQuoteDiscount = selectedQuote.discount;
 
+        newItems[index].unitType = selectedQuoteItem.unitType || 'hours';
+        newItems[index].quantity = selectedQuoteItem.quantity;
+
         // Clear special bid when supplier quote is selected
         newItems[index].specialBidId = '';
         newItems[index].specialBidUnitPrice = null;
         newItems[index].specialBidMolPercentage = null;
 
+        let salePrice: number;
         if (product) {
-          // Product found — calculate sale price using product MOL
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(netCost, mol);
+          salePrice = calcProductSalePrice(netCost, mol);
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         } else {
-          // No linked product — use net cost as unit price (no MOL markup)
-          newItems[index].unitPrice = netCost;
+          salePrice = netCost;
           newItems[index].productCost = netCost;
           newItems[index].productMolPercentage = null;
         }
+        if (newItems[index].unitType === 'days') {
+          salePrice = roundToTwoDecimals(salePrice * 8);
+        }
+        newItems[index].unitPrice = salePrice;
       } else {
         // Supplier quote item not found - clear supplier quote and revert
         newItems[index].supplierQuoteItemId = null;
@@ -718,7 +724,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
             if (newItems[index].unitType === 'days') {
-              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+              newUnitPrice = roundToTwoDecimals(newUnitPrice * 8);
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
@@ -742,7 +748,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
           if (newItems[index].unitType === 'days') {
-            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+            newItems[index].unitPrice = roundToTwoDecimals(newItems[index].unitPrice * 8);
           }
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
@@ -804,7 +810,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   // Filter accepted supplier quotes for sourcing
   const acceptedSupplierQuotes = useMemo(
-    () => supplierQuotes.filter((q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate)),
+    () =>
+      supplierQuotes.filter(
+        (q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate),
+      ),
     [supplierQuotes],
   );
 
@@ -818,6 +827,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       unitPrice: number;
       discount: number;
       quoteDiscount: number;
+      unitType?: 'hours' | 'days';
+      quantity: number;
     }> = [];
     for (const quote of acceptedSupplierQuotes) {
       for (const item of quote.items) {
@@ -829,6 +840,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           unitPrice: item.unitPrice,
           discount: item.discount ?? 0,
           quoteDiscount: quote.discount,
+          unitType: item.unitType,
+          quantity: item.quantity,
         });
       }
     }
@@ -852,7 +865,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: Math.round(adjustedPrice * 100) / 100,
+      unitPrice: roundToTwoDecimals(adjustedPrice),
     };
     setFormData({ ...formData, items: newItems });
   };
@@ -874,7 +887,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       <select
         value={item.unitType || 'hours'}
         onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
-        disabled={isReadOnly}
+        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
         className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
@@ -1415,14 +1428,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
+                  <div className="flex-1 min-w-0 grid grid-cols-13 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                       {t('sales:clientQuotes.productsServices')}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.qty')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
@@ -1466,6 +1479,40 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const unitSalePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
+
+                    const handleCostChange = (value: string) => {
+                      if (isReadOnly) return;
+                      const newCost = parseNumberInputValue(value);
+                      const unitMult = item.unitType === 'days' ? 8 : 1;
+                      const newUnitPrice = calcProductSalePrice(newCost, molPercentage);
+                      const updated = [...(formData.items || [])];
+                      updated[index] = {
+                        ...updated[index],
+                        unitPrice: roundToTwoDecimals(newUnitPrice),
+                        ...(item.supplierQuoteItemId
+                          ? {
+                              supplierQuoteUnitPrice: roundToTwoDecimals(newCost / unitMult),
+                            }
+                          : {
+                              productCost: roundToTwoDecimals(newCost / unitMult),
+                            }),
+                      };
+                      setFormData({ ...formData, items: updated });
+                    };
+
+                    const handleMolChange = (value: string) => {
+                      if (isReadOnly) return;
+                      const newMol = parseNumberInputValue(value);
+                      const newUnitPrice = calcProductSalePrice(cost, newMol);
+                      const updated = [...(formData.items || [])];
+                      updated[index] = {
+                        ...updated[index],
+                        unitPrice: roundToTwoDecimals(newUnitPrice),
+                        productMolPercentage: roundToTwoDecimals(newMol),
+                      };
+                      setFormData({ ...formData, items: updated });
+                    };
+
                     return (
                       <div
                         key={item.id}
@@ -1515,7 +1562,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 }
                                 placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                 className="min-w-0"
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
@@ -1550,7 +1597,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                   );
                                 }}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                 className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                               />
                               <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1573,16 +1620,32 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {t('sales:clientQuotes.bidBadge')}
                               </span>
                             )}
-                            <div className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                              {lineCost.toFixed(2)} {currency}
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly}
+                                className="w-full text-xs px-2 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                {currency}
+                              </span>
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               MOL (%)
                             </div>
-                            <div className="text-xs font-bold text-slate-600">
-                              {molPercentage.toFixed(1)}%
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className="w-full text-xs px-2 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                %
+                              </span>
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
@@ -1605,7 +1668,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                         </div>
                         <div className="hidden lg:flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-13 gap-3 items-center">
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
@@ -1642,12 +1705,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 }
                                 placeholder={t('sales:clientQuotes.selectProduct')}
                                 searchable={true}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                 className="min-w-0"
                                 buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="col-span-1">
+                            <div className="col-span-2">
                               <div className="flex items-center gap-1">
                                 <ValidatedNumberInput
                                   step="0.01"
@@ -1663,7 +1726,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                     );
                                   }}
-                                  disabled={isReadOnly}
+                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                   className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1683,14 +1746,30 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                                {lineCost.toFixed(2)} {currency}
-                              </span>
+                              <div className="flex items-center gap-0.5 w-full">
+                                <ValidatedNumberInput
+                                  value={cost.toFixed(2)}
+                                  onValueChange={handleCostChange}
+                                  disabled={isReadOnly}
+                                  className="w-full text-xs px-1 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  {currency}
+                                </span>
+                              </div>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span className="text-xs font-bold text-slate-600">
-                                {molPercentage.toFixed(1)}%
-                              </span>
+                              <div className="flex items-center gap-0.5 w-full">
+                                <ValidatedNumberInput
+                                  value={molPercentage.toFixed(1)}
+                                  onValueChange={handleMolChange}
+                                  disabled={isReadOnly}
+                                  className="w-full text-xs px-1 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  %
+                                </span>
+                              </div>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">

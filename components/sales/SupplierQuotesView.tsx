@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
+import type { Product, Supplier, SupplierQuote, SupplierQuoteItem } from '../../types';
 import {
   formatDateOnlyForLocale,
   getLocalDateString,
@@ -51,6 +51,7 @@ const calculateTotals = (items: SupplierQuoteItem[], globalDiscount: number): To
 export interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
   suppliers: Supplier[];
+  products: Product[];
   onAddQuote: (quoteData: Partial<SupplierQuote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void | Promise<void>;
@@ -63,6 +64,7 @@ export interface SupplierQuotesViewProps {
 const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   quotes,
   suppliers,
+  products,
   onAddQuote,
   onUpdateQuote,
   onDeleteQuote,
@@ -210,6 +212,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           quantity: 1,
           unitPrice: 0,
           discount: 0,
+          unitType: 'hours' as const,
           note: '',
         },
       ],
@@ -227,6 +230,48 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     },
     [isReadOnly],
   );
+
+  const handleUnitTypeChange = (index: number, newType: 'hours' | 'days') => {
+    if (isReadOnly) return;
+    const item = formData.items?.[index];
+    if (!item) return;
+    const oldType = item.unitType || 'hours';
+    if (oldType === newType) return;
+    const adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+    const newItems = [...(formData.items || [])];
+    newItems[index] = {
+      ...newItems[index],
+      unitType: newType,
+      unitPrice: roundToTwoDecimals(adjustedPrice),
+    };
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const renderUnitSelector = (index: number, item: SupplierQuoteItem) => {
+    const product = item.productId ? products.find((p) => p.id === item.productId) : undefined;
+    const isSupply = product?.type === 'supply';
+    const qty = Number(item.quantity) || 0;
+
+    if (isSupply) {
+      return (
+        <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
+        </span>
+      );
+    }
+
+    return (
+      <select
+        value={item.unitType || 'hours'}
+        onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
+        disabled={isReadOnly}
+        className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
+        <option value="days">{t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`)}</option>
+      </select>
+    );
+  };
 
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
@@ -767,9 +812,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
                     </div>
+                    <div className="col-span-1" />
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                     </div>
@@ -802,14 +848,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 type="text"
                                 value={item.productName || ''}
                                 disabled={isReadOnly}
-                                onChange={(event) => updateItem(index, 'productName', event.target.value)}
+                                onChange={(event) =>
+                                  updateItem(index, 'productName', event.target.value)
+                                }
                                 placeholder={t('sales:supplierQuotes.product', {
                                   defaultValue: 'Product',
                                 })}
                                 className={itemInputClassName}
                               />
                             </div>
-                            <div className="col-span-4 md:col-span-2">
+                            <div className="col-span-4 md:col-span-1">
                               <ValidatedNumberInput
                                 value={item.quantity}
                                 onValueChange={(value) =>
@@ -818,6 +866,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 disabled={isReadOnly}
                                 className={`${itemInputClassName} text-center`}
                               />
+                            </div>
+                            <div className="hidden md:flex col-span-1 items-center justify-center">
+                              {renderUnitSelector(index, item)}
                             </div>
                             <div className="col-span-4 md:col-span-3">
                               <div className="flex items-center gap-1.5">
@@ -1046,8 +1097,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         }}
         rowClassName={(row) => {
           const history = isHistoryRow(row);
-          const canOpenModal =
-            !history || row.status === 'accepted' || row.status === 'denied';
+          const canOpenModal = !history || row.status === 'accepted' || row.status === 'denied';
           const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
           return history
             ? `bg-slate-50 text-slate-400 hover:bg-slate-100 ${cursorClass}`
