@@ -227,15 +227,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   // Validation errors
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  const formatInsertDate = useCallback((timestamp: number) => {
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return '-';
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  }, []);
-
   const getEmptyClient = (): Partial<Client> => ({
     name: '',
     type: 'company',
@@ -494,11 +485,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       t,
     };
 
+    const dblClick = (field: keyof Client) =>
+      canUpdateClients ? { onCellDoubleClick: (row: Client) => startEditRow(row, field) } : {};
+
     return [
       {
         header: t('crm:clients.tableHeaders.name'),
         accessorKey: 'name',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'name') } : {}),
+        ...dblClick('name'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -519,9 +513,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.clientCode'),
         accessorKey: 'clientCode',
-        ...(canUpdateClients
-          ? { onCellDoubleClick: (row) => startEditRow(row, 'clientCode') }
-          : {}),
+        ...dblClick('clientCode'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.clientCode : row.clientCode;
@@ -566,7 +558,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         id: 'type',
         accessorFn: (row) =>
           row.type === 'company' ? t('crm:clients.typeCompany') : t('crm:clients.typeIndividual'),
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'type') } : {}),
+        ...dblClick('type'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.type : row.type;
@@ -607,7 +599,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.email'),
         accessorKey: 'email',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'email') } : {}),
+        ...dblClick('email'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -627,7 +619,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.phone'),
         accessorKey: 'phone',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'phone') } : {}),
+        ...dblClick('phone'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -648,9 +640,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         header: t('crm:clients.tableHeaders.fiscalCode'),
         id: 'fiscalCode',
         accessorFn: (row) => row.fiscalCode || row.vatNumber || row.taxCode || '',
-        ...(canUpdateClients
-          ? { onCellDoubleClick: (row) => startEditRow(row, 'fiscalCode') }
-          : {}),
+        ...dblClick('fiscalCode'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing
@@ -674,9 +664,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.officeCountRange'),
         accessorKey: 'officeCountRange',
-        ...(canUpdateClients
-          ? { onCellDoubleClick: (row) => startEditRow(row, 'officeCountRange') }
-          : {}),
+        ...dblClick('officeCountRange'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.officeCountRange : row.officeCountRange;
@@ -698,7 +686,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.sector'),
         accessorKey: 'sector',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'sector') } : {}),
+        ...dblClick('sector'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.sector : row.sector;
@@ -729,9 +717,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.numberOfEmployees'),
         accessorKey: 'numberOfEmployees',
-        ...(canUpdateClients
-          ? { onCellDoubleClick: (row) => startEditRow(row, 'numberOfEmployees') }
-          : {}),
+        ...dblClick('numberOfEmployees'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.numberOfEmployees : row.numberOfEmployees;
@@ -764,7 +750,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.revenue'),
         accessorKey: 'revenue',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'revenue') } : {}),
+        ...dblClick('revenue'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           const value = isEditing ? editingState.data.revenue : row.revenue;
@@ -795,9 +781,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.contactName'),
         accessorKey: 'contactName',
-        ...(canUpdateClients
-          ? { onCellDoubleClick: (row) => startEditRow(row, 'contactName') }
-          : {}),
+        ...dblClick('contactName'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -817,7 +801,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.address'),
         accessorKey: 'address',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'address') } : {}),
+        ...dblClick('address'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -837,9 +821,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.description'),
         accessorKey: 'description',
-        ...(canUpdateClients
-          ? { onCellDoubleClick: (row) => startEditRow(row, 'description') }
-          : {}),
+        ...dblClick('description'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -859,7 +841,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.atecoCode'),
         accessorKey: 'atecoCode',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'atecoCode') } : {}),
+        ...dblClick('atecoCode'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
@@ -879,7 +861,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       {
         header: t('crm:clients.tableHeaders.website'),
         accessorKey: 'website',
-        ...(canUpdateClients ? { onCellDoubleClick: (row) => startEditRow(row, 'website') } : {}),
+        ...dblClick('website'),
         cell: ({ row }) => {
           const isEditing = isRowEditing(row);
           return (
