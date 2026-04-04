@@ -1060,6 +1060,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   ]);
 
   // Prepare data with new row if editing
+  const tableData = useMemo(() => {
     if (editingState.isNewRow) {
       const newRow: Client = {
         id: 'new',
