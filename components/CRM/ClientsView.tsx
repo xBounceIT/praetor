@@ -469,7 +469,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     };
 
     const dblClick = (field: keyof Client) =>
-      canUpdateClients ? { onCellDoubleClick: (row: Client) => startEditRow(row, field) } : {};
+      canUpdateClients || editingState.isNewRow
+        ? { onCellDoubleClick: (row: Client) => startEditRow(row, field) }
+        : {};
 
     const textColumn = (
       field: keyof Client,
