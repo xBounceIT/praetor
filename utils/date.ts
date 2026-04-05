@@ -32,6 +32,16 @@ export const addDaysToDateOnly = (dateOnly: string, days: number): string => {
   return getLocalDateString(nextDate);
 };
 
+export const addMonthsToDateOnly = (dateOnly: string, months: number): string => {
+  const nextDate = dateOnlyStringToLocalDate(dateOnly);
+  const targetDay = nextDate.getDate();
+  nextDate.setMonth(nextDate.getMonth() + months);
+  if (nextDate.getDate() !== targetDay) {
+    nextDate.setDate(0);
+  }
+  return getLocalDateString(nextDate);
+};
+
 export const isDateOnlyBeforeToday = (
   dateOnly: string,
   today: string = getLocalDateString(),

@@ -9,6 +9,7 @@ import type {
   SupplierUnitType,
 } from '../../types';
 import {
+  addMonthsToDateOnly,
   formatDateOnlyForLocale,
   getLocalDateString,
   normalizeDateOnlyString,
@@ -67,6 +68,18 @@ export interface SupplierQuotesViewProps {
   currency: string;
 }
 
+const getDefaultFormData = (): Partial<SupplierQuote> => ({
+  supplierId: '',
+  supplierName: '',
+  id: '',
+  items: [],
+  paymentTerms: 'immediate',
+  discount: 0,
+  status: 'draft',
+  expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  notes: '',
+});
+
 const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   quotes,
   suppliers,
@@ -99,10 +112,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [suppliers],
   );
 
-  const filteredQuotes = useMemo(() => {
-    return quotes;
-  }, [quotes]);
-
   const tableInitialFilterState = useMemo(() => {
     if (quoteFilterId) {
       return { id: [quoteFilterId] };
@@ -115,21 +124,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const getNextMonthDate = () => {
-    const now = new Date();
-    return getLocalDateString(new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
-  };
-  const [formData, setFormData] = useState<Partial<SupplierQuote>>({
-    supplierId: '',
-    supplierName: '',
-    id: '',
-    items: [],
-    paymentTerms: 'immediate',
-    discount: 0,
-    status: 'draft',
-    expirationDate: getNextMonthDate(),
-    notes: '',
-  });
+  const [formData, setFormData] = useState<Partial<SupplierQuote>>(getDefaultFormData());
 
   const isReadOnly = Boolean(editingQuote?.linkedOrderId);
 
@@ -152,17 +147,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const openAddModal = useCallback(() => {
     setEditingQuote(null);
-    setFormData({
-      supplierId: '',
-      supplierName: '',
-      id: '',
-      items: [],
-      paymentTerms: 'immediate',
-      discount: 0,
-      status: 'draft',
-      expirationDate: getNextMonthDate(),
-      notes: '',
-    });
+    setFormData(getDefaultFormData());
     setErrors({});
     setIsModalOpen(true);
   }, []);
@@ -1099,7 +1084,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
       <StandardTable<SupplierQuote>
         title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
-        data={filteredQuotes}
+        data={quotes}
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => {

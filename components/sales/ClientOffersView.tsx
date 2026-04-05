@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientOffer, ClientOfferItem, Product, SpecialBid } from '../../types';
 import {
+  addMonthsToDateOnly,
   getLocalDateString,
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
@@ -81,6 +82,19 @@ export interface ClientOffersViewProps {
   offerFilterId?: string | null;
 }
 
+const getDefaultFormData = (): Partial<ClientOffer> => ({
+  id: '',
+  linkedQuoteId: '',
+  clientId: '',
+  clientName: '',
+  items: [],
+  paymentTerms: 'immediate',
+  discount: 0,
+  status: 'draft',
+  expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  notes: '',
+});
+
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
   clients,
@@ -130,18 +144,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<Partial<ClientOffer>>({
-    id: '',
-    linkedQuoteId: '',
-    clientId: '',
-    clientName: '',
-    items: [],
-    paymentTerms: 'immediate',
-    discount: 0,
-    status: 'draft',
-    expirationDate: getLocalDateString(),
-    notes: '',
-  });
+  const [formData, setFormData] = useState<Partial<ClientOffer>>(getDefaultFormData());
 
   const isReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
@@ -377,18 +380,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const openAddModal = () => {
     setEditingOffer(null);
-    setFormData({
-      id: '',
-      linkedQuoteId: '',
-      clientId: '',
-      clientName: '',
-      items: [],
-      paymentTerms: 'immediate',
-      discount: 0,
-      status: 'draft',
-      expirationDate: getLocalDateString(),
-      notes: '',
-    });
+    setFormData(getDefaultFormData());
     setErrors({});
     setIsModalOpen(true);
   };
