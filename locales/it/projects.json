@@ -53,7 +53,7 @@
     "orderRequired": "L'ordine è obbligatorio",
     "inheritedClientLabel": "Cliente (ereditato dall'ordine)",
     "projectTasks": "Attività del Progetto",
-    "addTaskRow": "+ Aggiungi Attività",
+    "addTaskRow": "Aggiungi Attività",
     "taskName": "Nome Attività",
     "expectedEffort": "Impegno (h)",
     "taskRevenue": "Ricavo",

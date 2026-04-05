@@ -1509,6 +1509,12 @@ const App: React.FC = () => {
                 load: () => api.workUnits.list(),
                 apply: (data) => setWorkUnits(data as WorkUnit[]),
               },
+              {
+                dataset: 'client orders',
+                enabled: canListOrders,
+                load: () => api.clientsOrders.list(),
+                apply: (data) => setClientsOrders(data as ClientsOrder[]),
+              },
             ]);
             break;
           }
@@ -3434,6 +3440,7 @@ const App: React.FC = () => {
                 projects={projects}
                 clients={clients}
                 orders={clientsOrders}
+                currency={generalSettings.currency}
                 permissions={currentUser.permissions || []}
                 users={availableUsers}
                 onAddProject={addProject}

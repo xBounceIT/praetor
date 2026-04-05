@@ -53,7 +53,7 @@
     "orderRequired": "Order is Required",
     "inheritedClientLabel": "Client (inherited from order)",
     "projectTasks": "Project Tasks",
-    "addTaskRow": "+ Add Task",
+    "addTaskRow": "Add Task",
     "taskName": "Task Name",
     "expectedEffort": "Effort (h)",
     "taskRevenue": "Revenue",

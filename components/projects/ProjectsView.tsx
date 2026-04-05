@@ -34,6 +34,7 @@ export interface ProjectsViewProps {
   orders: ClientsOrder[];
   permissions: string[];
   users: User[];
+  currency: string;
   onAddProject: (
     name: string,
     orderId: string,
@@ -52,6 +53,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   orders,
   permissions,
   users,
+  currency,
   onAddProject,
   onUpdateProject,
   onDeleteProject,
@@ -310,16 +312,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         <input
           type="number"
           min="0"
-          step="0.5"
+          step="1"
           value={row.expectedEffort}
           placeholder="0"
+          onKeyDown={(e) => {
+            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+          }}
           onChange={(e) => updateDraftTask(row._id, 'expectedEffort', e.target.value)}
           className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
         />
       ),
     },
     {
-      header: t('projects:projects.taskRevenue'),
+      header: `${t('projects:projects.taskRevenue')} (${currency})`,
       id: 'revenue',
       accessorKey: 'revenue',
       disableFiltering: true,
@@ -360,7 +365,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           onClick={() => removeDraftTask(row._id)}
           className="p-1 text-slate-400 hover:text-red-500 transition-colors"
         >
-          <i className="fa-solid fa-xmark text-xs"></i>
+          <i className="fa-solid fa-trash-can text-xs"></i>
         </button>
       ),
     },
