@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../../services/api';
 import type { InternalProductType } from '../../services/api/products';
 import type { Product, Supplier } from '../../types';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -215,20 +215,14 @@ const ExternalListingView: React.FC<ExternalListingViewProps> = ({
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
           ...formData,
-          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
-          molPercentage:
-            formData.molPercentage !== undefined
-              ? roundToTwoDecimals(formData.molPercentage)
-              : undefined,
+          costo: formData.costo !== undefined ? formData.costo : undefined,
+          molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       } else {
         await onAddProduct({
           ...formData,
-          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
-          molPercentage:
-            formData.molPercentage !== undefined
-              ? roundToTwoDecimals(formData.molPercentage)
-              : undefined,
+          costo: formData.costo !== undefined ? formData.costo : undefined,
+          molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       }
       setIsModalOpen(false);

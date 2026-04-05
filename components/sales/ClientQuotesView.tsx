@@ -17,7 +17,7 @@ import {
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -319,21 +319,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     const itemsWithSnapshots = (formData.items || []).map((item) => {
       return {
         ...item,
-        unitPrice: roundToTwoDecimals(item.unitPrice),
-        discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
-        productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
+        unitPrice: item.unitPrice,
+        discount: item.discount ? item.discount : 0,
+        productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
-            : roundToTwoDecimals(Number(item.productMolPercentage)),
+            : Number(item.productMolPercentage),
         specialBidUnitPrice:
           item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
             ? null
-            : roundToTwoDecimals(Number(item.specialBidUnitPrice)),
+            : Number(item.specialBidUnitPrice),
         specialBidMolPercentage:
           item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
             ? null
-            : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
+            : Number(item.specialBidMolPercentage),
         // Supplier quote snapshot fields
         supplierQuoteId: item.supplierQuoteId ?? null,
         supplierQuoteItemId: item.supplierQuoteItemId ?? null,
@@ -341,21 +341,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         supplierQuoteUnitPrice:
           item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
             ? null
-            : roundToTwoDecimals(Number(item.supplierQuoteUnitPrice)),
+            : Number(item.supplierQuoteUnitPrice),
         supplierQuoteItemDiscount:
           item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
             ? null
-            : roundToTwoDecimals(Number(item.supplierQuoteItemDiscount)),
+            : Number(item.supplierQuoteItemDiscount),
         supplierQuoteDiscount:
           item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
             ? null
-            : roundToTwoDecimals(Number(item.supplierQuoteDiscount)),
+            : Number(item.supplierQuoteDiscount),
       };
     });
 
     const payload = {
       ...formData,
-      discount: formData.discount ? roundToTwoDecimals(formData.discount) : 0,
+      discount: formData.discount ? formData.discount : 0,
       items: itemsWithSnapshots,
     };
 
@@ -424,7 +424,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
             let unitPrice = calcProductSalePrice(cost, mol);
             if (item.unitType === 'days') {
-              unitPrice = Math.round(unitPrice * 8 * 100) / 100;
+              unitPrice = unitPrice * 8;
             }
 
             return {
@@ -577,7 +577,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const mol = product.molPercentage ? Number(product.molPercentage) : 0;
         let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
         if (newItems[index].unitType === 'days') {
-          newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+          newUnitPrice = newUnitPrice * 8;
         }
         newItems[index].unitPrice = newUnitPrice;
         newItems[index].productCost = Number(product.costo);
@@ -611,7 +611,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = molSource ? Number(molSource) : 0;
             let newUnitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
             if (newItems[index].unitType === 'days') {
-              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+              newUnitPrice = newUnitPrice * 8;
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
@@ -625,7 +625,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
             if (newItems[index].unitType === 'days') {
-              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+              newUnitPrice = newUnitPrice * 8;
             }
             newItems[index].specialBidId = '';
             newItems[index].unitPrice = newUnitPrice;
@@ -727,7 +727,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
             if (newItems[index].unitType === 'days') {
-              newUnitPrice = Math.round(newUnitPrice * 8 * 100) / 100;
+              newUnitPrice = newUnitPrice * 8;
             }
             newItems[index].unitPrice = newUnitPrice;
             newItems[index].productCost = Number(product.costo);
@@ -751,7 +751,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           const mol = molSource ? Number(molSource) : 0;
           newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
           if (newItems[index].unitType === 'days') {
-            newItems[index].unitPrice = Math.round(newItems[index].unitPrice * 8 * 100) / 100;
+            newItems[index].unitPrice = newItems[index].unitPrice * 8;
           }
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
@@ -861,7 +861,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: Math.round(adjustedPrice * 100) / 100,
+      unitPrice: adjustedPrice,
     };
     setFormData({ ...formData, items: newItems });
   };

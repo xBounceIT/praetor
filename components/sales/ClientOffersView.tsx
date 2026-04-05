@@ -7,7 +7,7 @@ import {
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { roundToTwoDecimals } from '../../utils/numbers';
+
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -486,12 +486,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
     const payload: Partial<ClientOffer> = {
       ...formData,
-      discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
+      discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
-        unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-        productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
-        discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+        unitPrice: Number(item.unitPrice ?? 0),
+        productCost: Number(item.productCost ?? 0),
+        discount: Number(item.discount ?? 0),
       })),
     };
 

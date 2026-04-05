@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
-import { roundToTwoDecimals } from '../../utils/numbers';
+
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -170,11 +170,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
       await onUpdateOrder(editingOrder.id, {
         ...formData,
-        discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
+        discount: Number(formData.discount ?? 0),
         items: (formData.items || []).map((item) => ({
           ...item,
-          unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-          discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+          unitPrice: Number(item.unitPrice ?? 0),
+          discount: Number(item.discount ?? 0),
         })),
       });
 

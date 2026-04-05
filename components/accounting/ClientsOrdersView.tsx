@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, ClientsOrder, ClientsOrderItem, Product, SpecialBid } from '../../types';
 import { getLocalDateString, isDateOnlyWithinInclusiveRange } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -122,27 +122,27 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     const itemsWithSnapshots = (formData.items || []).map((item) => {
       return {
         ...item,
-        unitPrice: roundToTwoDecimals(item.unitPrice),
-        discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
-        productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
+        unitPrice: item.unitPrice,
+        discount: item.discount ? item.discount : 0,
+        productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
-            : roundToTwoDecimals(Number(item.productMolPercentage)),
+            : Number(item.productMolPercentage),
         specialBidUnitPrice:
           item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
             ? null
-            : roundToTwoDecimals(Number(item.specialBidUnitPrice)),
+            : Number(item.specialBidUnitPrice),
         specialBidMolPercentage:
           item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
             ? null
-            : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
+            : Number(item.specialBidMolPercentage),
       };
     });
 
     const payload = {
       ...formData,
-      discount: formData.discount ? roundToTwoDecimals(formData.discount) : 0,
+      discount: formData.discount ? formData.discount : 0,
       items: itemsWithSnapshots,
     };
 

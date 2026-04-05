@@ -9,7 +9,7 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { parseNumberInputValue } from '../../utils/numbers';
 import Calendar from '../shared/Calendar';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -170,11 +170,8 @@ const SpecialBidsView: React.FC<SpecialBidsViewProps> = ({
 
     const payload = {
       ...formData,
-      unitPrice: formData.unitPrice !== undefined ? roundToTwoDecimals(formData.unitPrice) : 0,
-      molPercentage:
-        formData.molPercentage !== undefined
-          ? roundToTwoDecimals(formData.molPercentage)
-          : undefined,
+      unitPrice: formData.unitPrice !== undefined ? formData.unitPrice : 0,
+      molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
     };
 
     if (editingBid) {

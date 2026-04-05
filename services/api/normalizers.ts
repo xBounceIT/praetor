@@ -23,7 +23,6 @@ import type {
   TimeEntry,
   User,
 } from '../../types';
-import { roundToTwoDecimals } from '../../utils/numbers';
 
 export const normalizeClient = (c: Client): Client => ({
   ...c,
@@ -269,9 +268,9 @@ export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
 
 export const normalizeInvoice = (i: Invoice): Invoice => ({
   ...i,
-  subtotal: roundToTwoDecimals(Number(i.subtotal ?? 0)),
-  total: roundToTwoDecimals(Number(i.total ?? 0)),
-  amountPaid: roundToTwoDecimals(Number(i.amountPaid ?? 0)),
+  subtotal: Number(i.subtotal ?? 0),
+  total: Number(i.total ?? 0),
+  amountPaid: Number(i.amountPaid ?? 0),
   items: (i.items || []).map(normalizeInvoiceItem),
 });
 
@@ -314,9 +313,9 @@ export const normalizeSupplierInvoiceItem = (item: SupplierInvoiceItem): Supplie
 
 export const normalizeSupplierInvoice = (invoice: SupplierInvoice): SupplierInvoice => ({
   ...invoice,
-  subtotal: roundToTwoDecimals(Number(invoice.subtotal ?? 0)),
-  total: roundToTwoDecimals(Number(invoice.total ?? 0)),
-  amountPaid: roundToTwoDecimals(Number(invoice.amountPaid ?? 0)),
+  subtotal: Number(invoice.subtotal ?? 0),
+  total: Number(invoice.total ?? 0),
+  amountPaid: Number(invoice.amountPaid ?? 0),
   items: (invoice.items || []).map(normalizeSupplierInvoiceItem),
 });
 

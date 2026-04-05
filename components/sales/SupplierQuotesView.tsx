@@ -7,7 +7,7 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { roundToTwoDecimals } from '../../utils/numbers';
+
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -206,7 +206,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             }
             nextItem.unitPrice = Number(product.costo);
             if (nextItem.unitType === 'days') {
-              nextItem.unitPrice = Math.round(nextItem.unitPrice * 8 * 100) / 100;
+              nextItem.unitPrice = nextItem.unitPrice * 8;
             }
           }
         }
@@ -263,7 +263,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         items[index] = {
           ...item,
           unitType: newType,
-          unitPrice: Math.round(adjustedPrice * 100) / 100,
+          unitPrice: adjustedPrice,
         };
         return { ...prev, items };
       });
@@ -616,11 +616,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
-      discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
+      discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
-        unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-        discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+        unitPrice: Number(item.unitPrice ?? 0),
+        discount: Number(item.discount ?? 0),
       })),
     };
 
