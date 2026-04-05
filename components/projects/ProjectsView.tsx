@@ -297,6 +297,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       cell: ({ row }) => (
         <input
           value={row.name}
+          required
           placeholder={t('projects:projects.taskName')}
           onChange={(e) => updateDraftTask(row._id, 'name', e.target.value)}
           className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none"
@@ -313,6 +314,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           type="number"
           min="0"
           step="1"
+          required
           value={row.expectedEffort}
           placeholder="0"
           onKeyDown={(e) => {
@@ -333,6 +335,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           type="number"
           min="0"
           step="0.01"
+          required
           value={row.revenue}
           placeholder="0.00"
           onChange={(e) => updateDraftTask(row._id, 'revenue', e.target.value)}
@@ -355,7 +358,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       ),
     },
     {
-      header: '',
+      header: t('projects:projects.tableHeaders.actions'),
       id: 'actions',
       disableFiltering: true,
       align: 'right',
