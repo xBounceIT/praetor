@@ -48,6 +48,9 @@ const taskSchema = {
     recurrenceStart: { type: ['string', 'null'] },
     recurrenceEnd: { type: ['string', 'null'] },
     recurrenceDuration: { type: 'number' },
+    expectedEffort: { type: 'number' },
+    revenue: { type: 'number' },
+    notes: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
   },
   required: ['id', 'name', 'projectId', 'isRecurring', 'recurrenceDuration', 'isDisabled'],
@@ -63,6 +66,9 @@ const taskCreateBodySchema = {
     recurrencePattern: { type: 'string' },
     recurrenceStart: { type: 'string' },
     recurrenceDuration: { type: 'number' },
+    expectedEffort: { type: 'number' },
+    revenue: { type: 'number' },
+    notes: { type: 'string' },
   },
   required: ['name', 'projectId'],
 } as const;
@@ -77,6 +83,9 @@ const taskUpdateBodySchema = {
     recurrenceStart: { type: 'string' },
     recurrenceEnd: { type: 'string' },
     recurrenceDuration: { type: 'number' },
+    expectedEffort: { type: 'number' },
+    revenue: { type: 'number' },
+    notes: { type: 'string' },
     isDisabled: { type: 'boolean' },
   },
 } as const;
@@ -127,16 +136,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const canViewAll = hasPermission(request, 'projects.tasks_all.view');
       let queryText = `
-            SELECT id, name, project_id, description, is_recurring, 
-                   recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration, is_disabled 
+            SELECT id, name, project_id, description, is_recurring,
+                   recurrence_pattern, recurrence_start, recurrence_end, recurrence_duration,
+                   expected_effort, revenue, notes, is_disabled
             FROM tasks ORDER BY name
         `;
       let queryParams: string[] = [];
 
       if (!canViewAll) {
         queryText = `
-                SELECT t.id, t.name, t.project_id, t.description, t.is_recurring, 
-                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration, t.is_disabled 
+                SELECT t.id, t.name, t.project_id, t.description, t.is_recurring,
+                       t.recurrence_pattern, t.recurrence_start, t.recurrence_end, t.recurrence_duration,
+                       t.expected_effort, t.revenue, t.notes, t.is_disabled
                 FROM tasks t
                 INNER JOIN user_tasks ut ON t.id = ut.task_id
                 WHERE ut.user_id = $1
@@ -158,6 +169,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceEnd:
           normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
         recurrenceDuration: parseFloat(t.recurrence_duration || 0),
+        expectedEffort: t.expected_effort !== null ? parseFloat(t.expected_effort) : undefined,
+        revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
+        notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
       }));
 
@@ -181,16 +195,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name, projectId, description, isRecurring, recurrencePattern, recurrenceStart } =
-        request.body as {
-          name: string;
-          projectId: string;
-          description?: string;
-          isRecurring?: boolean;
-          recurrencePattern?: string;
-          recurrenceStart?: string;
-          recurrenceDuration?: number;
-        };
+      const {
+        name,
+        projectId,
+        description,
+        isRecurring,
+        recurrencePattern,
+        recurrenceStart,
+        notes,
+      } = request.body as {
+        name: string;
+        projectId: string;
+        description?: string;
+        isRecurring?: boolean;
+        recurrencePattern?: string;
+        recurrenceStart?: string;
+        recurrenceDuration?: number;
+        expectedEffort?: number;
+        revenue?: number;
+        notes?: string;
+      };
+      const expectedEffortRaw = (request.body as { expectedEffort?: number }).expectedEffort;
+      const revenueRaw = (request.body as { revenue?: number }).revenue;
+      const expectedEffortVal =
+        expectedEffortRaw !== undefined ? parseFloat(String(expectedEffortRaw)) : 0;
+      const revenueVal = revenueRaw !== undefined ? parseFloat(String(revenueRaw)) : 0;
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
@@ -214,12 +243,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         start = recurrenceStartResult.value || todayLocalDateOnly();
       }
 
-      const id = 't-' + Date.now();
+      const id = 't-' + crypto.randomUUID();
 
       try {
         await query(
-          `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, is_disabled) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          `INSERT INTO tasks (id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start, recurrence_duration, expected_effort, revenue, notes, is_disabled)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             id,
             nameResult.value,
@@ -229,6 +258,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             recurrencePattern || null,
             start,
             durationResult.value || 0,
+            expectedEffortVal,
+            revenueVal,
+            notes || null,
             false,
           ],
         );
@@ -269,6 +301,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           recurrencePattern,
           recurrenceStart: start,
           recurrenceDuration: durationResult.value || 0,
+          expectedEffort: expectedEffortVal,
+          revenue: revenueVal,
+          notes: notes || null,
           isDisabled: false,
         });
       } catch (err) {
@@ -308,6 +343,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceStart,
         recurrenceEnd,
         isDisabled,
+        notes,
       } = request.body as {
         name?: string;
         description?: string;
@@ -317,7 +353,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceEnd?: string;
         isDisabled?: boolean;
         recurrenceDuration?: number;
+        expectedEffort?: number;
+        revenue?: number;
+        notes?: string;
       };
+      const updateExpectedEffort = (request.body as { expectedEffort?: number }).expectedEffort;
+      const updateRevenue = (request.body as { revenue?: number }).revenue;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const durationResult = optionalLocalizedNonNegativeNumber(
@@ -342,7 +383,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isRecurring === undefined || isRecurring === null ? null : parseBoolean(isRecurring);
 
       const result = await query(
-        `UPDATE tasks 
+        `UPDATE tasks
              SET name = COALESCE($2, name),
                  description = COALESCE($3, description),
                  is_recurring = COALESCE($4, is_recurring),
@@ -350,7 +391,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                  recurrence_start = COALESCE($6, recurrence_start),
                  recurrence_end = COALESCE($7, recurrence_end),
                  recurrence_duration = COALESCE($8, recurrence_duration),
-                 is_disabled = COALESCE($9, is_disabled)
+                 is_disabled = COALESCE($9, is_disabled),
+                 expected_effort = COALESCE($10, expected_effort),
+                 revenue = COALESCE($11, revenue),
+                 notes = COALESCE($12, notes)
              WHERE id = $1
              RETURNING *`,
         [
@@ -363,6 +407,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           recurrenceEnd || null,
           durationResult.value,
           isDisabled,
+          updateExpectedEffort !== undefined ? parseFloat(String(updateExpectedEffort)) : null,
+          updateRevenue !== undefined ? parseFloat(String(updateRevenue)) : null,
+          notes !== undefined ? notes || null : null,
         ],
       );
 
@@ -413,6 +460,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceEnd:
           normalizeNullableDateOnly(t.recurrence_end, 'task.recurrenceEnd') ?? undefined,
         recurrenceDuration: parseFloat(t.recurrence_duration || 0),
+        expectedEffort: t.expected_effort !== null ? parseFloat(t.expected_effort) : undefined,
+        revenue: t.revenue !== null ? parseFloat(t.revenue) : undefined,
+        notes: t.notes ?? undefined,
         isDisabled: t.is_disabled,
       };
     },

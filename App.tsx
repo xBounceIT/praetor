@@ -22,6 +22,7 @@ import InternalEmployeesView from './components/HR/InternalEmployeesView';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import NotFound from './components/NotFound';
+import type { DraftTaskInput } from './components/projects/ProjectsView';
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import RecurringManager from './components/RecurringManager';
@@ -1508,6 +1509,12 @@ const App: React.FC = () => {
                 load: () => api.workUnits.list(),
                 apply: (data) => setWorkUnits(data as WorkUnit[]),
               },
+              {
+                dataset: 'client orders',
+                enabled: canListOrders,
+                load: () => api.clientsOrders.list(),
+                apply: (data) => setClientsOrders(data as ClientsOrder[]),
+              },
             ]);
             break;
           }
@@ -2347,13 +2354,6 @@ const App: React.FC = () => {
     try {
       await api.clientsOrders.update(id, updates);
       await refreshClientOrderFlow();
-
-      // When an order is confirmed, projects are auto-created on the backend
-      // Refresh the projects list to reflect the new projects
-      if (updates.status === 'confirmed') {
-        const projectsData = await api.projects.list();
-        setProjects(projectsData);
-      }
     } catch (err) {
       console.error('Failed to update order:', err);
     }
@@ -2660,8 +2660,17 @@ const App: React.FC = () => {
     }
   };
 
-  const addProject = async (name: string, clientId: string, description?: string) => {
+  const addProject = async (
+    name: string,
+    orderId: string,
+    description?: string,
+    draftTasks?: DraftTaskInput[],
+  ) => {
     try {
+      const order = clientsOrders.find((o) => o.id === orderId);
+      if (!order) throw new Error('Order not found');
+      const clientId = order.clientId;
+
       const usedColors = projects.map((p) => p.color);
       const availableColors = COLORS.filter((c) => !usedColors.includes(c));
       const color =
@@ -2670,7 +2679,25 @@ const App: React.FC = () => {
           : COLORS[Math.floor(Math.random() * COLORS.length)];
 
       const project = await api.projects.create(name, clientId, description, color);
-      setProjects([...projects, project]);
+      setProjects((prev) => [...prev, project]);
+
+      if (draftTasks && draftTasks.length > 0) {
+        const createdTasks = await Promise.all(
+          draftTasks.map((t) =>
+            api.tasks.create(
+              t.name,
+              project.id,
+              undefined,
+              false,
+              undefined,
+              t.expectedEffort,
+              t.revenue,
+              t.notes,
+            ),
+          ),
+        );
+        setProjectTasks((prev) => [...prev, ...createdTasks]);
+      }
     } catch (err) {
       console.error('Failed to add project:', err);
     }
@@ -3412,6 +3439,8 @@ const App: React.FC = () => {
               <ProjectsView
                 projects={projects}
                 clients={clients}
+                orders={clientsOrders}
+                currency={generalSettings.currency}
                 permissions={currentUser.permissions || []}
                 users={availableUsers}
                 onAddProject={addProject}

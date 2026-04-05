@@ -10,12 +10,6 @@ import {
 } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
-  assignClientToTopManagers,
-  assignClientToUser,
-  assignProjectToTopManagers,
-  assignProjectToUser,
-} from '../utils/top-manager-assignments.ts';
-import {
   badRequest,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -29,22 +23,6 @@ interface DatabaseError extends Error {
   constraint?: string;
   detail?: string;
 }
-
-// Project color palette for auto-created projects
-const PROJECT_COLORS = [
-  '#3b82f6', // blue
-  '#10b981', // emerald
-  '#8b5cf6', // violet
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#06b6d4', // cyan
-  '#ec4899', // pink
-  '#84cc16', // lime
-  '#6366f1', // indigo
-  '#f97316', // orange
-];
-
-const getRandomColor = () => PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
 
 const idParamSchema = {
   type: 'object',
@@ -1250,111 +1228,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
       }
 
-      // Auto-create projects when order is confirmed for the first time
-      if (status === 'confirmed' && existingOrder.status !== 'confirmed') {
-        // Fetch order items with notes and product codes for project creation
-        const orderItemsResult = await query(
-          `SELECT si.product_id, si.product_name, si.note, p.product_code
-         FROM sale_items si
-         LEFT JOIN products p ON si.product_id = p.id
-         WHERE si.sale_id = $1`,
-          [updatedOrderId],
-        );
-
-        // Get the client code for project naming
-        const clientResult = await query(`SELECT client_code FROM clients WHERE id = $1`, [
-          orderResult.rows[0].clientId,
-        ]);
-        const clientCode = clientResult.rows[0]?.client_code || orderResult.rows[0].clientId;
-
-        // Get the order year from created_at (createdAt is returned as a numeric string from EXTRACT)
-        const orderYear = new Date(Number(orderResult.rows[0].createdAt)).getFullYear();
-
-        // Create a project for each order item
-        for (const orderItem of orderItemsResult.rows) {
-          const productCode = orderItem.product_code || orderItem.product_id;
-          const projectName = `${clientCode}_${productCode}_${orderYear}`;
-
-          // Check if project with this exact name already exists for this client
-          const existingProject = await query(
-            `SELECT id FROM projects WHERE name = $1 AND client_id = $2`,
-            [projectName, orderResult.rows[0].clientId],
-          );
-
-          if (existingProject.rows.length === 0) {
-            const projectId = 'p-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-            await query(
-              `INSERT INTO projects (id, name, client_id, color, description, is_disabled)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-              [
-                projectId,
-                projectName,
-                orderResult.rows[0].clientId,
-                getRandomColor(),
-                orderItem.note || null,
-                false,
-              ],
-            );
-
-            if (request.user?.id) {
-              await assignClientToUser(request.user.id, orderResult.rows[0].clientId);
-              await assignProjectToUser(request.user.id, projectId);
-            }
-            await assignClientToTopManagers(orderResult.rows[0].clientId);
-            await assignProjectToTopManagers(projectId);
-          }
-        }
-
-        // Create notifications for all managers except the one who confirmed the order
-        const projectNames = orderItemsResult.rows.map(
-          (item) => `${clientCode}_${item.product_code || item.product_id}_${orderYear}`,
-        );
-
-        // Get all managers except the current user
-        const managersResult = await query(
-          `SELECT u.id
-           FROM users u
-           JOIN roles r ON u.role = r.id
-           LEFT JOIN role_permissions rp
-             ON rp.role_id = r.id AND rp.permission = 'projects.manage.view'
-           WHERE u.id != $1
-             AND u.is_disabled = FALSE
-             AND rp.permission IS NOT NULL`,
-          [request.user?.id],
-        );
-
-        // Create a notification for each manager
-        for (const manager of managersResult.rows) {
-          const notificationId =
-            'n-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
-          await query(
-            `INSERT INTO notifications (id, user_id, type, title, message, data)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              notificationId,
-              manager.id,
-              'new_projects',
-              `${projectNames.length} new project${projectNames.length > 1 ? 's' : ''} available`,
-              `New projects created from order confirmation`,
-              JSON.stringify({
-                projectNames,
-                orderId: updatedOrderId,
-                clientName: orderResult.rows[0].clientName,
-              }),
-            ],
-          );
-        }
-      }
-
       const nextStatus =
         typeof status === 'string'
           ? status
           : String(orderResult.rows[0].status ?? existingOrder.status);
       const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
-
-      // Invalidate client cache if order status affects accepted orders totals
-      if (didStatusChange && (existingOrder.status === 'confirmed' || nextStatus === 'confirmed')) {
-      }
 
       await logAudit({
         request,

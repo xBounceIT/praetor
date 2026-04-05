@@ -401,7 +401,11 @@ const StandardTable = <T extends object>({
 
       <div className="flex items-center gap-2">
         <button
-          onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setCurrentPage((prev) => Math.max(1, prev - 1));
+          }}
           disabled={currentPage === 1}
           className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
         >
@@ -417,7 +421,11 @@ const StandardTable = <T extends object>({
               <div key={page} className="flex items-center">
                 {i > 0 && page - arr[i - 1] > 1 && <span className="text-slate-400 mx-1">...</span>}
                 <button
-                  onClick={() => setCurrentPage(page)}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentPage(page);
+                  }}
                   className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
                     currentPage === page
                       ? 'bg-praetor text-white shadow-md shadow-slate-200'
@@ -430,7 +438,11 @@ const StandardTable = <T extends object>({
             ))}
         </div>
         <button
-          onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+          }}
           disabled={currentPage === totalPages || totalPages === 0}
           className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
         >
@@ -463,7 +475,11 @@ const StandardTable = <T extends object>({
                 <Tooltip label={t('table.decreaseFont')} position="bottom">
                   {() => (
                     <button
-                      onClick={handleDecreaseFontSize}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDecreaseFontSize();
+                      }}
                       disabled={fontSize === 'xs'}
                       className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
                     >
@@ -474,7 +490,11 @@ const StandardTable = <T extends object>({
                 <Tooltip label={t('table.increaseFont')} position="bottom">
                   {() => (
                     <button
-                      onClick={handleIncreaseFontSize}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleIncreaseFontSize();
+                      }}
                       disabled={fontSize === 'base'}
                       className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
                     >
@@ -486,8 +506,12 @@ const StandardTable = <T extends object>({
                   <Tooltip label={t('table.columnSettings')} position="bottom" disabled={gearOpen}>
                     {() => (
                       <button
+                        type="button"
                         ref={gearButtonRef}
-                        onClick={() => setGearOpen((prev) => !prev)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setGearOpen((prev) => !prev);
+                        }}
                         className={`w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white transition-colors ${gearOpen ? 'text-praetor bg-slate-100' : 'text-slate-500 hover:bg-slate-100'}`}
                       >
                         <i className="fa-solid fa-gear text-[10px]"></i>
@@ -504,7 +528,11 @@ const StandardTable = <T extends object>({
                           {t('table.columns')}
                         </span>
                         <button
-                          onClick={() => setGearOpen(false)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setGearOpen(false);
+                          }}
                           className="text-slate-400 hover:text-slate-600 transition-colors"
                         >
                           <i className="fa-solid fa-xmark text-xs"></i>
@@ -536,7 +564,11 @@ const StandardTable = <T extends object>({
                       </div>
                       <div className="p-2 border-t border-slate-100">
                         <button
-                          onClick={resetColumnVisibility}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            resetColumnVisibility();
+                          }}
                           className="w-full px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-white bg-slate-50 hover:bg-praetor rounded-lg transition-all flex items-center justify-center gap-1.5"
                         >
                           <i className="fa-solid fa-rotate-left text-[10px]"></i>
@@ -597,6 +629,7 @@ const StandardTable = <T extends object>({
                           {/* Filter button - inline with header text */}
                           {!col.disableFiltering && (
                             <button
+                              type="button"
                               ref={activeFilterCol === colId ? filterRef : undefined}
                               onClick={(e) => {
                                 e.stopPropagation();
