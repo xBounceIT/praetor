@@ -363,13 +363,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       disableFiltering: true,
       align: 'right',
       cell: ({ row }) => (
-        <button
-          type="button"
-          onClick={() => removeDraftTask(row._id)}
-          className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-        >
-          <i className="fa-solid fa-trash-can text-xs"></i>
-        </button>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => removeDraftTask(row._id)}
+            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <i className="fa-solid fa-trash-can text-xs"></i>
+          </button>
+        </div>
       ),
     },
   ];
@@ -378,7 +380,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -402,80 +404,103 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             <div className="space-y-4">
               {/* Order selector (create only) / Client selector (edit only) */}
               {editingProject ? (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('projects:projects.client')}
-                  </label>
-                  <CustomSelect
-                    options={clientOptions}
-                    value={clientId}
-                    onChange={(val) => {
-                      setClientId(val as string);
-                      if (errors.clientId) setErrors({ ...errors, clientId: '' });
-                    }}
-                    placeholder={t('projects:projects.selectClient')}
-                    searchable={true}
-                    className={errors.clientId ? 'border-red-300' : ''}
-                    buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
-                  />
-                  {errors.clientId && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
-                  )}
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('projects:projects.client')}
+                    </label>
+                    <CustomSelect
+                      options={clientOptions}
+                      value={clientId}
+                      onChange={(val) => {
+                        setClientId(val as string);
+                        if (errors.clientId) setErrors({ ...errors, clientId: '' });
+                      }}
+                      placeholder={t('projects:projects.selectClient')}
+                      searchable={true}
+                      className={errors.clientId ? 'border-red-300' : ''}
+                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.clientId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    />
+                    {errors.clientId && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientId}</p>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('projects:projects.name')}
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (errors.name) setErrors({ ...errors, name: '' });
+                      }}
+                      placeholder={t('projects:projects.projectNamePlaceholder')}
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      }`}
+                    />
+                    {errors.name && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('projects:projects.order')}
-                  </label>
-                  <CustomSelect
-                    options={orderOptions}
-                    value={orderId}
-                    onChange={(val) => {
-                      setOrderId(val as string);
-                      if (errors.orderId) setErrors({ ...errors, orderId: '' });
-                    }}
-                    placeholder={t('projects:projects.selectOrder')}
-                    searchable={true}
-                    className={errors.orderId ? 'border-red-300' : ''}
-                    buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.orderId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
-                  />
-                  {errors.orderId && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1">{errors.orderId}</p>
-                  )}
-                  {selectedOrder && (
-                    <div className="flex items-center gap-2 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-                      <i className="fa-solid fa-building text-slate-400 text-xs"></i>
-                      <span className="text-xs text-slate-500">
-                        {t('projects:projects.inheritedClientLabel')}:
-                      </span>
-                      <span className="text-xs font-bold text-slate-700">
-                        {selectedOrder.clientName}
-                      </span>
-                    </div>
-                  )}
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('projects:projects.order')}
+                    </label>
+                    <CustomSelect
+                      options={orderOptions}
+                      value={orderId}
+                      onChange={(val) => {
+                        setOrderId(val as string);
+                        if (errors.orderId) setErrors({ ...errors, orderId: '' });
+                      }}
+                      placeholder={t('projects:projects.selectOrder')}
+                      searchable={true}
+                      className={errors.orderId ? 'border-red-300' : ''}
+                      buttonClassName={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${errors.orderId ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    />
+                    {errors.orderId && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.orderId}</p>
+                    )}
+                    {selectedOrder && (
+                      <div className="flex items-center gap-2 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+                        <i className="fa-solid fa-building text-slate-400 text-xs"></i>
+                        <span className="text-xs text-slate-500">
+                          {t('projects:projects.inheritedClientLabel')}:
+                        </span>
+                        <span className="text-xs font-bold text-slate-700">
+                          {selectedOrder.clientName}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">
+                      {t('projects:projects.name')}
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (errors.name) setErrors({ ...errors, name: '' });
+                      }}
+                      placeholder={t('projects:projects.projectNamePlaceholder')}
+                      className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                        errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                      }`}
+                    />
+                    {errors.name && (
+                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
+                    )}
+                  </div>
                 </div>
               )}
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 ml-1">
-                  {t('projects:projects.name')}
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    if (errors.name) setErrors({ ...errors, name: '' });
-                  }}
-                  placeholder={t('projects:projects.projectNamePlaceholder')}
-                  className={`w-full text-sm px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                    errors.name ? 'border-red-500 bg-red-50' : 'border-slate-200'
-                  }`}
-                />
-                {errors.name && (
-                  <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                )}
-              </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
