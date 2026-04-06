@@ -1286,7 +1286,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -1331,12 +1331,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </div>
             )}
             {/* Client Selection */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:clientQuotes.clientInformation')}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.client')}
@@ -1381,8 +1381,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.paymentTerms')}
@@ -1397,7 +1395,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     disabled={isReadOnly}
                   />
                 </div>
-
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.expirationDateLabel')}
@@ -1415,7 +1412,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
 
             {/* Products */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
@@ -1809,8 +1806,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
 
             {/* Notes & Cost Summary */}
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
-              <div className="w-full space-y-4 md:w-2/3">
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="w-full space-y-2 md:w-2/3">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.notesLabel')}
@@ -1825,7 +1822,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
+              <div className="w-full space-y-2 md:w-1/3">
                 <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.totalLabel')}
