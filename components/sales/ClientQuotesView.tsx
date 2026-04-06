@@ -1845,8 +1845,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {formTotals.discountValue > 0 && (
                   <div className="flex justify-between">
                     <span className="text-sm font-bold text-slate-500">
-                      {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
-                      {formTotals.discountValue}%)
+                      {t('sales:clientQuotes.discountAmount', {
+                        defaultValue: 'Discount',
+                        discount: formTotals.discountValue,
+                      })}
                     </span>
                     <span className="text-sm font-bold text-amber-600">
                       -{formTotals.discountAmount.toFixed(2)} {currency}
