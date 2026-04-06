@@ -1810,32 +1810,29 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {errors.total && (
                   <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
                 )}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-500">
                     {t('sales:clientQuotes.globalDiscount')}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <ValidatedNumberInput
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.discount}
-                      onValueChange={(value) => {
-                        const parsed = parseNumberInputValue(value);
-                        setFormData({ ...formData, discount: parsed });
-                        if (errors.total) {
-                          setErrors((prev) => {
-                            const next = { ...prev };
-                            delete next.total;
-                            return next;
-                          });
-                        }
-                      }}
-                      disabled={isReadOnly}
-                      className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <span className="text-sm font-bold text-slate-400 shrink-0">%</span>
-                  </div>
+                  </span>
+                  <ValidatedNumberInput
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={formData.discount}
+                    onValueChange={(value) => {
+                      const parsed = parseNumberInputValue(value);
+                      setFormData({ ...formData, discount: parsed });
+                      if (errors.total) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.total;
+                          return next;
+                        });
+                      }
+                    }}
+                    disabled={isReadOnly}
+                    className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-right outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-bold text-slate-500">
