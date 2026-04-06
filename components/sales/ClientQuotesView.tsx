@@ -790,9 +790,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const acceptedSupplierQuotes = useMemo(
     () =>
       supplierQuotes.filter(
-        (q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate),
+        (q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate, today),
       ),
-    [supplierQuotes],
+    [supplierQuotes, today],
   );
 
   const supplierQuoteItemOptions = useMemo(() => {

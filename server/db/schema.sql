@@ -843,6 +843,18 @@ BEGIN
     END IF;
 END $$;
 
+-- Migration: Allow quote_items.product_id to be NULL for supplier-quote-sourced items
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'quote_items'
+          AND column_name = 'product_id' AND is_nullable = 'NO'
+    ) THEN
+        ALTER TABLE quote_items ALTER COLUMN product_id DROP NOT NULL;
+    END IF;
+END $$;
+
 -- Customer offers
 CREATE TABLE IF NOT EXISTS customer_offers (
     id VARCHAR(100) PRIMARY KEY,
@@ -1210,6 +1222,18 @@ BEGIN
           AND column_name = 'unit_price' AND numeric_scale != 2
     ) THEN
         ALTER TABLE supplier_quote_items ALTER COLUMN unit_price TYPE DECIMAL(15, 2);
+    END IF;
+END $$;
+
+-- Migration: Allow supplier_quote_items.product_id to be NULL (supplier quotes rework)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'supplier_quote_items'
+          AND column_name = 'product_id' AND is_nullable = 'NO'
+    ) THEN
+        ALTER TABLE supplier_quote_items ALTER COLUMN product_id DROP NOT NULL;
     END IF;
 END $$;
 
