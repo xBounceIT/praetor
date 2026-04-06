@@ -61,6 +61,7 @@
     "errors": {
       "clientRequired": "Client is required",
       "itemsRequired": "At least one product is required",
+      "productOrSupplierRequired": "Each item must have a product or a linked supplier quote",
       "quantityGreaterThanZero": "All items must have quantity greater than 0",
       "totalGreaterThanZero": "Total must be greater than 0",
       "quoteCodeRequired": "Quote Code is required",
@@ -91,7 +92,7 @@
     "selectBid": "Select bid...",
     "selectSupplierQuote": "Select supplier quote...",
     "selectProduct": "Select product...",
-    "qty": "Qty",
+    "qty": "Quantity",
     "hour": "Hour",
     "hours": "Hours",
     "day": "Day",
@@ -129,7 +130,9 @@
     "clientChangeRepriceMessage": "You changed the client on an existing quote. Keep current line snapshots to preserve history, or reprice lines using current products and special bids for the new client.",
     "clientChangeKeepSnapshots": "Keep current snapshots",
     "clientChangeRepriceNow": "Reprice lines",
-    "clientChangeRepriceCancel": "Cancel"
+    "clientChangeRepriceCancel": "Cancel",
+    "supplierQuoteColumn": "Supplier Quote",
+    "revenue": "Revenue"
   },
   "clientOffers": {
     "title": "Client Offers",
@@ -159,7 +162,7 @@
     "noItemsAdded": "No items added yet",
     "product": "Product",
     "selectProduct": "Select product",
-    "qty": "Qty",
+    "qty": "Quantity",
     "unitPrice": "Unit Price",
     "note": "Note",
     "discount": "Discount %",
@@ -207,7 +210,7 @@
     "addItem": "Add item",
     "product": "Product",
     "selectProduct": "Select product",
-    "qty": "Qty",
+    "qty": "Quantity",
     "unitPrice": "Unit Price",
     "noItemsAdded": "No items added yet",
     "discount": "Discount %",

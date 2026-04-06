@@ -9,15 +9,18 @@ import type {
   QuoteItem,
   SpecialBid,
   SupplierQuote,
+  SupplierUnitType,
 } from '../../types';
 import {
+  addMonthsToDateOnly,
   formatDateOnlyForLocale,
+  formatInsertDate,
   getLocalDateString,
   isDateOnlyBeforeToday,
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -49,7 +52,6 @@ const calcProductSalePrice = (costo: number, molPercentage: number) => {
   return costo / (1 - molPercentage / 100);
 };
 
-// Helper: Get effective cost from item (supplier quote > special bid > product)
 const getEffectiveCost = (item: QuoteItem): number => {
   if (item.supplierQuoteItemId) {
     return Number(item.supplierQuoteUnitPrice ?? 0);
@@ -59,6 +61,18 @@ const getEffectiveCost = (item: QuoteItem): number => {
   }
   return Number(item.productCost ?? 0);
 };
+
+const getDefaultFormData = (): Partial<Quote> => ({
+  id: '',
+  clientId: '',
+  clientName: '',
+  items: [],
+  paymentTerms: 'immediate',
+  discount: 0,
+  status: 'draft',
+  expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  notes: '',
+});
 
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
@@ -98,10 +112,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [t],
   );
 
-  const filteredQuotes = useMemo(() => {
-    return quotes;
-  }, [quotes]);
-
   const tableInitialFilterState = useMemo(() => {
     if (quoteFilterId) {
       return { id: [quoteFilterId] };
@@ -140,7 +150,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [STATUS_OPTIONS],
   );
 
-  // Helper: Check if quote is expired
   const isExpired = useCallback(
     (expirationDate: string) => isDateOnlyBeforeToday(expirationDate),
     [],
@@ -177,7 +186,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [isQuoteExpired, hasOfferForQuote],
   );
 
-  // Calculate totals for a quote
   const calculateQuoteTotals = useCallback((items: QuoteItem[], globalDiscount: number) => {
     let subtotal = 0;
     let totalCost = 0;
@@ -190,8 +198,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       subtotal += lineNet;
 
       const cost = getEffectiveCost(item);
-      const costMultiplier = item.unitType === 'days' ? 8 : 1;
-      totalCost += item.quantity * cost * costMultiplier;
+      totalCost += item.quantity * convertUnitPrice(cost, 'hours', item.unitType || 'hours');
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
@@ -208,18 +215,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     };
   }, []);
 
-  // Form State
-  const [formData, setFormData] = useState<Partial<Quote>>({
-    id: '',
-    clientId: '',
-    clientName: '',
-    items: [],
-    paymentTerms: 'immediate',
-    discount: 0,
-    status: 'draft',
-    expirationDate: getLocalDateString(),
-    notes: '',
-  });
+  const [formData, setFormData] = useState<Partial<Quote>>(getDefaultFormData());
   const isReadOnly = Boolean(
     editingQuote &&
       (editingQuote.linkedOfferId ||
@@ -228,20 +224,18 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         editingQuote.status === 'denied'),
   );
 
+  const formTotals = useMemo(() => {
+    const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
+    return {
+      discountValue,
+      ...calculateQuoteTotals(formData.items || [], discountValue),
+    };
+  }, [formData.items, formData.discount, calculateQuoteTotals]);
+
   const openAddModal = () => {
     setEditingQuote(null);
     setPendingClientChange(null);
-    setFormData({
-      id: '',
-      clientId: '',
-      clientName: '',
-      items: [],
-      paymentTerms: 'immediate',
-      discount: 0,
-      status: 'draft',
-      expirationDate: getLocalDateString(),
-      notes: '',
-    });
+    setFormData(getDefaultFormData());
     setErrors({});
     setIsModalOpen(true);
   };
@@ -249,7 +243,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const openEditModal = useCallback((quote: Quote) => {
     setEditingQuote(quote);
     setPendingClientChange(null);
-    // Ensure expirationDate is in YYYY-MM-DD format for the date input
     const formattedDate = quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '';
     setFormData({
       id: quote.id,
@@ -274,7 +267,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     }
 
     const newErrors: Record<string, string> = {};
-    const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
+    const discountValue = formTotals.discountValue;
 
     if (!formData.clientId) {
       newErrors.clientId = t('sales:clientQuotes.errors.clientRequired');
@@ -289,9 +282,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     if (!formData.items || formData.items.length === 0) {
       newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
     } else {
-      const invalidItem = formData.items.find((item) => !item.productId);
+      const invalidItem = formData.items.find(
+        (item) => !item.productId && !item.supplierQuoteItemId,
+      );
       if (invalidItem) {
-        newErrors.items = 'Please select a product for all items';
+        newErrors.items = t('sales:clientQuotes.errors.productOrSupplierRequired', {
+          defaultValue: 'Each item must have a product or a linked supplier quote',
+        });
       }
       const invalidQuantity = formData.items.find(
         (item) =>
@@ -304,7 +301,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newErrors.items = t('sales:clientQuotes.errors.quantityGreaterThanZero');
       }
       if (!newErrors.items) {
-        const { total } = calculateTotals(formData.items, discountValue);
+        const { total } = calculateQuoteTotals(formData.items, discountValue);
         if (!Number.isFinite(total) || total <= 0) {
           newErrors.total = t('sales:clientQuotes.errors.totalGreaterThanZero');
         }
@@ -333,7 +330,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         specialBidMolPercentage:
           item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
             ? null
-            : Number(item.specialBidMolPercentage),
+            : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
         // Supplier quote snapshot fields
         supplierQuoteId: item.supplierQuoteId ?? null,
         supplierQuoteItemId: item.supplierQuoteItemId ?? null,
@@ -422,10 +419,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             const molSource = applicableBid?.molPercentage ?? product.molPercentage;
             const mol = molSource ? Number(molSource) : 0;
             const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
-            let unitPrice = calcProductSalePrice(cost, mol);
-            if (item.unitType === 'days') {
-              unitPrice = unitPrice * 8;
-            }
+            let unitPrice = convertUnitPrice(
+              calcProductSalePrice(cost, mol),
+              'hours',
+              item.unitType || 'hours',
+            );
+            unitPrice = roundToTwoDecimals(unitPrice);
 
             return {
               ...item,
@@ -559,7 +558,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       if (product) {
         newItems[index].productName = product.name;
 
-        // Clear any existing supplier quote or special bid when product changes
         newItems[index].supplierQuoteId = null;
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
@@ -575,11 +573,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           newItems[index].unitType = 'hours';
         }
         const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
-        if (newItems[index].unitType === 'days') {
-          newUnitPrice = newUnitPrice * 8;
-        }
-        newItems[index].unitPrice = newUnitPrice;
+        newItems[index].unitPrice = roundToTwoDecimals(
+          convertUnitPrice(
+            calcProductSalePrice(Number(product.costo), mol),
+            'hours',
+            newItems[index].unitType || 'hours',
+          ),
+        );
         newItems[index].productCost = Number(product.costo);
         newItems[index].productMolPercentage = product.molPercentage;
       }
@@ -595,7 +595,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemDiscount = null;
         newItems[index].supplierQuoteDiscount = null;
 
-        // Check for applicable special bid as fallback
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
           const applicableBid = activeSpecialBids.find(
@@ -609,11 +608,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             }
             const molSource = applicableBid.molPercentage ?? product.molPercentage;
             const mol = molSource ? Number(molSource) : 0;
-            let newUnitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
-            if (newItems[index].unitType === 'days') {
-              newUnitPrice = newUnitPrice * 8;
-            }
-            newItems[index].unitPrice = newUnitPrice;
+            newItems[index].unitPrice = roundToTwoDecimals(
+              convertUnitPrice(
+                calcProductSalePrice(Number(applicableBid.unitPrice), mol),
+                'hours',
+                newItems[index].unitType || 'hours',
+              ),
+            );
             newItems[index].productCost = Number(product.costo);
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
@@ -623,12 +624,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               newItems[index].unitType = 'hours';
             }
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
-            if (newItems[index].unitType === 'days') {
-              newUnitPrice = newUnitPrice * 8;
-            }
             newItems[index].specialBidId = '';
-            newItems[index].unitPrice = newUnitPrice;
+            newItems[index].unitPrice = roundToTwoDecimals(
+              convertUnitPrice(
+                calcProductSalePrice(Number(product.costo), mol),
+                'hours',
+                newItems[index].unitType || 'hours',
+              ),
+            );
             newItems[index].productCost = Number(product.costo);
             newItems[index].productMolPercentage = product.molPercentage;
             newItems[index].specialBidUnitPrice = null;
@@ -646,51 +649,44 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       const selectedQuoteItem = selectedQuote?.items.find((item) => item.id === value);
 
       if (selectedQuote && selectedQuoteItem) {
-        const product = products.find((p) => p.id === selectedQuoteItem.productId);
+        const product = selectedQuoteItem.productId
+          ? products.find((p) => p.id === selectedQuoteItem.productId)
+          : undefined;
+
+        const lineDiscountedCost =
+          selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
+        const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
+
+        newItems[index].productId = selectedQuoteItem.productId || '';
+        newItems[index].productName = product?.name || selectedQuoteItem.productName;
+        newItems[index].supplierQuoteId = selectedQuote.id;
+        newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
+        newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
+        newItems[index].supplierQuoteUnitPrice = netCost;
+        newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
+        newItems[index].supplierQuoteDiscount = selectedQuote.discount;
+
+        newItems[index].unitType = selectedQuoteItem.unitType || 'hours';
+        newItems[index].quantity = selectedQuoteItem.quantity;
+
+        newItems[index].specialBidId = '';
+        newItems[index].specialBidUnitPrice = null;
+        newItems[index].specialBidMolPercentage = null;
+
+        let salePrice: number;
         if (product) {
-          // Calculate net cost after supplier discounts
-          const lineDiscountedCost =
-            selectedQuoteItem.unitPrice * (1 - (selectedQuoteItem.discount ?? 0) / 100);
-          const netCost = lineDiscountedCost * (1 - selectedQuote.discount / 100);
-
-          // Store supplier quote data
-          newItems[index].productId = selectedQuoteItem.productId;
-          newItems[index].productName = product.name;
-          newItems[index].supplierQuoteId = selectedQuote.id;
-          newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
-          newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
-          newItems[index].supplierQuoteUnitPrice = netCost;
-          newItems[index].supplierQuoteItemDiscount = selectedQuoteItem.discount ?? 0;
-          newItems[index].supplierQuoteDiscount = selectedQuote.discount;
-
-          // Clear special bid when supplier quote is selected
-          newItems[index].specialBidId = '';
-          newItems[index].specialBidUnitPrice = null;
-          newItems[index].specialBidMolPercentage = null;
-
-          // Calculate sale price using net cost
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(netCost, mol);
+          salePrice = calcProductSalePrice(netCost, mol);
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         } else {
-          // Product not found for supplier quote item - clear supplier quote and revert
-          newItems[index].supplierQuoteItemId = null;
-          newItems[index].supplierQuoteId = null;
-          newItems[index].supplierQuoteSupplierName = null;
-          newItems[index].supplierQuoteUnitPrice = null;
-          newItems[index].supplierQuoteItemDiscount = null;
-          newItems[index].supplierQuoteDiscount = null;
-
-          // Revert to product cost if product exists on the item
-          const existingProduct = products.find((p) => p.id === newItems[index].productId);
-          if (existingProduct) {
-            const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
-            newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
-            newItems[index].productCost = Number(existingProduct.costo);
-            newItems[index].productMolPercentage = existingProduct.molPercentage;
-          }
+          salePrice = netCost;
+          newItems[index].productCost = netCost;
+          newItems[index].productMolPercentage = null;
         }
+        newItems[index].unitPrice = roundToTwoDecimals(
+          convertUnitPrice(salePrice, 'hours', newItems[index].unitType || 'hours'),
+        );
       } else {
         // Supplier quote item not found - clear supplier quote and revert
         newItems[index].supplierQuoteItemId = null;
@@ -700,7 +696,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemDiscount = null;
         newItems[index].supplierQuoteDiscount = null;
 
-        // Revert to product cost if product exists on the item
         const existingProduct = products.find((p) => p.id === newItems[index].productId);
         if (existingProduct) {
           const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
@@ -721,15 +716,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         if (newItems[index].supplierQuoteItemId) {
           // Keep supplier quote data
         } else {
-          // Revert to standard product cost with unit type handling
           const product = products.find((p) => p.id === newItems[index].productId);
           if (product) {
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            let newUnitPrice = calcProductSalePrice(Number(product.costo), mol);
-            if (newItems[index].unitType === 'days') {
-              newUnitPrice = newUnitPrice * 8;
-            }
-            newItems[index].unitPrice = newUnitPrice;
+            newItems[index].unitPrice = roundToTwoDecimals(
+              convertUnitPrice(
+                calcProductSalePrice(Number(product.costo), mol),
+                'hours',
+                newItems[index].unitType || 'hours',
+              ),
+            );
             newItems[index].productCost = Number(product.costo);
             newItems[index].productMolPercentage = product.molPercentage;
           }
@@ -749,17 +745,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           }
           const molSource = bid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
-          if (newItems[index].unitType === 'days') {
-            newItems[index].unitPrice = newItems[index].unitPrice * 8;
-          }
+          newItems[index].unitPrice = roundToTwoDecimals(
+            convertUnitPrice(
+              calcProductSalePrice(Number(bid.unitPrice), mol),
+              'hours',
+              newItems[index].unitType || 'hours',
+            ),
+          );
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidId = bid.id;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
           newItems[index].specialBidMolPercentage = bid.molPercentage ?? null;
 
-          // Clear supplier quote when special bid is selected
           newItems[index].supplierQuoteId = null;
           newItems[index].supplierQuoteItemId = null;
           newItems[index].supplierQuoteSupplierName = null;
@@ -773,60 +771,41 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     setFormData({ ...formData, items: newItems });
   };
 
-  // Calculate totals (used in form)
-  const calculateTotals = useCallback((items: QuoteItem[], globalDiscount: number) => {
-    let subtotal = 0;
-    let totalCost = 0;
-
-    items.forEach((item) => {
-      const lineSubtotal = item.quantity * item.unitPrice;
-      const lineDiscount = item.discount ? (lineSubtotal * item.discount) / 100 : 0;
-      const lineNet = lineSubtotal - lineDiscount;
-
-      subtotal += lineNet;
-
-      const cost = getEffectiveCost(item);
-      const costMultiplier = item.unitType === 'days' ? 8 : 1;
-      totalCost += item.quantity * cost * costMultiplier;
-    });
-
-    const discountAmount = subtotal * (globalDiscount / 100);
-    const total = subtotal - discountAmount;
-    const margin = total - totalCost;
-    const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
-
-    return {
-      subtotal,
-      discountAmount,
-      total,
-      margin,
-      marginPercentage,
-    };
-  }, []);
-
-  const activeClients = clients.filter((c) => !c.isDisabled);
-  const activeProducts = products.filter((p) => !p.isDisabled);
+  const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
+  const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
+  const activeProductOptions = useMemo(
+    () => activeProducts.map((p) => ({ id: p.id, name: p.name })),
+    [activeProducts],
+  );
+  const activeProductIds = useMemo(
+    () => new Set(activeProducts.map((p) => p.id)),
+    [activeProducts],
+  );
   const today = getLocalDateString();
-  const activeSpecialBids = specialBids.filter((b) => {
-    return isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate);
-  });
+  const activeSpecialBids = useMemo(
+    () => specialBids.filter((b) => isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate)),
+    [specialBids, today],
+  );
 
-  // Filter accepted supplier quotes for sourcing
   const acceptedSupplierQuotes = useMemo(
-    () => supplierQuotes.filter((q) => q.status === 'accepted'),
+    () =>
+      supplierQuotes.filter(
+        (q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate),
+      ),
     [supplierQuotes],
   );
 
-  // Build supplier quote items for selection (flattened with quote context)
   const supplierQuoteItemOptions = useMemo(() => {
     const options: Array<{
       id: string;
       name: string;
       quoteId: string;
-      productId: string;
+      productId?: string;
       unitPrice: number;
       discount: number;
       quoteDiscount: number;
+      unitType?: SupplierUnitType;
+      quantity: number;
     }> = [];
     for (const quote of acceptedSupplierQuotes) {
       for (const item of quote.items) {
@@ -838,6 +817,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           unitPrice: item.unitPrice,
           discount: item.discount ?? 0,
           quoteDiscount: quote.discount,
+          unitType: item.unitType,
+          quantity: item.quantity,
         });
       }
     }
@@ -850,18 +831,50 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
   };
 
-  const handleUnitTypeChange = (index: number, newType: 'hours' | 'days') => {
+  const isLinkedProductMissing = (item: QuoteItem) =>
+    Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
+
+  const renderProductSelectOrFallback = (
+    item: QuoteItem,
+    index: number,
+    selectProps: { className?: string; buttonClassName?: string },
+  ) => {
+    if (isLinkedProductMissing(item)) {
+      return (
+        <input
+          type="text"
+          readOnly
+          value={item.productName || ''}
+          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600"
+        />
+      );
+    }
+    return (
+      <CustomSelect
+        options={activeProductOptions}
+        value={item.productId}
+        onChange={(val) => updateProductRow(index, 'productId', val as string)}
+        placeholder={t('sales:clientQuotes.selectProduct')}
+        searchable={true}
+        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        className={selectProps.className}
+        buttonClassName={selectProps.buttonClassName}
+      />
+    );
+  };
+
+  const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item) return;
     const oldType = item.unitType || 'hours';
     if (oldType === newType) return;
-    const adjustedPrice = newType === 'days' ? item.unitPrice * 8 : item.unitPrice / 8;
+    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: adjustedPrice,
+      unitPrice: roundToTwoDecimals(adjustedPrice),
     };
     setFormData({ ...formData, items: newItems });
   };
@@ -879,16 +892,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       );
     }
 
+    const unitOptions = [
+      { id: 'hours', name: t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`) },
+      { id: 'days', name: t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`) },
+      { id: 'unit', name: t(`sales:clientQuotes.${qty === 1 ? 'unit' : 'units'}`) },
+    ];
+
     return (
-      <select
+      <CustomSelect
+        options={unitOptions}
         value={item.unitType || 'hours'}
-        onChange={(e) => handleUnitTypeChange(index, e.target.value as 'hours' | 'days')}
-        disabled={isReadOnly}
-        className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
-        <option value="days">{t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`)}</option>
-      </select>
+        onChange={(val) => handleUnitTypeChange(index, val as SupplierUnitType)}
+        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        searchable={false}
+        className="shrink-0"
+        buttonClassName="px-2 py-2 bg-white border border-slate-200 rounded-lg text-xs min-w-[4rem]"
+      />
     );
   };
 
@@ -901,6 +920,25 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+      },
+      {
+        header: t('crm:clients.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        className: 'whitespace-nowrap',
+        cell: ({ row }) => {
+          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
+          return formatInsertDate(timestamp);
+        },
       },
       {
         header: t('sales:clientQuotes.clientColumn'),
@@ -1249,7 +1287,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 space-y-8 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-8">
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
@@ -1294,12 +1332,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </div>
             )}
             {/* Client Selection */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                 {t('sales:clientQuotes.clientInformation')}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.client')}
@@ -1344,8 +1382,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id}</p>
                   )}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.paymentTerms')}
@@ -1360,32 +1396,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     disabled={isReadOnly}
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">
-                    {t('sales:clientQuotes.globalDiscount')}
-                  </label>
-                  <ValidatedNumberInput
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    value={formData.discount}
-                    onValueChange={(value) => {
-                      const parsed = parseNumberInputValue(value);
-                      setFormData({ ...formData, discount: parsed });
-                      if (errors.total) {
-                        setErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.total;
-                          return next;
-                        });
-                      }
-                    }}
-                    disabled={isReadOnly}
-                    className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">
                     {t('sales:clientQuotes.expirationDateLabel')}
@@ -1403,7 +1413,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
 
             {/* Products */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
@@ -1424,14 +1434,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
+                  <div className="flex-1 min-w-0 grid grid-cols-13 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
-                      {t('crm:externalListing.title')}
+                      {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                       {t('sales:clientQuotes.productsServices')}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.qty')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
@@ -1444,7 +1454,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       {t('sales:clientQuotes.marginLabel')}
                     </div>
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      {t('crm:internalListing.salePrice')}
+                      {t('sales:clientQuotes.revenue')}
                     </div>
                   </div>
                   <div className="w-10 shrink-0"></div>
@@ -1475,6 +1485,40 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const unitSalePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = unitSalePrice * quantity;
                     const lineMargin = lineSalePrice - lineCost;
+
+                    const handleCostChange = (value: string) => {
+                      if (isReadOnly) return;
+                      const newCost = parseNumberInputValue(value);
+                      const unitMult = item.unitType === 'days' ? 8 : 1;
+                      const newUnitPrice = calcProductSalePrice(newCost, molPercentage);
+                      const updated = [...(formData.items || [])];
+                      updated[index] = {
+                        ...updated[index],
+                        unitPrice: roundToTwoDecimals(newUnitPrice),
+                        ...(item.supplierQuoteItemId
+                          ? {
+                              supplierQuoteUnitPrice: roundToTwoDecimals(newCost / unitMult),
+                            }
+                          : {
+                              productCost: roundToTwoDecimals(newCost / unitMult),
+                            }),
+                      };
+                      setFormData({ ...formData, items: updated });
+                    };
+
+                    const handleMolChange = (value: string) => {
+                      if (isReadOnly) return;
+                      const newMol = parseNumberInputValue(value);
+                      const newUnitPrice = calcProductSalePrice(cost, newMol);
+                      const updated = [...(formData.items || [])];
+                      updated[index] = {
+                        ...updated[index],
+                        unitPrice: roundToTwoDecimals(newUnitPrice),
+                        productMolPercentage: roundToTwoDecimals(newMol),
+                      };
+                      setFormData({ ...formData, items: updated });
+                    };
+
                     return (
                       <div
                         key={item.id}
@@ -1484,7 +1528,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="min-w-0">
                               <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                {t('crm:externalListing.title')}
+                                {t('sales:clientQuotes.supplierQuoteColumn')}
                               </div>
                               <CustomSelect
                                 options={[
@@ -1516,18 +1560,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                                 {t('sales:clientQuotes.productsServices')}
                               </div>
-                              <CustomSelect
-                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                value={item.productId}
-                                onChange={(val) =>
-                                  updateProductRow(index, 'productId', val as string)
-                                }
-                                placeholder={t('sales:clientQuotes.selectProduct')}
-                                searchable={true}
-                                disabled={isReadOnly}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                              />
+                              {renderProductSelectOrFallback(item, index, {
+                                className: 'min-w-0',
+                                buttonClassName:
+                                  'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                              })}
                             </div>
                           </div>
                           <button
@@ -1559,7 +1596,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                   );
                                 }}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                 className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                               />
                               <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1582,16 +1619,32 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {t('sales:clientQuotes.bidBadge')}
                               </span>
                             )}
-                            <div className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                              {lineCost.toFixed(2)} {currency}
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                {currency}
+                              </span>
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               MOL (%)
                             </div>
-                            <div className="text-xs font-bold text-slate-600">
-                              {molPercentage.toFixed(1)}%
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                %
+                              </span>
                             </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
@@ -1604,7 +1657,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1 col-span-2 md:col-span-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                              {t('crm:internalListing.salePrice')}
+                              {t('sales:clientQuotes.revenue')}
                             </div>
                             <div
                               className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
@@ -1614,7 +1667,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                         </div>
                         <div className="hidden lg:flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-13 gap-3 items-center">
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
@@ -1643,20 +1696,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               />
                             </div>
                             <div className="col-span-3 min-w-0">
-                              <CustomSelect
-                                options={activeProducts.map((p) => ({ id: p.id, name: p.name }))}
-                                value={item.productId}
-                                onChange={(val) =>
-                                  updateProductRow(index, 'productId', val as string)
-                                }
-                                placeholder={t('sales:clientQuotes.selectProduct')}
-                                searchable={true}
-                                disabled={isReadOnly}
-                                className="min-w-0"
-                                buttonClassName="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
-                              />
+                              {renderProductSelectOrFallback(item, index, {
+                                className: 'min-w-0',
+                                buttonClassName:
+                                  'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm',
+                              })}
                             </div>
-                            <div className="col-span-1">
+                            <div className="col-span-2">
                               <div className="flex items-center gap-1">
                                 <ValidatedNumberInput
                                   step="0.01"
@@ -1672,7 +1718,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                     );
                                   }}
-                                  disabled={isReadOnly}
+                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                   className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
@@ -1692,14 +1738,30 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                                {lineCost.toFixed(2)} {currency}
-                              </span>
+                              <div className="flex items-center gap-0.5 w-full">
+                                <ValidatedNumberInput
+                                  value={cost.toFixed(2)}
+                                  onValueChange={handleCostChange}
+                                  disabled={isReadOnly}
+                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  {currency}
+                                </span>
+                              </div>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <span className="text-xs font-bold text-slate-600">
-                                {molPercentage.toFixed(1)}%
-                              </span>
+                              <div className="flex items-center gap-0.5 w-full">
+                                <ValidatedNumberInput
+                                  value={molPercentage.toFixed(1)}
+                                  onValueChange={handleMolChange}
+                                  disabled={isReadOnly}
+                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  %
+                                </span>
+                              </div>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">
@@ -1745,8 +1807,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
 
             {/* Notes & Cost Summary */}
-            <div className="flex flex-col gap-8 border-t border-slate-100 pt-6 md:flex-row">
-              <div className="w-full space-y-4 md:w-2/3">
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
+              <div className="w-full space-y-2 md:w-2/3">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.notesLabel')}
@@ -1761,63 +1823,76 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 />
               </div>
 
-              <div className="w-full space-y-3 md:w-1/3">
+              <div className="w-full space-y-2 md:w-1/3">
                 <h4 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
                   {t('sales:clientQuotes.totalLabel')}
                 </h4>
-                {formData.items &&
-                  formData.items.length > 0 &&
-                  (() => {
-                    const discountValue = Number.isNaN(formData.discount ?? 0)
-                      ? 0
-                      : (formData.discount ?? 0);
-                    const { subtotal, discountAmount, total, margin, marginPercentage } =
-                      calculateTotals(formData.items, discountValue);
-                    return (
-                      <>
-                        {errors.total && (
-                          <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
-                        )}
-                        <div className="flex justify-between">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
-                          </span>
-                          <span className="text-sm font-bold text-slate-700">
-                            {subtotal.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                        {discountValue > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('sales:clientQuotes.discountAmount', { defaultValue: 'Sconto' })} (
-                              {discountValue}%)
-                            </span>
-                            <span className="text-sm font-bold text-amber-600">
-                              -{discountAmount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex justify-between">
-                          <span className="text-sm font-bold text-emerald-600">
-                            {t('sales:clientQuotes.marginLabel')} (
-                            {(marginPercentage || 0).toFixed(1)}%)
-                          </span>
-                          <span className="text-sm font-bold text-emerald-600">
-                            {margin.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-t border-slate-200 pt-3">
-                          <span className="text-lg font-black text-slate-800">
-                            {t('sales:clientQuotes.totalLabel')}
-                          </span>
-                          <span className="text-lg font-black text-praetor">
-                            {total.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                      </>
-                    );
-                  })()}
+                {errors.total && (
+                  <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('sales:clientQuotes.globalDiscount')}
+                  </span>
+                  <ValidatedNumberInput
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={formData.discount}
+                    onValueChange={(value) => {
+                      const parsed = parseNumberInputValue(value);
+                      setFormData({ ...formData, discount: parsed });
+                      if (errors.total) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.total;
+                          return next;
+                        });
+                      }
+                    }}
+                    disabled={isReadOnly}
+                    className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-right outline-none focus:ring-2 focus:ring-praetor disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-slate-500">
+                    {t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                  </span>
+                  <span className="text-sm font-bold text-slate-700">
+                    {formTotals.subtotal.toFixed(2)} {currency}
+                  </span>
+                </div>
+                {formTotals.discountValue > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm font-bold text-slate-500">
+                      {t('sales:clientQuotes.discountAmount', {
+                        defaultValue: 'Discount',
+                        discount: formTotals.discountValue,
+                      })}
+                    </span>
+                    <span className="text-sm font-bold text-amber-600">
+                      -{formTotals.discountAmount.toFixed(2)} {currency}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-emerald-600">
+                    {t('sales:clientQuotes.marginLabel')} (
+                    {(formTotals.marginPercentage || 0).toFixed(1)}%)
+                  </span>
+                  <span className="text-sm font-bold text-emerald-600">
+                    {formTotals.margin.toFixed(2)} {currency}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-3">
+                  <span className="text-lg font-black text-slate-800">
+                    {t('sales:clientQuotes.totalLabel')}
+                  </span>
+                  <span className="text-lg font-black text-praetor">
+                    {formTotals.total.toFixed(2)} {currency}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1935,7 +2010,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
       <StandardTable<Quote>
         title={t('sales:clientQuotes.activeQuotes')}
-        data={filteredQuotes}
+        data={quotes}
         columns={columns}
         defaultRowsPerPage={5}
         initialFilterState={tableInitialFilterState}

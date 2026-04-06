@@ -2519,6 +2519,7 @@ const App: React.FC = () => {
           ...item,
           id: `tmp-${Math.random().toString(36).slice(2, 9)}`,
           orderId: '',
+          productId: item.productId ?? '',
         })),
       });
       setSupplierQuoteFilterId(quote.id);

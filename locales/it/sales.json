@@ -61,6 +61,7 @@
     "errors": {
       "clientRequired": "Il cliente è richiesto",
       "itemsRequired": "Almeno un prodotto è richiesto",
+      "productOrSupplierRequired": "Ogni voce deve avere un prodotto o un preventivo fornitore collegato",
       "quantityGreaterThanZero": "Tutti gli articoli devono avere quantità maggiore di 0",
       "totalGreaterThanZero": "Il totale deve essere maggiore di 0",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
@@ -87,11 +88,11 @@
     "marginLabel": "Margine",
     "selectAClient": "Seleziona un cliente...",
     "noSpecialBidOption": "Nessuna Offerta Speciale",
-    "noSupplierQuote": "Nessuna Quotazione Fornitore",
+    "noSupplierQuote": "Nessun Preventivo Fornitore",
     "selectBid": "Seleziona offerta...",
-    "selectSupplierQuote": "Seleziona quotazione fornitore...",
+    "selectSupplierQuote": "Seleziona preventivo fornitore...",
     "selectProduct": "Seleziona prodotto...",
-    "qty": "Qtà",
+    "qty": "Quantità",
     "hour": "Ora",
     "hours": "Ore",
     "day": "Giorno",
@@ -129,7 +130,9 @@
     "clientChangeRepriceMessage": "Hai cambiato il cliente su un preventivo esistente. Mantieni gli snapshot correnti delle righe per preservare lo storico, oppure ricalcola le righe usando prodotti e offerte speciali correnti per il nuovo cliente.",
     "clientChangeKeepSnapshots": "Mantieni snapshot correnti",
     "clientChangeRepriceNow": "Ricalcola righe",
-    "clientChangeRepriceCancel": "Annulla"
+    "clientChangeRepriceCancel": "Annulla",
+    "supplierQuoteColumn": "Preventivo Fornitore",
+    "revenue": "Ricavi"
   },
   "clientOffers": {
     "title": "Offerte Clienti",
@@ -159,7 +162,7 @@
     "noItemsAdded": "Nessun articolo aggiunto",
     "product": "Prodotto",
     "selectProduct": "Seleziona prodotto",
-    "qty": "Qtà",
+    "qty": "Quantità",
     "unitPrice": "Prezzo Unitario",
     "note": "Nota",
     "discount": "Sconto %",
