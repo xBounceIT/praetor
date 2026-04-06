@@ -896,7 +896,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         value={item.unitType || 'hours'}
         onChange={(e) => handleUnitTypeChange(index, e.target.value as SupplierUnitType)}
         disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-        className="text-xs px-1.5 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="text-xs px-1.5 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <option value="hours">{t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`)}</option>
         <option value="days">{t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`)}</option>
@@ -1621,7 +1621,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 value={cost.toFixed(2)}
                                 onValueChange={handleCostChange}
                                 disabled={isReadOnly}
-                                className="w-full text-xs px-2 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full text-xs px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                 {currency}
@@ -1637,7 +1637,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 value={molPercentage.toFixed(1)}
                                 onValueChange={handleMolChange}
                                 disabled={isReadOnly}
-                                className="w-full text-xs px-2 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full text-xs px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               />
                               <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                 %
@@ -1740,7 +1740,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   value={cost.toFixed(2)}
                                   onValueChange={handleCostChange}
                                   disabled={isReadOnly}
-                                  className="w-full text-xs px-1 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-full text-xs px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                   {currency}
@@ -1753,7 +1753,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   value={molPercentage.toFixed(1)}
                                   onValueChange={handleMolChange}
                                   disabled={isReadOnly}
-                                  className="w-full text-xs px-1 py-1 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-full text-xs px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-[9px] font-semibold text-slate-400 shrink-0">
                                   %
