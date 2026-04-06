@@ -88,9 +88,9 @@
     "marginLabel": "Margine",
     "selectAClient": "Seleziona un cliente...",
     "noSpecialBidOption": "Nessuna Offerta Speciale",
-    "noSupplierQuote": "Nessuna Quotazione Fornitore",
+    "noSupplierQuote": "Nessun Preventivo Fornitore",
     "selectBid": "Seleziona offerta...",
-    "selectSupplierQuote": "Seleziona quotazione fornitore...",
+    "selectSupplierQuote": "Seleziona preventivo fornitore...",
     "selectProduct": "Seleziona prodotto...",
     "qty": "Quantità",
     "hour": "Ora",
@@ -131,7 +131,7 @@
     "clientChangeKeepSnapshots": "Mantieni snapshot correnti",
     "clientChangeRepriceNow": "Ricalcola righe",
     "clientChangeRepriceCancel": "Annulla",
-    "supplierQuoteColumn": "Quotazione Fornitore",
+    "supplierQuoteColumn": "Preventivo Fornitore",
     "revenue": "Ricavi"
   },
   "clientOffers": {
