@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "components": {
     "securitySchemes": {
@@ -4113,6 +4113,18 @@
                       "recurrenceDuration": {
                         "type": "number"
                       },
+                      "expectedEffort": {
+                        "type": "number"
+                      },
+                      "revenue": {
+                        "type": "number"
+                      },
+                      "notes": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "isDisabled": {
                         "type": "boolean"
                       }
@@ -4271,6 +4283,15 @@
                   },
                   "recurrenceDuration": {
                     "type": "number"
+                  },
+                  "expectedEffort": {
+                    "type": "number"
+                  },
+                  "revenue": {
+                    "type": "number"
+                  },
+                  "notes": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -4328,6 +4349,18 @@
                     },
                     "recurrenceDuration": {
                       "type": "number"
+                    },
+                    "expectedEffort": {
+                      "type": "number"
+                    },
+                    "revenue": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "isDisabled": {
                       "type": "boolean"
@@ -4471,6 +4504,15 @@
                   "recurrenceDuration": {
                     "type": "number"
                   },
+                  "expectedEffort": {
+                    "type": "number"
+                  },
+                  "revenue": {
+                    "type": "number"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
                   "isDisabled": {
                     "type": "boolean"
                   }
@@ -4535,6 +4577,18 @@
                     },
                     "recurrenceDuration": {
                       "type": "number"
+                    },
+                    "expectedEffort": {
+                      "type": "number"
+                    },
+                    "revenue": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "isDisabled": {
                       "type": "boolean"
@@ -7445,6 +7499,12 @@
                       },
                       "isDisabled": {
                         "type": "boolean"
+                      },
+                      "createdAt": {
+                        "type": [
+                          "null",
+                          "number"
+                        ]
                       }
                     },
                     "required": [
@@ -7694,6 +7754,12 @@
                     },
                     "isDisabled": {
                       "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
                     }
                   },
                   "required": [
@@ -7931,6 +7997,12 @@
                     },
                     "isDisabled": {
                       "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
                     }
                   },
                   "required": [
@@ -10101,7 +10173,8 @@
                               "type": "string",
                               "enum": [
                                 "hours",
-                                "days"
+                                "days",
+                                "unit"
                               ]
                             }
                           },
@@ -10315,7 +10388,8 @@
                           "type": "string",
                           "enum": [
                             "hours",
-                            "days"
+                            "days",
+                            "unit"
                           ]
                         }
                       },
@@ -10509,7 +10583,8 @@
                             "type": "string",
                             "enum": [
                               "hours",
-                              "days"
+                              "days",
+                              "unit"
                             ]
                           }
                         },
@@ -10706,7 +10781,8 @@
                           "type": "string",
                           "enum": [
                             "hours",
-                            "days"
+                            "days",
+                            "unit"
                           ]
                         }
                       },
@@ -10905,7 +10981,8 @@
                             "type": "string",
                             "enum": [
                               "hours",
-                              "days"
+                              "days",
+                              "unit"
                             ]
                           }
                         },
@@ -13534,6 +13611,12 @@
                             "discount"
                           ]
                         }
+                      },
+                      "warnings": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       }
                     },
                     "required": [
@@ -13939,6 +14022,12 @@
                           "discount"
                         ]
                       }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -14327,6 +14416,12 @@
                           "productCost",
                           "discount"
                         ]
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     }
                   },
@@ -16430,7 +16525,8 @@
                               "type": "string",
                               "enum": [
                                 "hours",
-                                "days"
+                                "days",
+                                "unit"
                               ]
                             }
                           },
@@ -16617,7 +16713,8 @@
                           "type": "string",
                           "enum": [
                             "hours",
-                            "days"
+                            "days",
+                            "unit"
                           ]
                         }
                       },
@@ -16750,7 +16847,8 @@
                             "type": "string",
                             "enum": [
                               "hours",
-                              "days"
+                              "days",
+                              "unit"
                             ]
                           }
                         },
@@ -16920,7 +17018,8 @@
                           "type": "string",
                           "enum": [
                             "hours",
-                            "days"
+                            "days",
+                            "unit"
                           ]
                         }
                       },
@@ -17055,7 +17154,8 @@
                             "type": "string",
                             "enum": [
                               "hours",
-                              "days"
+                              "days",
+                              "unit"
                             ]
                           }
                         },
@@ -19241,7 +19341,8 @@
                               "type": "string",
                               "enum": [
                                 "hours",
-                                "days"
+                                "days",
+                                "unit"
                               ]
                             }
                           },
@@ -19428,7 +19529,8 @@
                           "type": "string",
                           "enum": [
                             "hours",
-                            "days"
+                            "days",
+                            "unit"
                           ]
                         }
                       },
@@ -19561,7 +19663,8 @@
                             "type": "string",
                             "enum": [
                               "hours",
-                              "days"
+                              "days",
+                              "unit"
                             ]
                           }
                         },
@@ -19731,7 +19834,8 @@
                           "type": "string",
                           "enum": [
                             "hours",
-                            "days"
+                            "days",
+                            "unit"
                           ]
                         }
                       },
@@ -19866,7 +19970,8 @@
                             "type": "string",
                             "enum": [
                               "hours",
-                              "days"
+                              "days",
+                              "unit"
                             ]
                           }
                         },
