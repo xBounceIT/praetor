@@ -8,7 +8,7 @@ import {
   getLocalDateString,
   isDateOnlyWithinInclusiveRange,
 } from '../../utils/date';
-import { roundToTwoDecimals } from '../../utils/numbers';
+
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -215,7 +215,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       subtotal += lineNet;
     });
 
-    const total = roundToTwoDecimals(subtotal);
+    const total = subtotal;
 
     return { subtotal, total };
   }, []);
@@ -363,18 +363,18 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       ...item,
       specialBidId: item.specialBidId || undefined,
       unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
-      quantity: roundToTwoDecimals(Number(item.quantity ?? 0)),
-      unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-      discount: roundToTwoDecimals(Number(item.discount || 0)),
+      quantity: Number(item.quantity ?? 0),
+      unitPrice: Number(item.unitPrice ?? 0),
+      discount: Number(item.discount || 0),
     }));
 
     const { subtotal, total } = calculateTotals(roundedItems);
     const payload = {
       ...formData,
       items: roundedItems,
-      amountPaid: roundToTwoDecimals(Number(formData.amountPaid || 0)),
-      subtotal: roundToTwoDecimals(subtotal),
-      total: roundToTwoDecimals(total),
+      amountPaid: Number(formData.amountPaid || 0),
+      subtotal,
+      total,
     };
 
     if (editingInvoice) {
@@ -472,9 +472,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       {
         header: t('accounting:clientsInvoices.balance'),
         id: 'balance',
-        accessorFn: (row: Invoice) => roundToTwoDecimals(row.total - row.amountPaid),
+        accessorFn: (row: Invoice) => row.total - row.amountPaid,
         cell: ({ row }: { row: Invoice }) => {
-          const balance = roundToTwoDecimals(row.total - row.amountPaid);
+          const balance = row.total - row.amountPaid;
           return (
             <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
               {balance.toFixed(2)} {currency}
@@ -934,8 +934,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     {t('accounting:clientsInvoices.balanceDue')}
                   </span>
                   <span className="font-bold text-red-500">
-                    {roundToTwoDecimals(total - Number(formData.amountPaid || 0)).toFixed(2)}{' '}
-                    {currency}
+                    {(total - Number(formData.amountPaid || 0)).toFixed(2)} {currency}
                   </span>
                 </div>
               </div>

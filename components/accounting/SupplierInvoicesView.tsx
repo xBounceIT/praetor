@@ -8,7 +8,7 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { roundToTwoDecimals } from '../../utils/numbers';
+
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -149,12 +149,12 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       await onUpdateInvoice(editingInvoice.id, {
         ...formData,
         ...totals,
-        amountPaid: roundToTwoDecimals(Number(formData.amountPaid ?? 0)),
+        amountPaid: Number(formData.amountPaid ?? 0),
         items: (formData.items || []).map((item) => ({
           ...item,
-          quantity: roundToTwoDecimals(Number(item.quantity ?? 0)),
-          unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-          discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+          quantity: Number(item.quantity ?? 0),
+          unitPrice: Number(item.unitPrice ?? 0),
+          discount: Number(item.discount ?? 0),
         })),
       });
 
@@ -164,7 +164,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   );
 
   const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
-  const balanceDue = roundToTwoDecimals(Number(totals.total) - Number(formData.amountPaid || 0));
+  const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
   const totalDiscount = useMemo(
     () =>
       (formData.items || []).reduce((sum, item) => {

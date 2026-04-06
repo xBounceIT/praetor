@@ -598,11 +598,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
-      discount: roundToTwoDecimals(Number(formData.discount ?? 0)),
+      discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
-        unitPrice: roundToTwoDecimals(Number(item.unitPrice ?? 0)),
-        discount: roundToTwoDecimals(Number(item.discount ?? 0)),
+        unitPrice: Number(item.unitPrice ?? 0),
+        discount: Number(item.discount ?? 0),
       })),
     };
 

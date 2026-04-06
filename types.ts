@@ -195,6 +195,7 @@ export interface Product {
   supplierId?: string;
   supplierName?: string;
   isDisabled?: boolean;
+  createdAt?: number;
 }
 
 export interface SpecialBid {
@@ -358,6 +359,7 @@ export interface ClientsOrder {
   notes?: string;
   createdAt: number;
   updatedAt: number;
+  warnings?: string[];
 }
 
 export type View =

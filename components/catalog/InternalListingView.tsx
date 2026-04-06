@@ -8,7 +8,8 @@ import type {
   InternalProductType,
 } from '../../services/api/products';
 import type { Product } from '../../types';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { formatInsertDate } from '../../utils/date';
+import { parseNumberInputValue } from '../../utils/numbers';
 import CustomSelect, { type Option } from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -326,20 +327,14 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       if (editingProduct) {
         await onUpdateProduct(editingProduct.id, {
           ...productPayload,
-          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
-          molPercentage:
-            formData.molPercentage !== undefined
-              ? roundToTwoDecimals(formData.molPercentage)
-              : undefined,
+          costo: formData.costo !== undefined ? formData.costo : undefined,
+          molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       } else {
         await onAddProduct({
           ...productPayload,
-          costo: formData.costo !== undefined ? roundToTwoDecimals(formData.costo) : undefined,
-          molPercentage:
-            formData.molPercentage !== undefined
-              ? roundToTwoDecimals(formData.molPercentage)
-              : undefined,
+          costo: formData.costo !== undefined ? formData.costo : undefined,
+          molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       }
       setIsModalOpen(false);
@@ -1562,6 +1557,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             cell: ({ row: p }) => (
               <span className="font-bold text-slate-700">{p.productCode || '-'}</span>
             ),
+          },
+          {
+            header: t('crm:internalListing.insertDate'),
+            id: 'createdAt',
+            accessorFn: (row) => row.createdAt ?? 0,
+            cell: ({ value }) => (
+              <span className="text-xs text-slate-500 whitespace-nowrap">
+                {formatInsertDate(value as number | null)}
+              </span>
+            ),
+            filterFormat: (value) => formatInsertDate(value as number | null),
           },
           {
             header: t('common:labels.name'),

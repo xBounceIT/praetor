@@ -316,42 +316,43 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     const itemsWithSnapshots = (formData.items || []).map((item) => {
       return {
         ...item,
-        unitPrice: roundToTwoDecimals(item.unitPrice),
-        discount: item.discount ? roundToTwoDecimals(item.discount) : 0,
-        productCost: roundToTwoDecimals(Number(item.productCost ?? 0)),
+        unitPrice: item.unitPrice,
+        discount: item.discount ? item.discount : 0,
+        productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
-            : roundToTwoDecimals(Number(item.productMolPercentage)),
+            : Number(item.productMolPercentage),
         specialBidUnitPrice:
           item.specialBidUnitPrice === undefined || item.specialBidUnitPrice === null
             ? null
-            : roundToTwoDecimals(Number(item.specialBidUnitPrice)),
+            : Number(item.specialBidUnitPrice),
         specialBidMolPercentage:
           item.specialBidMolPercentage === undefined || item.specialBidMolPercentage === null
             ? null
             : roundToTwoDecimals(Number(item.specialBidMolPercentage)),
+        // Supplier quote snapshot fields
         supplierQuoteId: item.supplierQuoteId ?? null,
         supplierQuoteItemId: item.supplierQuoteItemId ?? null,
         supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
         supplierQuoteUnitPrice:
           item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
             ? null
-            : roundToTwoDecimals(Number(item.supplierQuoteUnitPrice)),
+            : Number(item.supplierQuoteUnitPrice),
         supplierQuoteItemDiscount:
           item.supplierQuoteItemDiscount === undefined || item.supplierQuoteItemDiscount === null
             ? null
-            : roundToTwoDecimals(Number(item.supplierQuoteItemDiscount)),
+            : Number(item.supplierQuoteItemDiscount),
         supplierQuoteDiscount:
           item.supplierQuoteDiscount === undefined || item.supplierQuoteDiscount === null
             ? null
-            : roundToTwoDecimals(Number(item.supplierQuoteDiscount)),
+            : Number(item.supplierQuoteDiscount),
       };
     });
 
     const payload = {
       ...formData,
-      discount: formData.discount ? roundToTwoDecimals(formData.discount) : 0,
+      discount: formData.discount ? formData.discount : 0,
       items: itemsWithSnapshots,
     };
 
