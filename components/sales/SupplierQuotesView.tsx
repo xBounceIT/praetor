@@ -11,6 +11,7 @@ import type {
 import {
   addMonthsToDateOnly,
   formatDateOnlyForLocale,
+  formatInsertDate,
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
@@ -280,6 +281,25 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => <span className="font-bold text-slate-700">{row.id}</span>,
+      },
+      {
+        header: t('crm:clients.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        className: 'whitespace-nowrap',
+        cell: ({ row }) => {
+          if (!row.createdAt) return <span className="text-xs text-slate-400">-</span>;
+          return (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt)}
+            </span>
+          );
+        },
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) return '-';
+          return formatInsertDate(timestamp);
+        },
       },
       {
         header: t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' }),
