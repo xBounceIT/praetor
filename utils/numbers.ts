@@ -1,4 +1,4 @@
-import type { SupplierUnitType } from '../types';
+type UnitType = 'hours' | 'days' | 'unit';
 
 export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
   if (value === '') return fallback;
@@ -11,11 +11,7 @@ export const roundToTwoDecimals = (value: number) => {
 };
 
 /** Convert a unit price from one unit type to another via hourly base rate. */
-export const convertUnitPrice = (
-  price: number,
-  fromType: SupplierUnitType,
-  toType: SupplierUnitType,
-): number => {
+export const convertUnitPrice = (price: number, fromType: UnitType, toType: UnitType): number => {
   if (fromType === toType) return price;
   const hourly = fromType === 'days' ? price / 8 : price;
   return toType === 'days' ? hourly * 8 : hourly;

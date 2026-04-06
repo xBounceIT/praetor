@@ -251,15 +251,15 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       const qty = Number(item.quantity) || 0;
       return (
         <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
+          {qty === 1 ? t('sales:supplierQuotes.unit') : t('sales:supplierQuotes.units')}
         </span>
       );
     }
 
     const unitOptions = [
-      { id: 'unit', name: t('sales:clientQuotes.unit') },
-      { id: 'hours', name: t('sales:clientQuotes.hours') },
-      { id: 'days', name: t('sales:clientQuotes.days') },
+      { id: 'unit', name: t('sales:supplierQuotes.unit') },
+      { id: 'hours', name: t('sales:supplierQuotes.hours') },
+      { id: 'days', name: t('sales:supplierQuotes.days') },
     ];
 
     return (
