@@ -78,35 +78,61 @@ export interface Client {
   createdAt?: number;
   isDisabled?: boolean;
   type?: 'individual' | 'company';
+  contacts?: ClientContact[];
   contactName?: string;
   clientCode?: string;
   email?: string;
   phone?: string;
   address?: string;
+  addressCountry?: string;
+  addressState?: string;
+  addressCap?: string;
+  addressProvince?: string;
+  addressCivicNumber?: string;
+  addressLine?: string;
   description?: string;
   atecoCode?: string;
   website?: string;
-  sector?:
-    | 'FINANCE'
-    | 'TELCO'
-    | 'UTILITIES'
-    | 'ENERGY'
-    | 'SERVICES'
-    | 'GDO'
-    | 'HEALTH'
-    | 'INDUSTRY'
-    | 'PA'
-    | 'TRASPORTI'
-    | 'ALTRO';
-  numberOfEmployees?: '< 50' | '50..250' | '251..1000' | '> 1000';
-  revenue?: '< 10' | '11..50' | '51..1000' | '> 1000';
+  sector?: string;
+  numberOfEmployees?: string;
+  revenue?: string;
   fiscalCode?: string;
-  officeCountRange?: '1' | '2...5' | '6...10' | '>10';
+  officeCountRange?: string;
   totalSentQuotes?: number;
   totalAcceptedOrders?: number;
   // Legacy compatibility fields (mapped from fiscalCode by API)
   vatNumber?: string;
   taxCode?: string;
+}
+
+export interface ClientContact {
+  fullName: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+}
+
+export type ClientProfileOptionCategory =
+  | 'sector'
+  | 'numberOfEmployees'
+  | 'revenue'
+  | 'officeCountRange';
+
+export interface ClientProfileOption {
+  id: string;
+  category: ClientProfileOptionCategory;
+  value: string;
+  sortOrder: number;
+  usageCount: number;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface ClientProfileOptionsByCategory {
+  sector: ClientProfileOption[];
+  numberOfEmployees: ClientProfileOption[];
+  revenue: ClientProfileOption[];
+  officeCountRange: ClientProfileOption[];
 }
 
 export interface Project {

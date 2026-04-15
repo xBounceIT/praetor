@@ -26,11 +26,27 @@ import type {
 
 export const normalizeClient = (c: Client): Client => ({
   ...c,
+  contacts: Array.isArray(c.contacts)
+    ? c.contacts
+        .map((contact) => ({
+          fullName: typeof contact.fullName === 'string' ? contact.fullName.trim() : '',
+          role: typeof contact.role === 'string' ? contact.role.trim() || undefined : undefined,
+          email: typeof contact.email === 'string' ? contact.email.trim() || undefined : undefined,
+          phone: typeof contact.phone === 'string' ? contact.phone.trim() || undefined : undefined,
+        }))
+        .filter((contact) => contact.fullName.length > 0)
+    : undefined,
   contactName: c.contactName ?? undefined,
   clientCode: c.clientCode ?? undefined,
   email: c.email ?? undefined,
   phone: c.phone ?? undefined,
   address: c.address ?? undefined,
+  addressCountry: c.addressCountry ?? undefined,
+  addressState: c.addressState ?? undefined,
+  addressCap: c.addressCap ?? undefined,
+  addressProvince: c.addressProvince ?? undefined,
+  addressCivicNumber: c.addressCivicNumber ?? undefined,
+  addressLine: c.addressLine ?? undefined,
   description: c.description ?? undefined,
   atecoCode: c.atecoCode ?? undefined,
   website: c.website ?? undefined,

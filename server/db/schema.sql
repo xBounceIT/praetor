@@ -367,38 +367,24 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS number_of_employees VARCHAR(20);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS revenue VARCHAR(20);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS fiscal_code VARCHAR(50);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS office_count_range VARCHAR(10);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS contacts JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_country VARCHAR(100);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_state VARCHAR(100);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_cap VARCHAR(20);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_province VARCHAR(100);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_civic_number VARCHAR(30);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_line TEXT;
 -- Ensure office count range is limited to supported values
 ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_office_count_range;
-ALTER TABLE clients
-    ADD CONSTRAINT chk_clients_office_count_range
-    CHECK (office_count_range IS NULL OR office_count_range IN ('1', '2...5', '6...10', '>10'));
 
 -- Ensure sector is limited to supported values
 ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_sector;
-ALTER TABLE clients
-    ADD CONSTRAINT chk_clients_sector
-    CHECK (
-        sector IS NULL OR
-        sector IN ('FINANCE', 'TELCO', 'UTILITIES', 'ENERGY', 'SERVICES', 'GDO', 'HEALTH', 'INDUSTRY', 'PA', 'TRASPORTI', 'ALTRO')
-    );
 
 -- Ensure number of employees range is limited to supported values
 ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_number_of_employees;
-ALTER TABLE clients
-    ADD CONSTRAINT chk_clients_number_of_employees
-    CHECK (
-        number_of_employees IS NULL OR
-        number_of_employees IN ('< 50', '50..250', '251..1000', '> 1000')
-    );
 
 -- Ensure revenue range is limited to supported values
 ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_revenue;
-ALTER TABLE clients
-    ADD CONSTRAINT chk_clients_revenue
-    CHECK (
-        revenue IS NULL OR
-        revenue IN ('< 10', '11..50', '51..1000', '> 1000')
-    );
 
 -- Ensure fiscal code is unique (case-insensitive, non-empty)
 DROP INDEX IF EXISTS idx_clients_vat_number_unique;
@@ -408,6 +394,87 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_fiscal_code_unique
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_client_code_unique
     ON clients (client_code)
     WHERE client_code IS NOT NULL AND client_code <> '';
+
+CREATE TABLE IF NOT EXISTS client_profile_options (
+    id VARCHAR(50) PRIMARY KEY,
+    category VARCHAR(50) NOT NULL CHECK (category IN ('sector', 'numberOfEmployees', 'revenue', 'officeCountRange')),
+    value VARCHAR(120) NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_profile_options_category_value_unique
+    ON client_profile_options (category, LOWER(value));
+
+CREATE INDEX IF NOT EXISTS idx_client_profile_options_category_sort
+    ON client_profile_options (category, sort_order, value);
+
+INSERT INTO client_profile_options (id, category, value, sort_order)
+VALUES
+    ('cpo-sector-finance', 'sector', 'FINANCE', 1),
+    ('cpo-sector-telco', 'sector', 'TELCO', 2),
+    ('cpo-sector-utilities', 'sector', 'UTILITIES', 3),
+    ('cpo-sector-energy', 'sector', 'ENERGY', 4),
+    ('cpo-sector-services', 'sector', 'SERVICES', 5),
+    ('cpo-sector-gdo', 'sector', 'GDO', 6),
+    ('cpo-sector-health', 'sector', 'HEALTH', 7),
+    ('cpo-sector-industry', 'sector', 'INDUSTRY', 8),
+    ('cpo-sector-pa', 'sector', 'PA', 9),
+    ('cpo-sector-trasporti', 'sector', 'TRASPORTI', 10),
+    ('cpo-sector-altro', 'sector', 'ALTRO', 11),
+    ('cpo-employees-under50', 'numberOfEmployees', '< 50', 1),
+    ('cpo-employees-50-250', 'numberOfEmployees', '50..250', 2),
+    ('cpo-employees-251-1000', 'numberOfEmployees', '251..1000', 3),
+    ('cpo-employees-over1000', 'numberOfEmployees', '> 1000', 4),
+    ('cpo-revenue-under10', 'revenue', '< 10', 1),
+    ('cpo-revenue-11-50', 'revenue', '11..50', 2),
+    ('cpo-revenue-51-1000', 'revenue', '51..1000', 3),
+    ('cpo-revenue-over1000', 'revenue', '> 1000', 4),
+    ('cpo-office-1', 'officeCountRange', '1', 1),
+    ('cpo-office-2-5', 'officeCountRange', '2...5', 2),
+    ('cpo-office-6-10', 'officeCountRange', '6...10', 3),
+    ('cpo-office-over10', 'officeCountRange', '>10', 4)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO client_profile_options (id, category, value, sort_order)
+SELECT 'cpo-sector-migrated-' || gen_random_uuid(), 'sector', sector, 1000 + ROW_NUMBER() OVER (ORDER BY sector)
+FROM (
+    SELECT DISTINCT sector
+    FROM clients
+    WHERE sector IS NOT NULL AND BTRIM(sector) <> ''
+) existing_sector_values
+ON CONFLICT DO NOTHING;
+
+INSERT INTO client_profile_options (id, category, value, sort_order)
+SELECT 'cpo-employees-migrated-' || gen_random_uuid(), 'numberOfEmployees', number_of_employees,
+       1000 + ROW_NUMBER() OVER (ORDER BY number_of_employees)
+FROM (
+    SELECT DISTINCT number_of_employees
+    FROM clients
+    WHERE number_of_employees IS NOT NULL AND BTRIM(number_of_employees) <> ''
+) existing_number_of_employees_values
+ON CONFLICT DO NOTHING;
+
+INSERT INTO client_profile_options (id, category, value, sort_order)
+SELECT 'cpo-revenue-migrated-' || gen_random_uuid(), 'revenue', revenue,
+       1000 + ROW_NUMBER() OVER (ORDER BY revenue)
+FROM (
+    SELECT DISTINCT revenue
+    FROM clients
+    WHERE revenue IS NOT NULL AND BTRIM(revenue) <> ''
+) existing_revenue_values
+ON CONFLICT DO NOTHING;
+
+INSERT INTO client_profile_options (id, category, value, sort_order)
+SELECT 'cpo-office-range-migrated-' || gen_random_uuid(), 'officeCountRange', office_count_range,
+       1000 + ROW_NUMBER() OVER (ORDER BY office_count_range)
+FROM (
+    SELECT DISTINCT office_count_range
+    FROM clients
+    WHERE office_count_range IS NOT NULL AND BTRIM(office_count_range) <> ''
+) existing_office_count_values
+ON CONFLICT DO NOTHING;
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (

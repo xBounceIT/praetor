@@ -1,4 +1,9 @@
-import type { Client } from '../../types';
+import type {
+  Client,
+  ClientProfileOption,
+  ClientProfileOptionCategory,
+  ClientProfileOptionsByCategory,
+} from '../../types';
 import { fetchApi } from './client';
 import { normalizeClient } from './normalizers';
 
@@ -31,4 +36,51 @@ export const clientsApi = {
     }).then(normalizeClient),
 
   delete: (id: string): Promise<void> => fetchApi(`/clients/${id}`, { method: 'DELETE' }),
+
+  listProfileOptions: (category: ClientProfileOptionCategory): Promise<ClientProfileOption[]> =>
+    fetchApi<ClientProfileOption[]>(`/clients/profile-options/${encodeURIComponent(category)}`),
+
+  listAllProfileOptions: async (): Promise<ClientProfileOptionsByCategory> => {
+    const [sector, numberOfEmployees, revenue, officeCountRange] = await Promise.all([
+      clientsApi.listProfileOptions('sector'),
+      clientsApi.listProfileOptions('numberOfEmployees'),
+      clientsApi.listProfileOptions('revenue'),
+      clientsApi.listProfileOptions('officeCountRange'),
+    ]);
+
+    return {
+      sector,
+      numberOfEmployees,
+      revenue,
+      officeCountRange,
+    };
+  },
+
+  createProfileOption: (
+    category: ClientProfileOptionCategory,
+    value: string,
+    sortOrder?: number,
+  ): Promise<ClientProfileOption> =>
+    fetchApi<ClientProfileOption>(`/clients/profile-options/${encodeURIComponent(category)}`, {
+      method: 'POST',
+      body: JSON.stringify({ value, sortOrder }),
+    }),
+
+  updateProfileOption: (
+    category: ClientProfileOptionCategory,
+    id: string,
+    updates: { value: string; sortOrder?: number },
+  ): Promise<ClientProfileOption> =>
+    fetchApi<ClientProfileOption>(
+      `/clients/profile-options/${encodeURIComponent(category)}/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      },
+    ),
+
+  deleteProfileOption: (category: ClientProfileOptionCategory, id: string): Promise<void> =>
+    fetchApi(`/clients/profile-options/${encodeURIComponent(category)}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
 };

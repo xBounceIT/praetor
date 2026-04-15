@@ -74,12 +74,9 @@ const normalizeQuoteItems = (
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    if (!item.productId && !itemSupplierQuoteItemId) {
-      return {
-        ok: false,
-        message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
-      };
-    }
+    const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
+    if (!productIdResult.ok) return { ok: false, message: productIdResult.message };
+
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
     if (!productNameResult.ok) return { ok: false, message: productNameResult.message };
     const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
@@ -96,7 +93,7 @@ const normalizeQuoteItems = (
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
-      productId: normalizeNullableString(item.productId),
+      productId: productIdResult.value,
       productName: productNameResult.value,
       specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
