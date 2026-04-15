@@ -1136,10 +1136,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   fastify.get(
     '/profile-options/:category',
-    {
       onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
         requireAnyPermission('crm.clients.view', 'crm.clients_all.view'),
+      ],
       ],
       schema: {
         tags: ['clients'],
