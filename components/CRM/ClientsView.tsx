@@ -46,7 +46,7 @@ const EMPTY_CONTACT: ClientContact = {
 const INITIAL_FORM_DATA: Partial<Client> = {
   name: '',
   type: 'company',
-  contacts: [{ ...EMPTY_CONTACT }],
+  contacts: [],
   contactName: '',
   clientCode: '',
   email: '',
@@ -106,7 +106,7 @@ const normalizeContacts = (contacts?: ClientContact[]) => {
     phone: contact.phone?.trim() || '',
   }));
 
-  return normalized.length > 0 ? normalized : [{ ...EMPTY_CONTACT }];
+  return normalized;
 };
 
 const getNamedContacts = (contacts?: ClientContact[]) =>
@@ -249,10 +249,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         name: client.name || '',
         type: client.type ?? 'company',
         contacts: hydratedContacts,
-        contactName: client.contactName || primaryContact.fullName || '',
+        contactName: client.contactName || primaryContact?.fullName || '',
         clientCode: client.clientCode || '',
-        email: client.email || primaryContact.email || '',
-        phone: client.phone || primaryContact.phone || '',
+        email: client.email || primaryContact?.email || '',
+        phone: client.phone || primaryContact?.phone || '',
         address: client.address || '',
         addressCountry: client.addressCountry || '',
         addressState: client.addressState || '',
@@ -302,10 +302,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
   const removeContact = useCallback(
     (index: number) => {
-      setContacts((prev) => {
-        if (prev.length <= 1) return [{ ...EMPTY_CONTACT }];
-        return prev.filter((_, currentIndex) => currentIndex !== index);
-      });
+      setContacts((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
     },
     [setContacts],
   );

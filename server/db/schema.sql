@@ -374,6 +374,10 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_cap VARCHAR(20);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_province VARCHAR(100);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_civic_number VARCHAR(30);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_line TEXT;
+ALTER TABLE clients ALTER COLUMN sector TYPE VARCHAR(120);
+ALTER TABLE clients ALTER COLUMN number_of_employees TYPE VARCHAR(120);
+ALTER TABLE clients ALTER COLUMN revenue TYPE VARCHAR(120);
+ALTER TABLE clients ALTER COLUMN office_count_range TYPE VARCHAR(120);
 -- Ensure office count range is limited to supported values
 ALTER TABLE clients DROP CONSTRAINT IF EXISTS chk_clients_office_count_range;
 
