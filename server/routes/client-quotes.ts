@@ -24,7 +24,7 @@ interface DatabaseError extends Error {
 
 type IncomingQuoteItem = {
   id?: string;
-  productId: string;
+  productId: string | null;
   productName: string;
   specialBidId?: string | null;
   supplierQuoteItemId?: string | null;
@@ -97,7 +97,7 @@ const normalizeQuoteItems = (
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
-      productId: itemProductId ?? '',
+      productId: itemProductId,
       productName: productNameResult.value,
       specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
@@ -224,7 +224,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
       {
         supplierQuoteId: string;
         supplierName: string;
-        productId: string;
+        productId: string | null;
         unitPrice: number;
         itemDiscount: number;
         quoteDiscount: number;
@@ -296,8 +296,7 @@ const resolveQuoteItemSnapshots = async (
     );
   });
 
-  const [productSnapshots, specialBidSnapshots, supplierQuoteSnapshots] = await Promise.all([
-    getProductSnapshots(itemsNeedingRecalc.map((item) => item.productId)),
+  const [specialBidSnapshots, supplierQuoteSnapshots] = await Promise.all([
     getSpecialBidSnapshots(
       itemsNeedingRecalc
         .map((item) => normalizeSpecialBidId(item.specialBidId))
@@ -309,6 +308,19 @@ const resolveQuoteItemSnapshots = async (
         .filter((id): id is string => id !== null),
     ),
   ]);
+
+  const productIds = new Set<string>();
+  for (const item of itemsNeedingRecalc) {
+    if (item.productId) {
+      productIds.add(item.productId);
+    }
+  }
+  for (const supplierQuoteSnapshot of supplierQuoteSnapshots.values()) {
+    if (supplierQuoteSnapshot.productId) {
+      productIds.add(supplierQuoteSnapshot.productId);
+    }
+  }
+  const productSnapshots = await getProductSnapshots(Array.from(productIds));
 
   const resolvedItems: ResolvedQuoteItem[] = [];
   for (const item of items) {
@@ -345,11 +357,6 @@ const resolveQuoteItemSnapshots = async (
         });
         continue;
       }
-    }
-
-    const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
-    if (!productSnapshot && !normalizedSupplierQuoteItemId) {
-      throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
     let specialBidUnitPrice: number | null = null;
@@ -399,6 +406,11 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
       supplierQuoteItemDiscount = supplierQuoteSnapshot.itemDiscount;
       supplierQuoteDiscount = supplierQuoteSnapshot.quoteDiscount;
+    }
+
+    const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
+    if (!productSnapshot && !normalizedSupplierQuoteItemId) {
+      throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
     resolvedItems.push({
@@ -570,7 +582,7 @@ const toNullableString = (value: unknown) => {
 const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   quoteId: String(row.quoteId),
-  productId: String(row.productId),
+  productId: toNullableString(row.productId) ?? '',
   productName: String(row.productName),
   specialBidId: toNullableString(row.specialBidId),
   quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),
@@ -876,7 +888,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               nextIdResult.value,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.specialBidId || null,
               item.quantity,
@@ -1124,7 +1136,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         existingItemsResult.rows.forEach((item) => {
           existingItemsById.set(item.id, {
             id: item.id,
-            productId: item.productId,
+            productId: normalizeNullableString(item.productId),
             productName: '',
             specialBidId: normalizeSpecialBidId(item.specialBidId),
             quantity: 0,
@@ -1293,7 +1305,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               updatedQuoteId,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.specialBidId || null,
               item.quantity,
