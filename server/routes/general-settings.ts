@@ -79,7 +79,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest, _reply: FastifyReply) => {
       const apiKeyVisible = hasPermission(request, 'administration.general.update') ? 'yes' : 'no';
       const result = await query(
         'SELECT currency, daily_limit, start_of_week, treat_saturday_as_holiday, enable_ai_reporting, gemini_api_key, ai_provider, openrouter_api_key, gemini_model_id, openrouter_model_id, allow_weekend_selection, default_location FROM general_settings WHERE id = 1',

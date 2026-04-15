@@ -69,7 +69,7 @@ class LDAPService {
       await this.loadConfig();
     }
 
-    if (!this.config || !this.config.enabled) {
+    if (!this.config?.enabled) {
       return null;
     }
 

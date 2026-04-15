@@ -101,7 +101,7 @@ class EmailService {
         await this.loadConfig();
       }
 
-      if (!this.config || !this.config.enabled) {
+      if (!this.config?.enabled) {
         return { success: false, code: 'EMAIL_NOT_ENABLED' };
       }
 
@@ -138,7 +138,7 @@ class EmailService {
         await this.loadConfig();
       }
 
-      if (!this.config || !this.config.enabled) {
+      if (!this.config?.enabled) {
         return { success: false, code: 'EMAIL_NOT_ENABLED' };
       }
 

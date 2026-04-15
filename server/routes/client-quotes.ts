@@ -73,7 +73,6 @@ const normalizeQuoteItems = (
   const result: IncomingQuoteItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
-    const itemProductId = normalizeNullableString(item.productId);
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
     const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
     if (!productIdValue && !itemSupplierQuoteItemId) {
