@@ -73,8 +73,9 @@ const normalizeQuoteItems = (
   const result: IncomingQuoteItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
+    const itemProductId = normalizeNullableString(item.productId);
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    if (!item.productId && !itemSupplierQuoteItemId) {
+    if (!itemProductId && !itemSupplierQuoteItemId) {
       return {
         ok: false,
         message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
@@ -96,7 +97,7 @@ const normalizeQuoteItems = (
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
-      productId: normalizeNullableString(item.productId),
+      productId: itemProductId ?? '',
       productName: productNameResult.value,
       specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
@@ -252,7 +253,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
     {
       supplierQuoteId: string;
       supplierName: string;
-      productId: string;
+      productId: string | null;
       unitPrice: number;
       itemDiscount: number;
       quoteDiscount: number;
@@ -268,7 +269,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
     snapshots.set(row.itemId, {
       supplierQuoteId: row.quoteId,
       supplierName: row.supplierName,
-      productId: row.productId,
+      productId: normalizeNullableString(row.productId),
       unitPrice: Number(row.unitPrice ?? 0),
       itemDiscount: Number(row.itemDiscount ?? 0),
       quoteDiscount: Number(row.quoteDiscount ?? 0),
@@ -313,6 +314,7 @@ const resolveQuoteItemSnapshots = async (
   for (const item of items) {
     const normalizedBidId = normalizeSpecialBidId(item.specialBidId);
     const normalizedSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
+    let resolvedProductId = item.productId;
 
     // Validate: cannot have both special bid and supplier quote
     if (normalizedBidId && normalizedSupplierQuoteItemId) {
@@ -345,9 +347,9 @@ const resolveQuoteItemSnapshots = async (
       }
     }
 
-    const productSnapshot = item.productId ? productSnapshots.get(item.productId) : undefined;
+    const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
     if (!productSnapshot && !normalizedSupplierQuoteItemId) {
-      throw new Error(`items productId "${item.productId}" is invalid`);
+      throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
     let specialBidUnitPrice: number | null = null;
@@ -364,9 +366,9 @@ const resolveQuoteItemSnapshots = async (
       if (!specialBidSnapshot) {
         throw new Error(`specialBidId "${normalizedBidId}" is invalid`);
       }
-      if (specialBidSnapshot.productId !== item.productId) {
+      if (specialBidSnapshot.productId !== resolvedProductId) {
         throw new Error(
-          `specialBidId "${normalizedBidId}" does not match productId "${item.productId}"`,
+          `specialBidId "${normalizedBidId}" does not match productId "${resolvedProductId}"`,
         );
       }
       specialBidUnitPrice = specialBidSnapshot.unitPrice;
@@ -380,12 +382,16 @@ const resolveQuoteItemSnapshots = async (
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" is invalid or supplier quote is not accepted`,
         );
       }
+      if (!resolvedProductId && supplierQuoteSnapshot.productId !== null) {
+        resolvedProductId = supplierQuoteSnapshot.productId;
+      }
       if (
-        supplierQuoteSnapshot.productId !== item.productId &&
+        resolvedProductId &&
+        supplierQuoteSnapshot.productId !== resolvedProductId &&
         supplierQuoteSnapshot.productId !== null
       ) {
         throw new Error(
-          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${item.productId}"`,
+          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${resolvedProductId}"`,
         );
       }
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
@@ -397,6 +403,7 @@ const resolveQuoteItemSnapshots = async (
 
     resolvedItems.push({
       ...item,
+      productId: resolvedProductId,
       specialBidId: normalizedBidId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
       productCost: productSnapshot?.productCost ?? 0,
