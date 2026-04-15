@@ -74,8 +74,14 @@ const normalizeQuoteItems = (
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
-    if (!productIdResult.ok) return { ok: false, message: productIdResult.message };
+    if (!item.productId && !itemSupplierQuoteItemId) {
+      return {
+        ok: false,
+        message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
+      };
+    }
+    const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
+
 
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
     if (!productNameResult.ok) return { ok: false, message: productNameResult.message };
