@@ -75,6 +75,10 @@ const EMPTY_PROFILE_OPTIONS: ClientProfileOptionsByCategory = {
   officeCountRange: [],
 };
 
+type ContactTableRow = ClientContact & {
+  contactIndex: number;
+};
+
 const getPrimaryTaxId = (client: Pick<Client, 'fiscalCode' | 'vatNumber' | 'taxCode'>) =>
   client.fiscalCode || client.vatNumber || client.taxCode || '';
 
@@ -98,16 +102,15 @@ const buildAddress = (formData: Partial<Client>) => {
     .join(', ');
 };
 
-const normalizeContacts = (contacts?: ClientContact[]) => {
-  const normalized = (contacts ?? []).map((contact) => ({
-    fullName: contact.fullName?.trim() || '',
-    role: contact.role?.trim() || '',
-    email: contact.email?.trim() || '',
-    phone: contact.phone?.trim() || '',
-  }));
+const normalizeContact = (contact?: ClientContact | null): ClientContact => ({
+  fullName: contact?.fullName?.trim() || '',
+  role: contact?.role?.trim() || '',
+  email: contact?.email?.trim() || '',
+  phone: contact?.phone?.trim() || '',
+});
 
-  return normalized;
-};
+const normalizeContacts = (contacts?: ClientContact[]) =>
+  (contacts ?? []).map((contact) => normalizeContact(contact));
 
 const getNamedContacts = (contacts?: ClientContact[]) =>
   normalizeContacts(contacts).filter((contact) => contact.fullName.length > 0);
@@ -177,6 +180,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<Client>>(INITIAL_FORM_DATA);
   const [contactsExpanded, setContactsExpanded] = useState(false);
+  const [contactDraft, setContactDraft] = useState<ClientContact | null>(null);
+  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
+  const [contactDraftError, setContactDraftError] = useState<string | null>(null);
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
@@ -234,6 +240,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     setEditingClient(null);
     setFormData(INITIAL_FORM_DATA);
     setContactsExpanded(false);
+    setContactDraft(null);
+    setEditingContactIndex(null);
+    setContactDraftError(null);
     setErrors({});
     setIsModalOpen(true);
   };
@@ -270,6 +279,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         officeCountRange: client.officeCountRange,
       });
       setContactsExpanded(hydratedContacts.length > 1);
+      setContactDraft(null);
+      setEditingContactIndex(null);
+      setContactDraftError(null);
       setErrors({});
       setIsModalOpen(true);
     },
@@ -283,28 +295,78 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     });
   }, []);
 
-  const updateContact = useCallback(
-    (index: number, field: keyof ClientContact, value: string) => {
-      setContacts((prev) =>
-        prev.map((contact, currentIndex) =>
-          currentIndex === index ? { ...contact, [field]: value } : contact,
-        ),
-      );
+  const addContact = useCallback(() => {
+    setContactDraft({ ...EMPTY_CONTACT });
+    setEditingContactIndex(null);
+    setContactDraftError(null);
+    if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
+    setContactsExpanded(true);
+  }, [errors.contacts]);
+
+  const updateContactDraft = useCallback(
+    (field: keyof ClientContact, value: string) => {
+      setContactDraft((prev) => ({ ...(prev ?? { ...EMPTY_CONTACT }), [field]: value }));
+      if (contactDraftError) setContactDraftError(null);
       if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
     },
-    [errors.contacts, setContacts],
+    [contactDraftError, errors.contacts],
   );
 
-  const addContact = useCallback(() => {
-    setContacts((prev) => [...prev, { ...EMPTY_CONTACT }]);
-    setContactsExpanded(true);
-  }, [setContacts]);
+  const saveContactDraft = useCallback(() => {
+    if (!contactDraft) return;
+
+    const normalizedDraft = normalizeContact(contactDraft);
+    if (!normalizedDraft.fullName) {
+      setContactDraftError(t('common:validation.required'));
+      return;
+    }
+
+    setContacts((prev) => {
+      if (editingContactIndex !== null) {
+        return prev.map((contact, currentIndex) =>
+          currentIndex === editingContactIndex ? normalizedDraft : contact,
+        );
+      }
+      return [...prev, normalizedDraft];
+    });
+
+    setContactDraft(null);
+    setEditingContactIndex(null);
+    setContactDraftError(null);
+    if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
+  }, [contactDraft, editingContactIndex, errors.contacts, setContacts, t]);
+
+  const editContact = useCallback(
+    (index: number) => {
+      const target = normalizeContacts(formData.contacts)[index];
+      if (!target) return;
+      setContactDraft({ ...target });
+      setEditingContactIndex(index);
+      setContactDraftError(null);
+      if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
+      setContactsExpanded(true);
+    },
+    [errors.contacts, formData.contacts],
+  );
+
+  const cancelContactDraft = useCallback(() => {
+    setContactDraft(null);
+    setEditingContactIndex(null);
+    setContactDraftError(null);
+  }, []);
 
   const removeContact = useCallback(
     (index: number) => {
       setContacts((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
+      if (editingContactIndex === index) {
+        setContactDraft(null);
+        setEditingContactIndex(null);
+        setContactDraftError(null);
+      } else if (editingContactIndex !== null && editingContactIndex > index) {
+        setEditingContactIndex(editingContactIndex - 1);
+      }
     },
-    [setContacts],
+    [editingContactIndex, setContacts],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -313,10 +375,34 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     if (editingClient && !canUpdateClients) return;
     if (!editingClient && !canCreateClients) return;
 
+    const normalizedDraft = contactDraft ? normalizeContact(contactDraft) : null;
+    const hasDraftValues = normalizedDraft
+      ? (normalizedDraft.fullName || '').length > 0 ||
+        (normalizedDraft.role || '').length > 0 ||
+        (normalizedDraft.email || '').length > 0 ||
+        (normalizedDraft.phone || '').length > 0
+      : false;
+    let contactsForSubmit = normalizeContacts(formData.contacts);
+
+    if (normalizedDraft && (editingContactIndex !== null || hasDraftValues)) {
+      if (!normalizedDraft.fullName) {
+        setContactDraftError(t('common:validation.required'));
+        setContactsExpanded(true);
+        return;
+      }
+
+      contactsForSubmit =
+        editingContactIndex !== null
+          ? contactsForSubmit.map((contact, currentIndex) =>
+              currentIndex === editingContactIndex ? normalizedDraft : contact,
+            )
+          : [...contactsForSubmit, normalizedDraft];
+    }
+
     const trimmedName = formData.name?.trim() || '';
     const trimmedClientCode = formData.clientCode?.trim() || '';
     const trimmedFiscalCode = formData.fiscalCode?.trim() || '';
-    const normalizedContacts = getNamedContacts(formData.contacts);
+    const normalizedContacts = getNamedContacts(contactsForSubmit);
     const primaryContact = normalizedContacts[0];
     const newErrors: Record<string, string> = {};
 
@@ -419,6 +505,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     setIsModalOpen(false);
     setErrors({});
     setContactsExpanded(false);
+    setContactDraft(null);
+    setEditingContactIndex(null);
+    setContactDraftError(null);
   };
 
   const canSubmit = editingClient ? canUpdateClients : canCreateClients;
@@ -500,7 +589,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     setProfileOptionError(null);
   };
 
-  const contactColumns = useMemo<Column<ClientContact>[]>(
+  const contactColumns = useMemo<Column<ContactTableRow>[]>(
     () => [
       {
         header: t('crm:clients.fullName'),
@@ -534,38 +623,41 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         disableSorting: true,
         disableFiltering: true,
         sticky: 'right',
-        cell: ({ row }) => {
-          const contactIndex = normalizeContacts(formData.contacts).findIndex(
-            (contact) =>
-              contact.fullName === row.fullName &&
-              contact.role === row.role &&
-              contact.email === row.email &&
-              contact.phone === row.phone,
-          );
-          return (
-            <div className="flex justify-end items-center gap-1">
-              {contactIndex >= 0 && (
-                <Tooltip label={t('common:buttons.delete')}>
-                  {() => (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeContact(contactIndex);
-                      }}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <i className="fa-solid fa-trash"></i>
-                    </button>
-                  )}
-                </Tooltip>
+        cell: ({ row }) => (
+          <div className="flex justify-end items-center gap-1">
+            <Tooltip label={t('common:buttons.edit')}>
+              {() => (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    editContact(row.contactIndex);
+                  }}
+                  className="p-2 text-slate-400 hover:text-praetor hover:bg-slate-100 rounded-lg transition-all"
+                >
+                  <i className="fa-solid fa-pen"></i>
+                </button>
               )}
-            </div>
-          );
-        },
+            </Tooltip>
+            <Tooltip label={t('common:buttons.delete')}>
+              {() => (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeContact(row.contactIndex);
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                >
+                  <i className="fa-solid fa-trash"></i>
+                </button>
+              )}
+            </Tooltip>
+          </div>
+        ),
       },
     ],
-    [formData.contacts, removeContact, t],
+    [editContact, removeContact, t],
   );
 
   const columns = useMemo<Column<Client>[]>(() => {
@@ -817,9 +909,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     openEditModal,
   ]);
 
-  const visibleContacts = normalizeContacts(formData.contacts).filter(
+  const savedContacts = normalizeContacts(formData.contacts).filter(
     (contact) => contact.fullName || contact.role || contact.email || contact.phone,
   );
+
+  const contactTableRows = savedContacts.map((contact, contactIndex) => ({
+    ...contact,
+    contactIndex,
+  }));
 
   const manageCategoryLabels: Record<ClientProfileOptionCategory, string> = {
     sector: t('crm:clients.sector'),
@@ -1174,7 +1271,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     <i
                       className={`fa-solid fa-chevron-${contactsExpanded ? 'up' : 'down'} text-[10px]`}
                     ></i>
-                    {t('crm:clients.contactsList')} ({visibleContacts.length})
+                    {t('crm:clients.contactsList')} ({contactTableRows.length})
                   </button>
 
                   <button
@@ -1189,78 +1286,92 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                 {contactsExpanded && (
                   <div className="space-y-4">
-                    <div className="space-y-4">
-                      {normalizeContacts(formData.contacts).map((contact, index) => (
-                        <div
-                          key={`contact-form-${index}-${contact.fullName}-${contact.email}`}
-                          className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200"
-                        >
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 ml-1">
-                              {t('crm:clients.fullName')} <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={contact.fullName}
-                              onChange={(e) => updateContact(index, 'fullName', e.target.value)}
-                              placeholder={t('crm:clients.fullNamePlaceholder')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 ml-1">
-                              {t('crm:clients.role')}
-                            </label>
-                            <input
-                              type="text"
-                              value={contact.role || ''}
-                              onChange={(e) => updateContact(index, 'role', e.target.value)}
-                              placeholder={t('crm:clients.rolePlaceholder')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 ml-1">
-                              {t('crm:clients.email')}
-                            </label>
-                            <input
-                              type="email"
-                              value={contact.email || ''}
-                              onChange={(e) => updateContact(index, 'email', e.target.value)}
-                              placeholder={t('crm:clients.email')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 ml-1">
-                              {t('crm:clients.phone')}
-                            </label>
-                            <input
-                              type="text"
-                              value={contact.phone || ''}
-                              onChange={(e) => updateContact(index, 'phone', e.target.value)}
-                              placeholder={t('crm:clients.phone')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                            />
-                          </div>
+                    {contactDraft && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 ml-1">
+                            {t('crm:clients.fullName')} <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={contactDraft.fullName}
+                            onChange={(e) => updateContactDraft('fullName', e.target.value)}
+                            placeholder={t('crm:clients.fullNamePlaceholder')}
+                            className={`w-full text-sm px-4 py-2.5 bg-white border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
+                              contactDraftError ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                            }`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 ml-1">
+                            {t('crm:clients.role')}
+                          </label>
+                          <input
+                            type="text"
+                            value={contactDraft.role || ''}
+                            onChange={(e) => updateContactDraft('role', e.target.value)}
+                            placeholder={t('crm:clients.rolePlaceholder')}
+                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 ml-1">
+                            {t('crm:clients.email')}
+                          </label>
+                          <input
+                            type="email"
+                            value={contactDraft.email || ''}
+                            onChange={(e) => updateContactDraft('email', e.target.value)}
+                            placeholder={t('crm:clients.email')}
+                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 ml-1">
+                            {t('crm:clients.phone')}
+                          </label>
+                          <input
+                            type="text"
+                            value={contactDraft.phone || ''}
+                            onChange={(e) => updateContactDraft('phone', e.target.value)}
+                            placeholder={t('crm:clients.phone')}
+                            className="w-full text-sm px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
+                          />
+                        </div>
 
-                          <div className="col-span-full flex justify-end">
+                        <div className="col-span-full flex items-center justify-between">
+                          <div>
+                            {contactDraftError && (
+                              <p className="text-red-500 text-[10px] font-bold ml-1">
+                                {contactDraftError}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => removeContact(index)}
-                              className="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                              onClick={cancelContactDraft}
+                              className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
                             >
-                              <i className="fa-solid fa-trash mr-1.5"></i>
-                              {t('common:buttons.delete')}
+                              {t('common:buttons.cancel')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={saveContactDraft}
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-praetor hover:bg-slate-700 rounded-lg transition-colors"
+                            >
+                              {editingContactIndex !== null
+                                ? t('common:buttons.update')
+                                : t('common:buttons.save')}
                             </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
 
-                    <StandardTable<ClientContact>
+                    <StandardTable<ContactTableRow>
                       title={t('crm:clients.contactsList')}
-                      data={visibleContacts}
+                      data={contactTableRows}
                       columns={contactColumns}
                       defaultRowsPerPage={5}
                       containerClassName="shadow-none border-slate-200 rounded-2xl"

@@ -74,14 +74,13 @@ const normalizeQuoteItems = (
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    if (!item.productId && !itemSupplierQuoteItemId) {
+    const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
+    if (!productIdValue && !itemSupplierQuoteItemId) {
       return {
         ok: false,
         message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
       };
     }
-    const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
-
 
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
     if (!productNameResult.ok) return { ok: false, message: productNameResult.message };
@@ -99,7 +98,7 @@ const normalizeQuoteItems = (
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
-      productId: productIdResult.value,
+      productId: productIdValue,
       productName: productNameResult.value,
       specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
@@ -566,7 +565,7 @@ const toNullableString = (value: unknown) => {
 const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   quoteId: String(row.quoteId),
-  productId: String(row.productId),
+  productId: toNullableString(row.productId) || '',
   productName: String(row.productName),
   specialBidId: toNullableString(row.specialBidId),
   quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),
@@ -872,7 +871,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               nextIdResult.value,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.specialBidId || null,
               item.quantity,
@@ -1289,7 +1288,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               updatedQuoteId,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.specialBidId || null,
               item.quantity,

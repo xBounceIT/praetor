@@ -442,7 +442,7 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO client_profile_options (id, category, value, sort_order)
-SELECT 'cpo-sector-migrated-' || gen_random_uuid(), 'sector', sector, 1000 + ROW_NUMBER() OVER (ORDER BY sector)
+SELECT 'cpo-s-' || gen_random_uuid(), 'sector', sector, 1000 + ROW_NUMBER() OVER (ORDER BY sector)
 FROM (
     SELECT DISTINCT sector
     FROM clients
@@ -451,7 +451,7 @@ FROM (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO client_profile_options (id, category, value, sort_order)
-SELECT 'cpo-employees-migrated-' || gen_random_uuid(), 'numberOfEmployees', number_of_employees,
+SELECT 'cpo-ne-' || gen_random_uuid(), 'numberOfEmployees', number_of_employees,
        1000 + ROW_NUMBER() OVER (ORDER BY number_of_employees)
 FROM (
     SELECT DISTINCT number_of_employees
@@ -461,7 +461,7 @@ FROM (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO client_profile_options (id, category, value, sort_order)
-SELECT 'cpo-revenue-migrated-' || gen_random_uuid(), 'revenue', revenue,
+SELECT 'cpo-r-' || gen_random_uuid(), 'revenue', revenue,
        1000 + ROW_NUMBER() OVER (ORDER BY revenue)
 FROM (
     SELECT DISTINCT revenue
@@ -471,7 +471,7 @@ FROM (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO client_profile_options (id, category, value, sort_order)
-SELECT 'cpo-office-range-migrated-' || gen_random_uuid(), 'officeCountRange', office_count_range,
+SELECT 'cpo-oc-' || gen_random_uuid(), 'officeCountRange', office_count_range,
        1000 + ROW_NUMBER() OVER (ORDER BY office_count_range)
 FROM (
     SELECT DISTINCT office_count_range
