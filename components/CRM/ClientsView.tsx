@@ -909,14 +909,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     openEditModal,
   ]);
 
-  const savedContacts = normalizeContacts(formData.contacts).filter(
-    (contact) => contact.fullName || contact.role || contact.email || contact.phone,
-  );
+  const allContacts = normalizeContacts(formData.contacts);
 
-  const contactTableRows = savedContacts.map((contact, contactIndex) => ({
-    ...contact,
-    contactIndex,
-  }));
+  const contactTableRows = allContacts
+    .map((contact, contactIndex) => ({
+      ...contact,
+      contactIndex,
+    }))
+    .filter((contact) => contact.fullName || contact.role || contact.email || contact.phone);
 
   const manageCategoryLabels: Record<ClientProfileOptionCategory, string> = {
     sector: t('crm:clients.sector'),
