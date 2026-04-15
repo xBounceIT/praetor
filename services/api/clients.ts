@@ -11,7 +11,7 @@ const normalizeClientPayload = (payload: Partial<Client>): Partial<Client> => {
   const normalized = { ...payload };
 
   for (const [key, value] of Object.entries(normalized)) {
-    if (value === undefined || value === null) {
+    if (value === undefined) {
       delete normalized[key as keyof Client];
     }
   }

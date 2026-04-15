@@ -566,7 +566,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       await loadProfileOptions();
 
       if (formData[option.category] === option.value) {
-        setFormData((prev) => ({ ...prev, [option.category]: undefined }));
+        setFormData((prev) => ({ ...prev, [option.category]: null }));
       }
     } catch (err) {
       setProfileOptionError(
@@ -1448,7 +1448,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     options={sectorOptions}
                     value={formData.sector || ''}
                     onChange={(val) =>
-                      setFormData({ ...formData, sector: (val as Client['sector']) || undefined })
+                      setFormData({ ...formData, sector: (val as Client['sector']) || null })
                     }
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
@@ -1476,7 +1476,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     onChange={(val) =>
                       setFormData({
                         ...formData,
-                        numberOfEmployees: (val as Client['numberOfEmployees']) || undefined,
+                        numberOfEmployees: (val as Client['numberOfEmployees']) || null,
                       })
                     }
                     placeholder={t('common:form.selectOption')}
@@ -1503,7 +1503,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     options={revenueOptions}
                     value={formData.revenue || ''}
                     onChange={(val) =>
-                      setFormData({ ...formData, revenue: (val as Client['revenue']) || undefined })
+                      setFormData({ ...formData, revenue: (val as Client['revenue']) || null })
                     }
                     placeholder={t('common:form.selectOption')}
                     searchable={false}
@@ -1531,7 +1531,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     onChange={(val) =>
                       setFormData({
                         ...formData,
-                        officeCountRange: (val as Client['officeCountRange']) || undefined,
+                        officeCountRange: (val as Client['officeCountRange']) || null,
                       })
                     }
                     placeholder={t('common:form.selectOption')}

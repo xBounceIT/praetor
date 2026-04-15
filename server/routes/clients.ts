@@ -992,11 +992,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 description = COALESCE($16, description),
                 ateco_code = COALESCE($17, ateco_code),
                 website = COALESCE($18, website),
-                sector = COALESCE($19, sector),
-                number_of_employees = COALESCE($20, number_of_employees),
-                revenue = COALESCE($21, revenue),
+                sector = CASE WHEN $28 THEN $19 ELSE sector END,
+                number_of_employees = CASE WHEN $29 THEN $20 ELSE number_of_employees END,
+                revenue = CASE WHEN $30 THEN $21 ELSE revenue END,
                 fiscal_code = COALESCE($22, fiscal_code),
-                office_count_range = COALESCE($23, office_count_range)
+                office_count_range = CASE WHEN $31 THEN $23 ELSE office_count_range END
             WHERE id = $24
             RETURNING *
           `,
@@ -1028,6 +1028,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             shouldUpdateContactName,
             shouldUpdateEmail,
             shouldUpdatePhone,
+            hasSector,
+            hasNumberOfEmployees,
+            hasRevenue,
+            hasOfficeCountRange,
           ],
         );
 
@@ -1136,11 +1140,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   fastify.get(
     '/profile-options/:category',
+    {
       onRequest: [
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
         requireAnyPermission('crm.clients.view', 'crm.clients_all.view'),
-      ],
       ],
       schema: {
         tags: ['clients'],

@@ -93,11 +93,11 @@ export interface Client {
   description?: string;
   atecoCode?: string;
   website?: string;
-  sector?: string;
-  numberOfEmployees?: string;
-  revenue?: string;
+  sector?: string | null;
+  numberOfEmployees?: string | null;
+  revenue?: string | null;
   fiscalCode?: string;
-  officeCountRange?: string;
+  officeCountRange?: string | null;
   totalSentQuotes?: number;
   totalAcceptedOrders?: number;
   // Legacy compatibility fields (mapped from fiscalCode by API)
