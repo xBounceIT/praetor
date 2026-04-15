@@ -24,7 +24,7 @@ interface DatabaseError extends Error {
 
 type IncomingQuoteItem = {
   id?: string;
-  productId: string;
+  productId: string | null;
   productName: string;
   specialBidId?: string | null;
   supplierQuoteItemId?: string | null;
@@ -73,8 +73,9 @@ const normalizeQuoteItems = (
   const result: IncomingQuoteItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
+    const itemProductId = normalizeNullableString(item.productId);
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    if (!item.productId && !itemSupplierQuoteItemId) {
+    if (!itemProductId && !itemSupplierQuoteItemId) {
       return {
         ok: false,
         message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
@@ -96,7 +97,7 @@ const normalizeQuoteItems = (
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
-      productId: normalizeNullableString(item.productId),
+      productId: itemProductId,
       productName: productNameResult.value,
       specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
@@ -223,7 +224,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
       {
         supplierQuoteId: string;
         supplierName: string;
-        productId: string;
+        productId: string | null;
         unitPrice: number;
         itemDiscount: number;
         quoteDiscount: number;
@@ -252,7 +253,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
     {
       supplierQuoteId: string;
       supplierName: string;
-      productId: string;
+      productId: string | null;
       unitPrice: number;
       itemDiscount: number;
       quoteDiscount: number;
@@ -268,7 +269,7 @@ const getSupplierQuoteItemSnapshots = async (supplierQuoteItemIds: string[]) => 
     snapshots.set(row.itemId, {
       supplierQuoteId: row.quoteId,
       supplierName: row.supplierName,
-      productId: row.productId,
+      productId: normalizeNullableString(row.productId),
       unitPrice: Number(row.unitPrice ?? 0),
       itemDiscount: Number(row.itemDiscount ?? 0),
       quoteDiscount: Number(row.quoteDiscount ?? 0),
@@ -295,8 +296,7 @@ const resolveQuoteItemSnapshots = async (
     );
   });
 
-  const [productSnapshots, specialBidSnapshots, supplierQuoteSnapshots] = await Promise.all([
-    getProductSnapshots(itemsNeedingRecalc.map((item) => item.productId)),
+  const [specialBidSnapshots, supplierQuoteSnapshots] = await Promise.all([
     getSpecialBidSnapshots(
       itemsNeedingRecalc
         .map((item) => normalizeSpecialBidId(item.specialBidId))
@@ -309,10 +309,24 @@ const resolveQuoteItemSnapshots = async (
     ),
   ]);
 
+  const productIds = new Set<string>();
+  for (const item of itemsNeedingRecalc) {
+    if (item.productId) {
+      productIds.add(item.productId);
+    }
+  }
+  for (const supplierQuoteSnapshot of supplierQuoteSnapshots.values()) {
+    if (supplierQuoteSnapshot.productId) {
+      productIds.add(supplierQuoteSnapshot.productId);
+    }
+  }
+  const productSnapshots = await getProductSnapshots(Array.from(productIds));
+
   const resolvedItems: ResolvedQuoteItem[] = [];
   for (const item of items) {
     const normalizedBidId = normalizeSpecialBidId(item.specialBidId);
     const normalizedSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
+    let resolvedProductId = item.productId;
 
     // Validate: cannot have both special bid and supplier quote
     if (normalizedBidId && normalizedSupplierQuoteItemId) {
@@ -345,11 +359,6 @@ const resolveQuoteItemSnapshots = async (
       }
     }
 
-    const productSnapshot = item.productId ? productSnapshots.get(item.productId) : undefined;
-    if (!productSnapshot && !normalizedSupplierQuoteItemId) {
-      throw new Error(`items productId "${item.productId}" is invalid`);
-    }
-
     let specialBidUnitPrice: number | null = null;
     let specialBidMolPercentage: number | null = null;
     // Supplier quote snapshot fields
@@ -364,9 +373,9 @@ const resolveQuoteItemSnapshots = async (
       if (!specialBidSnapshot) {
         throw new Error(`specialBidId "${normalizedBidId}" is invalid`);
       }
-      if (specialBidSnapshot.productId !== item.productId) {
+      if (specialBidSnapshot.productId !== resolvedProductId) {
         throw new Error(
-          `specialBidId "${normalizedBidId}" does not match productId "${item.productId}"`,
+          `specialBidId "${normalizedBidId}" does not match productId "${resolvedProductId}"`,
         );
       }
       specialBidUnitPrice = specialBidSnapshot.unitPrice;
@@ -380,12 +389,16 @@ const resolveQuoteItemSnapshots = async (
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" is invalid or supplier quote is not accepted`,
         );
       }
+      if (!resolvedProductId && supplierQuoteSnapshot.productId !== null) {
+        resolvedProductId = supplierQuoteSnapshot.productId;
+      }
       if (
-        supplierQuoteSnapshot.productId !== item.productId &&
+        resolvedProductId &&
+        supplierQuoteSnapshot.productId !== resolvedProductId &&
         supplierQuoteSnapshot.productId !== null
       ) {
         throw new Error(
-          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${item.productId}"`,
+          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${resolvedProductId}"`,
         );
       }
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
@@ -395,8 +408,14 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteDiscount = supplierQuoteSnapshot.quoteDiscount;
     }
 
+    const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
+    if (!productSnapshot && !normalizedSupplierQuoteItemId) {
+      throw new Error(`items productId "${resolvedProductId}" is invalid`);
+    }
+
     resolvedItems.push({
       ...item,
+      productId: resolvedProductId,
       specialBidId: normalizedBidId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
       productCost: productSnapshot?.productCost ?? 0,
@@ -563,7 +582,7 @@ const toNullableString = (value: unknown) => {
 const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   quoteId: String(row.quoteId),
-  productId: String(row.productId),
+  productId: toNullableString(row.productId) ?? '',
   productName: String(row.productName),
   specialBidId: toNullableString(row.specialBidId),
   quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),
@@ -869,7 +888,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               nextIdResult.value,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.specialBidId || null,
               item.quantity,
@@ -1117,7 +1136,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         existingItemsResult.rows.forEach((item) => {
           existingItemsById.set(item.id, {
             id: item.id,
-            productId: item.productId,
+            productId: normalizeNullableString(item.productId),
             productName: '',
             specialBidId: normalizeSpecialBidId(item.specialBidId),
             quantity: 0,
@@ -1286,7 +1305,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [
               itemId,
               updatedQuoteId,
-              item.productId,
+              item.productId || null,
               item.productName,
               item.specialBidId || null,
               item.quantity,
