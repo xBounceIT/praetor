@@ -75,12 +75,14 @@ const normalizeQuoteItems = (
     const item = items[i] as Record<string, unknown>;
     const itemProductId = normalizeNullableString(item.productId);
     const itemSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    if (!itemProductId && !itemSupplierQuoteItemId) {
+    const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
+    if (!productIdValue && !itemSupplierQuoteItemId) {
       return {
         ok: false,
         message: `items[${i}].productId is required when no supplierQuoteItemId is provided`,
       };
     }
+
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
     if (!productNameResult.ok) return { ok: false, message: productNameResult.message };
     const quantityResult = parseLocalizedPositiveNumber(item.quantity, `items[${i}].quantity`);
@@ -97,7 +99,7 @@ const normalizeQuoteItems = (
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
-      productId: itemProductId,
+      productId: productIdValue,
       productName: productNameResult.value,
       specialBidId: normalizeSpecialBidId(item.specialBidId),
       supplierQuoteItemId: itemSupplierQuoteItemId,
@@ -582,7 +584,7 @@ const toNullableString = (value: unknown) => {
 const normalizeQuoteItemRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   quoteId: String(row.quoteId),
-  productId: toNullableString(row.productId) ?? '',
+  productId: toNullableString(row.productId) || '',
   productName: String(row.productName),
   specialBidId: toNullableString(row.specialBidId),
   quantity: toFiniteNumber(row.quantity, 'quoteItem.quantity'),

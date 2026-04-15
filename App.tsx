@@ -46,6 +46,8 @@ import api, { getAuthToken, type Settings, setAuthToken } from './services/api';
 import type {
   Client,
   ClientOffer,
+  ClientProfileOption,
+  ClientProfileOptionCategory,
   ClientsOrder,
   EmailConfig,
   GeneralSettings as IGeneralSettings,
@@ -2035,6 +2037,47 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCreateClientProfileOption = async (
+    category: ClientProfileOptionCategory,
+    value: string,
+    sortOrder?: number,
+  ): Promise<ClientProfileOption> => {
+    try {
+      return await api.clients.createProfileOption(category, value, sortOrder);
+    } catch (err) {
+      console.error('Failed to create client profile option:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateClientProfileOption = async (
+    category: ClientProfileOptionCategory,
+    id: string,
+    updates: { value: string; sortOrder?: number },
+  ): Promise<ClientProfileOption> => {
+    try {
+      const updated = await api.clients.updateProfileOption(category, id, updates);
+      const refreshedClients = await api.clients.list();
+      setClients(refreshedClients);
+      return updated;
+    } catch (err) {
+      console.error('Failed to update client profile option:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteClientProfileOption = async (
+    category: ClientProfileOptionCategory,
+    id: string,
+  ): Promise<void> => {
+    try {
+      await api.clients.deleteProfileOption(category, id);
+    } catch (err) {
+      console.error('Failed to delete client profile option:', err);
+      throw err;
+    }
+  };
+
   const addProduct = async (productData: Partial<Product>) => {
     try {
       const product = await api.products.create(productData);
@@ -3190,6 +3233,9 @@ const App: React.FC = () => {
                   onAddClient={addClient}
                   onUpdateClient={handleUpdateClient}
                   onDeleteClient={handleDeleteClient}
+                  onCreateClientProfileOption={handleCreateClientProfileOption}
+                  onUpdateClientProfileOption={handleUpdateClientProfileOption}
+                  onDeleteClientProfileOption={handleDeleteClientProfileOption}
                   permissions={currentUser.permissions || []}
                 />
               )}
