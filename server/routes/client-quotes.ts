@@ -30,8 +30,8 @@ type IncomingQuoteItem = {
   supplierQuoteItemId?: string | null;
   quantity: number;
   unitPrice: number;
-  productCost?: number | null;
-  productMolPercentage?: number | null;
+  productCost: number | null;
+  productMolPercentage: number | null;
   discount: number;
   note?: string | null;
   unitType?: UnitType;
@@ -359,8 +359,7 @@ const resolveQuoteItemSnapshots = async (
         normalizeNullableString(existingItem.supplierQuoteItemId) ===
           normalizedSupplierQuoteItemId &&
         (item.productCost === null || item.productCost === existingItem.productCost) &&
-        (item.productMolPercentage === undefined ||
-          item.productMolPercentage === null ||
+        (item.productMolPercentage === null ||
           item.productMolPercentage === (existingItem.productMolPercentage ?? null));
       if (existingItem && isUnchanged) {
         resolvedItems.push({
@@ -442,13 +441,12 @@ const resolveQuoteItemSnapshots = async (
       specialBidId: normalizedBidId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
       productCost:
-        allowManualProductSnapshot && item.productCost !== null && item.productCost !== undefined
+        allowManualProductSnapshot && item.productCost !== null
           ? item.productCost
           : (productSnapshot?.productCost ?? 0),
-      productMolPercentage:
-        allowManualProductSnapshot && item.productMolPercentage !== undefined
-          ? item.productMolPercentage
-          : (productSnapshot?.productMolPercentage ?? null),
+      productMolPercentage: allowManualProductSnapshot
+        ? item.productMolPercentage
+        : (productSnapshot?.productMolPercentage ?? null),
       specialBidUnitPrice,
       specialBidMolPercentage,
       supplierQuoteId,
