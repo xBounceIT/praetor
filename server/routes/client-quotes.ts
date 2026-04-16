@@ -444,9 +444,10 @@ const resolveQuoteItemSnapshots = async (
         allowManualProductSnapshot && item.productCost !== null
           ? item.productCost
           : (productSnapshot?.productCost ?? 0),
-      productMolPercentage: allowManualProductSnapshot
-        ? item.productMolPercentage
-        : (productSnapshot?.productMolPercentage ?? null),
+      productMolPercentage:
+        allowManualProductSnapshot && item.productMolPercentage !== null
+          ? item.productMolPercentage
+          : (productSnapshot?.productMolPercentage ?? null),
       specialBidUnitPrice,
       specialBidMolPercentage,
       supplierQuoteId,
