@@ -219,7 +219,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const isReadOnly = Boolean(
     editingQuote &&
       (editingQuote.linkedOfferId ||
-        editingQuote.status === 'sent' ||
         editingQuote.status === 'accepted' ||
         editingQuote.status === 'denied'),
   );
@@ -1224,7 +1223,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
-              {history && (
+              {!row.linkedOfferId && (row.status === 'accepted' || row.status === 'denied' || isQuoteExpired(row)) && (
                 <Tooltip label={restoreTitle}>
                   {() => (
                     <button
@@ -1267,7 +1266,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -1291,9 +1290,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
-                  {t('sales:clientQuotes.readOnlyBecauseOffer', {
-                    defaultValue: 'This quote is read-only because an offer was created from it.',
-                  })}
+                  {editingQuote?.linkedOfferId
+                    ? t('sales:clientQuotes.readOnlyBecauseOffer', {
+                        defaultValue:
+                          'This quote is read-only because an offer was created from it.',
+                      })
+                    : t('sales:clientQuotes.readOnlyBecauseFinal', {
+                        defaultValue:
+                          'This quote is read-only because it was already accepted or denied.',
+                      })}
                 </span>
               </div>
             )}
@@ -1413,7 +1418,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
 
             {/* Products */}
-            <div className="space-y-2">
+            <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
@@ -1433,8 +1438,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-13 gap-3">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
+                  <div className="flex-1 min-w-0 grid grid-cols-13 gap-2">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
@@ -1447,13 +1452,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('crm:internalListing.cost')}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      MOL (%)
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">
+                      MOL
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">
+                      {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.marginLabel')}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.revenue')}
                     </div>
                   </div>
@@ -1576,7 +1584,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <i className="fa-solid fa-trash-can"></i>
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 lg:hidden">
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
                           <div>
                             <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.qty')}
@@ -1649,6 +1657,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+                            </div>
+                            <div className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                              {lineCost.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.marginLabel')}
                             </div>
                             <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
@@ -1666,8 +1682,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                           </div>
                         </div>
-                        <div className="hidden lg:flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-13 gap-3 items-center">
+                        <div className="hidden lg:flex gap-2 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
@@ -1738,39 +1754,34 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <div className="flex items-center gap-0.5 w-full">
-                                <ValidatedNumberInput
-                                  value={cost.toFixed(2)}
-                                  onValueChange={handleCostChange}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
-                                  {currency}
-                                </span>
-                              </div>
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <div className="flex items-center gap-0.5 w-full">
-                                <ValidatedNumberInput
-                                  value={molPercentage.toFixed(1)}
-                                  onValueChange={handleMolChange}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
-                                  %
-                                </span>
-                              </div>
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                {lineCost.toFixed(2)} {currency}
+                              </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">
                                 {lineMargin.toFixed(2)} {currency}
                               </span>
                             </div>
-                            <div className="col-span-2 flex items-center justify-center">
+                            <div className="col-span-1 flex items-center justify-center">
                               <span
-                                className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                               >
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
@@ -1831,7 +1842,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {errors.total && (
                   <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
                 )}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-1">
                   <span className="text-sm font-bold text-slate-500">
                     {t('sales:clientQuotes.globalDiscount')}
                   </span>

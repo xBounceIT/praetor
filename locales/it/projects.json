@@ -59,6 +59,8 @@
     "taskRevenue": "Ricavo",
     "taskNotes": "Note",
     "noTasksAdded": "Nessuna attività aggiunta.",
+    "progress": "Avanzamento",
+    "deleteTaskConfirm": "Eliminare questa attività? L'azione non è reversibile.",
     "tableHeaders": {
       "client": "Cliente",
       "projectName": "Nome Progetto",

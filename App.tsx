@@ -1919,7 +1919,7 @@ const App: React.FC = () => {
   const handleUpdateTask = async (id: string, updates: Partial<ProjectTask>) => {
     try {
       const updated = await api.tasks.update(id, updates);
-      setProjectTasks(projectTasks.map((t) => (t.id === id ? updated : t)));
+      setProjectTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
     } catch (err) {
       console.error('Failed to update task:', err);
     }
@@ -1941,7 +1941,7 @@ const App: React.FC = () => {
         recurrenceEnd: endDate,
         recurrenceDuration: duration,
       });
-      setProjectTasks(projectTasks.map((t) => (t.id === taskId ? updated : t)));
+      setProjectTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
       setTimeout(generateRecurringEntries, 100);
     } catch (err) {
       console.error('Failed to make task recurring:', err);
@@ -1962,8 +1962,8 @@ const App: React.FC = () => {
         recurrenceStart: undefined,
         recurrenceEnd: undefined,
       });
-      setProjectTasks(
-        projectTasks.map((t) =>
+      setProjectTasks((prev) =>
+        prev.map((t) =>
           t.id === taskId
             ? {
                 ...t,
@@ -2030,7 +2030,7 @@ const App: React.FC = () => {
       setProjects(projects.filter((p) => p.clientId !== id));
       // Tasks are also deleted by cascade in DB, so filter them too
       const projectIdsForClient = projects.filter((p) => p.clientId === id).map((p) => p.id);
-      setProjectTasks(projectTasks.filter((t) => !projectIdsForClient.includes(t.projectId)));
+      setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.includes(t.projectId)));
     } catch (err) {
       console.error('Failed to delete client:', err);
       alert('Failed to delete client');
@@ -2761,7 +2761,7 @@ const App: React.FC = () => {
         recurringConfig?.isRecurring,
         recurringConfig?.pattern,
       );
-      setProjectTasks([...projectTasks, task]);
+      setProjectTasks((prev) => [...prev, task]);
     } catch (err) {
       console.error('Failed to add task:', err);
     }
@@ -2781,7 +2781,7 @@ const App: React.FC = () => {
     try {
       await api.projects.delete(id);
       setProjects(projects.filter((p) => p.id !== id));
-      setProjectTasks(projectTasks.filter((t) => t.projectId !== id));
+      setProjectTasks((prev) => prev.filter((t) => t.projectId !== id));
       setEntries(entries.filter((e) => e.projectId !== id));
     } catch (err) {
       console.error('Failed to delete project:', err);
@@ -3491,9 +3491,20 @@ const App: React.FC = () => {
                 permissions={currentUser.permissions || []}
                 users={availableUsers}
                 roles={roles}
+                tasks={projectTasks}
                 onAddProject={addProject}
                 onUpdateProject={handleUpdateProject}
                 onDeleteProject={handleDeleteProject}
+                onAddTask={addProjectTask}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={async (id) => {
+                  try {
+                    await api.tasks.delete(id);
+                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                  } catch (err) {
+                    console.error('Failed to delete task:', err);
+                  }
+                }}
               />
             )}
 
@@ -3510,7 +3521,7 @@ const App: React.FC = () => {
                 onDeleteTask={async (id) => {
                   try {
                     await api.tasks.delete(id);
-                    setProjectTasks(projectTasks.filter((t) => t.id !== id));
+                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
                   } catch (err) {
                     console.error('Failed to delete task:', err);
                     alert('Failed to delete task');
