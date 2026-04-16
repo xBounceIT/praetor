@@ -23,7 +23,8 @@ const getRolePresentation = (user: User, roleLookup: Map<string, Role>) => {
   const role = roleLookup.get(user.role);
   const isAdminRole = role?.isAdmin || user.role === 'admin';
   const isTopManagerRole = role?.id === TOP_MANAGER_ROLE_ID || user.role === TOP_MANAGER_ROLE_ID;
-  const isManagerRole = role?.isSystem && !isAdminRole && role?.id === 'manager';
+  const isManagerRole =
+    (role?.isSystem && !isAdminRole && role?.id === 'manager') || user.role === 'manager';
 
   return {
     roleBadgeClass: isAdminRole
@@ -399,8 +400,8 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    {t('assignment.unassignSelected')}
                     <i className="fa-solid fa-angles-left text-xs"></i>
+                    {t('assignment.unassignSelected')}
                     {selectedAssignedIds.size > 0 && (
                       <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
                         {selectedAssignedIds.size}
