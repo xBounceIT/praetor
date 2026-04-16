@@ -35,6 +35,7 @@
     "convertConfirm": "Convert this quote to a sale?",
     "readOnlyStatus": "{{status}} quotes are read-only",
     "readOnlyBecauseOffer": "This quote is read-only because an offer was created from it.",
+    "readOnlyBecauseFinal": "This quote is read-only because it was already accepted or denied.",
     "linkedOffer": "Linked Offer",
     "linkedOfferInfo": "Offer #{{number}}",
     "offerDetailsReadOnly": "(Quote details are read-only)",

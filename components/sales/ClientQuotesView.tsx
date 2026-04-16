@@ -219,7 +219,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const isReadOnly = Boolean(
     editingQuote &&
       (editingQuote.linkedOfferId ||
-        editingQuote.status === 'sent' ||
         editingQuote.status === 'accepted' ||
         editingQuote.status === 'denied'),
   );
@@ -1224,7 +1223,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
-              {history && (
+              {!row.linkedOfferId && (row.status === 'accepted' || row.status === 'denied' || isQuoteExpired(row)) && (
                 <Tooltip label={restoreTitle}>
                   {() => (
                     <button
@@ -1291,9 +1290,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             {isReadOnly && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
                 <span className="text-amber-700 text-xs font-bold">
-                  {t('sales:clientQuotes.readOnlyBecauseOffer', {
-                    defaultValue: 'This quote is read-only because an offer was created from it.',
-                  })}
+                  {editingQuote?.linkedOfferId
+                    ? t('sales:clientQuotes.readOnlyBecauseOffer', {
+                        defaultValue:
+                          'This quote is read-only because an offer was created from it.',
+                      })
+                    : t('sales:clientQuotes.readOnlyBecauseFinal', {
+                        defaultValue:
+                          'This quote is read-only because it was already accepted or denied.',
+                      })}
                 </span>
               </div>
             )}
