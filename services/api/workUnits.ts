@@ -18,7 +18,8 @@ export const workUnitsApi = {
 
   delete: (id: string): Promise<void> => fetchApi(`/work-units/${id}`, { method: 'DELETE' }),
 
-  getUsers: (id: string): Promise<string[]> => fetchApi(`/work-units/${id}/users`),
+  getUsers: (id: string, signal?: AbortSignal): Promise<string[]> =>
+    fetchApi(`/work-units/${id}/users`, { signal }),
 
   updateUsers: (id: string, userIds: string[]): Promise<void> =>
     fetchApi(`/work-units/${id}/users`, {

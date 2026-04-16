@@ -23,7 +23,8 @@ export const projectsApi = {
 
   delete: (id: string): Promise<void> => fetchApi(`/projects/${id}`, { method: 'DELETE' }),
 
-  getUsers: (id: string): Promise<string[]> => fetchApi(`/projects/${id}/users`),
+  getUsers: (id: string, signal?: AbortSignal): Promise<string[]> =>
+    fetchApi(`/projects/${id}/users`, { signal }),
 
   updateUsers: (id: string, userIds: string[]): Promise<void> =>
     fetchApi(`/projects/${id}/users`, {

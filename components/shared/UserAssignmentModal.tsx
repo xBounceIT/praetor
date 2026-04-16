@@ -12,12 +12,14 @@ export interface UserAssignmentModalProps {
   onClose: () => void;
   users: User[];
   roles?: Role[];
-  loadAssignedUserIds: () => Promise<string[]>;
+  loadAssignedUserIds: (signal?: AbortSignal) => Promise<string[]>;
   saveAssignedUserIds: (userIds: string[]) => Promise<void>;
   entityLabel: string;
   entityName: string;
   disabled?: boolean;
 }
+
+const isAbortError = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
 const getRolePresentation = (user: User, roleLookup: Map<string, Role>) => {
   const role = roleLookup.get(user.role);
@@ -109,19 +111,30 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   const [selectedAvailableIds, setSelectedAvailableIds] = useState<Set<string>>(new Set());
   const [selectedAssignedIds, setSelectedAssignedIds] = useState<Set<string>>(new Set());
   const initializedRef = useRef(false);
+  const loadAbortControllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    loadAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortControllerRef.current = controller;
+
     setLoadState('loading');
     setAssignedUserIds([]);
     setSelectedAvailableIds(new Set());
     setSelectedAssignedIds(new Set());
     try {
-      const ids = await loadAssignedUserIds();
+      const ids = await loadAssignedUserIds(controller.signal);
+      if (controller.signal.aborted) return;
       setAssignedUserIds(ids);
       setLoadState('ready');
     } catch (err) {
+      if (controller.signal.aborted || isAbortError(err)) return;
       console.error('Failed to load assignments', err);
       setLoadState('error');
+    } finally {
+      if (loadAbortControllerRef.current === controller) {
+        loadAbortControllerRef.current = null;
+      }
     }
   }, [loadAssignedUserIds]);
 
@@ -132,13 +145,25 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
     }
     if (!isOpen) {
       initializedRef.current = false;
+      loadAbortControllerRef.current?.abort();
+      loadAbortControllerRef.current = null;
     }
   }, [isOpen, load]);
+
+  useEffect(
+    () => () => {
+      loadAbortControllerRef.current?.abort();
+      loadAbortControllerRef.current = null;
+    },
+    [],
+  );
 
   const handleClose = useCallback(() => {
     setUserSearch('');
     setSelectedAvailableIds(new Set());
     setSelectedAssignedIds(new Set());
+    loadAbortControllerRef.current?.abort();
+    loadAbortControllerRef.current = null;
     onClose();
   }, [onClose]);
 
