@@ -3,15 +3,15 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
-import type { Client, ClientsOrder, Project, ProjectTask, User } from '../../types';
+import type { Client, ClientsOrder, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
+import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TasksView';
 
 type DraftTask = {
@@ -35,6 +35,7 @@ export interface ProjectsViewProps {
   orders: ClientsOrder[];
   permissions: string[];
   users: User[];
+  roles: Role[];
   currency: string;
   tasks: ProjectTask[];
   onAddProject: (
@@ -55,14 +56,13 @@ export interface ProjectsViewProps {
   onDeleteTask: (id: string) => void | Promise<void>;
 }
 
-type AssignmentLoadState = 'loading' | 'error' | 'ready';
-
 const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
   orders,
   permissions,
   users,
+  roles,
   currency,
   tasks,
   onAddProject,
@@ -99,11 +99,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
-  // Assignment Modal State
   const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
-  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
-  const [assignmentLoadState, setAssignmentLoadState] = useState<AssignmentLoadState>('ready');
-  const [userSearch, setUserSearch] = useState('');
 
   // Form State
   const [name, setName] = useState('');
@@ -240,53 +236,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   };
 
-  const loadAssignments = async (projectId: string) => {
-    setAssignmentLoadState('loading');
-    setAssignedUserIds([]);
-    try {
-      const userIds = await projectsApi.getUsers(projectId);
-      setAssignedUserIds(userIds);
-      setAssignmentLoadState('ready');
-    } catch (err) {
-      console.error('Failed to load project users', err);
-      setAssignmentLoadState('error');
-    }
-  };
-
-  const openAssignments = async (projectId: string) => {
+  const openAssignments = (projectId: string) => {
     if (!canManageAssignments) return;
     setManagingProjectId(projectId);
-    setUserSearch('');
-    await loadAssignments(projectId);
   };
 
   const closeAssignments = () => {
     setManagingProjectId(null);
-    setAssignedUserIds([]);
-    setUserSearch('');
-    setAssignmentLoadState('ready');
-  };
-
-  const toggleUserAssignment = (userId: string) => {
-    setAssignedUserIds((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-    );
-  };
-
-  const saveAssignments = async () => {
-    if (!canManageAssignments || !managingProjectId || assignmentLoadState !== 'ready') return;
-    try {
-      await projectsApi.updateUsers(managingProjectId, assignedUserIds);
-      closeAssignments();
-    } catch (err) {
-      console.error('Failed to save project users', err);
-      alert(t('projects:projects.assignmentSaveFailed'));
-    }
-  };
-
-  const retryAssignmentsLoad = async () => {
-    if (!managingProjectId) return;
-    await loadAssignments(managingProjectId);
   };
 
   // Draft task helpers
@@ -489,13 +445,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const selectedOrder = orders.find((o) => o.id === orderId);
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
-  const filteredUsers = users.filter(
-    (u) =>
-      !u.hasTopManagerRole &&
-      !u.isAdminOnly &&
-      !u.isDisabled &&
-      (u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-        (u.username?.toLowerCase() ?? '').includes(userSearch.toLowerCase())),
+  const assignableUsers = users.filter(
+    (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
   );
 
   const draftTaskColumns: Column<DraftTask>[] = [
@@ -934,137 +885,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       </Modal>
 
       {/* User Assignment Modal */}
-      <Modal isOpen={!!managingProjectId} onClose={closeAssignments}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh]">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 className="font-bold text-lg text-slate-800 flex flex-col">
-              <span>{t('projects:projects.assignUsers')}</span>
-              <span className="text-xs font-normal text-slate-500 mt-0.5">
-                {t('common:labels.project')}:{' '}
-                <span className="font-bold text-praetor">{managingProject?.name}</span>
-              </span>
-            </h3>
-            <button
-              onClick={closeAssignments}
-              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
-
-          <div className="p-4 border-b border-slate-100 bg-white">
-            <div className="relative">
-              <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-              <input
-                type="text"
-                placeholder={t('projects:projects.searchUsers')}
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                disabled={assignmentLoadState !== 'ready'}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none text-sm font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                autoFocus={assignmentLoadState === 'ready'}
-              />
-            </div>
-          </div>
-
-          <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
-            {assignmentLoadState === 'loading' ? (
-              <div className="flex items-center justify-center py-12">
-                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-              </div>
-            ) : assignmentLoadState === 'error' ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="max-w-sm text-center space-y-4">
-                  <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
-                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold text-slate-800">
-                      {t('projects:projects.assignmentLoadFailed')}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {t('projects:projects.assignmentLoadRetryHint')}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={retryAssignmentsLoad}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors"
-                  >
-                    <i className="fa-solid fa-rotate-right"></i>
-                    {t('common:buttons.refresh')}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredUsers.map((user) => (
-                  <label
-                    key={user.id}
-                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
-                      assignedUserIds.includes(user.id)
-                        ? 'bg-white border-praetor shadow-sm ring-1 ring-praetor/10'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
-                          assignedUserIds.includes(user.id)
-                            ? 'bg-praetor text-white'
-                            : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        {user.avatarInitials || user.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex flex-col">
-                        <span
-                          className={`text-sm font-bold ${assignedUserIds.includes(user.id) ? 'text-slate-800' : 'text-slate-600'}`}
-                        >
-                          {user.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">{user.role}</span>
-                      </div>
-                    </div>
-                    <Checkbox
-                      checked={assignedUserIds.includes(user.id)}
-                      onChange={() => toggleUserAssignment(user.id)}
-                    />
-                  </label>
-                ))}
-                {filteredUsers.length === 0 && (
-                  <div className="text-center py-12 text-slate-400 italic text-sm">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
-                      <i className="fa-solid fa-user-slash text-2xl"></i>
-                    </div>
-                    {t('projects:projects.noUsersFound')}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3">
-            <button
-              onClick={closeAssignments}
-              className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors text-sm border border-slate-200"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              onClick={saveAssignments}
-              disabled={!canManageAssignments || assignmentLoadState !== 'ready'}
-              className={`px-8 py-2.5 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 text-sm ${
-                canManageAssignments && assignmentLoadState === 'ready'
-                  ? 'bg-praetor shadow-slate-200 hover:bg-slate-700'
-                  : 'bg-slate-300 shadow-none cursor-not-allowed'
-              }`}
-            >
-              {t('common:buttons.save')}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <UserAssignmentModal
+        isOpen={!!managingProjectId}
+        onClose={closeAssignments}
+        users={assignableUsers}
+        roles={roles}
+        loadAssignedUserIds={(signal) => projectsApi.getUsers(managingProjectId!, signal)}
+        saveAssignedUserIds={(ids) => projectsApi.updateUsers(managingProjectId!, ids)}
+        entityLabel={t('common:labels.project')}
+        entityName={managingProject?.name || ''}
+        disabled={!canManageAssignments}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

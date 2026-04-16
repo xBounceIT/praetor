@@ -256,6 +256,20 @@
     "selectAll": "Seleziona Tutto",
     "clear": "Cancella"
   },
+  "assignment": {
+    "title": "Assegna Utenti",
+    "availableUsers": "Utenti Disponibili",
+    "assignedUsers": "Utenti Assegnati",
+    "assignSelected": "Assegna Selezionati",
+    "unassignSelected": "Rimuovi Selezionati",
+    "searchUsers": "Cerca utenti...",
+    "noUsersFound": "Nessun utente trovato.",
+    "noUsersToAssign": "Nessun utente da assegnare.",
+    "noUsersAssigned": "Nessun utente assegnato.",
+    "loadFailed": "Impossibile caricare le assegnazioni.",
+    "saveFailed": "Impossibile salvare le assegnazioni.",
+    "loadRetryHint": "Riprova prima di salvare modifiche alle assegnazioni."
+  },
   "notFound": {
     "title": "Pagina Non Trovata",
     "message": "La pagina che stai cercando non esiste o è stata spostata. Controlla l'URL o torna alla pagina iniziale.",
