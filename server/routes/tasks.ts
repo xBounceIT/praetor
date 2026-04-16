@@ -317,7 +317,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // GET /hours - Get total hours logged per task for a project (global, all users)
+  // GET /hours - Get total hours logged per task for a project
   fastify.get(
     '/hours',
     {
@@ -345,13 +345,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
       const { projectId } = request.query as { projectId: string };
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
-      const result = await query(
-        'SELECT task, COALESCE(SUM(duration), 0)::float AS total FROM time_entries WHERE project_id = $1 GROUP BY task',
-        [projectIdResult.value],
-      );
+
+      const canViewAll = hasPermission(request, 'projects.tasks_all.view');
+      let queryText =
+        'SELECT task, COALESCE(SUM(duration), 0)::float AS total FROM time_entries WHERE project_id = $1 GROUP BY task';
+      let queryParams: string[] = [projectIdResult.value];
+
+      if (!canViewAll) {
+        queryText = `
+          SELECT te.task, COALESCE(SUM(te.duration), 0)::float AS total
+          FROM time_entries te
+          INNER JOIN tasks t ON t.name = te.task AND t.project_id = te.project_id
+          INNER JOIN user_tasks ut ON t.id = ut.task_id
+          WHERE te.project_id = $1 AND ut.user_id = $2
+          GROUP BY te.task
+        `;
+        queryParams = [projectIdResult.value, request.user.id];
+      }
+
+      const result = await query(queryText, queryParams);
       const hours: Record<string, number> = {};
       for (const row of result.rows) hours[row.task as string] = Number(row.total);
       return reply.send(hours);

@@ -1962,8 +1962,8 @@ const App: React.FC = () => {
         recurrenceStart: undefined,
         recurrenceEnd: undefined,
       });
-      setProjectTasks(
-        projectTasks.map((t) =>
+      setProjectTasks((prev) =>
+        prev.map((t) =>
           t.id === taskId
             ? {
                 ...t,
