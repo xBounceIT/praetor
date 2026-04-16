@@ -724,8 +724,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let result: Awaited<ReturnType<typeof query>>;
-      const hadTopManagerRole =
-        role !== undefined ? await userHasTopManagerRole(idResult.value) : false;
       if (updates.length === 0) {
         result = await query(
           `SELECT id, name, username, role, avatar_initials, cost_per_hour, is_disabled, employee_type
@@ -928,7 +926,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         idResult.value,
       ]);
       if (userExists.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
-      const hadTopManagerRole = await userHasTopManagerRole(idResult.value);
 
       const roleCheck = await query('SELECT id FROM roles WHERE id = ANY($1::varchar[])', [
         roleIdsResult.value,

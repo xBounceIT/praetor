@@ -122,7 +122,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, _reply: FastifyReply) => {
       const result = await query('SELECT id, name, is_system, is_admin FROM roles ORDER BY name');
       const value = await Promise.all(result.rows.map(mapRoleRow));
       return value;

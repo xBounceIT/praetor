@@ -141,7 +141,7 @@ const validateTranslations = (files, namespacesByLanguage) => {
       for (const language of SUPPORTED_LANGUAGES) {
         const namespaces = namespacesByLanguage.get(language);
         const namespaceKeys = namespaces?.get(namespace);
-        if (!namespaceKeys || !namespaceKeys.has(translationKey)) {
+        if (!namespaceKeys?.has(translationKey)) {
           missingLanguages.push(language);
         }
       }

@@ -145,7 +145,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, _reply: FastifyReply) => {
       const result = await query(
         `SELECT p.id, p.name, p.product_code as "productCode", p.created_at as "createdAt", p.description, p.costo, p.mol_percentage as "molPercentage", p.cost_unit as "costUnit", p.category, p.subcategory, p.type, p.supplier_id as "supplierId", s.name as "supplierName", p.is_disabled as "isDisabled"
          FROM products p 
@@ -1301,8 +1301,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [newNameResult.value, categoryId, oldNameResult.value],
           );
           if (subResult.rows.length === 0) {
-            const err = new Error('Subcategory not found');
-            (err as any).statusCode = 404;
+            const err = new Error('Subcategory not found') as Error & { statusCode?: number };
+            err.statusCode = 404;
             throw err;
           }
 
@@ -1321,8 +1321,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         subId = result.subId;
         productCount = result.productCount;
-      } catch (err: any) {
-        if (err.statusCode === 404) {
+      } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          'statusCode' in err &&
+          (err as Error & { statusCode?: number }).statusCode === 404
+        ) {
           return reply.code(404).send({ error: err.message });
         }
         throw err;

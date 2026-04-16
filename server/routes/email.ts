@@ -243,7 +243,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request, reply) => {
       const { recipientEmail } = request.body as { recipientEmail: string };
 
-      if (!recipientEmail || !recipientEmail.includes('@')) {
+      if (!recipientEmail?.includes('@')) {
         return reply.code(400).send({ error: 'INVALID_RECIPIENT', code: 'INVALID_RECIPIENT' });
       }
 

@@ -65,7 +65,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       if (
         containerRef.current &&
         !containerRef.current.contains(target) &&
-        (!dropdownRef.current || !dropdownRef.current.contains(target))
+        !dropdownRef.current?.contains(target)
       ) {
         setIsOpen(false);
         onClose?.();
