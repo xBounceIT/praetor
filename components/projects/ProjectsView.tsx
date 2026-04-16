@@ -1,9 +1,9 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
-import { projectsApi } from '../../services/api';
-import type { Client, ClientsOrder, Project, User } from '../../types';
+import { projectsApi, tasksApi } from '../../services/api';
+import type { Client, ClientsOrder, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import Checkbox from '../shared/Checkbox';
 import CustomSelect from '../shared/CustomSelect';
@@ -12,6 +12,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import Tooltip from '../shared/Tooltip';
+import type { RecurringConfig } from './TasksView';
 
 type DraftTask = {
   _id: string;
@@ -35,6 +36,7 @@ export interface ProjectsViewProps {
   permissions: string[];
   users: User[];
   currency: string;
+  tasks: ProjectTask[];
   onAddProject: (
     name: string,
     orderId: string,
@@ -43,6 +45,14 @@ export interface ProjectsViewProps {
   ) => void;
   onUpdateProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
+  onAddTask: (
+    name: string,
+    projectId: string,
+    recurringConfig?: RecurringConfig,
+    description?: string,
+  ) => void | Promise<void>;
+  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
+  onDeleteTask: (id: string) => void | Promise<void>;
 }
 
 type AssignmentLoadState = 'loading' | 'error' | 'ready';
@@ -54,9 +64,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   permissions,
   users,
   currency,
+  tasks,
   onAddProject,
   onUpdateProject,
   onDeleteProject,
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
 }) => {
   const { t } = useTranslation(['projects', 'common', 'form']);
   const canCreateProjects = hasPermission(
@@ -75,6 +89,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     permissions,
     buildPermission('projects.assignments', 'update'),
   );
+  const canCreateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'create'));
+  const canUpdateTasks = hasPermission(permissions, buildPermission('projects.tasks', 'update'));
+  const canDeleteTasks = hasPermission(permissions, buildPermission('projects.tasks', 'delete'));
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,6 +116,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   // Draft tasks state (create modal only)
   const [draftTasks, setDraftTasks] = useState<DraftTask[]>([]);
+
+  // Task management state (edit modal only)
+  const [projectTaskHours, setProjectTaskHours] = useState<Record<string, number>>({});
+  const [hoursLoadState, setHoursLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
+  const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
+  const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
+  const fetchHoursIdRef = useRef<string | null>(null);
 
   // Modal Handlers
   const openAddModal = () => {
@@ -126,16 +151,37 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setTempIsDisabled(project.isDisabled || false);
     setDraftTasks([]);
     setErrors({});
+    setTaskEdits({});
+    setProjectTaskHours({});
+    setHoursLoadState('loading');
     setIsModalOpen(true);
+    const fetchId = project.id;
+    fetchHoursIdRef.current = fetchId;
+    tasksApi
+      .getHours(project.id)
+      .then((h) => {
+        if (fetchHoursIdRef.current !== fetchId) return;
+        setProjectTaskHours(h);
+        setHoursLoadState('idle');
+      })
+      .catch(() => {
+        if (fetchHoursIdRef.current !== fetchId) return;
+        setHoursLoadState('error');
+      });
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setIsDeleteConfirmOpen(false);
+    setIsTaskDeleteConfirmOpen(false);
     setEditingProject(null);
     setProjectToDelete(null);
+    setTaskToDelete(null);
     setDraftTasks([]);
     setErrors({});
+    setTaskEdits({});
+    setProjectTaskHours({});
+    setHoursLoadState('idle');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -265,7 +311,171 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setDraftTasks((prev) => prev.filter((t) => t._id !== id));
   };
 
+  // Existing task inline-edit helpers
+  const getTaskFieldValue = (taskId: string, field: string, fallback: string): string =>
+    taskEdits[taskId]?.[field] ?? fallback;
+
+  const setTaskFieldValue = (taskId: string, field: string, value: string) => {
+    setTaskEdits((prev) => ({ ...prev, [taskId]: { ...prev[taskId], [field]: value } }));
+  };
+
+  const commitTaskField = (
+    row: ProjectTask,
+    field: keyof ProjectTask,
+    parseValue: (v: string) => unknown,
+  ) => {
+    const edited = taskEdits[row.id]?.[field];
+    if (edited === undefined) return;
+    const parsed = parseValue(edited);
+    if (parsed === row[field]) return;
+    onUpdateTask(row.id, { [field]: parsed });
+  };
+
+  const handleAddExistingTask = async () => {
+    if (!editingProject || !canCreateTasks) return;
+    await onAddTask('New Task', editingProject.id);
+  };
+
+  const promptDeleteTask = (task: ProjectTask) => {
+    setTaskToDelete(task);
+    setIsTaskDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteTask = () => {
+    if (!canDeleteTasks || !taskToDelete) return;
+    onDeleteTask(taskToDelete.id);
+    setIsTaskDeleteConfirmOpen(false);
+    setTaskToDelete(null);
+  };
+
   const canSubmit = editingProject ? canUpdateProjects : canCreateProjects;
+
+  const editingProjectTasks = useMemo(
+    () => (editingProject ? tasks.filter((t) => t.projectId === editingProject.id) : []),
+    [tasks, editingProject],
+  );
+
+  const existingTaskColumns: Column<ProjectTask>[] = [
+    {
+      header: t('projects:projects.taskName'),
+      id: 'name',
+      accessorKey: 'name',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          value={getTaskFieldValue(row.id, 'name', row.name)}
+          disabled={!canUpdateTasks}
+          placeholder={t('projects:projects.taskName')}
+          onChange={(e) => setTaskFieldValue(row.id, 'name', e.target.value)}
+          onBlur={() => commitTaskField(row, 'name', (v) => v.trim() || row.name)}
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.expectedEffort'),
+      id: 'expectedEffort',
+      accessorKey: 'expectedEffort',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          type="number"
+          min="0"
+          step="1"
+          disabled={!canUpdateTasks}
+          value={getTaskFieldValue(row.id, 'expectedEffort', String(row.expectedEffort ?? ''))}
+          placeholder="0"
+          onKeyDown={(e) => {
+            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+          }}
+          onChange={(e) => setTaskFieldValue(row.id, 'expectedEffort', e.target.value)}
+          onBlur={() => commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : 0))}
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+        />
+      ),
+    },
+    {
+      header: `${t('projects:projects.taskRevenue')} (${currency})`,
+      id: 'revenue',
+      accessorKey: 'revenue',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          disabled={!canUpdateTasks}
+          value={getTaskFieldValue(row.id, 'revenue', String(row.revenue ?? ''))}
+          placeholder="0.00"
+          onChange={(e) => setTaskFieldValue(row.id, 'revenue', e.target.value)}
+          onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : 0))}
+          className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.taskNotes'),
+      id: 'notes',
+      accessorKey: 'notes',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <input
+          disabled={!canUpdateTasks}
+          value={getTaskFieldValue(row.id, 'notes', row.notes ?? '')}
+          placeholder="—"
+          onChange={(e) => setTaskFieldValue(row.id, 'notes', e.target.value)}
+          onBlur={() => commitTaskField(row, 'notes', (v) => v.trim())}
+          className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
+        />
+      ),
+    },
+    {
+      header: t('projects:projects.progress'),
+      id: 'progress',
+      disableFiltering: true,
+      cell: ({ row }) => {
+        if (hoursLoadState === 'loading') return <span className="text-slate-400 text-xs">…</span>;
+        if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">—</span>;
+        const logged = projectTaskHours[row.name] ?? 0;
+        const expected = row.expectedEffort ?? 0;
+        const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
+        const overBudget = expected > 0 && logged > expected;
+        return (
+          <span
+            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+          >
+            {expected > 0 ? `${pct}%` : '—'}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('projects:projects.tableHeaders.actions'),
+      id: 'actions',
+      disableFiltering: true,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          {canDeleteTasks && (
+            <Tooltip label={t('common:buttons.delete')}>
+              {() => (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    promptDeleteTask(row);
+                  }}
+                  className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              )}
+            </Tooltip>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
@@ -542,6 +752,35 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </div>
               )}
 
+              {/* Tasks section (edit only) */}
+              {editingProject && (
+                <div className="space-y-2">
+                  <StandardTable<ProjectTask>
+                    title={t('projects:projects.projectTasks')}
+                    data={editingProjectTasks}
+                    columns={existingTaskColumns}
+                    defaultRowsPerPage={5}
+                    emptyState={
+                      <span className="text-slate-400 text-xs italic">
+                        {t('projects:projects.noTasksAdded')}
+                      </span>
+                    }
+                    headerAction={
+                      canCreateTasks ? (
+                        <button
+                          type="button"
+                          onClick={handleAddExistingTask}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-praetor text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors"
+                        >
+                          <i className="fa-solid fa-plus text-[10px]"></i>
+                          {t('projects:projects.addTaskRow')}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 ml-1">
                   {t('projects:projects.color')}
@@ -652,6 +891,39 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               </button>
               <button
                 onClick={handleDelete}
+                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                {t('common:buttons.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Task Delete Confirmation Modal */}
+      <Modal isOpen={isTaskDeleteConfirmOpen} onClose={() => setIsTaskDeleteConfirmOpen(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">
+                {t('common:messages.deleteConfirmNamed', { name: taskToDelete?.name })}
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                {t('projects:projects.deleteTaskConfirm')}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsTaskDeleteConfirmOpen(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+              >
+                {t('common:buttons.cancel')}
+              </button>
+              <button
+                onClick={handleDeleteTask}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
                 {t('common:buttons.delete')}
