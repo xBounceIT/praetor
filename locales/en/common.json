@@ -256,6 +256,20 @@
     "selectAll": "Select All",
     "clear": "Clear"
   },
+  "assignment": {
+    "title": "Assign Users",
+    "availableUsers": "Available Users",
+    "assignedUsers": "Assigned Users",
+    "assignSelected": "Assign Selected",
+    "unassignSelected": "Unassign Selected",
+    "searchUsers": "Search users...",
+    "noUsersFound": "No users found.",
+    "noUsersToAssign": "No users to assign.",
+    "noUsersAssigned": "No users assigned.",
+    "loadFailed": "Failed to load assignments.",
+    "saveFailed": "Failed to save assignments.",
+    "loadRetryHint": "Retry before saving any assignment changes."
+  },
   "notFound": {
     "title": "Page Not Found",
     "message": "The page you're looking for doesn't exist or has been moved. Please check the URL or navigate back to the home page.",
