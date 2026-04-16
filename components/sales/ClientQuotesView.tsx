@@ -1837,7 +1837,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 {errors.total && (
                   <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>
                 )}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-1">
                   <span className="text-sm font-bold text-slate-500">
                     {t('sales:clientQuotes.globalDiscount')}
                   </span>
