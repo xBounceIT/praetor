@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi } from '../../services/api';
-import type { Client, ClientsOrder, Project, User } from '../../types';
+import type { Client, ClientsOrder, Project, Role, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -34,6 +34,7 @@ export interface ProjectsViewProps {
   orders: ClientsOrder[];
   permissions: string[];
   users: User[];
+  roles: Role[];
   currency: string;
   onAddProject: (
     name: string,
@@ -51,6 +52,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   orders,
   permissions,
   users,
+  roles,
   currency,
   onAddProject,
   onUpdateProject,
@@ -615,6 +617,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         isOpen={!!managingProjectId}
         onClose={closeAssignments}
         users={assignableUsers}
+        roles={roles}
         loadAssignedUserIds={() => projectsApi.getUsers(managingProjectId!)}
         saveAssignedUserIds={(ids) => projectsApi.updateUsers(managingProjectId!, ids)}
         entityLabel={t('common:labels.project')}

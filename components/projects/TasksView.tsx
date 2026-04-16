@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { tasksApi } from '../../services/api';
-import type { Client, Project, ProjectTask, User } from '../../types';
+import type { Client, Project, ProjectTask, Role, User } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -20,6 +20,7 @@ export interface TasksViewProps {
   clients: Client[];
   permissions: string[];
   users: User[];
+  roles: Role[];
   onAddTask: (
     name: string,
     projectId: string,
@@ -36,6 +37,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   clients,
   permissions,
   users,
+  roles,
   onAddTask,
   onUpdateTask,
   onDeleteTask,
@@ -424,6 +426,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         isOpen={!!managingTaskId}
         onClose={closeAssignments}
         users={users}
+        roles={roles}
         loadAssignedUserIds={() => tasksApi.getUsers(managingTaskId!)}
         saveAssignedUserIds={(ids) => tasksApi.updateUsers(managingTaskId!, ids)}
         entityLabel={t('common:labels.task')}
