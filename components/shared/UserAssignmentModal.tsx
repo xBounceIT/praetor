@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { User } from '../../types';
 import Modal from './Modal';
+import StatusBadge from './StatusBadge';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
@@ -28,7 +29,7 @@ const UserRow: React.FC<{
     onDoubleClick={onDoubleClick}
     className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
       isSelected
-        ? 'bg-praetor/5 border-praetor ring-2 ring-praetor/20'
+        ? 'bg-praetor/5 border-praetor'
         : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
     }`}
   >
@@ -39,14 +40,14 @@ const UserRow: React.FC<{
     >
       {user.avatarInitials || user.name.substring(0, 2).toUpperCase()}
     </div>
-    <div className="flex flex-col min-w-0">
+    <div className="flex flex-col min-w-0 flex-1">
       <span
         className={`text-sm font-bold truncate ${isSelected ? 'text-slate-800' : 'text-slate-600'}`}
       >
         {user.name}
       </span>
-      <span className="text-[10px] text-slate-400 font-mono">{user.role}</span>
     </div>
+    <StatusBadge type={user.employeeType ?? 'app_user'} label={user.role} className="shrink-0" />
   </div>
 );
 
@@ -311,12 +312,12 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                     disabled={disabled || selectedAvailableIds.size === 0}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
                       selectedAvailableIds.size > 0 && !disabled
-                        ? 'bg-praetor text-white shadow-md shadow-praetor/20 hover:bg-slate-700 active:scale-[0.98]'
+                        ? 'bg-praetor text-white hover:bg-slate-700 active:scale-[0.98]'
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    <i className="fa-solid fa-angles-right text-xs"></i>
                     {t('assignment.assignSelected')}
+                    <i className="fa-solid fa-angles-right text-xs"></i>
                     {selectedAvailableIds.size > 0 && (
                       <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
                         {selectedAvailableIds.size}
@@ -353,12 +354,12 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                     disabled={disabled || selectedAssignedIds.size === 0}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
                       selectedAssignedIds.size > 0 && !disabled
-                        ? 'bg-red-500 text-white shadow-md shadow-red-200 hover:bg-red-600 active:scale-[0.98]'
+                        ? 'bg-praetor text-white hover:bg-slate-700 active:scale-[0.98]'
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    <i className="fa-solid fa-angles-left text-xs"></i>
                     {t('assignment.unassignSelected')}
+                    <i className="fa-solid fa-angles-left text-xs"></i>
                     {selectedAssignedIds.size > 0 && (
                       <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
                         {selectedAssignedIds.size}
