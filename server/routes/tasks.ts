@@ -450,7 +450,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isDisabled,
           updateExpectedEffort !== undefined ? parseFloat(String(updateExpectedEffort)) : null,
           updateRevenue !== undefined ? parseFloat(String(updateRevenue)) : null,
-          notes !== undefined ? notes || null : null,
+          notes !== undefined ? notes : null,
         ],
       );
 

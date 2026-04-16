@@ -382,9 +382,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
           }}
           onChange={(e) => setTaskFieldValue(row.id, 'expectedEffort', e.target.value)}
-          onBlur={() =>
-            commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : undefined))
-          }
+          onBlur={() => commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : 0))}
           className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
         />
       ),
@@ -403,7 +401,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           value={getTaskFieldValue(row.id, 'revenue', String(row.revenue ?? ''))}
           placeholder="0.00"
           onChange={(e) => setTaskFieldValue(row.id, 'revenue', e.target.value)}
-          onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : undefined))}
+          onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : 0))}
           className="w-full min-w-[80px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
         />
       ),
@@ -419,7 +417,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           value={getTaskFieldValue(row.id, 'notes', row.notes ?? '')}
           placeholder="—"
           onChange={(e) => setTaskFieldValue(row.id, 'notes', e.target.value)}
-          onBlur={() => commitTaskField(row, 'notes', (v) => v.trim() || undefined)}
+          onBlur={() => commitTaskField(row, 'notes', (v) => v.trim())}
           className="w-full min-w-[120px] text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none disabled:bg-slate-50 disabled:text-slate-400"
         />
       ),
