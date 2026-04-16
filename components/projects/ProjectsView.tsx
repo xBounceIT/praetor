@@ -436,19 +436,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
         const overBudget = expected > 0 && logged > expected;
         return (
-          <div className="flex items-center gap-2 min-w-[110px]">
-            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full ${overBudget ? 'bg-red-500' : 'bg-praetor'}`}
-                style={{ width: `${Math.min(100, pct)}%` }}
-              />
-            </div>
-            <span
-              className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
-            >
-              {expected > 0 ? `${pct}%` : '—'}
-            </span>
-          </div>
+          <span
+            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-slate-600'}`}
+          >
+            {expected > 0 ? `${pct}%` : '—'}
+          </span>
         );
       },
     },
