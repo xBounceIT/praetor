@@ -1434,7 +1434,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-13 gap-3">
+                  <div className="flex-1 min-w-0 grid grid-cols-14 gap-3">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
@@ -1449,6 +1449,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       MOL (%)
+                    </div>
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.marginLabel')}
@@ -1576,7 +1579,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             <i className="fa-solid fa-trash-can"></i>
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 lg:hidden">
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
                           <div>
                             <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.qty')}
@@ -1649,6 +1652,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                              {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+                            </div>
+                            <div className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                              {lineCost.toFixed(2)} {currency}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientQuotes.marginLabel')}
                             </div>
                             <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
@@ -1667,7 +1678,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                         </div>
                         <div className="hidden lg:flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-13 gap-3 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-14 gap-3 items-center">
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
@@ -1762,6 +1773,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   %
                                 </span>
                               </div>
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                {lineCost.toFixed(2)} {currency}
+                              </span>
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">

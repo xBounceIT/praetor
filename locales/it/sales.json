@@ -85,6 +85,7 @@
     "cannotRevertLinkedSale": "Impossibile ripristinare: esiste un ordine di vendita collegato",
     "discountAmount": "Sconto ({{discount}}%)",
     "totalLabel": "Totale",
+    "totalCost": "Costo totale",
     "marginLabel": "Margine",
     "selectAClient": "Seleziona un cliente...",
     "noSpecialBidOption": "Nessuna Offerta Speciale",

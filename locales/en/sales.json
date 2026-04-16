@@ -85,6 +85,7 @@
     "cannotRevertLinkedSale": "Cannot revert: linked sale order exists",
     "discountAmount": "Discount ({{discount}}%)",
     "totalLabel": "Total",
+    "totalCost": "Total cost",
     "marginLabel": "Margin",
     "selectAClient": "Select a client...",
     "noSpecialBidOption": "No Special Bid",
