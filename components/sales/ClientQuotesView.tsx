@@ -1223,7 +1223,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   )}
                 </Tooltip>
               )}
-              {row.status !== 'draft' && row.status !== 'sent' && !row.linkedOfferId && (
+              {!row.linkedOfferId && (row.status === 'accepted' || row.status === 'denied' || isQuoteExpired(row)) && (
                 <Tooltip label={restoreTitle}>
                   {() => (
                     <button
