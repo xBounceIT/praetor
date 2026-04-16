@@ -1413,7 +1413,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
             </div>
 
             {/* Products */}
-            <div className="space-y-2">
+            <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
@@ -1434,7 +1434,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
               {formData.items && formData.items.length > 0 && (
                 <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-14 gap-2">
+                  <div className="flex-1 min-w-0 grid grid-cols-13 gap-2">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
@@ -1444,13 +1444,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.qty')}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('crm:internalListing.cost')}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                      MOL (%)
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">
+                      MOL
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">
                       {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
@@ -1678,7 +1678,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           </div>
                         </div>
                         <div className="hidden lg:flex gap-2 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-14 gap-2 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
@@ -1738,7 +1738,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {renderUnitSelector(index, item)}
                               </div>
                             </div>
-                            <div className="col-span-2 flex flex-col items-center justify-center gap-1">
+                            <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                               {selectedSupplierQuote && (
                                 <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                   {t('sales:clientQuotes.supplierQuoteBadge')}
@@ -1749,30 +1749,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <div className="flex items-center gap-0.5 w-full">
-                                <ValidatedNumberInput
-                                  value={cost.toFixed(2)}
-                                  onValueChange={handleCostChange}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
-                                  {currency}
-                                </span>
-                              </div>
+                              <ValidatedNumberInput
+                                value={cost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
-                              <div className="flex items-center gap-0.5 w-full">
-                                <ValidatedNumberInput
-                                  value={molPercentage.toFixed(1)}
-                                  onValueChange={handleMolChange}
-                                  disabled={isReadOnly}
-                                  className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
-                                  %
-                                </span>
-                              </div>
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className="w-full text-sm px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
@@ -1786,7 +1776,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                             <div className="col-span-1 flex items-center justify-center">
                               <span
-                                className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
+                                className={`text-xs font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                               >
                                 {lineSalePrice.toFixed(2)} {currency}
                               </span>
