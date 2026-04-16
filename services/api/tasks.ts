@@ -38,6 +38,9 @@ export const tasksApi = {
 
   delete: (id: string): Promise<void> => fetchApi(`/tasks/${id}`, { method: 'DELETE' }),
 
+  getHours: (projectId: string): Promise<Record<string, number>> =>
+    fetchApi(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`),
+
   getUsers: (id: string): Promise<string[]> => fetchApi(`/tasks/${id}/users`),
 
   updateUsers: (id: string, userIds: string[]): Promise<void> =>

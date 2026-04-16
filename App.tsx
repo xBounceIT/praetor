@@ -3490,9 +3490,20 @@ const App: React.FC = () => {
                 currency={generalSettings.currency}
                 permissions={currentUser.permissions || []}
                 users={availableUsers}
+                tasks={projectTasks}
                 onAddProject={addProject}
                 onUpdateProject={handleUpdateProject}
                 onDeleteProject={handleDeleteProject}
+                onAddTask={addProjectTask}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={async (id) => {
+                  try {
+                    await api.tasks.delete(id);
+                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                  } catch (err) {
+                    console.error('Failed to delete task:', err);
+                  }
+                }}
               />
             )}
 
@@ -3508,7 +3519,7 @@ const App: React.FC = () => {
                 onDeleteTask={async (id) => {
                   try {
                     await api.tasks.delete(id);
-                    setProjectTasks(projectTasks.filter((t) => t.id !== id));
+                    setProjectTasks((prev) => prev.filter((t) => t.id !== id));
                   } catch (err) {
                     console.error('Failed to delete task:', err);
                     alert('Failed to delete task');

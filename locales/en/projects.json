@@ -59,6 +59,8 @@
     "taskRevenue": "Revenue",
     "taskNotes": "Notes",
     "noTasksAdded": "No tasks added yet.",
+    "progress": "Progress",
+    "deleteTaskConfirm": "Delete this task? This action cannot be undone.",
     "tableHeaders": {
       "client": "Client",
       "projectName": "Project Name",

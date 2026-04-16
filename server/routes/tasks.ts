@@ -317,6 +317,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  // GET /hours - Get total hours logged per task for a project (global, all users)
+  fastify.get(
+    '/hours',
+    {
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'projects.tasks.view',
+          'projects.manage.view',
+          'timesheets.tracker.view',
+          'timesheets.recurring.view',
+        ),
+      ],
+      schema: {
+        tags: ['tasks'],
+        summary: 'Get total logged hours per task for a project',
+        querystring: {
+          type: 'object',
+          required: ['projectId'],
+          properties: { projectId: { type: 'string' } },
+        },
+        response: {
+          200: { type: 'object', additionalProperties: { type: 'number' } },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { projectId } = request.query as { projectId: string };
+      const projectIdResult = requireNonEmptyString(projectId, 'projectId');
+      if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
+      const result = await query(
+        'SELECT task, COALESCE(SUM(duration), 0)::float AS total FROM time_entries WHERE project_id = $1 GROUP BY task',
+        [projectIdResult.value],
+      );
+      const hours: Record<string, number> = {};
+      for (const row of result.rows) hours[row.task as string] = Number(row.total);
+      return reply.send(hours);
+    },
+  );
+
   // PUT /:id - Update task
   fastify.put(
     '/:id',
