@@ -30,6 +30,8 @@ type IncomingQuoteItem = {
   supplierQuoteItemId?: string | null;
   quantity: number;
   unitPrice: number;
+  productCost?: number | null;
+  productMolPercentage?: number | null;
   discount: number;
   note?: string | null;
   unitType?: UnitType;
@@ -96,6 +98,18 @@ const normalizeQuoteItems = (
       `items[${i}].discount`,
     );
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
+    const productCostResult = optionalLocalizedNonNegativeNumber(
+      item.productCost,
+      `items[${i}].productCost`,
+    );
+    if (!productCostResult.ok) return { ok: false, message: productCostResult.message };
+    const productMolPercentageResult = optionalLocalizedNonNegativeNumber(
+      item.productMolPercentage,
+      `items[${i}].productMolPercentage`,
+    );
+    if (!productMolPercentageResult.ok) {
+      return { ok: false, message: productMolPercentageResult.message };
+    }
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -104,6 +118,8 @@ const normalizeQuoteItems = (
       supplierQuoteItemId: itemSupplierQuoteItemId,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
+      productCost: productCostResult.value,
+      productMolPercentage: productMolPercentageResult.value,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
       unitType: normalizeUnitType(item.unitType),
@@ -340,7 +356,12 @@ const resolveQuoteItemSnapshots = async (
         existingItem &&
         existingItem.productId === item.productId &&
         normalizeSpecialBidId(existingItem.specialBidId) === normalizedBidId &&
-        normalizeNullableString(existingItem.supplierQuoteItemId) === normalizedSupplierQuoteItemId;
+        normalizeNullableString(existingItem.supplierQuoteItemId) ===
+          normalizedSupplierQuoteItemId &&
+        (item.productCost === null || item.productCost === existingItem.productCost) &&
+        (item.productMolPercentage === undefined ||
+          item.productMolPercentage === null ||
+          item.productMolPercentage === (existingItem.productMolPercentage ?? null));
       if (existingItem && isUnchanged) {
         resolvedItems.push({
           ...item,
@@ -414,13 +435,20 @@ const resolveQuoteItemSnapshots = async (
       throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
+    const allowManualProductSnapshot = !normalizedBidId && !normalizedSupplierQuoteItemId;
     resolvedItems.push({
       ...item,
       productId: resolvedProductId,
       specialBidId: normalizedBidId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
-      productCost: productSnapshot?.productCost ?? 0,
-      productMolPercentage: productSnapshot?.productMolPercentage ?? null,
+      productCost:
+        allowManualProductSnapshot && item.productCost !== null && item.productCost !== undefined
+          ? item.productCost
+          : (productSnapshot?.productCost ?? 0),
+      productMolPercentage:
+        allowManualProductSnapshot && item.productMolPercentage !== undefined
+          ? item.productMolPercentage
+          : (productSnapshot?.productMolPercentage ?? null),
       specialBidUnitPrice,
       specialBidMolPercentage,
       supplierQuoteId,
