@@ -1444,7 +1444,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.qty')}
                     </div>
-                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('crm:internalListing.cost')}
                     </div>
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
@@ -1456,7 +1456,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.marginLabel')}
                     </div>
-                    <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                    <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {t('sales:clientQuotes.revenue')}
                     </div>
                   </div>
@@ -1738,7 +1738,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {renderUnitSelector(index, item)}
                               </div>
                             </div>
-                            <div className="col-span-1 flex flex-col items-center justify-center gap-1">
+                            <div className="col-span-2 flex flex-col items-center justify-center gap-1">
                               {selectedSupplierQuote && (
                                 <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                   {t('sales:clientQuotes.supplierQuoteBadge')}
@@ -1749,7 +1749,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <div className="flex items-center gap-0.5 w-full min-w-[5.5rem]">
+                              <div className="flex items-center gap-0.5 w-full">
                                 <ValidatedNumberInput
                                   value={cost.toFixed(2)}
                                   onValueChange={handleCostChange}
@@ -1784,7 +1784,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 {lineMargin.toFixed(2)} {currency}
                               </span>
                             </div>
-                            <div className="col-span-2 flex items-center justify-center">
+                            <div className="col-span-1 flex items-center justify-center">
                               <span
                                 className={`text-sm font-semibold whitespace-nowrap ${selectedSupplierQuote ? 'text-emerald-600' : selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                               >
