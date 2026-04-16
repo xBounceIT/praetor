@@ -309,7 +309,10 @@ const resolveQuoteItemSnapshots = async (
       normalizeSpecialBidId(existingItem.specialBidId) !==
         normalizeSpecialBidId(item.specialBidId) ||
       normalizeNullableString(existingItem.supplierQuoteItemId) !==
-        normalizeNullableString(item.supplierQuoteItemId)
+        normalizeNullableString(item.supplierQuoteItemId) ||
+      (item.productCost !== null && item.productCost !== existingItem.productCost) ||
+      (item.productMolPercentage !== null &&
+        item.productMolPercentage !== (existingItem.productMolPercentage ?? null))
     );
   });
 
