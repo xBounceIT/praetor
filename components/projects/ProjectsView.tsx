@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../constants';
 import { projectsApi, tasksApi } from '../../services/api';
@@ -123,6 +123,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
+  const fetchHoursIdRef = useRef<string | null>(null);
 
   // Modal Handlers
   const openAddModal = () => {
@@ -154,13 +155,19 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setProjectTaskHours({});
     setHoursLoadState('loading');
     setIsModalOpen(true);
+    const fetchId = project.id;
+    fetchHoursIdRef.current = fetchId;
     tasksApi
       .getHours(project.id)
       .then((h) => {
+        if (fetchHoursIdRef.current !== fetchId) return;
         setProjectTaskHours(h);
         setHoursLoadState('idle');
       })
-      .catch(() => setHoursLoadState('error'));
+      .catch(() => {
+        if (fetchHoursIdRef.current !== fetchId) return;
+        setHoursLoadState('error');
+      });
   };
 
   const closeModal = () => {

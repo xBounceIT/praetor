@@ -2761,7 +2761,7 @@ const App: React.FC = () => {
         recurringConfig?.isRecurring,
         recurringConfig?.pattern,
       );
-      setProjectTasks([...projectTasks, task]);
+      setProjectTasks((prev) => [...prev, task]);
     } catch (err) {
       console.error('Failed to add task:', err);
     }
