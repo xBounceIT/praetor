@@ -1267,7 +1267,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in duration-200">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-praetor">
@@ -1433,8 +1433,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               )}
 
               {formData.items && formData.items.length > 0 && (
-                <div className="hidden lg:flex gap-3 px-3 mb-1 items-center">
-                  <div className="flex-1 min-w-0 grid grid-cols-14 gap-3">
+                <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
+                  <div className="flex-1 min-w-0 grid grid-cols-14 gap-2">
                     <div className="col-span-3 text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
                       {t('sales:clientQuotes.supplierQuoteColumn')}
                     </div>
@@ -1677,8 +1677,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                           </div>
                         </div>
-                        <div className="hidden lg:flex gap-3 items-center">
-                          <div className="flex-1 min-w-0 grid grid-cols-14 gap-3 items-center">
+                        <div className="hidden lg:flex gap-2 items-center">
+                          <div className="flex-1 min-w-0 grid grid-cols-14 gap-2 items-center">
                             <div className="col-span-3 min-w-0">
                               <CustomSelect
                                 options={[
@@ -1749,7 +1749,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <div className="flex items-center gap-0.5 w-full">
+                              <div className="flex items-center gap-0.5 w-full min-w-[5.5rem]">
                                 <ValidatedNumberInput
                                   value={cost.toFixed(2)}
                                   onValueChange={handleCostChange}
