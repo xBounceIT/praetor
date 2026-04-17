@@ -51,7 +51,7 @@ export interface ClientsOrdersViewProps {
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
 const compactInputClass =
-  'w-full text-xs px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed';
+  'w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed';
 
 const pillBadgeClass =
   'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
