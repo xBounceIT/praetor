@@ -144,7 +144,7 @@
     "viewOffer": "View offer",
     "newOffer": "New offer",
     "addOffer": "Add offer",
-    "sourceQuote": "Source quote: {{quoteId}}",
+    "sourceQuote": "Source quote",
     "viewQuote": "View quote",
     "readOnlyStatus": "Non-draft offers are read-only. Change status from the list actions.",
     "clientInformation": "Client Information",

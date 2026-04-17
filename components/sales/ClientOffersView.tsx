@@ -8,6 +8,7 @@ import type {
   Product,
   SpecialBid,
   SupplierQuote,
+  SupplierUnitType,
 } from '../../types';
 import {
   addMonthsToDateOnly,
@@ -16,7 +17,7 @@ import {
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -231,6 +232,56 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
         className={selectProps.className}
         buttonClassName={selectProps.buttonClassName}
+      />
+    );
+  };
+
+  const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
+    if (isReadOnly) return;
+    setFormData((prev) => {
+      const items = [...(prev.items || [])];
+      const item = items[index];
+      if (!item) return prev;
+      const oldType = item.unitType || 'hours';
+      if (oldType === newType) return prev;
+      const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
+      items[index] = {
+        ...items[index],
+        unitType: newType,
+        unitPrice: roundToTwoDecimals(adjustedPrice),
+      };
+      return { ...prev, items };
+    });
+  };
+
+  const renderUnitSelector = (index: number, item: ClientOfferItem) => {
+    const product = products.find((p) => p.id === item.productId);
+    const isSupply = product?.type === 'supply';
+    const qty = Number(item.quantity) || 0;
+
+    if (isSupply) {
+      return (
+        <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
+        </span>
+      );
+    }
+
+    const unitOptions = [
+      { id: 'hours', name: t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`) },
+      { id: 'days', name: t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`) },
+      { id: 'unit', name: t(`sales:clientQuotes.${qty === 1 ? 'unit' : 'units'}`) },
+    ];
+
+    return (
+      <CustomSelect
+        options={unitOptions}
+        value={item.unitType || 'hours'}
+        onChange={(val) => handleUnitTypeChange(index, val as SupplierUnitType)}
+        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        searchable={false}
+        className="shrink-0"
+        buttonClassName="px-2 py-2 bg-white border border-slate-200 rounded-lg text-xs min-w-[4rem]"
       />
     );
   };
@@ -500,6 +551,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       productName: '',
       specialBidId: '',
       quantity: 1,
+      unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
@@ -991,23 +1043,24 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             <div className="mb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">
                               {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
                             </div>
-                            <ValidatedNumberInput
-                              step="0.01"
-                              min="0"
-                              required
-                              placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
-                              value={item.quantity}
-                              onValueChange={(value) => {
-                                const parsed = parseFloat(value);
-                                updateItem(
-                                  index,
-                                  'quantity',
-                                  value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                );
-                              }}
-                              disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                              className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
+                            <div className="flex items-center gap-1">
+                              <ValidatedNumberInput
+                                step="0.01"
+                                min="0"
+                                required
+                                placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                                value={item.quantity}
+                                onValueChange={(value) =>
+                                  updateItem(index, 'quantity', parseNumberInputValue(value))
+                                }
+                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                              />
+                              <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                /
+                              </span>
+                              {renderUnitSelector(index, item)}
+                            </div>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 space-y-1">
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
@@ -1109,23 +1162,24 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               })}
                             </div>
                             <div className="col-span-2">
-                              <ValidatedNumberInput
-                                step="0.01"
-                                min="0"
-                                required
-                                placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
-                                value={item.quantity}
-                                onValueChange={(value) => {
-                                  const parsed = parseFloat(value);
-                                  updateItem(
-                                    index,
-                                    'quantity',
-                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                  );
-                                }}
-                                disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  step="0.01"
+                                  min="0"
+                                  required
+                                  placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+                                  value={item.quantity}
+                                  onValueChange={(value) =>
+                                    updateItem(index, 'quantity', parseNumberInputValue(value))
+                                  }
+                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  className="w-full text-sm px-2 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  /
+                                </span>
+                                {renderUnitSelector(index, item)}
+                              </div>
                             </div>
                             <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                               {selectedSupplierQuote && (
@@ -1212,9 +1266,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               return (
                 <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 md:flex-row">
                   <div className="md:w-2/3 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">
+                    <h4 className="text-xs font-black text-praetor uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-praetor"></span>
                       {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
-                    </label>
+                    </h4>
                     <textarea
                       rows={4}
                       value={formData.notes || ''}
@@ -1250,7 +1305,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       discountRow={
                         discountValue > 0
                           ? {
-                              label: `${t('sales:clientOffers.discountAmount', { defaultValue: 'Discount' })} (${discountValue}%)`,
+                              label: t('sales:clientOffers.discountAmount', {
+                                defaultValue: 'Discount',
+                              }),
                               amount: discountAmount,
                             }
                           : undefined

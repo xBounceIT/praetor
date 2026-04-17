@@ -314,6 +314,7 @@ export interface ClientOfferItem {
   supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
+  unitType?: SupplierUnitType;
 }
 export interface ClientOffer {
   id: string;

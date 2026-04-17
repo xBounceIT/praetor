@@ -1865,7 +1865,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   discountRow={
                     formTotals.discountValue > 0
                       ? {
-                          label: `${t('sales:clientQuotes.discountAmount', { defaultValue: 'Discount' })} (${formTotals.discountValue}%)`,
+                          label: t('sales:clientQuotes.discountAmount', {
+                            defaultValue: 'Discount',
+                          }),
                           amount: formTotals.discountAmount,
                         }
                       : undefined

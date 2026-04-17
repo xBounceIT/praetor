@@ -144,7 +144,7 @@
     "viewOffer": "Visualizza offerta",
     "newOffer": "Nuova offerta",
     "addOffer": "Aggiungi offerta",
-    "sourceQuote": "Preventivo di origine: {{quoteId}}",
+    "sourceQuote": "Preventivo di origine",
     "viewQuote": "Vedi preventivo",
     "readOnlyStatus": "Le offerte non in bozza sono in sola lettura. Cambia lo stato dalle azioni nella lista.",
     "clientInformation": "Informazioni Cliente",
