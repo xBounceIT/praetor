@@ -8,6 +8,7 @@ import {
   getLocalDateString,
   isDateOnlyWithinInclusiveRange,
 } from '../../utils/date';
+import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -27,11 +28,6 @@ export interface ClientsInvoicesViewProps {
   onDeleteInvoice: (id: string) => void;
   currency: string;
 }
-
-const calcProductSalePrice = (costo: number, molPercentage: number) => {
-  if (molPercentage >= 100) return costo;
-  return costo / (1 - molPercentage / 100);
-};
 
 const getLineTotal = (item: InvoiceItem) =>
   item.quantity * item.unitPrice * (1 - Number(item.discount || 0) / 100);

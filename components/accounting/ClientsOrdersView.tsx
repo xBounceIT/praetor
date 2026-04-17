@@ -10,28 +10,25 @@ import type {
   SupplierUnitType,
 } from '../../types';
 import { getLocalDateString, isDateOnlyWithinInclusiveRange } from '../../utils/date';
-import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
+import {
+  calcProductSalePrice,
+  calculatePricingTotals,
+  convertUnitPrice,
+  getEffectiveCost,
+  getItemPricingContext,
+  parseNumberInputValue,
+  roundToTwoDecimals,
+} from '../../utils/numbers';
+import { getPaymentTermsOptions } from '../../utils/options';
+import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
+import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-
-const getPaymentTermsOptions = (t: (key: string) => string) => [
-  { id: 'immediate', name: t('crm:paymentTerms.immediate') },
-  { id: '15gg', name: t('crm:paymentTerms.15gg') },
-  { id: '21gg', name: t('crm:paymentTerms.21gg') },
-  { id: '30gg', name: t('crm:paymentTerms.30gg') },
-  { id: '45gg', name: t('crm:paymentTerms.45gg') },
-  { id: '60gg', name: t('crm:paymentTerms.60gg') },
-  { id: '90gg', name: t('crm:paymentTerms.90gg') },
-  { id: '120gg', name: t('crm:paymentTerms.120gg') },
-  { id: '180gg', name: t('crm:paymentTerms.180gg') },
-  { id: '240gg', name: t('crm:paymentTerms.240gg') },
-  { id: '365gg', name: t('crm:paymentTerms.365gg') },
-];
 
 const getStatusOptions = (t: (key: string) => string) => [
   { id: 'draft', name: t('accounting:clientsOrders.statusDraft') },
@@ -53,23 +50,14 @@ export interface ClientsOrdersViewProps {
 
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
-const calcProductSalePrice = (costo: number, molPercentage: number) => {
-  if (molPercentage >= 100) return costo;
-  return costo / (1 - molPercentage / 100);
-};
+const compactInputClass =
+  'w-full text-xs px-1 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed';
+
+const pillBadgeClass =
+  'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
 
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
   roundToTwoDecimals(convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE));
-
-const getEffectiveCost = (item: ClientsOrderItem): number => {
-  if (item.supplierQuoteItemId) {
-    return Number(item.supplierQuoteUnitPrice ?? 0);
-  }
-  if (item.specialBidId) {
-    return Number(item.specialBidUnitPrice ?? 0);
-  }
-  return Number(item.productCost ?? 0);
-};
 
 const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) => string) => {
   if (status === 'confirmed') return t('accounting:clientsOrders.statusConfirmed');
@@ -377,80 +365,20 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setFormData({ ...formData, items: newItems });
   };
 
-  const renderUnitSelector = (
-    index: number,
-    item: Partial<ClientsOrderItem>,
-    isSupply: boolean,
-  ) => {
-    const qty = Number(item.quantity) || 0;
-
-    if (isSupply) {
-      return (
-        <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
-          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
-        </span>
-      );
-    }
-
-    const unitOptions = [
-      { id: 'hours', name: t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`) },
-      { id: 'days', name: t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`) },
-      { id: 'unit', name: t(`sales:clientQuotes.${qty === 1 ? 'unit' : 'units'}`) },
-    ];
-
-    return (
-      <CustomSelect
-        options={unitOptions}
-        value={item.unitType || DEFAULT_UNIT_TYPE}
-        onChange={(val) => handleUnitTypeChange(index, val as SupplierUnitType)}
-        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-        searchable={false}
-        className="shrink-0"
-        buttonClassName="px-2 py-2 bg-white border border-slate-200 rounded-lg text-xs min-w-[4rem]"
-      />
-    );
-  };
-
-  // Calculate totals
-  const calculateTotals = useCallback((items: ClientsOrderItem[], globalDiscount: number) => {
-    let subtotal = 0;
-    let totalCost = 0;
-
-    items.forEach((item) => {
-      const lineSubtotal = item.quantity * item.unitPrice;
-      const lineDiscount = (lineSubtotal * (item.discount || 0)) / 100;
-      const lineNet = lineSubtotal - lineDiscount;
-
-      subtotal += lineNet;
-
-      const cost = getEffectiveCost(item);
-      totalCost +=
-        item.quantity * convertUnitPrice(cost, 'hours', item.unitType || DEFAULT_UNIT_TYPE);
-    });
-
-    const discountAmount = subtotal * (globalDiscount / 100);
-    const total = subtotal - discountAmount;
-    const margin = total - totalCost;
-    const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
-
-    return {
-      subtotal,
-      discountAmount,
-      total,
-      margin,
-      marginPercentage,
-    };
-  }, []);
-
-  const activeClients = clients.filter((c) => !c.isDisabled);
-  const activeProducts = products.filter((p) => !p.isDisabled);
+  const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
+  const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
   const today = getLocalDateString();
-  const activeSpecialBids = specialBids.filter((b) => {
-    return isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate);
-  });
-  const clientSpecialBids = formData.clientId
-    ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)
-    : activeSpecialBids;
+  const activeSpecialBids = useMemo(
+    () => specialBids.filter((b) => isDateOnlyWithinInclusiveRange(today, b.startDate, b.endDate)),
+    [specialBids, today],
+  );
+  const clientSpecialBids = useMemo(
+    () =>
+      formData.clientId
+        ? activeSpecialBids.filter((b) => b.clientId === formData.clientId)
+        : activeSpecialBids,
+    [formData.clientId, activeSpecialBids],
+  );
 
   const getBidDisplayValue = (bidId?: string) => {
     if (!bidId) return t('sales:clientQuotes.noSpecialBid');
@@ -469,6 +397,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     }
     return orders;
   }, [orders, offerFilterId]);
+
+  const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
 
   // Table columns definition with TableFilter support
   const columns = useMemo(
@@ -502,13 +432,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       {
         header: t('accounting:clientsOrders.totalColumn'),
         accessorFn: (row: ClientsOrder) => {
-          const { total } = calculateTotals(row.items, row.discount);
+          const { total } = calculatePricingTotals(row.items, row.discount, DEFAULT_UNIT_TYPE);
           return total;
         },
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: ClientsOrder }) => {
-          const { total } = calculateTotals(row.items, row.discount);
+          const { total } = calculatePricingTotals(row.items, row.discount, DEFAULT_UNIT_TYPE);
           return (
             <span
               className={`text-sm font-bold whitespace-nowrap ${row.status === 'confirmed' || row.status === 'denied' ? 'text-slate-400' : 'text-slate-700'}`}
@@ -646,7 +576,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ),
       },
     ],
-    [currency, onUpdateClientsOrder, onViewOffer, t, calculateTotals, confirmDelete, openEditModal],
+    [
+      currency,
+      onUpdateClientsOrder,
+      onViewOffer,
+      t,
+      calculatePricingTotals,
+      confirmDelete,
+      openEditModal,
+    ],
   );
 
   return (
@@ -752,7 +690,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     {t('accounting:clientsOrders.paymentTerms')}
                   </label>
                   <CustomSelect
-                    options={getPaymentTermsOptions(t)}
+                    options={paymentTermsOptions}
                     value={formData.paymentTerms || 'immediate'}
                     onChange={(val) =>
                       setFormData({
@@ -818,22 +756,28 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       : undefined;
 
                     const product = products.find((p) => p.id === item.productId);
-                    const baseCost = getEffectiveCost(item);
-                    const unitCost = convertUnitPrice(
-                      baseCost,
-                      'hours',
-                      item.unitType || DEFAULT_UNIT_TYPE,
+                    const { unitCost, molPercentage, lineCost, quantity } = getItemPricingContext(
+                      item,
+                      DEFAULT_UNIT_TYPE,
                     );
-                    const molSource = item.specialBidId
-                      ? item.specialBidMolPercentage
-                      : item.productMolPercentage;
-                    const molPercentage = molSource ? Number(molSource) : 0;
-                    const quantity = Number(item.quantity || 0);
-                    const lineCost = unitCost * quantity;
                     const salePrice = Number(item.unitPrice || 0);
                     const lineSalePrice = salePrice * quantity;
                     const margin = lineSalePrice - lineCost;
                     const isSupply = product?.type === 'supply';
+
+                    const handleCostChange = (value: string) => {
+                      if (isReadOnly) return;
+                      setFormData(
+                        makeCostUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+                      );
+                    };
+
+                    const handleMolChange = (value: string) => {
+                      if (isReadOnly) return;
+                      setFormData(
+                        makeMolUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+                      );
+                    };
 
                     return (
                       <div
@@ -910,29 +854,46 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 <span className="text-xs font-semibold text-slate-400 shrink-0">
                                   /
                                 </span>
-                                {renderUnitSelector(index, item, isSupply)}
+                                <UnitTypeSelector
+                                  value={(item.unitType || DEFAULT_UNIT_TYPE) as SupplierUnitType}
+                                  onChange={(val) => handleUnitTypeChange(index, val)}
+                                  isSupply={isSupply}
+                                  quantity={Number(item.quantity) || 0}
+                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                />
                               </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center space-y-1 lg:col-span-1">
+                            <div className="flex flex-col items-center justify-center gap-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.cost')}
                               </label>
-                              <span className="text-xs font-bold text-slate-600">
-                                {unitCost.toFixed(2)} {currency}
-                              </span>
-                              {selectedBid && (
-                                <div className="text-[8px] font-black uppercase tracking-wider text-praetor">
-                                  Bid
-                                </div>
+                              {item.supplierQuoteItemId && (
+                                <span className={`${pillBadgeClass} bg-emerald-600`}>
+                                  {t('sales:clientQuotes.supplierQuoteBadge')}
+                                </span>
                               )}
+                              {selectedBid && !item.supplierQuoteItemId && (
+                                <span className={`${pillBadgeClass} bg-praetor`}>
+                                  {t('sales:clientQuotes.bidBadge')}
+                                </span>
+                              )}
+                              <ValidatedNumberInput
+                                value={unitCost.toFixed(2)}
+                                onValueChange={handleCostChange}
+                                disabled={isReadOnly}
+                                className={compactInputClass}
+                              />
                             </div>
                             <div className="flex items-center justify-center space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.molPercentage')}
                               </label>
-                              <span className="text-xs font-bold text-slate-600">
-                                {molPercentage.toFixed(1)}%
-                              </span>
+                              <ValidatedNumberInput
+                                value={molPercentage.toFixed(1)}
+                                onValueChange={handleMolChange}
+                                disabled={isReadOnly}
+                                className={compactInputClass}
+                              />
                             </div>
                             <div className="flex items-center justify-center space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
@@ -994,7 +955,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               <div className="md:w-1/3">
                 {(() => {
                   const { subtotal, discountAmount, total, margin, marginPercentage } =
-                    calculateTotals(formData.items || [], formData.discount || 0);
+                    calculatePricingTotals(
+                      formData.items || [],
+                      formData.discount || 0,
+                      DEFAULT_UNIT_TYPE,
+                    );
                   return (
                     <CostSummaryPanel
                       currency={currency}
