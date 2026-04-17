@@ -8,7 +8,7 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -16,24 +16,21 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import Tooltip from '../shared/Tooltip';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
-const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) => [
-  { id: 'draft', name: t('accounting:clientsInvoices.statusDraft') },
-  { id: 'sent', name: t('accounting:clientsInvoices.statusSent') },
-  { id: 'paid', name: t('accounting:clientsInvoices.statusPaid') },
-  { id: 'overdue', name: t('accounting:clientsInvoices.statusOverdue') },
-  { id: 'cancelled', name: t('accounting:clientsInvoices.statusCancelled') },
-];
+const statusLabelMap: Record<string, string> = {
+  draft: 'accounting:supplierInvoices.statusDraft',
+  sent: 'accounting:supplierInvoices.statusSent',
+  paid: 'accounting:supplierInvoices.statusPaid',
+  overdue: 'accounting:supplierInvoices.statusOverdue',
+  cancelled: 'accounting:supplierInvoices.statusCancelled',
+};
+
+const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) =>
+  Object.entries(statusLabelMap).map(([id, key]) => ({ id, name: t(key) }));
 
 const getStatusLabel = (
   status: SupplierInvoice['status'],
   t: (key: string, options?: Record<string, unknown>) => string,
-) => {
-  if (status === 'sent') return t('accounting:clientsInvoices.statusSent');
-  if (status === 'paid') return t('accounting:clientsInvoices.statusPaid');
-  if (status === 'overdue') return t('accounting:clientsInvoices.statusOverdue');
-  if (status === 'cancelled') return t('accounting:clientsInvoices.statusCancelled');
-  return t('accounting:clientsInvoices.statusDraft');
-};
+) => t(statusLabelMap[status] ?? String(status));
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
   let subtotal = 0;
@@ -74,6 +71,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   const activeProducts = useMemo(
     () => products.filter((product) => !product.isDisabled),
     [products],
+  );
+  const productOptions = useMemo(
+    () => activeProducts.map((product) => ({ id: product.id, name: product.name })),
+    [activeProducts],
+  );
+  const supplierOptions = useMemo(
+    () => activeSuppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
+    [activeSuppliers],
   );
 
   const [editingInvoice, setEditingInvoice] = useState<SupplierInvoice | null>(null);
@@ -215,7 +220,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         ),
       },
       {
-        header: t('accounting:clientsInvoices.dueDate'),
+        header: t('accounting:supplierInvoices.dueDate'),
         id: 'dueDate',
         accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.dueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
@@ -234,7 +239,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         filterFormat: (value: unknown) => Number(value).toFixed(2),
       },
       {
-        header: t('accounting:clientsInvoices.amountPaid'),
+        header: t('accounting:supplierInvoices.amountPaid'),
         id: 'amountPaid',
         accessorFn: (row: SupplierInvoice) => Number(row.amountPaid),
         cell: ({ row }: { row: SupplierInvoice }) => (
@@ -245,7 +250,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         filterFormat: (value: unknown) => Number(value).toFixed(2),
       },
       {
-        header: t('accounting:clientsInvoices.balance'),
+        header: t('accounting:supplierInvoices.balance'),
         id: 'balance',
         accessorFn: (row: SupplierInvoice) => Number(row.total) - Number(row.amountPaid || 0),
         cell: ({ row }: { row: SupplierInvoice }) => {
@@ -323,12 +328,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 <i className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
               </div>
               {editingInvoice
-                ? t('accounting:supplierInvoices.editInvoice', {
-                    defaultValue: 'Edit Supplier Invoice',
-                  })
-                : t('accounting:supplierInvoices.addInvoice', {
-                    defaultValue: 'Add Supplier Invoice',
-                  })}
+                ? t('accounting:supplierInvoices.editInvoice')
+                : t('accounting:supplierInvoices.addInvoice')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -342,9 +343,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:supplierInvoices.invoiceDetails', {
-                  defaultValue: 'Invoice Details',
-                })}
+                {t('accounting:supplierInvoices.invoiceDetails')}
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
@@ -352,10 +351,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     {t('accounting:supplierInvoices.supplier')}
                   </label>
                   <CustomSelect
-                    options={activeSuppliers.map((supplier) => ({
-                      id: supplier.id,
-                      name: supplier.name,
-                    }))}
+                    options={supplierOptions}
                     value={formData.supplierId || ''}
                     onChange={(value) => {
                       const supplier = suppliers.find((item) => item.id === value);
@@ -437,7 +433,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:supplierInvoices.items', { defaultValue: 'Items' })}
+                  {t('accounting:supplierInvoices.items')}
                 </h4>
               </div>
 
@@ -446,7 +442,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
                     <div className="col-span-3">
-                      {t('accounting:clientsInvoices.descriptionPlaceholder')}
+                      {t('accounting:supplierInvoices.descriptionPlaceholder')}
                     </div>
                     <div className="col-span-1">{t('common:labels.quantity')}</div>
                     <div className="col-span-2">
@@ -473,10 +469,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       >
                         <div className="lg:hidden space-y-2">
                           <CustomSelect
-                            options={activeProducts.map((product) => ({
-                              id: product.id,
-                              name: product.name,
-                            }))}
+                            options={productOptions}
                             value={item.productId || ''}
                             onChange={(value) => updateItem(index, 'productId', value as string)}
                             searchable={true}
@@ -485,7 +478,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                           <input
                             type="text"
                             value={item.description}
-                            placeholder={t('accounting:clientsInvoices.descriptionPlaceholder')}
+                            placeholder={t('accounting:supplierInvoices.descriptionPlaceholder')}
                             onChange={(event) =>
                               updateItem(index, 'description', event.target.value)
                             }
@@ -551,10 +544,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                           <div className="grid flex-1 grid-cols-12 gap-2">
                             <div className="lg:col-span-2 min-w-0">
                               <CustomSelect
-                                options={activeProducts.map((product) => ({
-                                  id: product.id,
-                                  name: product.name,
-                                }))}
+                                options={productOptions}
                                 value={item.productId || ''}
                                 onChange={(value) =>
                                   updateItem(index, 'productId', value as string)
@@ -618,7 +608,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('accounting:clientsInvoices.noItems')}
+                  {t('accounting:supplierInvoices.noItems')}
                 </div>
               )}
             </div>
@@ -635,68 +625,40 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     setFormData((prev) => ({ ...prev, notes: event.target.value }))
                   }
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-praetor transition-all"
-                  placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
+                  placeholder={t('accounting:supplierInvoices.notesPlaceholder')}
                 />
               </div>
 
               <div className="md:w-1/3">
-                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.subtotal')}
-                    </span>
-                    <span className="text-sm font-black text-slate-800">
-                      {grossSubtotal.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                  {totalDiscount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:clientsInvoices.totalDiscount')}
-                      </span>
-                      <span className="text-sm font-black text-amber-600">
-                        -{totalDiscount.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t border-slate-200 pt-2">
-                    <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                      {t('accounting:supplierInvoices.total')}
-                    </span>
-                    <span className="text-lg font-black text-praetor">
-                      {totals.total.toFixed(2)}{' '}
-                      <span className="text-sm text-slate-400 font-bold">{currency}</span>
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-slate-200 pt-2">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('accounting:supplierInvoices.amountPaid')}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <ValidatedNumberInput
-                        value={formData.amountPaid || 0}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            amountPaid: value === '' ? 0 : Number(value),
-                          }))
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={grossSubtotal}
+                  total={totals.total}
+                  subtotalLabel={t('accounting:supplierInvoices.subtotal')}
+                  totalLabel={t('accounting:supplierInvoices.total')}
+                  discountRow={
+                    totalDiscount > 0
+                      ? {
+                          label: t('accounting:supplierInvoices.totalDiscount'),
+                          amount: totalDiscount,
                         }
-                        className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-praetor"
-                      />
-                      <span className="text-xs font-bold text-slate-400">{currency}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.balanceDue')}
-                    </span>
-                    <span
-                      className={`font-black ${balanceDue > 0 ? 'text-red-500' : 'text-emerald-600'}`}
-                    >
-                      {balanceDue.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                </div>
+                      : undefined
+                  }
+                  amountPaid={{
+                    label: t('accounting:supplierInvoices.amountPaid'),
+                    value: formData.amountPaid || 0,
+                    onChange: (value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        amountPaid: value === '' ? 0 : Number(value),
+                      })),
+                  }}
+                  balanceDue={{
+                    label: t('accounting:supplierInvoices.balanceDue'),
+                    amount: balanceDue,
+                    colorClass: balanceDue > 0 ? 'text-red-500' : 'text-emerald-600',
+                  }}
+                />
               </div>
             </div>
 
@@ -727,9 +689,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('accounting:supplierInvoices.deleteTitle', {
-                  defaultValue: 'Delete supplier invoice?',
-                })}
+                {t('accounting:supplierInvoices.deleteTitle')}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
                 {invoiceToDelete?.supplierName} · {invoiceToDelete?.id}
@@ -759,19 +719,15 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-2xl font-black text-slate-800">
-              {t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+              {t('accounting:supplierInvoices.title')}
             </h2>
-            <p className="text-sm text-slate-500">
-              {t('accounting:supplierInvoices.subtitle', {
-                defaultValue: 'Invoices created from supplier orders.',
-              })}
-            </p>
+            <p className="text-sm text-slate-500">{t('accounting:supplierInvoices.subtitle')}</p>
           </div>
         </div>
       </div>
 
       <StandardTable<SupplierInvoice>
-        title={t('accounting:supplierInvoices.title', { defaultValue: 'Supplier Invoices' })}
+        title={t('accounting:supplierInvoices.title')}
         data={invoices}
         columns={columns}
         defaultRowsPerPage={10}

@@ -8,7 +8,7 @@ import {
   getLocalDateString,
   isDateOnlyWithinInclusiveRange,
 } from '../../utils/date';
-
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -875,61 +875,34 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               </div>
 
               <div className="md:w-1/3">
-                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.subtotal')}
-                    </span>
-                    <span className="text-sm font-black text-slate-800">
-                      {grossSubtotal.toFixed(2)} {currency}
-                    </span>
-                  </div>
-                  {totalDiscount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:clientsInvoices.totalDiscount')}
-                      </span>
-                      <span className="text-sm font-black text-amber-600">
-                        -{totalDiscount.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t border-slate-200 pt-2">
-                    <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                      {t('accounting:clientsInvoices.total')}
-                    </span>
-                    <span className="text-lg font-black text-praetor">
-                      {total.toFixed(2)}{' '}
-                      <span className="text-sm text-slate-400 font-bold">{currency}</span>
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-slate-200 pt-2">
-                    <span className="text-sm font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.amountPaid')}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <ValidatedNumberInput
-                        value={formData.amountPaid || 0}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            amountPaid: value === '' ? 0 : Number(value),
-                          }))
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={grossSubtotal}
+                  total={total}
+                  subtotalLabel={t('accounting:clientsInvoices.subtotal')}
+                  totalLabel={t('accounting:clientsInvoices.total')}
+                  discountRow={
+                    totalDiscount > 0
+                      ? {
+                          label: t('accounting:clientsInvoices.totalDiscount'),
+                          amount: totalDiscount,
                         }
-                        className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-praetor"
-                      />
-                      <span className="text-xs font-bold text-slate-400">{currency}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="font-bold text-slate-500">
-                      {t('accounting:clientsInvoices.balanceDue')}
-                    </span>
-                    <span className="font-black text-red-500">
-                      {(total - Number(formData.amountPaid || 0)).toFixed(2)} {currency}
-                    </span>
-                  </div>
-                </div>
+                      : undefined
+                  }
+                  amountPaid={{
+                    label: t('accounting:clientsInvoices.amountPaid'),
+                    value: formData.amountPaid || 0,
+                    onChange: (value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        amountPaid: value === '' ? 0 : Number(value),
+                      })),
+                  }}
+                  balanceDue={{
+                    label: t('accounting:clientsInvoices.balanceDue'),
+                    amount: total - Number(formData.amountPaid || 0),
+                  }}
+                />
               </div>
             </div>
 

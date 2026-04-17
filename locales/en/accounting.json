@@ -156,6 +156,17 @@
     "deleteTitle": "Delete supplier invoice?",
     "invoiceDetails": "Invoice Details",
     "items": "Items",
-    "subtotal": "Subtotal"
+    "subtotal": "Subtotal",
+    "statusDraft": "Draft",
+    "statusSent": "Sent",
+    "statusPaid": "Paid",
+    "statusOverdue": "Overdue",
+    "statusCancelled": "Cancelled",
+    "balance": "To pay",
+    "balanceDue": "To pay",
+    "totalDiscount": "Total Discount",
+    "noItems": "No items yet. Add a line to start.",
+    "descriptionPlaceholder": "Description",
+    "notesPlaceholder": "Additional notes..."
   }
 }

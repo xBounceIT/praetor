@@ -8,7 +8,7 @@ import {
   isDateOnlyWithinInclusiveRange,
   normalizeDateOnlyString,
 } from '../../utils/date';
-
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -126,9 +126,17 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   );
 
   const activeClients = useMemo(() => clients.filter((client) => !client.isDisabled), [clients]);
+  const clientOptions = useMemo(
+    () => activeClients.map((client) => ({ id: client.id, name: client.name })),
+    [activeClients],
+  );
   const activeProducts = useMemo(
     () => products.filter((product) => !product.isDisabled),
     [products],
+  );
+  const productOptions = useMemo(
+    () => activeProducts.map((product) => ({ id: product.id, name: product.name })),
+    [activeProducts],
   );
   const today = getLocalDateString();
   const activeSpecialBids = useMemo(() => {
@@ -568,7 +576,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     {t('sales:clientOffers.client', { defaultValue: 'Client' })}
                   </label>
                   <CustomSelect
-                    options={activeClients.map((client) => ({ id: client.id, name: client.name }))}
+                    options={clientOptions}
                     value={formData.clientId || ''}
                     onChange={(value) => handleClientChange(value as string)}
                     placeholder={t('sales:clientOffers.selectAClient', {
@@ -685,10 +693,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     >
                       <div className="lg:hidden space-y-2">
                         <CustomSelect
-                          options={activeProducts.map((product) => ({
-                            id: product.id,
-                            name: product.name,
-                          }))}
+                          options={productOptions}
                           value={item.productId}
                           onChange={(value) => updateItem(index, 'productId', value as string)}
                           placeholder={t('sales:clientOffers.selectProduct', {
@@ -757,10 +762,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         <div className="flex-1 grid grid-cols-12 gap-2 items-center">
                           <div className="col-span-4">
                             <CustomSelect
-                              options={activeProducts.map((product) => ({
-                                id: product.id,
-                                name: product.name,
-                              }))}
+                              options={productOptions}
                               value={item.productId}
                               onChange={(value) => updateItem(index, 'productId', value as string)}
                               placeholder={t('sales:clientOffers.selectProduct', {
@@ -854,7 +856,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               )}
             </div>
 
-            {/* Footer: Notes + Cost Summary */}
             {(() => {
               const discountValue = Number.isNaN(formData.discount ?? 0)
                 ? 0
@@ -883,68 +884,37 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     />
                   </div>
                   <div className="md:w-1/3">
-                    <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-slate-500 shrink-0">
-                          {t('sales:clientOffers.globalDiscount', {
-                            defaultValue: 'Global Discount %',
-                          })}
-                        </span>
-                        <ValidatedNumberInput
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={formData.discount || 0}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              discount: value === '' ? 0 : Number(value),
-                            }))
-                          }
-                          disabled={isReadOnly}
-                          className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                      <div className="border-t border-slate-200 pt-2 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' })}
-                          </span>
-                          <span className="text-sm font-black text-slate-800">
-                            {subtotal.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                        {discountValue > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('sales:clientOffers.discountAmount', { defaultValue: 'Discount' })}{' '}
-                              ({discountValue}%)
-                            </span>
-                            <span className="text-sm font-black text-amber-600">
-                              -{discountAmount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-emerald-600">
-                            {t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (
-                            {(marginPercentage || 0).toFixed(1)}%)
-                          </span>
-                          <span className="text-sm font-black text-emerald-600">
-                            {margin.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                          <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                            {t('sales:clientOffers.total', { defaultValue: 'Total' })}
-                          </span>
-                          <span className="text-lg font-black text-praetor">
-                            {total.toFixed(2)}{' '}
-                            <span className="text-sm text-slate-400 font-bold">{currency}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    <CostSummaryPanel
+                      currency={currency}
+                      subtotal={subtotal}
+                      total={total}
+                      subtotalLabel={t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' })}
+                      totalLabel={t('sales:clientOffers.total', { defaultValue: 'Total' })}
+                      globalDiscount={{
+                        label: t('sales:clientOffers.globalDiscount', {
+                          defaultValue: 'Global Discount %',
+                        }),
+                        value: formData.discount || 0,
+                        onChange: (value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            discount: value === '' ? 0 : Number(value),
+                          })),
+                        disabled: isReadOnly,
+                      }}
+                      discountRow={
+                        discountValue > 0
+                          ? {
+                              label: `${t('sales:clientOffers.discountAmount', { defaultValue: 'Discount' })} (${discountValue}%)`,
+                              amount: discountAmount,
+                            }
+                          : undefined
+                      }
+                      margin={{
+                        label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${(marginPercentage || 0).toFixed(1)}%)`,
+                        amount: margin,
+                      }}
+                    />
                   </div>
                 </div>
               );

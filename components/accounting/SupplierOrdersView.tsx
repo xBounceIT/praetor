@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Product, Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
-
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -100,6 +100,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const activeProducts = useMemo(
     () => products.filter((product) => !product.isDisabled),
     [products],
+  );
+  const productOptions = useMemo(
+    () => activeProducts.map((product) => ({ id: product.id, name: product.name })),
+    [activeProducts],
+  );
+  const supplierOptions = useMemo(
+    () => activeSuppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
+    [activeSuppliers],
   );
 
   const [editingOrder, setEditingOrder] = useState<SupplierSaleOrder | null>(null);
@@ -210,7 +218,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const columns = useMemo(
     () => [
       {
-        header: t('accounting:supplierOrders.orderNumber', { defaultValue: 'Order Number' }),
+        header: t('accounting:supplierOrders.orderNumber'),
         id: 'id',
         accessorFn: (row: SupplierSaleOrder) => row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
@@ -230,10 +238,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 {row.supplierName}
               </div>
               <div className="font-mono text-[10px] font-black uppercase tracking-wider text-slate-400">
-                {row.linkedQuoteId ||
-                  t('accounting:supplierOrders.noQuoteLink', {
-                    defaultValue: 'No quote link',
-                  })}
+                {row.linkedQuoteId || t('accounting:supplierOrders.noQuoteLink')}
               </div>
             </div>
           );
@@ -414,7 +419,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-praetor">
                 <i className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}></i>
               </div>
-              {t('accounting:supplierOrders.editOrder', { defaultValue: 'Supplier Order' })}
+              {t('accounting:supplierOrders.editOrder')}
             </h3>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -428,10 +433,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             {isReadOnly && (
               <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <span className="text-xs font-bold text-amber-700">
-                  {t('accounting:supplierOrders.readOnlyStatus', {
-                    defaultValue:
-                      'Non-draft orders are read-only. Change status from the list actions.',
-                  })}
+                  {t('accounting:supplierOrders.readOnlyStatus')}
                 </span>
               </div>
             )}
@@ -476,7 +478,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                 <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                {t('accounting:supplierOrders.orderDetails', { defaultValue: 'Order Details' })}
+                {t('accounting:supplierOrders.orderDetails')}
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
@@ -484,10 +486,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                     {t('accounting:supplierOrders.supplier')}
                   </label>
                   <CustomSelect
-                    options={activeSuppliers.map((supplier) => ({
-                      id: supplier.id,
-                      name: supplier.name,
-                    }))}
+                    options={supplierOptions}
                     value={formData.supplierId || ''}
                     onChange={(value) => {
                       const supplier = suppliers.find((item) => item.id === value);
@@ -503,7 +502,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
                 <div className="space-y-1.5">
                   <label className="ml-1 text-xs font-bold text-slate-500">
-                    {t('accounting:supplierOrders.orderNumber', { defaultValue: 'Order Number' })}
+                    {t('accounting:supplierOrders.orderNumber')}
                   </label>
                   <div className="w-full text-sm px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold">
                     {editingOrder?.id || '—'}
@@ -533,7 +532,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-praetor">
                   <span className="h-1.5 w-1.5 rounded-full bg-praetor"></span>
-                  {t('accounting:supplierOrders.items', { defaultValue: 'Items' })}
+                  {t('accounting:supplierOrders.items')}
                 </h4>
               </div>
 
@@ -567,10 +566,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                       >
                         <div className="lg:hidden space-y-2">
                           <CustomSelect
-                            options={activeProducts.map((product) => ({
-                              id: product.id,
-                              name: product.name,
-                            }))}
+                            options={productOptions}
                             value={item.productId}
                             onChange={(value) => updateItem(index, 'productId', value as string)}
                             searchable={true}
@@ -649,10 +645,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           <div className="grid flex-1 grid-cols-12 gap-2">
                             <div className="lg:col-span-3 min-w-0">
                               <CustomSelect
-                                options={activeProducts.map((product) => ({
-                                  id: product.id,
-                                  name: product.name,
-                                }))}
+                                options={productOptions}
                                 value={item.productId}
                                 onChange={(value) =>
                                   updateItem(index, 'productId', value as string)
@@ -720,9 +713,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 </div>
               ) : (
                 <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  {t('accounting:supplierOrders.noItemsAdded', {
-                    defaultValue: 'No items added yet',
-                  })}
+                  {t('accounting:supplierOrders.noItemsAdded')}
                 </div>
               )}
             </div>
@@ -744,57 +735,33 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
               </div>
 
               <div className="md:w-1/3">
-                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-500 shrink-0">
-                      {t('accounting:supplierOrders.discount', {
-                        defaultValue: 'Global Discount %',
-                      })}
-                    </span>
-                    <ValidatedNumberInput
-                      value={formData.discount || 0}
-                      disabled={isReadOnly}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          discount: value === '' ? 0 : Number(value),
-                        }))
-                      }
-                      className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="border-t border-slate-200 pt-2 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-bold text-slate-500">
-                        {t('accounting:supplierOrders.subtotal')}
-                      </span>
-                      <span className="text-sm font-black text-slate-800">
-                        {totals.subtotal.toFixed(2)} {currency}
-                      </span>
-                    </div>
-                    {Number(formData.discount || 0) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm font-bold text-slate-500">
-                          {t('crm:quotes.discountAmount', {
+                <CostSummaryPanel
+                  currency={currency}
+                  subtotal={totals.subtotal}
+                  total={totals.total}
+                  subtotalLabel={t('accounting:supplierOrders.subtotal')}
+                  totalLabel={t('accounting:supplierOrders.total')}
+                  globalDiscount={{
+                    label: t('accounting:supplierOrders.discount'),
+                    value: formData.discount || 0,
+                    onChange: (value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        discount: value === '' ? 0 : Number(value),
+                      })),
+                    disabled: isReadOnly,
+                  }}
+                  discountRow={
+                    Number(formData.discount || 0) > 0
+                      ? {
+                          label: t('crm:quotes.discountAmount', {
                             discount: Number(formData.discount || 0),
-                          })}
-                        </span>
-                        <span className="text-sm font-black text-amber-600">
-                          -{totals.discountAmount.toFixed(2)} {currency}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between border-t border-slate-200 pt-2">
-                      <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                        {t('accounting:supplierOrders.total')}
-                      </span>
-                      <span className="text-lg font-black text-praetor">
-                        {totals.total.toFixed(2)}{' '}
-                        <span className="text-sm text-slate-400 font-bold">{currency}</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                          }),
+                          amount: totals.discountAmount,
+                        }
+                      : undefined
+                  }
+                />
               </div>
             </div>
 
@@ -827,9 +794,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                {t('accounting:supplierOrders.deleteTitle', {
-                  defaultValue: 'Delete supplier order?',
-                })}
+                {t('accounting:supplierOrders.deleteTitle')}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-500">
                 {orderToDelete?.supplierName} · {orderToDelete?.linkedQuoteId || orderToDelete?.id}
@@ -859,19 +824,15 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-2xl font-black text-slate-800">
-              {t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
+              {t('accounting:supplierOrders.title')}
             </h2>
-            <p className="text-sm text-slate-500">
-              {t('accounting:supplierOrders.subtitle', {
-                defaultValue: 'Orders created from supplier quotes.',
-              })}
-            </p>
+            <p className="text-sm text-slate-500">{t('accounting:supplierOrders.subtitle')}</p>
           </div>
         </div>
       </div>
 
       <StandardTable<SupplierSaleOrder>
-        title={t('accounting:supplierOrders.title', { defaultValue: 'Supplier Orders' })}
+        title={t('accounting:supplierOrders.title')}
         data={filteredOrders}
         columns={columns}
         defaultRowsPerPage={10}

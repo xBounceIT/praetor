@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { Client, ClientsOrder, ClientsOrderItem, Product, SpecialBid } from '../../types';
 import { getLocalDateString, isDateOnlyWithinInclusiveRange } from '../../utils/date';
 import { parseNumberInputValue } from '../../utils/numbers';
+import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
 import StandardTable from '../shared/StandardTable';
@@ -893,66 +894,38 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   const { subtotal, discountAmount, total, margin, marginPercentage } =
                     calculateTotals(formData.items || [], formData.discount || 0);
                   return (
-                    <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-slate-500 shrink-0">
-                          {t('sales:clientQuotes.globalDiscount', {
-                            defaultValue: 'Global Discount %',
-                          })}
-                        </span>
-                        <ValidatedNumberInput
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={formData.discount}
-                          onValueChange={(value) => {
-                            const parsed = parseNumberInputValue(value);
-                            setFormData({ ...formData, discount: parsed });
-                          }}
-                          disabled={isReadOnly}
-                          className="w-20 text-sm px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                      <div className="border-t border-slate-200 pt-2 space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm font-bold text-slate-500">
-                            {t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
-                          </span>
-                          <span className="text-sm font-black text-slate-800">
-                            {subtotal.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                        {formData.discount !== undefined && formData.discount > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-sm font-bold text-slate-500">
-                              {t('sales:clientQuotes.discountAmount', {
+                    <CostSummaryPanel
+                      currency={currency}
+                      subtotal={subtotal}
+                      total={total}
+                      subtotalLabel={t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
+                      totalLabel={t('sales:clientQuotes.totalLabel')}
+                      globalDiscount={{
+                        label: t('sales:clientQuotes.globalDiscount', {
+                          defaultValue: 'Global Discount %',
+                        }),
+                        value: formData.discount || 0,
+                        onChange: (value) => {
+                          const parsed = parseNumberInputValue(value);
+                          setFormData({ ...formData, discount: parsed });
+                        },
+                        disabled: isReadOnly,
+                      }}
+                      discountRow={
+                        formData.discount !== undefined && formData.discount > 0
+                          ? {
+                              label: t('sales:clientQuotes.discountAmount', {
                                 discount: formData.discount,
-                              })}
-                            </span>
-                            <span className="text-sm font-black text-amber-600">
-                              -{discountAmount.toFixed(2)} {currency}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex justify-between">
-                          <span className="text-sm font-bold text-emerald-600">
-                            {t('sales:clientQuotes.marginLabel')} ({marginPercentage.toFixed(1)}%)
-                          </span>
-                          <span className="text-sm font-black text-emerald-600">
-                            {margin.toFixed(2)} {currency}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-t border-slate-200 pt-2">
-                          <span className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                            {t('sales:clientQuotes.totalLabel')}
-                          </span>
-                          <span className="text-lg font-black text-praetor">
-                            {total.toFixed(2)}{' '}
-                            <span className="text-sm text-slate-400 font-bold">{currency}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                              }),
+                              amount: discountAmount,
+                            }
+                          : undefined
+                      }
+                      margin={{
+                        label: `${t('sales:clientQuotes.marginLabel')} (${marginPercentage.toFixed(1)}%)`,
+                        amount: margin,
+                      }}
+                    />
                   );
                 })()}
               </div>
