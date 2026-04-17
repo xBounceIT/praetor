@@ -1481,10 +1481,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
                       : undefined;
 
-                    // Cost is from supplier quote if available, then special bid, then product cost
                     const baseCost = getEffectiveCost(item);
-                    const unitMultiplier = item.unitType === 'days' ? 8 : 1;
-                    const cost = baseCost * unitMultiplier;
+                    const cost = convertUnitPrice(baseCost, 'hours', item.unitType || 'hours');
 
                     const molSource = item.specialBidId
                       ? item.specialBidMolPercentage
@@ -1499,7 +1497,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;
                       const newCost = parseNumberInputValue(value);
-                      const unitMult = item.unitType === 'days' ? 8 : 1;
+                      const hourlyCost = convertUnitPrice(
+                        newCost,
+                        item.unitType || 'hours',
+                        'hours',
+                      );
                       const newUnitPrice = calcProductSalePrice(newCost, molPercentage);
                       const updated = [...(formData.items || [])];
                       updated[index] = {
@@ -1507,10 +1509,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         unitPrice: roundToTwoDecimals(newUnitPrice),
                         ...(item.supplierQuoteItemId
                           ? {
-                              supplierQuoteUnitPrice: roundToTwoDecimals(newCost / unitMult),
+                              supplierQuoteUnitPrice: roundToTwoDecimals(hourlyCost),
                             }
                           : {
-                              productCost: roundToTwoDecimals(newCost / unitMult),
+                              productCost: roundToTwoDecimals(hourlyCost),
                             }),
                       };
                       setFormData({ ...formData, items: updated });

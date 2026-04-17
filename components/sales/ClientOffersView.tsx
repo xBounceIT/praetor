@@ -64,7 +64,7 @@ const calculateTotals = (items: ClientOfferItem[], globalDiscount: number) => {
     subtotal += lineSubtotal;
 
     const cost = getEffectiveCost(item);
-    totalCost += item.quantity * cost;
+    totalCost += item.quantity * convertUnitPrice(cost, 'hours', item.unitType || 'hours');
   });
 
   const discountAmount = subtotal * (globalDiscount / 100);
@@ -940,7 +940,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       ? supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)
                       : undefined;
 
-                    const cost = getEffectiveCost(item);
+                    const baseCost = getEffectiveCost(item);
+                    const cost = convertUnitPrice(baseCost, 'hours', item.unitType || 'hours');
                     const molSource = item.specialBidId
                       ? item.specialBidMolPercentage
                       : item.productMolPercentage;
@@ -954,6 +955,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     const handleCostChange = (value: string) => {
                       if (isReadOnly) return;
                       const newCost = parseNumberInputValue(value);
+                      const hourlyCost = convertUnitPrice(
+                        newCost,
+                        item.unitType || 'hours',
+                        'hours',
+                      );
                       const newUnitPrice = calcProductSalePrice(newCost, molPercentage);
                       setFormData((prev) => {
                         const items = [...(prev.items || [])];
@@ -962,10 +968,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           unitPrice: roundToTwoDecimals(newUnitPrice),
                           ...(item.supplierQuoteItemId
                             ? {
-                                supplierQuoteUnitPrice: roundToTwoDecimals(newCost),
+                                supplierQuoteUnitPrice: roundToTwoDecimals(hourlyCost),
                               }
                             : {
-                                productCost: roundToTwoDecimals(newCost),
+                                productCost: roundToTwoDecimals(hourlyCost),
                               }),
                         };
                         return { ...prev, items };
