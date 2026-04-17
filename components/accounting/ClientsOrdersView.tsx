@@ -735,12 +735,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
                     <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
                     <div className="col-span-1 text-center">
-                      {t('crm:internalListing.molPercentage')}
+                      {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+                    </div>
+                    <div className="col-span-1 text-center whitespace-nowrap">
+                      {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                     </div>
                     <div className="col-span-1 text-center">
                       {t('sales:clientQuotes.marginLabel')}
                     </div>
-                    <div className="col-span-3 pr-2 text-right">
+                    <div className="col-span-2 pr-2 text-right">
                       {t('crm:internalListing.salePrice')}
                     </div>
                   </div>
@@ -877,23 +880,41 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   {t('sales:clientQuotes.bidBadge')}
                                 </span>
                               )}
-                              <ValidatedNumberInput
-                                value={unitCost.toFixed(2)}
-                                onValueChange={handleCostChange}
-                                disabled={isReadOnly}
-                                className={compactInputClass}
-                              />
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  value={unitCost.toFixed(2)}
+                                  onValueChange={handleCostChange}
+                                  disabled={isReadOnly}
+                                  className={compactInputClass}
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  {currency}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center justify-center space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
-                                {t('crm:internalListing.molPercentage')}
+                                {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
                               </label>
-                              <ValidatedNumberInput
-                                value={molPercentage.toFixed(1)}
-                                onValueChange={handleMolChange}
-                                disabled={isReadOnly}
-                                className={compactInputClass}
-                              />
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  value={molPercentage.toFixed(1)}
+                                  onValueChange={handleMolChange}
+                                  disabled={isReadOnly}
+                                  className={compactInputClass}
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 shrink-0">
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-center space-y-1 lg:col-span-1">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
+                                {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+                              </label>
+                              <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                {lineCost.toFixed(2)} {currency}
+                              </span>
                             </div>
                             <div className="flex items-center justify-center space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
@@ -903,7 +924,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 {margin.toFixed(2)} {currency}
                               </span>
                             </div>
-                            <div className="space-y-1 lg:col-span-3">
+                            <div className="space-y-1 lg:col-span-2">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.salePrice')}
                               </label>
