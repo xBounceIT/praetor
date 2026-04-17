@@ -1,9 +1,16 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, ClientsOrder, ClientsOrderItem, Product, SpecialBid } from '../../types';
+import type {
+  Client,
+  ClientsOrder,
+  ClientsOrderItem,
+  Product,
+  SpecialBid,
+  SupplierUnitType,
+} from '../../types';
 import { getLocalDateString, isDateOnlyWithinInclusiveRange } from '../../utils/date';
-import { parseNumberInputValue } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue, roundToTwoDecimals } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import CustomSelect from '../shared/CustomSelect';
 import Modal from '../shared/Modal';
@@ -44,9 +51,24 @@ export interface ClientsOrdersViewProps {
   offerFilterId?: string | null;
 }
 
+const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
+
 const calcProductSalePrice = (costo: number, molPercentage: number) => {
   if (molPercentage >= 100) return costo;
   return costo / (1 - molPercentage / 100);
+};
+
+const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
+  roundToTwoDecimals(convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE));
+
+const getEffectiveCost = (item: ClientsOrderItem): number => {
+  if (item.supplierQuoteItemId) {
+    return Number(item.supplierQuoteUnitPrice ?? 0);
+  }
+  if (item.specialBidId) {
+    return Number(item.specialBidUnitPrice ?? 0);
+  }
+  return Number(item.productCost ?? 0);
 };
 
 const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) => string) => {
@@ -187,10 +209,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         const mol = molSource ? Number(molSource) : 0;
         const cost = applicableBid ? Number(applicableBid.unitPrice) : Number(product.costo);
 
+        const hourlySalePrice = calcProductSalePrice(cost, mol);
         return {
           ...item,
           specialBidId: applicableBid ? applicableBid.id : '',
-          unitPrice: calcProductSalePrice(cost, mol),
+          unitPrice: convertHourlyToUnit(hourlySalePrice, item.unitType),
           productCost: Number(product.costo),
           productMolPercentage: product.molPercentage,
           specialBidUnitPrice: applicableBid ? Number(applicableBid.unitPrice) : null,
@@ -221,6 +244,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       productName: '',
       specialBidId: '',
       quantity: 1,
+      unitType: DEFAULT_UNIT_TYPE,
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
@@ -267,16 +291,24 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         if (applicableBid) {
           const molSource = applicableBid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
+          const hourlySalePrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
           newItems[index].specialBidId = applicableBid.id;
-          newItems[index].unitPrice = calcProductSalePrice(Number(applicableBid.unitPrice), mol);
+          newItems[index].unitPrice = convertHourlyToUnit(
+            hourlySalePrice,
+            newItems[index].unitType,
+          );
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = Number(applicableBid.unitPrice);
           newItems[index].specialBidMolPercentage = applicableBid.molPercentage ?? null;
         } else {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
+          const hourlySalePrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].specialBidId = '';
-          newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          newItems[index].unitPrice = convertHourlyToUnit(
+            hourlySalePrice,
+            newItems[index].unitType,
+          );
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = null;
@@ -293,7 +325,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
+          const hourlySalePrice = calcProductSalePrice(Number(product.costo), mol);
+          newItems[index].unitPrice = convertHourlyToUnit(
+            hourlySalePrice,
+            newItems[index].unitType,
+          );
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         }
@@ -309,7 +345,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           newItems[index].productName = product.name;
           const molSource = bid.molPercentage ?? product.molPercentage;
           const mol = molSource ? Number(molSource) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(bid.unitPrice), mol);
+          const hourlySalePrice = calcProductSalePrice(Number(bid.unitPrice), mol);
+          newItems[index].unitPrice = convertHourlyToUnit(
+            hourlySalePrice,
+            newItems[index].unitType,
+          );
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
           newItems[index].specialBidUnitPrice = Number(bid.unitPrice);
@@ -319,6 +359,56 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     }
 
     setFormData({ ...formData, items: newItems });
+  };
+
+  const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
+    if (isReadOnly) return;
+    const item = formData.items?.[index];
+    if (!item) return;
+    const oldType = item.unitType || DEFAULT_UNIT_TYPE;
+    if (oldType === newType) return;
+    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
+    const newItems = [...(formData.items || [])];
+    newItems[index] = {
+      ...newItems[index],
+      unitType: newType,
+      unitPrice: roundToTwoDecimals(adjustedPrice),
+    };
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const renderUnitSelector = (
+    index: number,
+    item: Partial<ClientsOrderItem>,
+    isSupply: boolean,
+  ) => {
+    const qty = Number(item.quantity) || 0;
+
+    if (isSupply) {
+      return (
+        <span className="text-xs font-semibold text-slate-400 shrink-0 whitespace-nowrap">
+          {qty === 1 ? t('sales:clientQuotes.unit') : t('sales:clientQuotes.units')}
+        </span>
+      );
+    }
+
+    const unitOptions = [
+      { id: 'hours', name: t(`sales:clientQuotes.${qty === 1 ? 'hour' : 'hours'}`) },
+      { id: 'days', name: t(`sales:clientQuotes.${qty === 1 ? 'day' : 'days'}`) },
+      { id: 'unit', name: t(`sales:clientQuotes.${qty === 1 ? 'unit' : 'units'}`) },
+    ];
+
+    return (
+      <CustomSelect
+        options={unitOptions}
+        value={item.unitType || DEFAULT_UNIT_TYPE}
+        onChange={(val) => handleUnitTypeChange(index, val as SupplierUnitType)}
+        disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+        searchable={false}
+        className="shrink-0"
+        buttonClassName="px-2 py-2 bg-white border border-slate-200 rounded-lg text-xs min-w-[4rem]"
+      />
+    );
   };
 
   // Calculate totals
@@ -333,10 +423,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
       subtotal += lineNet;
 
-      const cost = item.specialBidId
-        ? Number(item.specialBidUnitPrice ?? 0)
-        : Number(item.productCost ?? 0);
-      totalCost += item.quantity * cost;
+      const cost = getEffectiveCost(item);
+      totalCost +=
+        item.quantity * convertUnitPrice(cost, 'hours', item.unitType || DEFAULT_UNIT_TYPE);
     });
 
     const discountAmount = subtotal * (globalDiscount / 100);
@@ -704,8 +793,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <div className="col-span-2 ml-1">
                       {t('accounting:clientsOrders.specialBidLabel')}
                     </div>
-                    <div className="col-span-3">{t('sales:clientQuotes.productsServices')}</div>
-                    <div className="col-span-1 text-center">{t('sales:clientQuotes.qty')}</div>
+                    <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
+                    <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
                     <div className="col-span-1 text-center">{t('crm:internalListing.cost')}</div>
                     <div className="col-span-1 text-center">
                       {t('crm:internalListing.molPercentage')}
@@ -728,16 +817,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       ? specialBids.find((b) => b.id === item.specialBidId)
                       : undefined;
 
-                    const cost = item.specialBidId
-                      ? Number(item.specialBidUnitPrice ?? 0)
-                      : Number(item.productCost ?? 0);
-
+                    const product = products.find((p) => p.id === item.productId);
+                    const baseCost = getEffectiveCost(item);
+                    const unitCost = convertUnitPrice(
+                      baseCost,
+                      'hours',
+                      item.unitType || DEFAULT_UNIT_TYPE,
+                    );
                     const molSource = item.specialBidId
                       ? item.specialBidMolPercentage
                       : item.productMolPercentage;
                     const molPercentage = molSource ? Number(molSource) : 0;
+                    const quantity = Number(item.quantity || 0);
+                    const lineCost = unitCost * quantity;
                     const salePrice = Number(item.unitPrice || 0);
-                    const margin = salePrice - cost;
+                    const lineSalePrice = salePrice * quantity;
+                    const margin = lineSalePrice - lineCost;
+                    const isSupply = product?.type === 'supply';
 
                     return (
                       <div
@@ -773,7 +869,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-                            <div className="space-y-1 lg:col-span-3 min-w-0">
+                            <div className="space-y-1 lg:col-span-2 min-w-0">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.productsServices')}
                               </label>
@@ -789,34 +885,40 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                               />
                             </div>
-                            <div className="space-y-1 lg:col-span-1">
+                            <div className="space-y-1 lg:col-span-2">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('sales:clientQuotes.qty')}
                               </label>
-                              <ValidatedNumberInput
-                                step="0.01"
-                                min="0"
-                                required
-                                placeholder="Qty"
-                                value={item.quantity}
-                                onValueChange={(value) => {
-                                  const parsed = parseFloat(value);
-                                  updateProductRow(
-                                    index,
-                                    'quantity',
-                                    value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                  );
-                                }}
-                                disabled={isReadOnly}
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-slate-50 disabled:text-slate-400"
-                              />
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  step="0.01"
+                                  min="0"
+                                  required
+                                  placeholder="Qty"
+                                  value={item.quantity}
+                                  onValueChange={(value) => {
+                                    const parsed = parseFloat(value);
+                                    updateProductRow(
+                                      index,
+                                      'quantity',
+                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                                    );
+                                  }}
+                                  disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm outline-none focus:ring-2 focus:ring-praetor disabled:bg-slate-50 disabled:text-slate-400 flex-1"
+                                />
+                                <span className="text-xs font-semibold text-slate-400 shrink-0">
+                                  /
+                                </span>
+                                {renderUnitSelector(index, item, isSupply)}
+                              </div>
                             </div>
                             <div className="flex flex-col items-center justify-center space-y-1 lg:col-span-1">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 lg:hidden">
                                 {t('crm:internalListing.cost')}
                               </label>
                               <span className="text-xs font-bold text-slate-600">
-                                {cost.toFixed(2)} {currency}
+                                {unitCost.toFixed(2)} {currency}
                               </span>
                               {selectedBid && (
                                 <div className="text-[8px] font-black uppercase tracking-wider text-praetor">
@@ -848,7 +950,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 <span
                                   className={`text-sm font-semibold ${selectedBid ? 'text-praetor' : 'text-slate-800'}`}
                                 >
-                                  {salePrice.toFixed(2)} {currency}
+                                  {lineSalePrice.toFixed(2)} {currency}
                                 </span>
                               </div>
                             </div>

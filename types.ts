@@ -363,6 +363,7 @@ export interface ClientsOrderItem {
   supplierQuoteDiscount?: number | null;
   discount?: number;
   note?: string;
+  unitType?: SupplierUnitType;
 }
 
 export interface ClientsOrder {
